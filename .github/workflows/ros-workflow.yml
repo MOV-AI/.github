@@ -207,7 +207,6 @@ jobs:
       if: ${{ inputs.deploy == 'true' }}
       shell: bash
       run: |
-          echo ${BASH_VERSION}
           NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
           NEXUS_REPO="ppa-dev"
 
@@ -241,7 +240,6 @@ jobs:
       if: ${{ inputs.deploy == 'true' }}
       shell: bash
       run: |
-          echo ${BASH_VERSION}
           NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
           NEXUS_REPO="ppa-testing"
 
@@ -281,8 +279,8 @@ jobs:
         git add **package.xml
         git commit -m "Automatic Bump of build version"
         git push
-        commit_id=$(git log --format="%H" -n 1)
-        echo ::set-output name=commit_id::$VERSION  
+        commit_hash=$(git log --format="%H" -n 1)
+        echo ::set-output name=commit_id::$commit_hash  
         
     - name: Create Github Release
       uses: softprops/action-gh-release@v1
