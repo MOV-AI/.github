@@ -45,7 +45,7 @@ jobs:
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-20.04
     container:
-      image: registry.cloud.mov.ai/devops/ros-buildtools-noetic:latest
+      image: registry.cloud.mov.ai/devops/ros-buildtools-melodic:latest
       options: --user root
       credentials:
         username: ${{secrets.registry_user}} 
