@@ -178,7 +178,7 @@ jobs:
       id: vars-after-raise
       shell: bash
       run: |     
-        sub_component_expr=${{inputs.components}}
+        sub_component_expr="${{inputs.components}}"
         sub_component_str=$(echo $sub_component_expr | sed -e 's/\[//g' | sed -e 's/\]//g')
 
         IFS=',' read -r -a sub_components_array <<< $sub_component_str
