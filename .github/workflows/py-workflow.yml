@@ -89,10 +89,6 @@ jobs:
     - name: Run tests
       run: python3 -m pytest
 
-    - name: Raise version
-      if: ${{ inputs.deploy == 'true' }}
-      run: bump2version build setup.py --no-tag --no-commit
-
     - name: Find Package details
       id: vars
       run: |
