@@ -52,6 +52,7 @@ jobs:
 
     - name: Python Linter
       run: |
+        if: ${{ inputs.deploy == 'false' }}
         python3 -m pylint *
         python3 -m black .
         python3 -m flake8
