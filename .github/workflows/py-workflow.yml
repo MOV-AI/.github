@@ -51,8 +51,8 @@ jobs:
       run: python3 -m pip install -r build-requirements.txt
 
     - name: Python Linter
+      if: ${{ inputs.deploy == 'false' }}
       run: |
-        if: ${{ inputs.deploy == 'false' }}
         python3 -m pylint *
         python3 -m black .
         python3 -m flake8
