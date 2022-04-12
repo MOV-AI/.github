@@ -113,7 +113,7 @@ jobs:
       - name: Compute docker build arguments
         id: get_build_args
         run: |
-          BUILD_ARGS_INPUT=${{ inputs.build_args }}
+          BUILD_ARGS_INPUT="${{ inputs.build_args }}"
           BUILD_ARGS_JSON=""
           for arg in $BUILD_ARGS_INPUT; do
             BUILD_ARGS_JSON="$BUILD_ARGS_JSON\"$arg\","
