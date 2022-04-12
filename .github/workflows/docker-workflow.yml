@@ -2,6 +2,9 @@ name: Build, Deploy and release Docker images
 on:
   workflow_call:
     inputs:
+      build_args:
+        required: false
+        type: string
       docker_registry:
         required: false
         type: string
@@ -70,7 +73,7 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ inputs.public_registry }}
 
-      - name: "Verify push and tag vars from env"
+      - name: Verify push and tag vars from env
         id: get_version
         env:
           GITHUB_REF: ${{ inputs.github_ref }}
@@ -88,7 +91,7 @@ jobs:
             echo ::set-output name=DOCKER_TAG::local
           fi
 
-      - name: "Compute docker image names"
+      - name: Compute docker image names
         id: get_image_names
         env:
           PUBLIC_PUSH: ${{ inputs.public }}
@@ -105,6 +108,16 @@ jobs:
 
           echo -e "Images to publish:\n$DOCKER_IMAGES $PUB_DOCKER_IMAGES"
 
+      - name: Compute docker build arguments
+        id: get_build_args
+        run: |
+          BUILD_ARGS_INPUT=${{ inputs.build_args }}
+          BUILD_ARGS_JSON="["
+          for arg in $BUILD_ARGS_INPUT; do
+            BUILD_ARGS_JSON="$BUILD_ARGS_JSON\"$arg\","
+          done
+          BUILD_ARGS_JSON="${BUILD_ARGS_JSON::-1}]"
+          run: echo "::set-output name=build_args_json::$BUILD_ARGS_JSON"
 
       - name: Build and push:${{ env.DOCKER_PUSH }}
         uses: docker/build-push-action@v2
@@ -118,3 +131,4 @@ jobs:
             ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
             ${{ steps.get_image_names.outputs.PUB_DOCKER_IMAGES }}
           pull: true
+          build-args: ${{fromJson(steps.get_build_args.outputs.build_args_json)}}
