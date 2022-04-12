@@ -117,7 +117,7 @@ jobs:
             BUILD_ARGS_JSON="$BUILD_ARGS_JSON\"$arg\","
           done
           BUILD_ARGS_JSON="${BUILD_ARGS_JSON::-1}]"
-          run: echo "::set-output name=build_args_json::$BUILD_ARGS_JSON"
+          echo "::set-output name=build_args_json::$BUILD_ARGS_JSON"
 
       - name: Build and push:${{ env.DOCKER_PUSH }}
         uses: docker/build-push-action@v2
