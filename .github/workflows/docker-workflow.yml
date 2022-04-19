@@ -158,7 +158,7 @@ jobs:
           args: --severity-threshold=high --file=${{ inputs.docker_file }}
 
       - name: Upload snyk results
-        if: inputs.public && && inputs.snyk_check
+        if: inputs.public && inputs.snyk_check
         uses: github/codeql-action/upload-sarif@v1
         with:
           sarif_file: snyk.sarif
