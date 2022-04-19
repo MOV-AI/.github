@@ -126,7 +126,6 @@ jobs:
             echo -e "Docker build arguments:\n$BUILD_ARGS_JSON"
           fi
 
-
       - name: Download a single artifact
         uses: actions/download-artifact@v2
         continue-on-error: true
@@ -144,8 +143,20 @@ jobs:
           pull: true
           build-args: ${{ steps.get_build_args.outputs.build_args_json && fromJson(steps.get_build_args.outputs.build_args_json) }}
 
+      - name: Check snyk_secret presence
+        id: snyk_secret
+        shell: bash
+        run: |
+          if [ "$SNYK_TOKEN_ENV" == "" ]; then
+            echo ::set-output name=snyk_check::false
+          else
+            echo ::set-output name=snyk_check::true
+          fi
+        env:
+          SNYK_TOKEN_ENV: ${{ secrets.snyk_token}}
+
       - name: Run Snyk to check Docker image for vulnerabilities
-        if: ${{ secrets.snyk_token }}
+        if: ${{ steps.snyk_secret.outputs.snyk_check }}
         uses: snyk/actions/docker@master
         env:
           SNYK_TOKEN: ${{ secrets.snyk_token }}
@@ -154,6 +165,7 @@ jobs:
           args: --severity-threshold=high --file=${{ inputs.docker_file }}
 
       - name: Upload result to GitHub Code Scanning
+        if: ${{ steps.snyk_secret.outputs.snyk_check }}
         if: ${{ secrets.snyk_token }}
         uses: github/codeql-action/upload-sarif@v1
         with:
