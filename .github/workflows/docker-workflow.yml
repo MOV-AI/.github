@@ -41,6 +41,10 @@ on:
         required: false
         type: boolean
         default: false
+      snyk_check:
+        required: false
+        type: boolean
+        default: false
     secrets:
       registry_user:
         required: true
@@ -92,7 +96,7 @@ jobs:
           PUBLIC_PUSH: ${{ inputs.public }}
           LATEST: ${{ inputs.push_latest }}
         run: |
-          PUB_DOCKER_IMAGES=""
+          PUB_DOCKER_IMAGE=""
           DOCKER_IMAGES=${{ inputs.docker_registry }}/${{ inputs.docker_image }}:${{ inputs.version }}
 
           if [ "${LATEST}" = "true" ]; then
@@ -101,7 +105,9 @@ jobs:
 
           # If public push is needed
           if [ "${PUBLIC_PUSH}" = "true" ]; then
-            DOCKER_IMAGES="$DOCKER_IMAGES,${{ inputs.public_registry }}/${{ inputs.public_image }}:${{ inputs.version }}"
+            PUB_DOCKER_IMAGE="${{ inputs.public_registry }}/${{ inputs.public_image }}:${{ inputs.version }}"
+            DOCKER_IMAGES="$DOCKER_IMAGES,$PUB_DOCKER_IMAGE"
+            echo "::set-output name=PUB_DOCKER_IMAGE::$PUB_DOCKER_IMAGE"
 
             if [ "${LATEST}" = "true" ]; then
               DOCKER_IMAGES="$DOCKER_IMAGES,${{ inputs.public_registry }}/${{ inputs.public_image }}:latest"
@@ -109,7 +115,6 @@ jobs:
           fi
 
           echo "::set-output name=DOCKER_IMAGES::$DOCKER_IMAGES"
-
           echo -e "Docker images to publish:\n$DOCKER_IMAGES"
 
       - name: Compute docker build arguments
@@ -143,31 +148,17 @@ jobs:
           pull: true
           build-args: ${{ steps.get_build_args.outputs.build_args_json && fromJson(steps.get_build_args.outputs.build_args_json) }}
 
-      - name: Check snyk_secret presence
-        id: snyk_secret
-        shell: bash
-        run: |
-          if [ -z "$SNYK_TOKEN_ENV" ]; then
-            echo ::set-output name=snyk_check::false
-            echo "snyk_check: off"
-          else
-            echo ::set-output name=snyk_check::true
-            echo "snyk_check: on"
-          fi
-        env:
-          SNYK_TOKEN_ENV: ${{ secrets.snyk_token }}
-
-      - name: Snyk check ${{ steps.snyk_secret.outputs.snyk_check }}
-        if: inputs.public && steps.snyk_secret.outputs.snyk_check == 'true'
+      - name: Snyk check
+        if: inputs.public && inputs.snyk_check
         uses: snyk/actions/docker@master
         env:
           SNYK_TOKEN: ${{ secrets.snyk_token }}
         with:
-          image: ${{ steps.get_image_names.outputs.DOCKER_IMAGES[0] }}
+          image: ${{ steps.get_image_names.outputs.PUB_DOCKER_IMAGE }}
           args: --severity-threshold=high --file=${{ inputs.docker_file }}
 
-      - name: Upload snyk results ${{ steps.snyk_secret.outputs.snyk_check }}
-        if: inputs.public && steps.snyk_secret.outputs.snyk_check == 'true'
+      - name: Upload snyk results
+        if: inputs.public && && inputs.snyk_check
         uses: github/codeql-action/upload-sarif@v1
         with:
           sarif_file: snyk.sarif
