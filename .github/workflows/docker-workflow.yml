@@ -95,15 +95,15 @@ jobs:
 
           if [ "${LATEST}" = "true" ]; then
             DOCKER_IMAGES="$DOCKER_IMAGES,${{ inputs.docker_registry }}/${{ inputs.docker_image }}:latest"
-          fi          
+          fi
 
           # If public push is needed
           if [ "${PUBLIC_PUSH}" = "true" ]; then
             DOCKER_IMAGES="$DOCKER_IMAGES,${{ inputs.public_registry }}/${{ inputs.public_image }}:${{ inputs.version }}"
-          
+
             if [ "${LATEST}" = "true" ]; then
               DOCKER_IMAGES="$DOCKER_IMAGES,${{ inputs.public_registry }}/${{ inputs.public_image }}:latest"
-            fi  
+            fi
           fi
 
           echo "::set-output name=DOCKER_IMAGES::$DOCKER_IMAGES"
@@ -127,6 +127,7 @@ jobs:
 
       - name: Download a single artifact
         uses: actions/download-artifact@v2
+        continue-on-error: true
         with:
           name: packages
           path: dist
