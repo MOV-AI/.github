@@ -158,7 +158,7 @@ jobs:
           SNYK_TOKEN_ENV: ${{ secrets.snyk_token }}
 
       - name: Run Snyk to check Docker image for vulnerabilities
-        if: steps.snyk_secret.outputs.snyk_check
+        if: (steps.snyk_secret.outputs.snyk_check == 'true')
         uses: snyk/actions/docker@master
         env:
           SNYK_TOKEN: ${{ secrets.snyk_token }}
@@ -167,7 +167,7 @@ jobs:
           args: --severity-threshold=high --file=${{ inputs.docker_file }}
 
       - name: Upload result to GitHub Code Scanning
-        if: steps.snyk_secret.outputs.snyk_check
+        if: (steps.snyk_secret.outputs.snyk_check == 'true')
         uses: github/codeql-action/upload-sarif@v1
         with:
           sarif_file: snyk.sarif
