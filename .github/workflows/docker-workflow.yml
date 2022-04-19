@@ -33,10 +33,14 @@ on:
       version:
         required: false
         type: string
-        default: latest
+        default: local
       public_image:
         required: false
         type: string
+      push_latest:
+        required: false
+        type: boolean
+        default: false
     secrets:
       registry_user:
         required: true
@@ -84,18 +88,27 @@ jobs:
         id: get_image_names
         env:
           PUBLIC_PUSH: ${{ inputs.public }}
+          LATEST: ${{ inputs.push_latest }}
         run: |
           PUB_DOCKER_IMAGES=""
           DOCKER_IMAGES=${{ inputs.docker_registry }}/${{ inputs.docker_image }}:${{ inputs.version }}
-          echo "::set-output name=DOCKER_IMAGES::$DOCKER_IMAGES"
+
+          if [ "${LATEST}" = "true" ]; then
+            DOCKER_IMAGES="$DOCKER_IMAGES,${{ inputs.docker_registry }}/${{ inputs.docker_image }}:latest"
+          fi          
 
           # If public push is needed
           if [ "${PUBLIC_PUSH}" = "true" ]; then
-            PUB_DOCKER_IMAGES="${{ inputs.public_registry }}/${{ inputs.public_image }}:${{ inputs.version }}"
+            DOCKER_IMAGES="${{ inputs.public_registry }}/${{ inputs.public_image }}:${{ inputs.version }}"
+          
+            if [ "${LATEST}" = "true" ]; then
+              DOCKER_IMAGES="$DOCKER_IMAGES,${{ inputs.public_registry }}/${{ inputs.public_image }}:latest"
+            fi  
           fi
-          echo "::set-output name=PUB_DOCKER_IMAGES::$PUB_DOCKER_IMAGES"
 
-          echo -e "Docker images to publish:\n$DOCKER_IMAGES $PUB_DOCKER_IMAGES"
+          echo "::set-output name=DOCKER_IMAGES::$DOCKER_IMAGES"
+
+          echo -e "Docker images to publish:\n$DOCKER_IMAGES"
 
       - name: Compute docker build arguments
         id: get_build_args
@@ -126,9 +139,7 @@ jobs:
           push: ${{ inputs.deploy }}
           # should use automatic tagging:
           # https://github.com/marketplace/actions/docker-build-push-action#tagging-the-image-using-gitops
-          tags: |
-            ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
-            ${{ steps.get_image_names.outputs.PUB_DOCKER_IMAGES }}
+          tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
           pull: true
           build-args: |
             ${{fromJson(steps.get_build_args.outputs.build_args_json)}}
