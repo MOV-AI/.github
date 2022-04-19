@@ -147,10 +147,12 @@ jobs:
         id: snyk_secret
         shell: bash
         run: |
-          if [ "$SNYK_TOKEN_ENV" == "" ]; then
+          if [ -z "$SNYK_TOKEN_ENV" ]; then
             echo ::set-output name=snyk_check::false
+            echo "snyk_check: off"
           else
             echo ::set-output name=snyk_check::true
+            echo "snyk_check: on"
           fi
         env:
           SNYK_TOKEN_ENV: ${{ secrets.snyk_token}}
