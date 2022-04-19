@@ -99,7 +99,7 @@ jobs:
 
           # If public push is needed
           if [ "${PUBLIC_PUSH}" = "true" ]; then
-            DOCKER_IMAGES="${{ inputs.public_registry }}/${{ inputs.public_image }}:${{ inputs.version }}"
+            DOCKER_IMAGES="$DOCKER_IMAGES,${{ inputs.public_registry }}/${{ inputs.public_image }}:${{ inputs.version }}"
           
             if [ "${LATEST}" = "true" ]; then
               DOCKER_IMAGES="$DOCKER_IMAGES,${{ inputs.public_registry }}/${{ inputs.public_image }}:latest"
