@@ -46,6 +46,8 @@ on:
         required: true
       registry_password:
         required: true
+      snyk_token:
+        required: false
 
 jobs:
   build_deploy:
@@ -141,3 +143,18 @@ jobs:
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
           pull: true
           build-args: ${{ steps.get_build_args.outputs.build_args_json && fromJson(steps.get_build_args.outputs.build_args_json) }}
+
+      - name: Run Snyk to check Docker image for vulnerabilities
+        if: ${{ secrets.snyk_token }}
+        uses: snyk/actions/docker@master
+        env:
+          SNYK_TOKEN: ${{ secrets.snyk_token }}
+        with:
+          image: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
+          args: --severity-threshold=high --file=${{ inputs.docker_file }}
+
+      - name: Upload result to GitHub Code Scanning
+        if: ${{ secrets.snyk_token }}
+        uses: github/codeql-action/upload-sarif@v1
+        with:
+          sarif_file: snyk.sarif
