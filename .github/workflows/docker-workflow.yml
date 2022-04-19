@@ -158,16 +158,16 @@ jobs:
           SNYK_TOKEN_ENV: ${{ secrets.snyk_token }}
 
       - name: Snyk check ${{ steps.snyk_secret.outputs.snyk_check }}
-        if: steps.snyk_secret.outputs.snyk_check == 'true'
+        if: inputs.public && steps.snyk_secret.outputs.snyk_check == 'true'
         uses: snyk/actions/docker@master
         env:
           SNYK_TOKEN: ${{ secrets.snyk_token }}
         with:
-          image: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
+          image: ${{ steps.get_image_names.outputs.DOCKER_IMAGES[0] }}
           args: --severity-threshold=high --file=${{ inputs.docker_file }}
 
       - name: Upload snyk results ${{ steps.snyk_secret.outputs.snyk_check }}
-        if: steps.snyk_secret.outputs.snyk_check == 'true'
+        if: inputs.public && steps.snyk_secret.outputs.snyk_check == 'true'
         uses: github/codeql-action/upload-sarif@v1
         with:
           sarif_file: snyk.sarif
