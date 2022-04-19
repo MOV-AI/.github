@@ -120,10 +120,10 @@ jobs:
           done
           if [ -n "$BUILD_ARGS_JSON" ]; then
             BUILD_ARGS_JSON="[${BUILD_ARGS_JSON::-1}]"
+            echo "::set-output name=build_args_json::$BUILD_ARGS_JSON"
+            echo -e "Docker build arguments:\n$BUILD_ARGS_JSON"
           fi
-          echo "::set-output name=build_args_json::$BUILD_ARGS_JSON"
 
-          echo -e "Docker build arguments:\n$BUILD_ARGS_JSON"
 
       - name: Download a single artifact
         uses: actions/download-artifact@v2
@@ -138,9 +138,6 @@ jobs:
           context: .
           file: ${{ inputs.docker_file }}
           push: ${{ inputs.deploy }}
-          # should use automatic tagging:
-          # https://github.com/marketplace/actions/docker-build-push-action#tagging-the-image-using-gitops
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
           pull: true
-          build-args: |
-            ${{fromJson(steps.get_build_args.outputs.build_args_json)}}
+          build-args: ${{ steps.get_build_args.outputs.build_args_json && fromJson(steps.get_build_args.outputs.build_args_json) }}
