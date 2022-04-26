@@ -26,6 +26,10 @@ on:
       public_image:
         required: false
         type: string
+      target:
+        required: false
+        type: string
+        default:
     secrets:
       registry_user:
         required: true
@@ -118,3 +122,4 @@ jobs:
             ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
             ${{ steps.get_image_names.outputs.PUB_DOCKER_IMAGES }}
           pull: true
+          target: ${{ inputs.target }}
