@@ -157,9 +157,3 @@ jobs:
         with:
           image: ${{ steps.get_image_names.outputs.PUB_DOCKER_IMAGE }}
           args: --severity-threshold=high --file=${{ inputs.docker_file }}
-
-      - name: Upload snyk results
-        if: inputs.public && inputs.snyk_check && inputs.deploy
-        uses: github/codeql-action/upload-sarif@v1
-        with:
-          sarif_file: snyk.sarif
