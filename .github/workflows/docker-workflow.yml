@@ -137,6 +137,9 @@ jobs:
         with:
           name: packages
           path: dist
+          
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
 
       - name: Build and push:${{ inputs.deploy }}
         uses: docker/build-push-action@v2
