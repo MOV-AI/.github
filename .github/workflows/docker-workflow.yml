@@ -155,8 +155,16 @@ jobs:
       - name: Snyk check
         if: inputs.public && inputs.snyk_check && inputs.deploy
         uses: snyk/actions/docker@master
+        continue-on-error: true
+        timeout-minutes: 10
         env:
           SNYK_TOKEN: ${{ secrets.snyk_token }}
         with:
-          image: ${{ steps.get_image_names.outputs.PUB_DOCKER_IMAGE }}
           args: --severity-threshold=high --file=${{ inputs.docker_file }}
+          image: ${{ steps.get_image_names.outputs.PUB_DOCKER_IMAGE }}
+      - name: Upload result to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v2
+        continue-on-error: true
+        with:
+          sarif_file: snyk.sarif
+          
