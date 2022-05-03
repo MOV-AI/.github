@@ -13,6 +13,10 @@ on:
       ros_distro:
         required: true
         type: string
+      prod_publish_repos:
+        required: false
+        type: string
+        default: '["ppa-main"]'
 
     secrets:
       auto_commit_user:
@@ -177,7 +181,7 @@ jobs:
     runs-on: ubuntu-20.04
     needs:  [Build]
     container:
-      image: registry.aws.cloud.mov.ai/devops/ros-buildtools-noetic:latest
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:latest
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -222,7 +226,7 @@ jobs:
     - name: Publish to Nexus ppa-dev
       shell: bash
       run: |
-          NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+          NEXUS_ENDPOINT="artifacts.aws.cloud.mov.ai"
           NEXUS_REPO="ppa-dev"
 
           for file in artifacts/*.deb
@@ -254,7 +258,7 @@ jobs:
     - name: Publish to Nexus ppa-testing
       shell: bash
       run: |
-          NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+          NEXUS_ENDPOINT="artifacts.aws.cloud.mov.ai"
           NEXUS_REPO="ppa-testing"
 
           for file in artifacts/*.deb
@@ -286,6 +290,7 @@ jobs:
     - name: Commit raise version
       id: raise
       run: |
+        git config --global --add safe.directory $(pwd)
         git config --global user.name '${{ secrets.auto_commit_user }}'
         git config --global user.email '${{ secrets.auto_commit_mail }}'
         git pull
@@ -308,10 +313,13 @@ jobs:
         files: artifacts/*.deb
 
   Release:
+    strategy:
+      matrix:
+        publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-20.04
     container:
-      image: registry.aws.cloud.mov.ai/devops/ros-buildtools-noetic:latest
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:latest
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -331,16 +339,17 @@ jobs:
 
     - name: Fetch artifact from github release
       run: |
+        git config --global --add safe.directory $(pwd)
         mkdir artifacts
         cd artifacts
         gh release download ${{ steps.vars.outputs.tag}} -p *.deb
       env:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
 
-    - name: Publish to Nexus ppa-main
+    - name: Publish to Nexus ${{ matrix.publish_repo }}
       run: |
           NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-          NEXUS_REPO="ppa-main"
+          NEXUS_REPO="${{ matrix.publish_repo }}"
           FILE_LOCATION=$(find artifacts/*.deb)
           find artifacts -type f -name '*.deb' -exec curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
           -H "Content-Type: multipart/form-data" \
