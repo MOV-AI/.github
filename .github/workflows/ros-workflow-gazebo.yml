@@ -19,6 +19,8 @@ on:
         required: true
       auto_commit_mail:
         required: true
+      auto_commit_token:
+        required: true
       registry_user:
         required: true
       registry_password:
@@ -251,7 +253,7 @@ jobs:
 
           done
 
-    - name: Commit raise version
+    - name: Commit auto raise version
       id: raise
       run: |
         git config --global user.name '${{ secrets.auto_commit_user }}'
@@ -259,7 +261,17 @@ jobs:
         git pull
         git add **package.xml
         git commit -m "Automatic Bump of build version"
-        git push
+
+    - name: Push auto raise version
+      uses: CasperWA/push-protected@v2
+      with:
+        token: ${{ secrets.auto_commit_token }}
+        branch: ${{ github.ref_name }}
+        unprotect_reviews: true
+
+    - name: Get Commit id
+      id: raise
+      run: |
         commit_hash=$(git log --format="%H" -n 1)
         echo ::set-output name=commit_id::$commit_hash
 

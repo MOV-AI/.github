@@ -1,4 +1,4 @@
-name: Build and pack Npm components 
+name: Build and pack Npm components
 on:
   workflow_call:
     inputs:
@@ -20,6 +20,8 @@ on:
         required: true
       auto_commit_mail:
         required: true
+      auto_commit_token:
+        required: true
       registry_user:
         required: true
       registry_password:
@@ -39,14 +41,14 @@ jobs:
       image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
       options: --user root
       credentials:
-        username: ${{secrets.registry_user}} 
+        username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     env:
       NODE_AUTH_TOKEN: ${{ secrets.npm_token }}
 
 
     steps:
-    - name: Checkout    
+    - name: Checkout
       uses: actions/checkout@v2
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
@@ -60,7 +62,7 @@ jobs:
         git config --global user.email '${{ secrets.auto_commit_mail }}'
         npm version prerelease --no-git-tag-version
 
-    - name: Setup Github as proxy Registry 
+    - name: Setup Github as proxy Registry
       uses: actions/setup-node@v2
       with:
         node-version: '${{ inputs.npm_version }}'
@@ -75,7 +77,7 @@ jobs:
     - name: Check NPM log on failure
       if: ${{ failure() }}
       run: cat /github/home/.npm/_logs/*.log
-    
+
     - name: Run tests
       if: ${{ inputs.run_tests == 'true' }}
       run: npm run test
@@ -115,13 +117,13 @@ jobs:
       image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
       options: --user root
       credentials:
-        username: ${{secrets.registry_user}} 
+        username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     env:
       NODE_AUTH_TOKEN: ${{ secrets.npm_token }}
 
     steps:
-    - name: Checkout    
+    - name: Checkout
       if: ${{ inputs.deploy == 'true' }}
       uses: actions/checkout@v2
       with:
@@ -129,24 +131,33 @@ jobs:
         fetch-depth: 0
         submodules: recursive
         token: ${{ secrets.npm_token }}
-        
-    - name: Raise App version
-      id: raise
+
+    - name: Commit auto raise version
       run: |
         git config --global user.name '${{ secrets.auto_commit_user }}'
         git config --global user.email '${{ secrets.auto_commit_mail }}'
-        npm version prerelease -m "Automatic Bump of build version" 
+        npm version prerelease -m "Automatic Bump of build version"
         git add package.*
-        git push
+
+    - name: Push auto raise version
+      uses: CasperWA/push-protected@v2
+      with:
+        token: ${{ secrets.auto_commit_token }}
+        branch: ${{ github.ref_name }}
+        unprotect_reviews: true
+
+    - name: Get Commit id
+      id: raise
+      run: |
         commit_hash=$(git log --format="%H" -n 1)
-        echo ::set-output name=commit_id::$commit_hash  
+        echo ::set-output name=commit_id::$commit_hash
 
     - name: Find Package details
       id: vars
       run: |
         PACKAGE_VERSION=$(cat package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
         PACKAGE_NAME=$(cat package.json | grep name |head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
-        
+
         echo ::set-output name=npm_pkg_name::$PACKAGE_NAME
         echo ::set-output name=npm_pkg_version::$PACKAGE_VERSION
 

@@ -1,4 +1,4 @@
-name: Build and pack Ros packages 
+name: Build and pack Ros packages
 on:
   workflow_call:
     inputs:
@@ -13,12 +13,14 @@ on:
       ros_distro:
         required: true
         type: string
-        
+
 
     secrets:
       auto_commit_user:
         required: true
       auto_commit_mail:
+        required: true
+      auto_commit_token:
         required: true
       registry_user:
         required: true
@@ -49,11 +51,11 @@ jobs:
       image: registry.aws.cloud.mov.ai/devops/ros-buildtools-${{ matrix.distro }}:latest
       options: --user root
       credentials:
-        username: ${{secrets.registry_user}} 
+        username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
 
     steps:
-    - name: Checkout    
+    - name: Checkout
       uses: actions/checkout@v2
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
@@ -71,21 +73,21 @@ jobs:
 
         # is movai package ?
         if [ -n "$is_movai_package" ]:
-        then  
+        then
           if [ -z "$search_result" ]:
           then
               echo "\e[31m$0"
               touch $2
-          fi 
+          fi
         fi
 
         ' {} $expected_url $VALIDATION_FILE \;
 
         if [ -f $VALIDATION_FILE ];
-        then    
+        then
             echo "\e[31mPlease add \033[0;36m$expected_url \e[31mto all the package.xmls mentioned above!"
             exit 1
-        fi 
+        fi
 
     - name: Install Mobros
       run: python3 -m pip install mobros==1.0.1.22 --ignore-installed
@@ -103,8 +105,8 @@ jobs:
         mobtest $(pwd)
 
     - name: Raise version and validate Ros repository
-      run: mobros raise --workspace="$(pwd)" 
-    
+      run: mobros raise --workspace="$(pwd)"
+
     - name: Build
       run: mobros build --mode ${{ matrix.build_mode }}
 
@@ -166,17 +168,17 @@ jobs:
       image: registry.aws.cloud.mov.ai/devops/ros-buildtools-noetic:latest
       options: --user root
       credentials:
-        username: ${{secrets.registry_user}} 
+        username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
 
     steps:
-    - name: Checkout    
+    - name: Checkout
       uses: actions/checkout@v2
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
         submodules: recursive
-        
+
     - name: Download a single artifact
       uses: actions/download-artifact@v2
       with:
@@ -191,8 +193,8 @@ jobs:
       run: python3 -m pip install mobros==1.0.1.21 --ignore-installed
 
     - name: Raise version and validate Ros repository
-      run: mobros raise --workspace="$(pwd)" 
-         
+      run: mobros raise --workspace="$(pwd)"
+
     - name: Find package details
       id: vars
       run: |
@@ -202,9 +204,9 @@ jobs:
             main_version=$(echo $version_section | sed 's/ //g' | sed -e 's/<\w*>'//g | sed -e 's/<\/\w*>'//g)
             buildid=$(echo $build_version_section | sed 's/ //g' | sed -e 's/<\w*>'//g | sed -e 's/<\/\w*>'//g)
             VERSION="$main_version-$buildid"
-            echo ::set-output name=ros_pkg_version::$VERSION  
+            echo ::set-output name=ros_pkg_version::$VERSION
 
-    
+
     - name: Publish to Nexus ppa-testing
       shell: bash
       run: |
@@ -222,7 +224,7 @@ jobs:
             #retry
             if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
               echo "Failed upload with $RETURN_CODE. Retrying"
-            
+
               RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
                 -H "Content-Type: multipart/form-data" \
                 --data-binary "@$file" \
@@ -234,7 +236,7 @@ jobs:
               echo "Failed upload with $RETURN_CODE. Exiting"
               exit 1
             fi
-            
+
           done
 
     - name: Commit raise version
@@ -245,10 +247,20 @@ jobs:
         git pull
         git add **package.xml
         git commit -m "Automatic Bump of build version"
-        git push
+
+    - name: Push auto raise version
+      uses: CasperWA/push-protected@v2
+      with:
+        token: ${{ secrets.auto_commit_token }}
+        branch: ${{ github.ref_name }}
+        unprotect_reviews: true
+
+    - name: Get Commit id
+      id: raise
+      run: |
         commit_hash=$(git log --format="%H" -n 1)
-        echo ::set-output name=commit_id::$commit_hash  
-        
+        echo ::set-output name=commit_id::$commit_hash
+
     - name: Create Github Release
       uses: softprops/action-gh-release@v1
       with:
@@ -268,11 +280,11 @@ jobs:
       image: registry.aws.cloud.mov.ai/devops/ros-buildtools-noetic:latest
       options: --user root
       credentials:
-        username: ${{secrets.registry_user}} 
+        username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
 
     steps:
-    - name: Checkout    
+    - name: Checkout
       uses: actions/checkout@v2
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
@@ -284,7 +296,7 @@ jobs:
       run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
 
     - name: Fetch artifact from github release
-      run: | 
+      run: |
         mkdir artifacts
         cd artifacts
         gh release download ${{ steps.vars.outputs.tag}} -p *.deb
