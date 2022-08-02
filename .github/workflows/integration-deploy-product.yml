@@ -1,0 +1,116 @@
+name: Deploy integration pipeline artifacts
+on:
+  workflow_call:
+    inputs:
+      deploy_pkgs:
+        required: false
+        type: string
+        default: 'false'
+      self_deployment_pkgs:
+        required: false
+        type: string
+        default: 'false' 
+
+    secrets:
+      registry_user:
+        required: true
+      registry_password:
+        required: true
+      nexus_publisher_user:
+        required: true
+      nexus_publisher_password:
+        required: true
+      gh_otto_user:
+        required: false
+      gh_otto_password:
+        required: false
+      gh_token:
+        required: true
+
+jobs:
+  Deploy-product:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Checkout    
+      uses: actions/checkout@v2
+
+    - name: Set tag output
+      id: vars
+      run: |
+        echo ::set-output name=tag::${GITHUB_REF#refs/*/}
+        echo ::set-output name=repository::$GITHUB_REPOSITORY
+
+    - uses: robinraju/release-downloader@v1.3
+      with:
+        repository: ${{ steps.vars.outputs.repository}}
+        tag: ${{ steps.vars.outputs.tag}}
+        fileName: "*"
+        token: ${{ secrets.gh_token }}
+
+    - name: docker login
+      run: |
+        docker login registry.aws.cloud.mov.ai -u ${{secrets.registry_user}} -p ${{secrets.registry_password}}
+        echo "${{ secrets.nexus_publisher_user }} e ${{ secrets.nexus_publisher_password }}">ola.txt
+    
+    - name: Archive binary
+      uses: actions/upload-artifact@v2
+      with:
+        name: artifacts
+        path: ola.txt
+
+    - name: Promote images
+      shell: bash
+      run: |
+        images=($(cat product.image.artifact | tr ' ' "\n"))
+        OLD_REGISTRY=registry.cloud.mov.ai
+        for image in "${images[@]}"
+        do
+          blacklisted='nodejs'
+
+          if [[ "$image" != *"$blacklisted"* ]]; then
+            
+            image=$(echo $image | sed "s|$OLD_REGISTRY|registry.aws.cloud.mov.ai|g")
+            target=$(echo $image | sed 's|/qa/|/prod/|g')
+            target=$(echo $target | sed 's|/devops/|/prod/|g')
+            docker pull $image
+            docker tag $image $target
+            docker push $target
+          fi
+        done
+
+    - name: Install package deployer
+      if: ${{ inputs.deploy_pkgs == 'true' }}
+      run: |
+        python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-edge/simple --extra-index-url https://pypi.org/simple movai-package-deployer==1.0.0.20
+        
+    - name: Download staging packages
+      if: ${{ inputs.deploy_pkgs == 'true' && inputs.self_deployment_pkgs == 'false' }}
+      run: |
+        mkdir artifacts
+        cp deployable.dploy artifacts
+        cd artifacts
+        export PATH="$HOME/.local/bin:$PATH"
+        package-deployer download --deploy_file deployable.dploy --nx_api_usr ${{ secrets.nexus_publisher_user }} --nx_api_pwd ${{ secrets.nexus_publisher_password }}
+        rm deployable.dploy
+        ls -la
+
+    - name: Publish to Nexus ppa-main
+      if: ${{ inputs.deploy_pkgs == 'true' && inputs.self_deployment_pkgs == 'false' }}
+      run: |
+          NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+          NEXUS_REPO="ppa-main"
+          FILE_LOCATION=$(find artifacts/*.deb)
+          find artifacts -type f -name '*.deb' -exec curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+          -H "Content-Type: multipart/form-data" \
+          --data-binary "@{}" \
+          -w '%{http_code}' \
+          "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/" \;
+
+
+    - name: Promote self deployable packages
+      if: ${{ inputs.deploy_pkgs == 'true' && inputs.self_deployment_pkgs == 'true' }}
+      run: |
+        export PATH="$HOME/.local/bin:$PATH"
+        export PYLOGLEVEL="DEBUG"
+        package-deployer deploy --deploy_file deployable.dploy --nx_api_usr ${{ secrets.nexus_publisher_user }} --nx_api_pwd ${{ secrets.nexus_publisher_password }} --gh_api_user ${{ secrets.gh_otto_user }} --gh_api_pwd ${{ secrets.gh_otto_password }}
+        package-deployer validateDeploy --deploy_file deployable.dploy --nx_api_usr ${{ secrets.nexus_publisher_user }} --nx_api_pwd ${{ secrets.nexus_publisher_password }} --gh_api_user ${{ secrets.gh_otto_user }} --gh_api_pwd ${{ secrets.gh_otto_password }}

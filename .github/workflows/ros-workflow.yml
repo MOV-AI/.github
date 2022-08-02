@@ -123,7 +123,7 @@ jobs:
 
     - name: Mobtest validations
       run: |
-        mobtest $(pwd)
+        mobtest --sonar_issues_path ./mobtest-issues.json .
 
     - name: Raise version and validate Ros repository
       run: mobros raise --workspace="$(pwd)" 
@@ -151,6 +151,7 @@ jobs:
           -Dsonar.scm.provider=git
           -Dsonar.qualitygate.wait=true
           -Dsonar.qualitygate.timeout=300
+          -Dsonar.externalIssuesReportPaths=./mobtest-issues.json
 
     - name: Link to SonarQube Dashboard
       shell: bash

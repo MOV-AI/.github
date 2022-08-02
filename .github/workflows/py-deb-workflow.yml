@@ -45,6 +45,7 @@ jobs:
     outputs:
       package_name: ${{ steps.vars.outputs.py_pkg_name }}
       package_version: ${{ steps.releasevars.outputs.py_pkg_version }}
+      raise_commit : ${{steps.raise.outputs.commit_id}}
 
     steps:
     - name: Checkout    
@@ -106,6 +107,7 @@ jobs:
       run: sed -i s/"$(cat setup.py | grep version)"/"    version=\"${{ steps.vars.outputs.py_pkg_version }}\","/g setup.py
 
     - name: Push auto raise version
+      id: raise
       if: ${{ inputs.deploy == 'true' }}
       run: |
         git config --global user.name ${{ secrets.auto_commit_user }}
@@ -115,6 +117,8 @@ jobs:
         git commit -m "Automatic Bump of build version"
         git pull
         git push --force-with-lease
+        commit_hash=$(git log --format="%H" -n 1)
+        echo ::set-output name=commit_id::$commit_hash  
 
     - name: Enable 4 digit version
       id: releasevars
@@ -162,6 +166,7 @@ jobs:
     outputs:
       package_name: ${{ needs.Build.outputs.package_name }}
       package_version: ${{ needs.Build.outputs.package_version }}
+      raise_commit: ${{needs.Build.outputs.raise_commit}}
     steps:
 
     - name: Checkout    
@@ -286,8 +291,12 @@ jobs:
         shell: bash
         run: |
           title="Release of ${{ needs.Debian-Pack.outputs.package_version }}" 
+          git config --global --add safe.directory $(pwd)
           
-          gh release create -p -t "$title" -n "Release notes for ${{ needs.Debian-Pack.outputs.package_name }}" ${{ needs.Debian-Pack.outputs.package_version }}
+          gh release create -p -t "$title" -n "Release notes for ${{ needs.Debian-Pack.outputs.package_name }}" \
+          --target ${{ needs.Debian-Pack.outputs.raise_commit }} \
+          --generate-notes \
+          ${{ needs.Debian-Pack.outputs.package_version }}
 
           # add all files in the artifacts folder
           assets=()
@@ -329,7 +338,7 @@ jobs:
         cd dist
         gh release download ${{ steps.vars.outputs.tag}} -p *.whl
         gh release download ${{ steps.vars.outputs.tag}} -p *.tar.gz
-        cd artifacts
+        cd ../artifacts
         gh release download ${{ steps.vars.outputs.tag}} -p *.deb
 
       env:
