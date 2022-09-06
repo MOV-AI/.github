@@ -37,19 +37,12 @@ jobs:
           # Path to a config file
           config: # optional
 
-#      - name: Login to Movai Registry
-#        uses: docker/login-action@v1
-#        with:
-#          username: ${{ secrets.registry_user }}
-#          password: ${{ secrets.registry_password }}
-#          registry: registry.aws.cloud.mov.ai
-
-      - name: replace
-        id: get_name
-        run: |
-          image_name=${{ inputs.docker_image }}
-          new_name=$(echo $image_name | sed "s#registry.aws.cloud.mov.ai#ghcr.io/mov-ai#g") 
-          echo ::set-output name=DOCKER_IMAGE_NAME::$new_name
+      - name: Login to Movai Registry
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: registry.aws.cloud.mov.ai
 
       - name: "Verify push and tag vars from env"
         id: get_version
@@ -59,7 +52,6 @@ jobs:
         run: |
           echo $GITHUB_REF
           echo $DOCKER_PUSH
-          echo ${{ steps.get_name.outputs.DOCKER_IMAGE_NAME }}
           if [ "${DOCKER_PUSH}" = "true" ]; then
             if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
               echo ::set-output name=DOCKER_TAG::latest
@@ -70,15 +62,7 @@ jobs:
             echo ::set-output name=DOCKER_TAG::local
           fi
 
-      - uses: pmorelli92/github-container-registry-build-push@2.0.0
-        name: Build and Publish latest service image
-        with:
-          github-push-secret: ${{secrets.GITHUB_TOKEN}}
-          docker-image-name: ${{ steps.get_name.outputs.DOCKER_IMAGE_NAME }}
-          docker-image-tag: ${{ steps.get_version.outputs.DOCKER_TAG }}
-          dockerfile-path: ${{ inputs.docker_file }}
-
-      - name: Build and push:${{ env.DOCKER_PUSH }} of ${{ steps.get_name.outputs.DOCKER_IMAGE_NAME }}:${{ steps.get_version.outputs.DOCKER_TAG }}
+      - name: Build and push:${{ env.DOCKER_PUSH }} of ${{ inputs.docker_image }}:${{ steps.get_version.outputs.DOCKER_TAG }}
         uses: docker/build-push-action@v2
         with:
           context: .
@@ -87,5 +71,5 @@ jobs:
           # should use automatic tagging:
           # https://github.com/marketplace/actions/docker-build-push-action#tagging-the-image-using-gitops
           tags: |
-            ${{ steps.get_name.outputs.DOCKER_IMAGE_NAME }}:${{ steps.get_version.outputs.DOCKER_TAG }}
+            ${{ inputs.docker_image }}:${{ steps.get_version.outputs.DOCKER_TAG }}
           pull: true
