@@ -1,0 +1,376 @@
+name: Build and pack py packages 
+on:
+  workflow_call:
+    inputs:
+      deploy:
+        required: false
+        type: string
+        default: 'false'
+      release:
+        required: false
+        type: string
+        default: 'false'
+      skip_linting:
+        required: false
+        type: string
+        default: 'false'        
+
+    secrets:
+      auto_commit_user:
+        required: true
+      auto_commit_mail:
+        required: true
+      registry_user:
+        required: true
+      registry_password:
+        required: true
+      nexus_publisher_user:
+        required: true
+      nexus_publisher_password:
+        required: true
+      gh_token:
+        required: true
+      sonar_token:
+        required: true
+
+jobs:
+  Build:
+    if: ${{ inputs.release == 'false' }}
+    runs-on: ubuntu-20.04
+    container:
+      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      credentials:
+        username: ${{secrets.registry_user}} 
+        password: ${{secrets.registry_password}}
+    outputs:
+      package_name: ${{ steps.vars.outputs.py_pkg_name }}
+      package_version: ${{ steps.releasevars.outputs.py_pkg_version }}
+      raise_commit : ${{steps.raise.outputs.commit_id}}
+
+    steps:
+    - name: Checkout    
+      uses: actions/checkout@v2
+      with:
+        # Disabling shallow clone is recommended for improving relevancy of reporting
+        fetch-depth: 0
+        submodules: recursive
+
+    - name: install build-requirements
+      run: python3 -m pip install -r build-requirements.txt
+
+    - name: Python Linter
+      if: ${{ inputs.skip_linting == 'true' }}
+      run: |
+        python3 -m pylint *
+        python3 -m black .
+        python3 -m flake8
+
+    - name: SonarQube Scan
+      if: ${{ false }}
+      uses: SonarSource/sonarqube-scan-action@v1.0.0
+      env:
+        SONAR_TOKEN: ${{ secrets.sonar_token }}
+        SONAR_HOST_URL: https://sonarqube.aws.cloud.mov.ai
+      with:
+        projectBaseDir: ./
+        args: >
+          -Dsonar.organization=MOV-AI
+          -Dsonar.projectKey=${{ github.event.repository.name }}
+          -Dsonar.verbose=true
+          -Dsonar.sources=.
+          -Dsonar.scm.provider=git
+          -Dsonar.qualitygate.wait=true
+          -Dsonar.qualitygate.timeout=300
+
+    - name: Link to SonarQube Dashboard
+      shell: bash
+      run: |
+        echo "Please check report here: https://sonarqube.aws.cloud.mov.ai/dashboard?id=${{ github.event.repository.name }}"
+      id: sonar_links
+
+    - name: Run tests
+      run: python3 -m pytest
+
+    - name: Raise version
+      if: ${{ inputs.deploy == 'true' }}
+      run: bump2version build setup.py --no-tag --no-commit
+
+    - name: Find Package details
+      id: vars
+      run: |
+        PACKAGE_VERSION=$(cat .bumpversion.cfg | sed s/' '/''/g | grep 'current_version=' | sed s/'current_version='/''/g)
+        PACKAGE_NAME=$(cat setup.py | grep name | cut -d '"' -f2)
+        
+        echo ::set-output name=py_pkg_name::$PACKAGE_NAME
+        echo ::set-output name=py_pkg_version::$PACKAGE_VERSION
+
+    - name: Sync setup.py
+      run: sed -i s/"$(cat setup.py | grep version)"/"    version=\"${{ steps.vars.outputs.py_pkg_version }}\","/g setup.py
+
+    - name: Push auto raise version
+      id: raise
+      if: ${{ inputs.deploy == 'true' }}
+      run: |
+        git config --global user.name ${{ secrets.auto_commit_user }}
+        git config --global user.email ${{ secrets.auto_commit_mail }}
+        git add setup.py
+        git add .bumpversion.cfg
+        git commit -m "Automatic Bump of build version"
+        git pull
+        git push --force-with-lease
+        commit_hash=$(git log --format="%H" -n 1)
+        echo ::set-output name=commit_id::$commit_hash  
+
+    - name: Enable 4 digit version
+      id: releasevars
+      run: |
+        PACKAGE_RELEASE_VERSION=$(echo ${{ steps.vars.outputs.py_pkg_version }} | sed s/"-"/"."/g)
+        sed -i s/"$(cat setup.py | grep version)"/"$(cat setup.py | grep version | sed s/"-"/"."/g)"/g setup.py
+
+        echo ::set-output name=py_pkg_version::$PACKAGE_RELEASE_VERSION
+
+    - name: build
+      run: python3 -m build
+
+    - name: Archive binary
+      uses: actions/upload-artifact@v2
+      with:
+        name: packages
+        path: dist/*
+
+    - name: Publish package to TestPyPI Experimental
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        user: ${{ secrets.nexus_publisher_user }}
+        password: ${{ secrets.nexus_publisher_password }}
+        repository_url: https://artifacts.cloud.mov.ai/repository/pypi-experimental/
+
+    - name: Publish package to TestPyPI Testing
+      if: ${{ inputs.deploy == 'true' }}
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        user: ${{ secrets.nexus_publisher_user }}
+        password: ${{ secrets.nexus_publisher_password }}
+        repository_url: https://artifacts.cloud.mov.ai/repository/pypi-integration/
+
+
+  Debian-Pack:
+    if: ${{ inputs.release == 'false' }}
+    needs: [Build]
+    runs-on: ubuntu-20.04
+    container:
+      image: registry.aws.cloud.mov.ai/devops/ros-buildtools-noetic:latest
+      options: --user root
+      credentials:
+        username: ${{secrets.registry_user}} 
+        password: ${{secrets.registry_password}}
+    outputs:
+      package_name: ${{ needs.Build.outputs.package_name }}
+      package_version: ${{ needs.Build.outputs.package_version }}
+      raise_commit: ${{needs.Build.outputs.raise_commit}}
+    steps:
+
+    - name: Checkout    
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+    - name: Download a single artifact
+      uses: actions/download-artifact@v2
+      with:
+        name: packages
+        path: dist
+
+    - name: Raise & Pack
+      run: |
+        dch -b -v "${{ needs.Build.outputs.package_version }}" "Auto created package version ${{ needs.Build.outputs.package_version }}"
+        PKG_VERSION_ANCHOR='$PKG_VERSION'
+        sed -i "s/$PKG_VERSION_ANCHOR/${{ needs.Build.outputs.package_version }}/g" ./debian/postinst
+        sed -i "s/$PKG_VERSION_ANCHOR/${{ needs.Build.outputs.package_version }}/g" ./debian/prerm
+        dpkg-buildpackage -nc -d -b -rfakeroot -us -uc -tc
+        mkdir artifacts && \
+        cp ../*.deb artifacts
+
+    - name: Archive binary
+      uses: actions/upload-artifact@v2
+      with:
+        name: artifacts
+        path: artifacts/*.deb
+
+  Publish:
+    needs: [Debian-Pack]
+    if: ${{ inputs.deploy == 'true' }}
+    runs-on: ubuntu-20.04
+    container:
+      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      credentials:
+        username: ${{secrets.registry_user}} 
+        password: ${{secrets.registry_password}}
+    steps:
+      - name: Checkout    
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Download a single artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: packages
+          path: dist
+
+      - name: Download a single artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: artifacts
+          path: artifacts
+
+      - name: Publish to Nexus ppa-dev
+        shell: bash
+        run: |
+            NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+            NEXUS_REPO="ppa-dev"
+
+            for file in artifacts/*.deb
+            do
+              RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+              -H "Content-Type: multipart/form-data" \
+              --data-binary "@$file" \
+              -w '%{http_code}' \
+              "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
+
+              #retry
+              if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
+                echo "Failed upload with $RETURN_CODE. Retrying"
+              
+                RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+                  -H "Content-Type: multipart/form-data" \
+                  --data-binary "@$file" \
+                  -w '%{http_code}' \
+                  "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
+              fi
+
+              if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
+                echo "Failed upload with $RETURN_CODE. Exiting"
+                exit 1
+              fi
+              
+            done
+      
+      - name: Publish to Nexus ppa-testing
+        shell: bash
+        run: |
+            NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+            NEXUS_REPO="ppa-testing"
+
+            for file in artifacts/*.deb
+            do
+              RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+              -H "Content-Type: multipart/form-data" \
+              --data-binary "@$file" \
+              -w '%{http_code}' \
+              "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
+
+              #retry
+              if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
+                echo "Failed upload with $RETURN_CODE. Retrying"
+              
+                RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+                  -H "Content-Type: multipart/form-data" \
+                  --data-binary "@$file" \
+                  -w '%{http_code}' \
+                  "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
+              fi
+
+              if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
+                echo "Failed upload with $RETURN_CODE. Exiting"
+                exit 1
+              fi
+              
+            done
+
+      - name: Create Github Release
+        if: ${{ inputs.deploy == 'true' }}
+        shell: bash
+        run: |
+          title="Release of ${{ needs.Debian-Pack.outputs.package_version }}" 
+          git config --global --add safe.directory $(pwd)
+          
+          gh release create -p -t "$title" -n "Release notes for ${{ needs.Debian-Pack.outputs.package_name }}" \
+          --target ${{ needs.Debian-Pack.outputs.raise_commit }} \
+          --generate-notes \
+          ${{ needs.Debian-Pack.outputs.package_version }}
+
+          # add all files in the artifacts folder
+          assets=()
+          for asset in dist/*; do
+            # do nothing if folder is empty
+            if [[ $asset != "dist/*" ]]; then
+              gh release upload ${{ needs.Debian-Pack.outputs.package_version }} $asset
+            fi 
+          done
+          for asset in artifacts/*; do
+            # do nothing if folder is empty
+            if [[ $asset != "artifacts/*" ]]; then
+              gh release upload ${{ needs.Debian-Pack.outputs.package_version }} $asset
+            fi 
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+  Release:
+    if: ${{ inputs.release == 'true' }}
+    runs-on: ubuntu-20.04
+    container:
+      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      credentials:
+        username: ${{secrets.registry_user}} 
+        password: ${{secrets.registry_password}}
+
+    steps:
+    - name: Checkout    
+      uses: actions/checkout@v2
+
+    - name: Set tag output
+      id: vars
+      run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
+
+    - name: Fetch artifact from github release
+      run: | 
+        mkdir dist artifacts
+        cd dist
+        gh release download ${{ steps.vars.outputs.tag}} -p *.whl
+        gh release download ${{ steps.vars.outputs.tag}} -p *.tar.gz
+        cd ../artifacts
+        gh release download ${{ steps.vars.outputs.tag}} -p *.deb
+
+      env:
+        GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+    - name: Archive binary
+      uses: actions/upload-artifact@v2
+      with:
+        name: packages
+        path: dist/*
+
+    - name: Archive binary
+      uses: actions/upload-artifact@v2
+      with:
+        name: artifacts
+        path: artifacts/*.deb
+        
+    - name: Publish package to TestPyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        user: ${{ secrets.nexus_publisher_user }}
+        password: ${{ secrets.nexus_publisher_password }}
+        repository_url: https://artifacts.cloud.mov.ai/repository/pypi-edge/
+  
+    - name: Publish to Nexus ppa-main
+      run: |
+          NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+          NEXUS_REPO="ppa-main"
+          FILE_LOCATION=$(find artifacts/*.deb)
+          find artifacts -type f -name '*.deb' -exec curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+          -H "Content-Type: multipart/form-data" \
+          --data-binary "@{}" \
+          "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/" \;
+
