@@ -61,6 +61,16 @@ on:
         type: boolean
         default: false
         description: boolean to enable snyk security analysis
+      download_artifact:
+        required: false
+        type: boolean
+        default: false
+        description: boolean to enable download of 'packages' artifacts to be included in build
+      download_artifact_path:
+        required: false
+        type: string
+        default: dist
+        description: path where package is downloaded
     secrets:
       registry_user:
         required: true
@@ -151,14 +161,15 @@ jobs:
             echo -e "Docker build arguments:\n$BUILD_ARGS_JSON"
           fi
 
-      - name: Download a single artifact
+      - name: Download packages to include in build
+        if: inputs.download_artifact
         uses: actions/download-artifact@v2
-        continue-on-error: true
         with:
           name: packages
-          path: dist
+          path: inputs.download_artifact_path
 
-      - name: Set up QEMU
+      - name: Set up QEMU for multi platform
+        if: ${{ contains(inputs.platforms, 'arm') }}
         uses: docker/setup-qemu-action@v1
       # https://github.com/docker/setup-buildx-action
 
@@ -199,7 +210,9 @@ jobs:
         with:
           args: --severity-threshold=high --file=${{ inputs.docker_file }}
           image: ${{ steps.get_image_names.outputs.PUB_DOCKER_IMAGE }}
-      - name: Upload result to GitHub Code Scanning
+
+      - name: Snyk upload result to GitHub Code Scanning
+        if: inputs.public && inputs.snyk_check && inputs.deploy
         uses: github/codeql-action/upload-sarif@v2
         continue-on-error: true
         with:
