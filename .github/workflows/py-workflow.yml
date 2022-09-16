@@ -170,7 +170,7 @@ jobs:
       run: python3 -m pytest
 
     - name: Raise version
-      if: ${{ inputs.deploy == 'true' }}
+      if: ${{ (inputs.deploy == 'true') && (github.ref != 'refs/heads/dev') }}
       run: bump2version build setup.py --no-tag --no-commit
 
     - name: Find Package details
@@ -187,7 +187,7 @@ jobs:
 
     - name: Push auto raise version
       id: raise
-      if: ${{ inputs.deploy == 'true' }}
+      if: ${{ (inputs.deploy == 'true') && (github.ref != 'refs/heads/dev') }}
       run: |
         git config --global user.name ${{ secrets.auto_commit_user }}
         git config --global user.email ${{ secrets.auto_commit_mail }}
@@ -223,8 +223,8 @@ jobs:
         password: ${{ secrets.nexus_publisher_password }}
         repository_url: https://artifacts.cloud.mov.ai/repository/pypi-experimental/
 
-    - name: Publish package to TestPyPI Testing
-      if: ${{ inputs.deploy == 'true' }}
+    - name: Publish package to TestPyPI Integration
+      if: ${{ (inputs.deploy == 'true') && (github.ref != 'refs/heads/dev') }}
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         user: ${{ secrets.nexus_publisher_user }}
@@ -232,7 +232,7 @@ jobs:
         repository_url: https://artifacts.cloud.mov.ai/repository/pypi-integration/
 
     - name: Create Github Release
-      if: ${{ inputs.deploy == 'true' }}
+      if: ${{ (inputs.deploy == 'true') && (github.ref != 'refs/heads/dev') }}
       shell: bash
       run: |
         title="Release of ${{ steps.releasevars.outputs.py_pkg_version }}"
