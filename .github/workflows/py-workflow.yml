@@ -105,77 +105,11 @@ jobs:
             python3 -m pytest tests/
         fi
 
-    - name: Check if SonarCloud project exists
+    - name: Create SonarCloud project and disable autoscan
       if: ${{ !github.event.repository.private }}
-      id: sonar_project
-      env:
-        GITHUB_ORG: ${{ github.repository_owner }}
-        REPO_NAME: ${{ github.event.repository.name }}
-        SONAR_ORG: mov-ai
-        SONAR_TOKEN: ${{ secrets.sonar_token }}
-      run: |
-        json=$( \
-            curl -k -s  \
-                -X POST \
-                -u "${SONAR_TOKEN}:" \
-                -d "projects=${GITHUB_ORG}_${REPO_NAME}&organization=${SONAR_ORG}" \
-                "https://sonarcloud.io/api/projects/search"
-        )
-
-        echo "Project search results: ${json}"
-
-        found_proj_num=$(echo "${json}" | jq '.components | length')
-
-        # project was not found
-        if [ "${found_proj_num}" -eq 0 ]; then
-            echo "SonarCloud project does not exist"
-            echo ::set-output name=exists::false
-            exit 0
-        fi
-
-        # if -r is not used the returned string is double quoted
-        found_proj=$(echo "${json}" | jq -r '.components[0].key')
-
-        # project was found and the name matches
-        if [ "${found_proj_num}" -eq 1 ] && [ "${found_proj}" = "${GITHUB_ORG}_${REPO_NAME}" ]; then
-            echo "SonarCloud project exists"
-            echo ::set-output name=exists::true
-            exit 0
-        fi
-
-        # else error
-        exit 1
-
-    - name: Create SonarCloud project
-      if: ${{ !github.event.repository.private && steps.sonar_project.outputs.exists == 'false' }}
-      env:
-        GITHUB_ORG: ${{ github.repository_owner }}
-        REPO_NAME: ${{ github.event.repository.name }}
-        GITHUB_TOKEN: ${{ github.token }}
-        SONAR_ORG: mov-ai
-        SONAR_TOKEN: ${{ secrets.sonar_token }}
-      run: |
-        # find repository ID
-        json=$(curl \
-          -H "Accept: application/vnd.github+json" \
-          -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-          "https://api.github.com/repos/${GITHUB_ORG}/${REPO_NAME}")
-        REPO_ID=$(echo "${json}" | jq .id)
-        echo "Repository ID: ${REPO_ID}"
-
-        # create project
-        curl --include \
-          -X POST \
-          -u "${SONAR_TOKEN}:" \
-          -d "organization=${SONAR_ORG}&installationKeys=${GITHUB_ORG}%2F${REPO_NAME}%7C${REPO_ID}" \
-          "https://sonarcloud.io/api/alm_integration/provision_projects"
-
-        # disable autoscan (it is enabled at project creation)
-        curl --include \
-          -X POST \
-          -u "${SONAR_TOKEN}:" \
-          -d "enable=false&projectKey=${GITHUB_ORG}_${REPO_NAME}" \
-          "https://sonarcloud.io/api/autoscan/activation"
+      uses: MOV-AI/action-sonarcloud-proj-config@v1
+      with:
+        sonar_token: ${{ secrets.sonar_token }}
 
     - name: SonarCloud Scan
       if: ${{ !github.event.repository.private }}
