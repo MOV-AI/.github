@@ -82,6 +82,7 @@ jobs:
     - name: Install requirements
       shell: bash
       run: |
+        apt-get update
         IFS=';' read -r -a array <<< '${{ inputs.custom_requirements }}'
 
         for cmd in "${array[@]}"
