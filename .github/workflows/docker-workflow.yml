@@ -5,26 +5,100 @@ on:
       docker_file:
         required: true
         type: string
+        description: path to the Dockerfile used for build step
       docker_image:
         required: true
         type: string
+        description: name of image used for build step and optional push to registries
+      build_args:
+        required: false
+        type: string
+        description: list of arguments used for build step (comma separated)
+      platforms:
+        required: false
+        type: string
+        default: linux/amd64 #,linux/arm/v7
+        description: list of platform to build and optionally push (comma separated)
       github_ref:
         required: true
         type: string
+        description: the git branch or tag ref that triggered the workflow run
+      version:
+        required: false
+        type: string
+        default: local
+        description: tag of image used for build step and optional push to registries
+      deploy:
+        required: false
+        type: boolean
+        default: false
+        description: boolean to enable push
+      push_latest:
+        required: false
+        type: boolean
+        default: false
+        description: boolean to override latest tag on push
+      docker_registry:
+        required: false
+        type: string
+        default: registry.cloud.mov.ai
+        description: primary registry used for push
+      public:
+        required: false
+        type: boolean
+        default: false
+        description: boolean to enable secondary public registry push
+      public_registry:
+        required: false
+        type: string
+        default: pubregistry.aws.cloud.mov.ai
+        description: secondary public registry used for push
+      public_image:
+        required: false
+        type: string
+        description: secondary public name of image used for build step and optional push to registries
+      snyk_check:
+        required: false
+        type: boolean
+        default: false
+        description: boolean to enable snyk security analysis
+      download_artifact:
+        required: false
+        type: boolean
+        default: false
+        description: boolean to enable download of 'packages' artifacts to be included in build
+      download_artifact_path:
+        required: false
+        type: string
+        default: ./dist
+        description: path where package is downloaded
+      target:
+        required: false
+        type: string
+        default:
+        description: string of docker build target
     secrets:
       registry_user:
         required: true
       registry_password:
         required: true
+      pub_registry_user:
+        required: false
+      pub_registry_password:
+        required: false
+      snyk_token:
+        required: false
 
 jobs:
   build_deploy:
     runs-on: ubuntu-20.04
-    env:
-      DOCKER_PUSH: ${{ contains(inputs.github_ref, 'refs/heads/main') || contains(inputs.github_ref, 'refs/tags/v')}}
+    permissions:
+      contents: read
+      packages: write
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Hadolint ${{ inputs.docker_file }}
         uses: hadolint/hadolint-action@v1.6.0
@@ -33,42 +107,115 @@ jobs:
           format: tty
           failure-threshold: error # optional, default is info
           # A space separated string of rules to ignore
-          ignore: # optional
+          # ignore: # optional
           # Path to a config file
-          config: # optional
+          # config: # optional
 
-      - name: Login to Movai Registry
+      - name: Login to Private Registry
         uses: docker/login-action@v1
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
-          registry: registry.cloud.mov.ai
+          registry: ${{ inputs.docker_registry }}
 
-      - name: "Verify push and tag vars from env"
-        id: get_version
+      - name: Login to Public Registry (for push permission)
+        if: ${{ inputs.public }}
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.pub_registry_user }}
+          password: ${{ secrets.pub_registry_password }}
+          registry: ${{ inputs.public_registry }}
+
+      - name: Compute docker image names
+        id: get_image_names
         env:
-          GITHUB_REF: ${{ inputs.github_ref }}
-          DOCKER_PUSH: ${{ env.DOCKER_PUSH }}
+          PUBLIC_PUSH: ${{ inputs.public }}
+          LATEST: ${{ inputs.push_latest }}
         run: |
-          echo $GITHUB_REF
-          echo $DOCKER_PUSH
-          if "${DOCKER_PUSH}" = "true"; then
-            if "${GITHUB_REF}" = "refs/heads/main"; then
-              echo ::set-output name=DOCKER_TAG::latest
-            else
-              echo ::set-output name=DOCKER_TAG::${GITHUB_REF##*/}
-            fi
-          else
-            echo ::set-output name=DOCKER_TAG::local
+          PUB_DOCKER_IMAGE=""
+          DOCKER_IMAGES=${{ inputs.docker_registry }}/${{ inputs.docker_image }}:${{ inputs.version }}
+
+          if [ "${LATEST}" = "true" ]; then
+            DOCKER_IMAGES="$DOCKER_IMAGES,${{ inputs.docker_registry }}/${{ inputs.docker_image }}:latest"
           fi
 
-      - name: Build and push:${{ env.DOCKER_PUSH }} of ${{ inputs.docker_image }}:${{ steps.get_version.outputs.DOCKER_TAG }}
-        uses: docker/build-push-action@v2
+          # If public push is needed
+          if [ "${PUBLIC_PUSH}" = "true" ]; then
+            PUB_DOCKER_IMAGE="${{ inputs.public_registry }}/${{ inputs.public_image }}:${{ inputs.version }}"
+            DOCKER_IMAGES="$DOCKER_IMAGES,$PUB_DOCKER_IMAGE"
+            echo "::set-output name=PUB_DOCKER_IMAGE::$PUB_DOCKER_IMAGE"
+
+            if [ "${LATEST}" = "true" ]; then
+              DOCKER_IMAGES="$DOCKER_IMAGES,${{ inputs.public_registry }}/${{ inputs.public_image }}:latest"
+            fi
+          fi
+
+          echo "::set-output name=DOCKER_IMAGES::$DOCKER_IMAGES"
+          echo -e "Docker images to publish:\n$DOCKER_IMAGES"
+
+      - name: Compute docker build arguments
+        id: get_build_args
+        run: |
+          BUILD_ARGS_STR_LIST="${{ inputs.build_args }}"
+          if [ -n "$BUILD_ARGS_STR_LIST" ]; then
+            echo "::set-output name=build_args_str_list::$BUILD_ARGS_STR_LIST"
+            echo -e "Docker build arguments:\n$BUILD_ARGS_STR_LIST"
+          fi
+
+      - name: Download packages to include in build
+        if: inputs.download_artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: packages
+          path: ${{ inputs.download_artifact_path }}
+
+      - name: Set up QEMU for multi platform
+        if: ${{ contains(inputs.platforms, 'arm') }}
+        uses: docker/setup-qemu-action@v1
+      # https://github.com/docker/setup-buildx-action
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build with args and push:${{ inputs.deploy }}
+        if: ${{ steps.get_build_args.outputs.build_args_str_list != '' }}
+        uses: docker/build-push-action@v3
         with:
           context: .
+          platforms: ${{ inputs.platforms }}
           file: ${{ inputs.docker_file }}
-          push: ${{ env.DOCKER_PUSH }}
-          tags: |
-            ${{ inputs.docker_image }}:${{ steps.get_version.outputs.DOCKER_TAG }}
-          build-args:
+          push: ${{ inputs.deploy }}
+          tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
+          target: ${{ inputs.target }}
           pull: true
+          build-args: ${{ steps.get_build_args.outputs.build_args_str_list }}
+
+      - name: Build and push:${{ inputs.deploy }}
+        if: ${{ steps.get_build_args.outputs.build_args_str_list == '' }}
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          platforms: ${{ inputs.platforms }}
+          file: ${{ inputs.docker_file }}
+          push: ${{ inputs.deploy }}
+          tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
+          target: ${{ inputs.target }}
+          pull: true
+
+      - name: Snyk check
+        if: inputs.public && inputs.snyk_check && inputs.deploy
+        uses: snyk/actions/docker@master
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          SNYK_TOKEN: ${{ secrets.snyk_token }}
+        with:
+          args: --severity-threshold=high --file=${{ inputs.docker_file }}
+          image: ${{ steps.get_image_names.outputs.PUB_DOCKER_IMAGE }}
+
+      - name: Snyk upload result to GitHub Code Scanning
+        if: inputs.public && inputs.snyk_check && inputs.deploy
+        uses: github/codeql-action/upload-sarif@v2
+        continue-on-error: true
+        with:
+          sarif_file: snyk.sarif

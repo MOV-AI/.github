@@ -1,0 +1,17 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.3.0
+    hooks:
+    - id: check-json                # checks if json files are valid
+    - id: check-added-large-files   # checks if large files were added
+    - id: check-merge-conflict      # checks if all merge conflicts were resolved
+    - id: check-yaml                # checks if yaml files are valid
+    - id: end-of-file-fixer         # fixes missing line ending in end of file
+    - id: mixed-line-ending         # fixes line files line ending
+      args: [--fix=lf]
+    - id: trailing-whitespace       # removes trailing whitespaces from text files
+
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.18.3
+    hooks:
+      - id: check-github-workflows

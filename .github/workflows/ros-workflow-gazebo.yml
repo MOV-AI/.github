@@ -1,4 +1,4 @@
-name: Build and pack Cpp packages 
+name: Build and pack Ros packages
 on:
   workflow_call:
     inputs:
@@ -10,15 +10,14 @@ on:
         required: false
         type: string
         default: 'false'
-      components:
+      ros_distro:
+        required: true
+        type: string
+      prod_publish_repos:
         required: false
         type: string
-        default: ''
-      custom_requirements:
-        required: false
-        type: string
-        default: ''
-        
+        default: '["ppa-main"]'
+
     secrets:
       auto_commit_user:
         required: true
@@ -32,6 +31,10 @@ on:
         required: true
       nexus_publisher_password:
         required: true
+      aws_sqs_rosdep_access_key:
+        required: true
+      aws_sqs_rosdep_secret_access_key:
+        required: true
       gh_token:
         required: true
       sonar_token:
@@ -41,61 +44,95 @@ jobs:
   Build:
     strategy:
       matrix:
-        sub_component: ${{ fromJSON(inputs.components) }}
+        distro: ${{ fromJSON(inputs.ros_distro) }}
+        build_mode: ["debug","release"]
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-20.04
     container:
-      image: registry.cloud.mov.ai/devops/ros-buildtools-melodic:latest
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:latest
       options: --user root
       credentials:
-        username: ${{secrets.registry_user}} 
+        username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
 
     steps:
-    - name: Checkout    
+    - name: Checkout
       uses: actions/checkout@v2
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
         submodules: recursive
 
-    - name: Find Package details
-      id: vars
+    - name: Validate Repository Package.xml
       run: |
-        PACKAGE_VERSION=$(dpkg-parsechangelog --show-field Version)
-        PACKAGE_NAME=$(dpkg-parsechangelog --show-field Source)
-        echo ::set-output name=pkg_name::$PACKAGE_NAME
-        echo ::set-output name=pkg_version::$PACKAGE_VERSION
-      working-directory: ${{ matrix.sub_component }}
+        expected_url="<url>$GITHUB_SERVER_URL/$GITHUB_REPOSITORY</url>"
+        VALIDATION_FILE="/tmp/verification-failed"
+        find -L ./ -type f -name 'package.xml' -exec sh -c '
 
-    - name: Raise Version
-      id: vars-after-raise
+        search_result=$(cat $0 | grep "$1")
+        is_movai_package=$(cat $0 | grep "<name>movai_")
+
+        # is movai package ?
+        if [ -n "$is_movai_package" ]:
+        then
+          if [ -z "$search_result" ]:
+          then
+              echo "\e[31m$0"
+              touch $2
+          fi
+        fi
+
+        ' {} $expected_url $VALIDATION_FILE \;
+
+        if [ -f $VALIDATION_FILE ];
+        then
+            echo "\e[31mPlease add \033[0;36m$expected_url \e[31mto all the package.xmls mentioned above!"
+            exit 1
+        fi
+
+    - name: Run post-checkout
       run: |
-        PACKAGE_VERSION=${{ steps.vars.outputs.pkg_version }}
-        main_version=${PACKAGE_VERSION%-*}
-        build_id="${PACKAGE_VERSION#*-}"
-        raised_buildid=$(($build_id+1))
-        RAISED_PACKAGE_VERSION="$main_version-$raised_buildid"
-        echo ::set-output name=pkg_version::$RAISED_PACKAGE_VERSION
-      working-directory: ${{ matrix.sub_component }}
+        if [ -e ./scripts/post-checkout ]; then
+          python3 ./scripts/post-checkout
+        fi
 
-    - name: Install requirements
-      shell: bash
+    - name: Install Mobros
+      run: python3 -m pip install mobros==1.0.1.22 --ignore-installed
+
+    - name: Install Mobtest
       run: |
-        apt-get update
-        IFS=';' read -r -a array <<< '${{ inputs.custom_requirements }}'
+          python3 -m pip install \
+          -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple \
+          mobtest==0.0.2.2 --ignore-installed
 
-        for cmd in "${array[@]}"
-        do
-            echo "$cmd"
-            eval $cmd
-        done
-        echo "finished custom script, now the requirement.apt"
-        apt-get install $(cat ./requirements.apt) -y
-      working-directory: ${{ matrix.sub_component}}
- 
-        #          curl -fsSL http://packages.osrfoundation.org/gazebo.key | apt-key add - ;add-apt-repository "deb http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main"
+    - name: Setup link to Ros userspace
+      run: |
+        mkdir /opt/mov.ai/user/cache/ros/src/
+        ln -s $(pwd)/* /opt/mov.ai/user/cache/ros/src/
 
+    - name: Mobtest validations
+      run: |
+        mobtest repo --issues ./mobtest-issues.json .
+
+    - name: Raise version and validate Ros repository
+      run: mobros raise --workspace="$(pwd)"
+
+    - name: Build
+      run: |
+        echo "-$IGNITION_VERSION-"
+        mobros build --mode ${{ matrix.build_mode }}
+      env:
+        STRIP_REPLACES: true
+        IGNITION_VERSION: fortress
+
+    - name: Pack
+      run: |
+        export MOVAI_OUTPUT_DIR="$(pwd)/artifacts"
+        echo $IGNITION_VERSION
+        mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
+      env:
+        STRIP_REPLACES: true
+        IGNITION_VERSION: fortress
 
     - name: SonarQube Scan
       if: ${{ false }}
@@ -104,7 +141,7 @@ jobs:
         SONAR_TOKEN: ${{ secrets.sonar_token }}
         SONAR_HOST_URL: https://sonarqube.aws.cloud.mov.ai
       with:
-        projectBaseDir: ./${{ matrix.sub_component }}
+        projectBaseDir: ./
         args: >
           -Dsonar.organization=MOV-AI
           -Dsonar.projectKey=${{ github.event.repository.name }}
@@ -120,52 +157,48 @@ jobs:
         echo "Please check report here: https://sonarqube.aws.cloud.mov.ai/dashboard?id=${{ github.event.repository.name }}"
       id: sonar_links
 
-    
-    - name: Build
-      run: |
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu/
-        make
-      working-directory: ${{ matrix.sub_component }}
-
-    - name: Pack
-      run: | 
-        dch -v ${{ steps.vars-after-raise.outputs.pkg_version }} -b -D "UNRELEASED" "bump version"
-        dpkg-buildpackage -b && \
-        mkdir artifacts && \
-        cp ../*.deb artifacts
-      working-directory: ${{ matrix.sub_component }}
-
     - name: Archive binary
       uses: actions/upload-artifact@v2
       with:
         name: packages
-        path: ${{ matrix.sub_component }}/artifacts/*
+        path: artifacts/*
 
     - name: Print generated packages
-      run: ls -la artifacts
-      working-directory: ${{ matrix.sub_component }}
+      run: |
+        ls -la artifacts
+
+    - name: Print generated rosdep
+      run: |
+        cat /usr/local/rosdep/ros-pkgs.yaml
+
+    - name: Rosdep Publish
+      if: ${{ inputs.deploy == 'true' }}
+      run: |
+        export AWS_DEFAULT_REGION="eu-west-1"
+        export AWS_ACCESS_KEY_ID="${{ secrets.aws_sqs_rosdep_access_key }}"
+        export AWS_SECRET_ACCESS_KEY='${{ secrets.aws_sqs_rosdep_secret_access_key }}'
+        mobros publish
+        cat /usr/local/rosdep/ros-pkgs.yaml
 
   Publish:
     if: ${{ inputs.deploy == 'true' }}
     runs-on: ubuntu-20.04
     needs:  [Build]
     container:
-      image: registry.cloud.mov.ai/devops/ros-buildtools-noetic:latest
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:latest
       options: --user root
       credentials:
-        username: ${{secrets.registry_user}} 
+        username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
 
     steps:
-    - name: Checkout    
+    - name: Checkout
       uses: actions/checkout@v2
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
         submodules: recursive
-        
+
     - name: Download a single artifact
       uses: actions/download-artifact@v2
       with:
@@ -174,69 +207,25 @@ jobs:
 
     - name: Print generated packages
       run: |
-        ls -la artifacts
+        ls -la .
 
-    - name: Raise Version
-      id: vars-after-raise
-      shell: bash
-      run: |     
-        sub_component_expr="${{inputs.components}}"
-        sub_component_str=$(echo $sub_component_expr | sed -e 's/\[//g' | sed -e 's/\]//g')
+    - name: Install Mobros
+      run: python3 -m pip install mobros==1.0.1.21 --ignore-installed
 
-        IFS=',' read -r -a sub_components_array <<< $sub_component_str
+    - name: Raise version and validate Ros repository
+      run: mobros raise --workspace="$(pwd)"
 
-        for sub_component in "${sub_components_array[@]}"
-        do
-          echo "$sub_component"
-          pushd $sub_component >/dev/null
-
-          echo "raising component $sub_component"
-          PACKAGE_VERSION=$(dpkg-parsechangelog --show-field Version)
-          main_version=${PACKAGE_VERSION%-*}
-          build_id="${PACKAGE_VERSION#*-}"
-          raised_buildid=$(($build_id+1))
-          RAISED_PACKAGE_VERSION="$main_version-$raised_buildid"
-          dch -v $RAISED_PACKAGE_VERSION -b -D "UNRELEASED" "bump version"
-
-          popd >/dev/null
-        done
-
-        echo ::set-output name=pkg_version::$RAISED_PACKAGE_VERSION
-      working-directory: ${{ matrix.sub_component }}
-
-
-    - name: Publish to Nexus ppa-dev
-      shell: bash
+    - name: Find package details
+      id: vars
       run: |
-          NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-          NEXUS_REPO="ppa-dev"
+            main_package=$(cat /tmp/main-package.mobrosinfo)
+            build_version_section=$(cat $main_package | grep build_version)
+            version_section=$(cat $main_package | grep "<version")
+            main_version=$(echo $version_section | sed 's/ //g' | sed -e 's/<\w*>'//g | sed -e 's/<\/\w*>'//g)
+            buildid=$(echo $build_version_section | sed 's/ //g' | sed -e 's/<\w*>'//g | sed -e 's/<\/\w*>'//g)
+            VERSION="$main_version-$buildid"
+            echo ::set-output name=ros_pkg_version::$VERSION
 
-          for file in artifacts/*.deb
-          do
-            RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-            -H "Content-Type: multipart/form-data" \
-            --data-binary "@$file" \
-            -w '%{http_code}' \
-            "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
-
-            #retry
-            if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
-              echo "Failed upload with $RETURN_CODE. Retrying"
-            
-              RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-                -H "Content-Type: multipart/form-data" \
-                --data-binary "@$file" \
-                -w '%{http_code}' \
-                "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
-            fi
-
-            if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
-              echo "Failed upload with $RETURN_CODE. Exiting"
-              exit 1
-            fi
-            
-          done
-    
     - name: Publish to Nexus ppa-testing
       shell: bash
       run: |
@@ -254,7 +243,7 @@ jobs:
             #retry
             if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
               echo "Failed upload with $RETURN_CODE. Retrying"
-            
+
               RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
                 -H "Content-Type: multipart/form-data" \
                 --data-binary "@$file" \
@@ -266,45 +255,49 @@ jobs:
               echo "Failed upload with $RETURN_CODE. Exiting"
               exit 1
             fi
-            
+
           done
 
     - name: Commit raise version
       id: raise
       run: |
+        git config --global --add safe.directory $(pwd)
         git config --global user.name '${{ secrets.auto_commit_user }}'
         git config --global user.email '${{ secrets.auto_commit_mail }}'
         git pull
-        git add **changelog
+        git add **package.xml
         git commit -m "Automatic Bump of build version"
         git push
         commit_hash=$(git log --format="%H" -n 1)
-        echo ::set-output name=commit_id::$commit_hash  
-        
+        echo ::set-output name=commit_id::$commit_hash
+
     - name: Create Github Release
       uses: softprops/action-gh-release@v1
       with:
-        name: "Release of ${{ steps.vars-after-raise.outputs.pkg_version }}"
+        name: "Release of ${{ steps.vars.outputs.ros_pkg_version }}"
         body: "Please add release notes"
-        tag_name: ${{ steps.vars-after-raise.outputs.pkg_version }}
+        tag_name: ${{ steps.vars.outputs.ros_pkg_version }}
         target_commitish: ${{ steps.raise.outputs.commit_id }}
         token: ${{ secrets.gh_token }}
         prerelease: true
         generate_release_notes: true
         files: artifacts/*.deb
-  
+
   Release:
+    strategy:
+      matrix:
+        publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-20.04
     container:
-      image: registry.cloud.mov.ai/devops/ros-buildtools-noetic:latest
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:latest
       options: --user root
       credentials:
-        username: ${{secrets.registry_user}} 
+        username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
 
     steps:
-    - name: Checkout    
+    - name: Checkout
       uses: actions/checkout@v2
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
@@ -316,17 +309,18 @@ jobs:
       run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
 
     - name: Fetch artifact from github release
-      run: | 
+      run: |
+        git config --global --add safe.directory $(pwd)
         mkdir artifacts
         cd artifacts
         gh release download ${{ steps.vars.outputs.tag}} -p *.deb
       env:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
 
-    - name: Publish to Nexus ppa-main
+    - name: Publish to Nexus ${{ matrix.publish_repo }}
       run: |
           NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-          NEXUS_REPO="ppa-main"
+          NEXUS_REPO="${{ matrix.publish_repo }}"
           FILE_LOCATION=$(find artifacts/*.deb)
           find artifacts -type f -name '*.deb' -exec curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
           -H "Content-Type: multipart/form-data" \

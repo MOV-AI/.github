@@ -36,7 +36,7 @@ jobs:
 
     runs-on: ubuntu-20.04
     container:
-      image: registry.cloud.mov.ai/devops/npm-buildserver:latest
+      image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
       options: --user root
       credentials:
         username: ${{secrets.registry_user}} 
@@ -47,7 +47,7 @@ jobs:
 
     steps:
     - name: Checkout    
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -56,9 +56,10 @@ jobs:
 
     - name: Raise App version
       run: |
+        git config --global --add safe.directory $(pwd)
         git config --global user.name '${{ secrets.auto_commit_user }}'
         git config --global user.email '${{ secrets.auto_commit_mail }}'
-        npm version patch --no-git-tag-version
+        npm version prerelease --no-git-tag-version
 
     - name: Setup Github as proxy Registry 
       uses: actions/setup-node@v2
@@ -81,6 +82,7 @@ jobs:
       run: npm run test
 
     - name: SonarQube Scan
+      if: ${{ false }}
       uses: SonarSource/sonarqube-scan-action@v1.0.0
       env:
         SONAR_TOKEN: ${{ secrets.sonar_token }}
@@ -106,14 +108,13 @@ jobs:
       if: ${{ inputs.deploy == 'true' }}
       run: npm publish
 
-    
 
   Post-publish:
     if: ${{ inputs.deploy == 'true' }}
     runs-on: ubuntu-20.04
     needs:  [Build]
     container:
-      image: registry.cloud.mov.ai/devops/npm-buildserver:latest
+      image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
       options: --user root
       credentials:
         username: ${{secrets.registry_user}} 
@@ -124,7 +125,7 @@ jobs:
     steps:
     - name: Checkout    
       if: ${{ inputs.deploy == 'true' }}
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -132,9 +133,32 @@ jobs:
         token: ${{ secrets.npm_token }}
         
     - name: Raise App version
+      id: raise
       run: |
+        git config --global --add safe.directory $(pwd)
         git config --global user.name '${{ secrets.auto_commit_user }}'
         git config --global user.email '${{ secrets.auto_commit_mail }}'
-        npm version patch -m "Automatic Bump of build version" 
+        npm version prerelease -m "Automatic Bump of build version" 
         git add package.*
         git push
+        commit_hash=$(git log --format="%H" -n 1)
+        echo ::set-output name=commit_id::$commit_hash  
+
+    - name: Find Package details
+      id: vars
+      run: |
+        PACKAGE_VERSION=$(cat package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
+        PACKAGE_NAME=$(cat package.json | grep name |head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
+        
+        echo ::set-output name=npm_pkg_name::$PACKAGE_NAME
+        echo ::set-output name=npm_pkg_version::$PACKAGE_VERSION
+
+    - name: Create Github Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: "Release of ${{ steps.vars.outputs.npm_pkg_version }}"
+        tag_name: ${{ steps.vars.outputs.npm_pkg_version }}
+        target_commitish: ${{ steps.raise.outputs.commit_id }}
+        token: ${{ secrets.gh_token }}
+        prerelease: true
+        generate_release_notes: true
