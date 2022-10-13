@@ -1,6 +1,10 @@
 name: Build Packer images
 on:
   workflow_call:
+    inputs:
+        product_name:
+          required: true
+          type: string
     secrets:
       auto_commit_user:
         required: true
@@ -21,6 +25,9 @@ on:
 
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: '2.1.0.13'
+  GITHUB_API_USR: 'OttoMation-Movai'
+  BRANCH_NAME: ${GITHUB_REF#refs/heads/}
+
 
 jobs:
   Validate-boostrap-configs:
@@ -50,12 +57,12 @@ jobs:
           integration-pipeline merge_manifest_dependency \
                 --dependency_name product-platform \
                 --gh_api_user $GITHUB_API_USR \
-                --gh_api_pwd $GITHUB_TOKEN \
+                --gh_api_pwd ${{ secrets.gh_token }} \
                 --auto_fetch
 
           integration-pipeline generate_meta_simulator_artifacts \
                 --manifest_platform_base_key product-dependencies \
-                --product_name $PRODUCT_NAME \
+                --product_name ${{ inputs.product_name }} \
                 --branch $BRANCH_NAME \
                 --update_simulator \
                 --docker_registry registry.cloud.mov.ai
