@@ -43,7 +43,7 @@ jobs:
     
     - name: Bootstraping simulator metadata
       run: |
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION 
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
                   export PATH="$HOME/.local/bin:$PATH"
           rm -rf simulator_artifacts ci_artifacts
 
