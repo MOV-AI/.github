@@ -5,9 +5,6 @@ on:
         product_name:
           required: true
           type: string
-        branch_name:
-          required: true
-          type: string
     secrets:
       auto_commit_user:
         required: true
@@ -29,6 +26,7 @@ on:
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: '2.1.0.13'
   GITHUB_API_USR: 'OttoMation-Movai'
+  BRANCH_NAME: ${GITHUB_REF#refs/heads/}
 
 
 jobs:
@@ -65,7 +63,7 @@ jobs:
           integration-pipeline generate_meta_simulator_artifacts \
                 --manifest_platform_base_key product-dependencies \
                 --product_name ${{ inputs.product_name }} \
-                --branch ${{ inputs.branch_name }} \
+                --branch $BRANCH_NAME \
                 --update_simulator \
                 --docker_registry registry.cloud.mov.ai
 
