@@ -1,0 +1,33 @@
+name: Build Packer images
+on:
+  workflow_call:
+    secrets:
+      auto_commit_user:
+        required: true
+      auto_commit_mail:
+        required: true
+      auto_commit_pwd:
+        required: true
+      registry_user:
+        required: true
+      registry_password:
+        required: true
+      nexus_publisher_user:
+        required: true
+      nexus_publisher_password:
+        required: true
+      gh_token:
+        required: true
+
+jobs:
+  Setup:
+    runs-on: integration-pipeline
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Raise Template identifier
+      shell: bash
+      run: |
+              sudo apt install -y yamllint
+              yamllint product-manifest.yaml
