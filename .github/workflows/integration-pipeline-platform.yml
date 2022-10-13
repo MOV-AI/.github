@@ -19,9 +19,17 @@ on:
       gh_token:
         required: true
 
+env:
+  CI_INTEGRATION_SCRIPTS_VERSION: '2.1.0.13'
+
 jobs:
   Validate-boostrap-configs:
-    runs-on: integration-pipeline
+    runs-on: ubuntu-20.04
+    container:
+      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
     steps:
     - name: Checkout
       uses: actions/checkout@v3
@@ -31,7 +39,34 @@ jobs:
       run: |
             yamllint product-manifest.yaml
             cat product-manifest.yaml
-      
+    
+    - name: Bootstraping simulator metadata
+      run: |
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION 
+                  export PATH="$HOME/.local/bin:$PATH"
+          rm -rf simulator_artifacts ci_artifacts
+
+          integration-pipeline merge_manifest_dependency \
+                --dependency_name product-platform \
+                --gh_api_user $GITHUB_API_USR \
+                --gh_api_pwd $GITHUB_TOKEN \
+                --auto_fetch
+
+          integration-pipeline generate_meta_simulator_artifacts \
+                --manifest_platform_base_key product-dependencies \
+                --product_name $PRODUCT_NAME \
+                --branch $BRANCH_NAME \
+                --update_simulator \
+                --docker_registry registry.cloud.mov.ai
+
+          mkdir simulator_artifacts
+          cp ci_artifacts/* ./simulator_artifacts
+    - name: Stash sim_configs
+      uses: actions/upload-artifact@v2
+      with:
+        name: sim_configs
+        path: simulator_artifacts/*
+
   Build-Spawner:
     needs: [Validate-boostrap-configs]
     runs-on: integration-pipeline
