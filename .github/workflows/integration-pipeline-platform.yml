@@ -37,6 +37,7 @@ jobs:
     - name: Validate Manifest
       shell: bash
       run: |
+            sudo apt install -y yamllint
             yamllint product-manifest.yaml
             cat product-manifest.yaml
     
