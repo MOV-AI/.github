@@ -5,6 +5,9 @@ on:
         product_name:
           required: true
           type: string
+        branch_name:
+          required: true
+          type: string
     secrets:
       auto_commit_user:
         required: true
@@ -22,11 +25,16 @@ on:
         required: true
       gh_token:
         required: true
+      aws_key_id:
+        required: true
+      aws_secret_key_id:
+        required: true
 
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: '2.1.0.13'
   GITHUB_API_USR: 'OttoMation-Movai'
-  BRANCH_NAME: ${GITHUB_REF#refs/heads/}
+  AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
 
 
 jobs:
@@ -63,7 +71,7 @@ jobs:
           integration-pipeline generate_meta_simulator_artifacts \
                 --manifest_platform_base_key product-dependencies \
                 --product_name ${{ inputs.product_name }} \
-                --branch $BRANCH_NAME \
+                --branch ${{ inputs.branch_name }} \
                 --update_simulator \
                 --docker_registry registry.cloud.mov.ai
 
