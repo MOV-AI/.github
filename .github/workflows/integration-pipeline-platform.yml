@@ -57,7 +57,7 @@ jobs:
           integration-pipeline merge_manifest_dependency \
                 --dependency_name product-platform \
                 --gh_api_user $GITHUB_API_USR \
-                --gh_api_pwd ${{ secrets.gh_token }} \
+                --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
                 --auto_fetch
 
           integration-pipeline generate_meta_simulator_artifacts \
