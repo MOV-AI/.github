@@ -20,15 +20,50 @@ on:
         required: true
 
 jobs:
-  Setup:
+  Validate-boostrap-configs:
     runs-on: integration-pipeline
     steps:
     - name: Checkout
       uses: actions/checkout@v3
 
-    - name: Raise Template identifier
+    - name: Validate Manifest
       shell: bash
       run: |
-              sudo apt install -y yamllint
-              yamllint product-manifest.yaml
-              cat product-manifest.yaml
+            yamllint product-manifest.yaml
+            cat product-manifest.yaml
+      
+  Build-Spawner:
+    needs: [Validate-boostrap-configs]
+    runs-on: integration-pipeline
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Validate Manifest
+      shell: bash
+      run: |
+            cat product-manifest.yaml
+  
+  Build-Simulator:
+    needs: [Validate-boostrap-configs]
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Validate Manifest
+      shell: bash
+      run: |
+            cat product-manifest.yaml
+
+  publish:
+    needs: [Build-Spawner, Build-Simulator]
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Validate Manifest
+      shell: bash
+      run: |
+            cat product-manifest.yaml
