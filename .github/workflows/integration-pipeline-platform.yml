@@ -38,6 +38,7 @@ env:
   GITHUB_API_USR: 'OttoMation-Movai'
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
+  REGISTRY: registry.cloud.mov.ai
 
 
 jobs:
@@ -74,7 +75,7 @@ jobs:
                 --product_name ${{ inputs.product_name }} \
                 --branch ${{ inputs.branch_name }} \
                 --update_simulator \
-                --docker_registry registry.cloud.mov.ai
+                --docker_registry $REGISTRY
 
           mkdir simulator_artifacts
           cp ci_artifacts/* ./simulator_artifacts
@@ -143,7 +144,7 @@ jobs:
       with:
         username: ${{ secrets.registry_user }}
         password: ${{ secrets.registry_password }}
-        registry: registry.cloud.mov.ai
+        registry: $REGISTRY
 
     - name: Prepare task variables
       id: pre_build
@@ -160,11 +161,11 @@ jobs:
         platforms: linux/amd64
         file: docker/${{ matrix.distro }}/Dockerfile
         push: false
-        tags: "registry.cloud.mov.ai/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}"
+        tags: "$REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}"
         target: "${{ inputs.product_name }}-${{ matrix.distro }}"
         pull: true
         build-args: |
-          DOCKER_REGISTRY=registry.cloud.mov.ai
+          DOCKER_REGISTRY=$REGISTRY
           BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} 
           TAG=${{ steps.pre_build.outputs.base_version }} 
           CI_SCRIPT_VERSION=$CI_INTEGRATION_SCRIPTS_VERSION
