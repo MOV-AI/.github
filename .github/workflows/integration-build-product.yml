@@ -444,3 +444,5 @@ jobs:
             gh release create -p --generate-notes --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
             # add all files in the deployment_artifacts folder
             find deployment_artifacts -type f -exec gh release upload $product_version {} \\;
+      env:
+        GITHUB_TOKEN: ${{ secrets.gh_token }}
