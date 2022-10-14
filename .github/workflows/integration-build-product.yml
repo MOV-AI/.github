@@ -400,7 +400,7 @@ jobs:
       shell: bash
       run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
-    - name: Validate Manifest
+    - name: Publish and create release
       shell: bash
       run: |
             git config --global --add safe.directory $(pwd)
