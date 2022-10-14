@@ -161,7 +161,7 @@ jobs:
         platforms: linux/amd64
         file: docker/${{ matrix.distro }}/Dockerfile
         push: false
-        tags: "$REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}"
+        tags: "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}"
         pull: true
         build-args: |
           DOCKER_REGISTRY=$REGISTRY
