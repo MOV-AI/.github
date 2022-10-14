@@ -164,14 +164,53 @@ jobs:
         tags: "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}"
         pull: true
         build-args: |
-          DOCKER_REGISTRY=$REGISTRY
+          DOCKER_REGISTRY=${{ env.REGISTRY }}
           BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} 
           TAG=${{ steps.pre_build.outputs.base_version }} 
-          CI_SCRIPT_VERSION=$CI_INTEGRATION_SCRIPTS_VERSION
+          CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
   
   Build-Simulator:
     needs: [Validate-boostrap-configs]
     runs-on: on-prem-docker-ubuntu
+    container:
+      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Validate Manifest
+      shell: bash
+      run: |
+            cat product-manifest.yaml
+
+  Build-Simulator2:
+    needs: [Validate-boostrap-configs]
+    runs-on: on-prem-docker-ubuntu
+    container:
+      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Validate Manifest
+      shell: bash
+      run: |
+            cat product-manifest.yaml
+
+  Build-Simulator3:
+    needs: [Validate-boostrap-configs]
+    runs-on: on-prem-docker-ubuntu
+    container:
+      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
     steps:
     - name: Checkout
       uses: actions/checkout@v3
