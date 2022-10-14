@@ -144,7 +144,7 @@ jobs:
       with:
         username: ${{ secrets.registry_user }}
         password: ${{ secrets.registry_password }}
-        registry: $REGISTRY
+        registry: ${{ env.REGISTRY }} 
 
     - name: Prepare task variables
       id: pre_build
