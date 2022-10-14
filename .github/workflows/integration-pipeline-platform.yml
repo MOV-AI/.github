@@ -45,7 +45,7 @@ env:
 
 jobs:
   Validate-boostrap-configs:
-    runs-on: on-prem-docker-ubuntu
+    runs-on: integration-pipeline
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -225,7 +225,7 @@ jobs:
   
   Build-Simulator:
     needs: [Validate-boostrap-configs]
-    runs-on: on-prem-docker-ubuntu
+    runs-on: integration-pipeline
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -260,7 +260,12 @@ jobs:
             
   publish:
     needs: [Build-Spawner, Build-Simulator]
-    runs-on: on-prem-docker-ubuntu
+    runs-on: integration-pipeline
+    container:
+      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
     steps:
     - name: Checkout
       uses: actions/checkout@v3
