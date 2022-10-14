@@ -43,7 +43,7 @@ env:
 
 jobs:
   Validate-boostrap-configs:
-    runs-on: ubuntu-20.04
+    runs-on: on-prem-docker-ubuntu
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -171,7 +171,7 @@ jobs:
   
   Build-Simulator:
     needs: [Validate-boostrap-configs]
-    runs-on: ubuntu-20.04
+    runs-on: on-prem-docker-ubuntu
     steps:
     - name: Checkout
       uses: actions/checkout@v3
@@ -183,7 +183,7 @@ jobs:
 
   publish:
     needs: [Build-Spawner, Build-Simulator]
-    runs-on: ubuntu-20.04
+    runs-on: on-prem-docker-ubuntu
     steps:
     - name: Checkout
       uses: actions/checkout@v3
