@@ -246,7 +246,9 @@ jobs:
     
     - name: Cleanup checkout
       if: always()
-      run: git clean -fdx
+      run: |
+        git config --global --add safe.directory $(pwd)
+        git clean -fdx
   
   Build-Simulator:
     needs: [Validate-boostrap-configs]
@@ -261,6 +263,10 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v3
+
+    - name: Install CI Scripts 
+      shell: bash
+      run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
     - name: unstash sim_configs
       uses: actions/download-artifact@v2
