@@ -161,7 +161,6 @@ jobs:
         file: docker/${{ matrix.distro }}/Dockerfile
         push: false
         tags: ${{ steps.pre_build.outputs.raised_version }}
-        target: "${{ inputs.product_name }}-${{ matrix.distro }}"
         pull: true
         build-args: |
           DOCKER_REGISTRY=${props.registry}
