@@ -243,6 +243,10 @@ jobs:
       with:
         name: deploy_artifacts_noetic
         path: artifacts/*
+    
+    - name: Cleanup checkout
+      if: always()
+      run: git clean -fdx
   
   Build-Simulator:
     needs: [Validate-boostrap-configs]
