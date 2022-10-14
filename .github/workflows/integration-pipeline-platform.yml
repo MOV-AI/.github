@@ -112,6 +112,7 @@ jobs:
         distro: ${{ fromJSON(inputs.ros_distro) }}
     runs-on: integration-pipeline
     steps:
+    - uses: rtCamp/action-cleanup@master
     - name: Checkout
       uses: actions/checkout@v3
 
@@ -243,10 +244,7 @@ jobs:
       with:
         name: deploy_artifacts_noetic
         path: artifacts/*
-    
-    - name: Cleanup checkout
-      if: always()
-      run: rm -rf $(pwd)
+
   
   Build-Simulator:
     needs: [Validate-boostrap-configs]
@@ -254,6 +252,8 @@ jobs:
     env:
       DISTRO: noetic
     steps:
+    - uses: rtCamp/action-cleanup@master
+
     - name: Checkout
       uses: actions/checkout@v3
 
@@ -357,9 +357,6 @@ jobs:
       with:
         name: deploy_simulator_artifacts
         path: simulator.image.artifact
-    - name: Cleanup checkout
-      if: always()
-      run: rm -rf $(pwd)
 
   publish:
     needs: [Build-Spawner, Build-Simulator]
