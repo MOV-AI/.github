@@ -361,16 +361,80 @@ jobs:
   publish:
     needs: [Build-Spawner, Build-Simulator]
     runs-on: integration-pipeline
-    container:
-      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
     steps:
     - name: Checkout
       uses: actions/checkout@v3
 
+    - name: unstash raised_meta
+      uses: actions/download-artifact@v2
+      with:
+        name: raised_meta
+        path: platform_configs
+    - name: unstash deploy_artifacts_noetic
+      uses: actions/download-artifact@v2
+      with:
+        name: deploy_artifacts_noetic
+        path: artifacts
+    - name: unstash manifest
+      uses: actions/download-artifact@v2
+      with:
+        name: manifest
+        path: .
+    - name: unstash deploy_simulator_artifacts
+      uses: actions/download-artifact@v2
+      with:
+        name: deploy_simulator_artifacts
+        path: .
+
+    - name: Install CI Scripts 
+      shell: bash
+      run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+
+    - name: Install Package Deployer
+      shell: bash
+      run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
+
     - name: Validate Manifest
       shell: bash
       run: |
+            git config --global --add safe.directory $(pwd)
+            git config --global user.name '${{ secrets.auto_commit_user }}'
+            git config --global user.email '${{ secrets.auto_commit_mail }}'
+            git config --global user.password ${{ secrets.auto_commit_pwd }}
+
+            cp ./platform_configs/product.version product.version
+            cp ./platform_configs/product-manifest.yaml product-manifest.yaml
+            mkdir -p deployment_artifacts
+
+            export PATH="$HOME/.local/bin:$PATH"
+            ls -la
+            mkdir -p pkgs_deployable
+            cp artifacts/*deployable.dploy pkgs_deployable
+            package-deployer join --dploy_workspace "$(pwd)/pkgs_deployable"
+            mv "$(pwd)/pkgs_deployable/merged.dploy" deployment_artifacts/deployable.dploy
+
+            mkdir -p pkgs_undeployable
+            cp artifacts/*3rdParty.dploy pkgs_undeployable
+            package-deployer join --dploy_workspace "$(pwd)/pkgs_undeployable"
+            mv "$(pwd)/pkgs_undeployable/merged.dploy" deployment_artifacts/3rdParty.dploy
+
+            rm -rf pkgs_deployable pkgs_undeployable
+
+            cp artifacts/*.json deployment_artifacts
+            echo -e "$(cat ./artifacts/product-noetic.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
+            cp deployment_artifacts/product.image.artifact ./
+
+            integration-pipeline patch_manifest_with_spawner
             cat product-manifest.yaml
+            cp product-manifest.yaml deployment_artifacts
+
+            product_version=$(cat product.version)
+            
+            git pull
+            git add product.version
+            git commit -m "Automatic Raise"
+            git push origin HEAD:$BRANCH_NAME
+            commit_hash=$(git log --format="%H" -n 1)
+            gh release create -p --generate-notes --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
+            # add all files in the deployment_artifacts folder
+            find deployment_artifacts -type f -exec gh release upload $product_version {} \\;
