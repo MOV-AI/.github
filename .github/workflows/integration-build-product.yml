@@ -228,7 +228,7 @@ jobs:
               docker cp $container_id:/tmp/undeployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-3rdParty.dploy
               CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.distro }}.json
 
-              echo "$DOCKER_REGISTRY/$ENV/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)">artifacts/product-${{ matrix.distro }}.image.artifact
+              echo "$REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)">artifacts/product-${{ matrix.distro }}.image.artifact
   
     - name: Push image
       uses: docker/build-push-action@v3
@@ -356,7 +356,7 @@ jobs:
     - name: pre-stash
       shell: bash
       run: |
-            echo "$DOCKER_REGISTRY/$ENV/$(cat simulator_artifacts/simulator_name.ci)" > simulator.image.artifact
+            echo "$REGISTRY/qa/$(cat simulator_artifacts/simulator_name.ci)" > simulator.image.artifact
 
     - name: Stash deploy_simulator_artifacts
       uses: actions/upload-artifact@v2
