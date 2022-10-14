@@ -184,6 +184,12 @@ jobs:
     - name: Installation
       shell: bash
       run: |
+            for robot in $(movai-cli robots list); do
+              movai-cli robots stop $robot
+              sleep 5
+              movai-cli robots remove $robot
+            done || true'''
+
             mkdir -p artifacts
             cp *.json artifacts/
             CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.distro }}.json
