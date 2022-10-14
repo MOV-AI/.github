@@ -231,6 +231,8 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
+    env:
+      DISTRO: noetic
     steps:
     - name: Checkout
       uses: actions/checkout@v3
@@ -256,7 +258,7 @@ jobs:
       run: |
             wget https://github.com/hadolint/hadolint/releases/download/v2.9.3/hadolint-Linux-x86_64
             chmod +x hadolint-Linux-x86_64
-            ./hadolint-Linux-x86_64 docker/${{ matrix.distro }}/Dockerfile-simulator -t error
+            ./hadolint-Linux-x86_64 docker/$DISTRO/Dockerfile-simulator -t error
             
   publish:
     needs: [Build-Spawner, Build-Simulator]
