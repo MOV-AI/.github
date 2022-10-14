@@ -160,10 +160,11 @@ jobs:
         platforms: linux/amd64
         file: docker/${{ matrix.distro }}/Dockerfile
         push: false
-        tags: ${{ steps.pre_build.outputs.raised_version }}
+        tags: "registry.cloud.mov.ai/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}"
+        target: "${{ inputs.product_name }}-${{ matrix.distro }}"
         pull: true
         build-args: |
-          DOCKER_REGISTRY=${props.registry}
+          DOCKER_REGISTRY=registry.cloud.mov.ai
           BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} 
           TAG=${{ steps.pre_build.outputs.base_version }} 
           CI_SCRIPT_VERSION=$CI_INTEGRATION_SCRIPTS_VERSION
