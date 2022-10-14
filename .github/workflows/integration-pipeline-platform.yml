@@ -133,7 +133,6 @@ jobs:
       run: |
             cp ./platform_configs/product.version product.version
             cp ./platform_configs/product-manifest.yaml product-manifest.yaml
-            python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
             export PATH="$HOME/.local/bin:$PATH"
             cat product-manifest.yaml
             integration-pipeline generate_meta_artifacts --update_simulator --override_spawner ${{ inputs.product_name }} --manifest_platform_base_key "product-dependencies"
@@ -184,10 +183,10 @@ jobs:
     - name: Installation
       shell: bash
       run: |
-            #!/bin/bash
             mkdir -p artifacts
             cp *.json artifacts/
             CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.distro }}.json
+            export PATH="$HOME/.local/bin:$PATH"
             integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
             wget https://movai-scripts.s3.amazonaws.com/QuickStart.bash
             chmod +x ./QuickStart.bash
