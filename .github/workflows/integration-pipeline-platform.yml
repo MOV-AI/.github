@@ -8,6 +8,9 @@ on:
         branch_name:
           required: true
           type: string
+        ros_distro:
+          required: true
+          type: string
     secrets:
       auto_commit_user:
         required: true
@@ -54,12 +57,10 @@ jobs:
       run: |
             apt install -y yamllint
             yamllint product-manifest.yaml
-            cat product-manifest.yaml
     
     - name: Bootstraping simulator metadata
       run: |
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-                  export PATH="$HOME/.local/bin:$PATH"
           rm -rf simulator_artifacts ci_artifacts
 
           integration-pipeline merge_manifest_dependency \
@@ -77,23 +78,96 @@ jobs:
 
           mkdir simulator_artifacts
           cp ci_artifacts/* ./simulator_artifacts
+
     - name: Stash sim_configs
       uses: actions/upload-artifact@v2
       with:
         name: sim_configs
         path: simulator_artifacts/*
 
+    - name: raise
+      run: |
+            rm -rf simulator_artifacts ci_artifacts
+            mkdir platform_configs
+            integration-pipeline raise
+            cp product.version ./platform_configs/product.version
+            cp product-manifest.yaml ./platform_configs/product-manifest.yaml
+
+    - name: Stash raised_meta
+      uses: actions/upload-artifact@v2
+      with:
+        name: raised_meta
+        path: platform_configs/*
+
   Build-Spawner:
     needs: [Validate-boostrap-configs]
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(inputs.ros_distro) }}
     runs-on: integration-pipeline
     steps:
     - name: Checkout
       uses: actions/checkout@v3
 
-    - name: Validate Manifest
+    - name: Download a single artifact
+      uses: actions/download-artifact@v2
+      with:
+        name: raised_meta
+        path: platform_configs
+
+    - name: Generate product configs from manifest
       shell: bash
       run: |
+            cp ./platform_configs/product.version product.version
+            cp ./platform_configs/product-manifest.yaml product-manifest.yaml
+            python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+            export PATH="$HOME/.local/bin:$PATH"
             cat product-manifest.yaml
+            integration-pipeline generate_meta_artifacts --update_simulator --override_spawner ${{ inputs.product_name }} --manifest_platform_base_key "product-dependencies"
+    
+    - name: Stash manifest
+      uses: actions/upload-artifact@v2
+      with:
+        name: manifest
+        path: product-manifest.yaml
+
+    - name: Lint docker image
+      shell: bash
+      run: |
+            wget https://github.com/hadolint/hadolint/releases/download/v2.9.3/hadolint-Linux-x86_64
+            chmod +x hadolint-Linux-x86_64
+            ./hadolint-Linux-x86_64 docker/$DISTRO/Dockerfile -t error
+    
+    - name: Login to Private Registry
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.registry_user }}
+        password: ${{ secrets.registry_password }}
+        registry: registry.cloud.mov.ai
+
+    - name: Prepare task variables
+      id: pre_build
+      run: |
+            echo ::set-output name=base_name::$(cat ci_artifacts/spawner_base_name_${{ matrix.distro }}.ci)  
+            echo ::set-output name=base_version::$(cat ci_artifacts/spawner_base_version_${{ matrix.distro }}.ci)
+            echo ::set-output name=raised_version::$(cat product.version) 
+            
+
+    - name: Build with args and push:${{ inputs.deploy }}
+      uses: docker/build-push-action@v3
+      with:
+        context: .
+        platforms: linux/amd64
+        file: docker/${{ matrix.distro }}/Dockerfile
+        push: false
+        tags: ${{ steps.pre_build.outputs.raised_version }}
+        target: "${{ inputs.product_name }}-${{ matrix.distro }}"
+        pull: true
+        build-args: |
+          DOCKER_REGISTRY=${props.registry}
+          BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} 
+          TAG=${{ steps.pre_build.outputs.base_version }} 
+          CI_SCRIPT_VERSION=$CI_INTEGRATION_SCRIPTS_VERSION
   
   Build-Simulator:
     needs: [Validate-boostrap-configs]
