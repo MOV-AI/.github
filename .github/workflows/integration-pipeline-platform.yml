@@ -202,7 +202,7 @@ jobs:
             docker exec -t "$container_id" bash -c '
               set -e
               export PATH="$HOME/.local/bin:$PATH"
-              python3 -m pip install mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
+              python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
               mobtest proj /opt/ros/${{ matrix.distro }}/share/ || true
               '
     - name: Collect Installed components
@@ -213,7 +213,7 @@ jobs:
               set -e
               sudo apt update
               export PATH="$HOME/.local/bin:$PATH"
-              python3 -m pip install movai-package-deployer==${{ env.PACKAGE_DEPLOYER_VERSION }} --ignore-installed
+              python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple movai-package-deployer==${{ env.PACKAGE_DEPLOYER_VERSION }} --ignore-installed
               package-deployer scan
               ls -la /tmp
             ' || true
@@ -223,6 +223,21 @@ jobs:
 
               echo "$DOCKER_REGISTRY/$ENV/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)">artifacts/product-${{ matrix.distro }}.image.artifact
   
+    - name: Push image
+      uses: docker/build-push-action@v3
+      with:
+        context: .
+        platforms: linux/amd64
+        file: docker/${{ matrix.distro }}/Dockerfile
+        push: true
+        tags: "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}"
+        pull: true
+        build-args: |
+          DOCKER_REGISTRY=${{ env.REGISTRY }}
+          BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} 
+          TAG=${{ steps.pre_build.outputs.base_version }} 
+          CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
+
     - name: Stash deploy_artifacts_noetic
       uses: actions/upload-artifact@v2
       with:
@@ -265,7 +280,81 @@ jobs:
             wget https://github.com/hadolint/hadolint/releases/download/v2.9.3/hadolint-Linux-x86_64
             chmod +x hadolint-Linux-x86_64
             ./hadolint-Linux-x86_64 docker/$DISTRO/Dockerfile-simulator -t error
-            
+
+    - name: Fetch artifacts
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      shell: bash
+      run: |
+            export PATH="$HOME/.local/bin:$PATH"
+            integration-pipeline fetch_simulator_models \
+            --manifest_platform_base_key product_components \
+            --gh_api_user $GITHUB_API_USR \
+            --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
+            --target_dir "./models"
+
+    - name: Login to Private Registry
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.registry_user }}
+        password: ${{ secrets.registry_password }}
+        registry: ${{ env.REGISTRY }} 
+
+    - name: Prepare docker build variables
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      id: pre_build
+      run: |
+            echo ::set-output name=image_name::$(cat simulator_artifacts/simulator_name.ci)  
+            echo ::set-output name=base_name::$(cat simulator_artifacts/simulator_base.ci)
+
+    - name: Build with args and push:${{ inputs.deploy }}
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      uses: docker/build-push-action@v3
+      with:
+        context: .
+        platforms: linux/amd64
+        file: docker/${{ env.DISTRO }}/Dockerfile-simulator
+        push: false
+        tags: "${{ env.REGISTRY }}/qa/${{ steps.pre_build.outputs.image_name }}"
+        pull: true
+        build-args: |
+          BASE_IMAGE=${{ steps.pre_build.outputs.base_name }}
+          CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
+
+    - name: Push image
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      uses: docker/build-push-action@v3
+      with:
+        context: .
+        platforms: linux/amd64
+        file: docker/${{ env.DISTRO }}/Dockerfile-simulator
+        push: true
+        tags: "${{ env.REGISTRY }}/qa/${{ steps.pre_build.outputs.image_name }}"
+        pull: true
+        build-args: |
+          BASE_IMAGE=${{ steps.pre_build.outputs.base_name }}
+          CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
+
+    - name: Collect Installed components
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      shell: bash
+      run: |
+            export PATH="$HOME/.local/bin:$PATH"
+            cd simulator_artifacts
+            integration-pipeline publish_simulator_state_artifacts \
+                  --product_name ${{ inputs.product_name }} \
+                  --branch ${{ inputs.branch_name }}
+    - name: pre-stash
+      shell: bash
+      run: |
+            echo "$DOCKER_REGISTRY/$ENV/$(cat simulator_artifacts/simulator_name.ci)" > simulator.image.artifact
+
+    - name: Stash deploy_simulator_artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: deploy_simulator_artifacts
+        path: simulator.image.artifact
+
   publish:
     needs: [Build-Spawner, Build-Simulator]
     runs-on: integration-pipeline
