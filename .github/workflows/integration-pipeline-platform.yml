@@ -246,18 +246,11 @@ jobs:
     
     - name: Cleanup checkout
       if: always()
-      run: |
-        git config --global --add safe.directory $(pwd)
-        git clean -fdx
+      run: rm -rf $(pwd)
   
   Build-Simulator:
     needs: [Validate-boostrap-configs]
     runs-on: integration-pipeline
-    container:
-      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
     env:
       DISTRO: noetic
     steps:
@@ -364,6 +357,9 @@ jobs:
       with:
         name: deploy_simulator_artifacts
         path: simulator.image.artifact
+    - name: Cleanup checkout
+      if: always()
+      run: rm -rf $(pwd)
 
   publish:
     needs: [Build-Spawner, Build-Simulator]
