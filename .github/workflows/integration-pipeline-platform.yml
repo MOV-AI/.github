@@ -188,7 +188,7 @@ jobs:
               movai-cli robots stop $robot
               sleep 5
               movai-cli robots remove $robot
-            done || true'''
+            done || true
 
             mkdir -p artifacts
             cp *.json artifacts/
