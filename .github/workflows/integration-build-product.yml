@@ -447,12 +447,11 @@ jobs:
             cp product-manifest.yaml deployment_artifacts
 
             product_version=$(cat product.version)
-            git pull
+            git pull --no-edit
             git restore product.version
             echo "$product_version" > product.version
             git add product.version
             git commit -m "Automatic Raise"
-            git pull
             git push origin HEAD:${{ inputs.branch_name }}
             commit_hash=$(git log --format="%H" -n 1)
             gh release create -p --generate-notes --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
@@ -461,12 +460,23 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
 
+    - name: Prepare slack variables
+      id: pre_slack
+      run: |
+            echo "check ${{ inputs.repo_name }}"
+            echo "check ${GITHUB_REPOSITORY}"
+            echo "check ${github.repository}"
+            echo ::set-output name=msg::"PIPELINE: ${{ inputs.repo_name }}-${{ inputs.branch_name }} is stable :sunny:
+              https://github.com/${{ inputs.repo_name }}/actions/runs/${{ inputs.run_id }}" 
+            echo ::set-output name=msg_error::"PIPELINE: ${{ inputs.repo_name }}-${{ inputs.branch_name }} is unstable :rain_cloud:
+              https://github.com/MOV-AI/${{ inputs.repo_name }}/actions/runs/${{ inputs.run_id }}"
+
+
     - name: Slack message success
       uses: slackapi/slack-github-action@v1.23.0
       with:
         channel-id: 'C02U028NMB7'
-        slack-message: "PIPELINE: ${{ inputs.repo_name }}-${{ inputs.branch_name }} is stable :sunny:
-          https://github.com/${{ inputs.repo_name }}/actions/runs/${{ inputs.run_id }}"
+        slack-message: ${{ steps.pre_slack.outputs.msg }}
       env:
         SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
@@ -475,7 +485,6 @@ jobs:
       uses: slackapi/slack-github-action@v1.23.0
       with:
         channel-id: 'C02U028NMB7'
-        slack-message: "PIPELINE: ${{ inputs.repo_name }}-${{ inputs.branch_name }} is unstable :rain_cloud:
-          https://github.com/MOV-AI/${{ inputs.repo_name }}/actions/runs/${{ inputs.run_id }}"
+        slack-message: ${{ steps.pre_slack.outputs.msg_error }}
       env:
         SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
