@@ -66,8 +66,8 @@ jobs:
     - name: Prepare slack variables
       id: pre_slack
       run: |
-            MESSAGE="PIPELINE: ${GITHUB_REPOSITORY}-${{ inputs.branch_name }} is stable :sunny: \n https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" 
-            MESSAGE_ERR="PIPELINE: ${GITHUB_REPOSITORY}-${{ inputs.branch_name }} is unstable :rain_cloud: \n https://github.com/MOV-AI/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            MESSAGE="PIPELINE: ${GITHUB_REPOSITORY}-${{ inputs.branch_name }} is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" 
+            MESSAGE_ERR="PIPELINE: ${GITHUB_REPOSITORY}-${{ inputs.branch_name }} is unstable :rain_cloud: Details: https://github.com/MOV-AI/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             echo ::set-output name=msg::$MESSAGE
             echo ::set-output name=msg_error::$MESSAGE_ERR
 
@@ -87,7 +87,7 @@ jobs:
         slack-message: ${{ steps.pre_slack.outputs.msg_error }}
       env:
         SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
-        
+
     - name: Install CI Scripts 
       shell: bash
       run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
