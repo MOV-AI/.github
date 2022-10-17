@@ -32,6 +32,8 @@ on:
         required: true
       aws_secret_key_id:
         required: true
+      slack_token_id:
+        required: true
 
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: '2.1.0.13'
@@ -60,6 +62,18 @@ jobs:
       run: |
             apt install -y yamllint
             yamllint product-manifest.yaml
+    - name: Slack message
+      id: slack
+      uses: slackapi/slack-github-action@v1.23.0
+      with:
+        # Slack channel id, channel name, or user id to post message.
+        # See also: https://api.slack.com/methods/chat.postMessage#channels
+        # You can pass in multiple channels to post to by providing a comma-delimited list of channel IDs.
+        channel-id: 'C02U028NMB7'
+        # For posting a simple plain text message
+        slack-message: "GitHub build result: its a me mario"
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
     - name: Install CI Scripts 
       shell: bash
@@ -442,7 +456,7 @@ jobs:
             
             git add product.version
             git commit -m "Automatic Raise"
-            git pull || echo "$product_version" > product.version && git add product.version && git commit -m "Automatic Raise"
+            git pull #|| echo "$product_version" > product.version && git add product.version && git commit -m "Automatic Raise"
             git push origin HEAD:${{ inputs.branch_name }}
             commit_hash=$(git log --format="%H" -n 1)
             gh release create -p --generate-notes --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
