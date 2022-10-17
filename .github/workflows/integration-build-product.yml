@@ -5,9 +5,6 @@ on:
         product_name:
           required: true
           type: string
-        branch_name:
-          required: true
-          type: string
         ros_distro:
           required: true
           type: string
@@ -44,7 +41,7 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   REGISTRY: registry.cloud.mov.ai
-
+  BRANCH_NAME: ${GITHUB_REF#refs/heads/}
 
 jobs:
   Validate-boostrap-configs:
@@ -63,30 +60,6 @@ jobs:
       run: |
             apt install -y yamllint
             yamllint product-manifest.yaml
-    - name: Prepare slack variables
-      id: pre_slack
-      run: |
-            MESSAGE="PIPELINE: ${GITHUB_REPOSITORY}-${{ inputs.branch_name }} is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" 
-            MESSAGE_ERR="PIPELINE: ${GITHUB_REPOSITORY}-${{ inputs.branch_name }} is unstable :rain_cloud: Details: https://github.com/MOV-AI/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            echo ::set-output name=msg::$MESSAGE
-            echo ::set-output name=msg_error::$MESSAGE_ERR
-
-    - name: Slack message success
-      uses: slackapi/slack-github-action@v1.23.0
-      with:
-        channel-id: 'C02U028NMB7'
-        slack-message: ${{ steps.pre_slack.outputs.msg }}
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
-
-    - name: Slack message failure
-      if: failure()
-      uses: slackapi/slack-github-action@v1.23.0
-      with:
-        channel-id: 'C02U028NMB7'
-        slack-message: ${{ steps.pre_slack.outputs.msg_error }}
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
     - name: Install CI Scripts 
       shell: bash
@@ -96,7 +69,7 @@ jobs:
       run: |
           git config --global --add safe.directory $(pwd)
           git fetch
-          git checkout origin/${{ inputs.branch_name }} -- product.version
+          git checkout origin/${BRANCH_NAME} -- product.version
           cat product.version
           rm -rf simulator_artifacts ci_artifacts
 
@@ -109,7 +82,7 @@ jobs:
           integration-pipeline generate_meta_simulator_artifacts \
                 --manifest_platform_base_key product-dependencies \
                 --product_name ${{ inputs.product_name }} \
-                --branch ${{ inputs.branch_name }} \
+                --branch ${BRANCH_NAME} \
                 --update_simulator \
                 --docker_registry $REGISTRY
 
@@ -383,7 +356,7 @@ jobs:
             cd simulator_artifacts
             integration-pipeline publish_simulator_state_artifacts \
                   --product_name ${{ inputs.product_name }} \
-                  --branch ${{ inputs.branch_name }}
+                  --branch ${BRANCH_NAME}
     - name: pre-stash
       shell: bash
       run: |
@@ -474,7 +447,7 @@ jobs:
             
             git add product.version
             git commit -m "Automatic Raise"
-            git push origin HEAD:${{ inputs.branch_name }}
+            git push origin HEAD:${BRANCH_NAME}
             commit_hash=$(git log --format="%H" -n 1)
             gh release create -p --generate-notes --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
             # add all files in the deployment_artifacts folder
@@ -485,8 +458,8 @@ jobs:
     - name: Prepare slack variables
       id: pre_slack
       run: |
-            MESSAGE="PIPELINE: ${GITHUB_REPOSITORY}-${{ inputs.branch_name }} is stable :sunny: \n https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" 
-            MESSAGE_ERR="PIPELINE: ${GITHUB_REPOSITORY}-${{ inputs.branch_name }} is unstable :rain_cloud: \n https://github.com/MOV-AI/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            MESSAGE="PIPELINE: ${GITHUB_REPOSITORY} (${BRANCH_NAME}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" 
+            MESSAGE_ERR="PIPELINE: ${GITHUB_REPOSITORY}, (${BRANCH_NAME}) is unstable :rain_cloud: Details: https://github.com/MOV-AI/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             echo ::set-output name=msg::$MESSAGE
             echo ::set-output name=msg_error::$MESSAGE_ERR
 
