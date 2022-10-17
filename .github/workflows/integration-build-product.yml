@@ -68,6 +68,7 @@ jobs:
     - name: Bootstraping simulator metadata
       run: |
           git config --global --add safe.directory $(pwd)
+          git fetch
           git checkout origin/${{ inputs.branch_name }} -- product.version
           cat product.version
           rm -rf simulator_artifacts ci_artifacts
