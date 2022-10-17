@@ -67,6 +67,8 @@ jobs:
 
     - name: Bootstraping simulator metadata
       run: |
+          git checkout origin/${{ inputs.branch_name }} -- product.version
+          cat product.version
           rm -rf simulator_artifacts ci_artifacts
 
           integration-pipeline merge_manifest_dependency \
@@ -436,9 +438,9 @@ jobs:
 
             product_version=$(cat product.version)
             
-            git pull
             git add product.version
             git commit -m "Automatic Raise"
+            git pull
             git push origin HEAD:${{ inputs.branch_name }}
             commit_hash=$(git log --format="%H" -n 1)
             gh release create -p --generate-notes --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
