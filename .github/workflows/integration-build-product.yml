@@ -11,12 +11,7 @@ on:
         ros_distro:
           required: true
           type: string
-        repo_name:
-          required: true
-          type: string
-        run_id:
-          required: true
-          type: string
+
     secrets:
       auto_commit_user:
         required: true
@@ -466,14 +461,10 @@ jobs:
     - name: Prepare slack variables
       id: pre_slack
       run: |
-            echo "check ${{ inputs.repo_name }}"
-            echo "check ${GITHUB_REPOSITORY}"
-            echo "check ${github.repository}"
-            echo ::set-output name=msg::"PIPELINE: ${{ inputs.repo_name }}-${{ inputs.branch_name }} is stable :sunny:
-              https://github.com/${{ inputs.repo_name }}/actions/runs/${{ inputs.run_id }}" 
-            echo ::set-output name=msg_error::"PIPELINE: ${{ inputs.repo_name }}-${{ inputs.branch_name }} is unstable :rain_cloud:
-              https://github.com/MOV-AI/${{ inputs.repo_name }}/actions/runs/${{ inputs.run_id }}"
-
+            MESSAGE="PIPELINE: ${GITHUB_REPOSITORY}-${{ inputs.branch_name }} is stable :sunny: \n https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" 
+            MESSAGE_ERR="PIPELINE: ${GITHUB_REPOSITORY}-${{ inputs.branch_name }} is unstable :rain_cloud: \n https://github.com/MOV-AI/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo ::set-output name=msg::$MESSAGE
+            echo ::set-output name=msg_error::$MESSAGE_ERR
 
     - name: Slack message success
       uses: slackapi/slack-github-action@v1.23.0
