@@ -450,8 +450,8 @@ jobs:
             
             git add product.version
             git commit -m "Automatic Raise"
-            git pull #|| echo "$product_version" > product.version && git add product.version && git commit -m "Automatic Raise"
-            git push origin HEAD:${{ inputs.branch_name }}
+            git pull
+            git push origin HEAD:${{ inputs.branch_name }} || echo "$product_version" > product.version && git add product.version && git commit -m "Automatic Raise" && git push
             commit_hash=$(git log --format="%H" -n 1)
             gh release create -p --generate-notes --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
             # add all files in the deployment_artifacts folder
@@ -460,7 +460,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
 
     - name: Slack message success
-      if: failure()
       uses: slackapi/slack-github-action@v1.23.0
       with:
         channel-id: 'C02U028NMB7'
