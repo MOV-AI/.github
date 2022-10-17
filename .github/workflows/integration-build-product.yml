@@ -442,7 +442,7 @@ jobs:
             
             git add product.version
             git commit -m "Automatic Raise"
-            git pull
+            git pull || echo "$product_version" > product.version && git add product.version && git commit -m "Automatic Raise"
             git push origin HEAD:${{ inputs.branch_name }}
             commit_hash=$(git log --format="%H" -n 1)
             gh release create -p --generate-notes --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
