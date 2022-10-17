@@ -474,7 +474,7 @@ jobs:
       uses: slackapi/slack-github-action@v1.23.0
       with:
         channel-id: 'C02U028NMB7'
-        slack-message: "PIPELINE: ${{ inputs.repo_name }}-${{ inputs.branch_name } }is unstable :rain_cloud:
+        slack-message: "PIPELINE: ${{ inputs.repo_name }}-${{ inputs.branch_name }} is unstable :rain_cloud:
           https://github.com/MOV-AI/${{ inputs.repo_name }}/actions/runs/${{ inputs.run_id }}"
       env:
         SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
