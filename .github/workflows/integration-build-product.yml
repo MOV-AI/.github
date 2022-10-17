@@ -447,9 +447,12 @@ jobs:
             cp product-manifest.yaml deployment_artifacts
 
             product_version=$(cat product.version)
-            git pull --no-edit
+            
+            # danger zone. Everything will be deleted.
             git restore product.version
+            git pull
             echo "$product_version" > product.version
+            
             git add product.version
             git commit -m "Automatic Raise"
             git push origin HEAD:${{ inputs.branch_name }}
