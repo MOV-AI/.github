@@ -41,7 +41,6 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   REGISTRY: registry.cloud.mov.ai
-  BRANCH_NAME: ${{ GITHUB_REF#refs/heads/ }}
 
 jobs:
   Validate-boostrap-configs:
@@ -69,7 +68,7 @@ jobs:
       run: |
           git config --global --add safe.directory $(pwd)
           git fetch
-          git checkout origin/${BRANCH_NAME} -- product.version
+          git checkout origin/${GITHUB_REF#refs/heads/} -- product.version
           cat product.version
           rm -rf simulator_artifacts ci_artifacts
 
@@ -82,7 +81,7 @@ jobs:
           integration-pipeline generate_meta_simulator_artifacts \
                 --manifest_platform_base_key product-dependencies \
                 --product_name ${{ inputs.product_name }} \
-                --branch ${BRANCH_NAME} \
+                --branch ${GITHUB_REF#refs/heads/} \
                 --update_simulator \
                 --docker_registry $REGISTRY
 
@@ -356,7 +355,7 @@ jobs:
             cd simulator_artifacts
             integration-pipeline publish_simulator_state_artifacts \
                   --product_name ${{ inputs.product_name }} \
-                  --branch ${BRANCH_NAME}
+                  --branch ${GITHUB_REF#refs/heads/}
     - name: pre-stash
       shell: bash
       run: |
@@ -447,7 +446,7 @@ jobs:
             
             git add product.version
             git commit -m "Automatic Raise"
-            git push origin HEAD:${BRANCH_NAME}
+            git push origin HEAD:${GITHUB_REF#refs/heads/}
             commit_hash=$(git log --format="%H" -n 1)
             gh release create -p --generate-notes --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
             # add all files in the deployment_artifacts folder
@@ -458,8 +457,8 @@ jobs:
     - name: Prepare slack variables
       id: pre_slack
       run: |
-            MESSAGE="PIPELINE: ${GITHUB_REPOSITORY} (${BRANCH_NAME}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" 
-            MESSAGE_ERR="PIPELINE: ${GITHUB_REPOSITORY}, (${BRANCH_NAME}) is unstable :rain_cloud: Details: https://github.com/MOV-AI/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            MESSAGE="PIPELINE: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" 
+            MESSAGE_ERR="PIPELINE: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}) is unstable :rain_cloud: Details: https://github.com/MOV-AI/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             echo ::set-output name=msg::$MESSAGE
             echo ::set-output name=msg_error::$MESSAGE_ERR
 
