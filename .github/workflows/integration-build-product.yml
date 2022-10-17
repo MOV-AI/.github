@@ -11,6 +11,12 @@ on:
         ros_distro:
           required: true
           type: string
+        repo_name:
+          required: true
+          type: string
+        run_id:
+          required: true
+          type: string
     secrets:
       auto_commit_user:
         required: true
@@ -62,18 +68,6 @@ jobs:
       run: |
             apt install -y yamllint
             yamllint product-manifest.yaml
-    - name: Slack message
-      id: slack
-      uses: slackapi/slack-github-action@v1.23.0
-      with:
-        # Slack channel id, channel name, or user id to post message.
-        # See also: https://api.slack.com/methods/chat.postMessage#channels
-        # You can pass in multiple channels to post to by providing a comma-delimited list of channel IDs.
-        channel-id: 'C02U028NMB7'
-        # For posting a simple plain text message
-        slack-message: "GitHub build result: its a me mario"
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
     - name: Install CI Scripts 
       shell: bash
@@ -464,3 +458,23 @@ jobs:
             find deployment_artifacts -type f -exec gh release upload $product_version {} \;
       env:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+    - name: Slack message success
+      if: failure()
+      uses: slackapi/slack-github-action@v1.23.0
+      with:
+        channel-id: 'C02U028NMB7'
+        slack-message: "PIPELINE: ${{ inputs.repo_name }}-${{ inputs.branch_name }} is stable :sunny:
+          https://github.com/${{ inputs.repo_name }}/actions/runs/${{ inputs.run_id }}"
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+
+    - name: Slack message failure
+      if: failure()
+      uses: slackapi/slack-github-action@v1.23.0
+      with:
+        channel-id: 'C02U028NMB7'
+        slack-message: "PIPELINE: ${{ inputs.repo_name }}-${{ inputs.branch_name } }is unstable :rain_cloud:
+          https://github.com/MOV-AI/${{ inputs.repo_name }}/actions/runs/${{ inputs.run_id }}"
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
