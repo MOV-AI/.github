@@ -63,7 +63,31 @@ jobs:
       run: |
             apt install -y yamllint
             yamllint product-manifest.yaml
+    - name: Prepare slack variables
+      id: pre_slack
+      run: |
+            MESSAGE="PIPELINE: ${GITHUB_REPOSITORY}-${{ inputs.branch_name }} is stable :sunny: \n https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" 
+            MESSAGE_ERR="PIPELINE: ${GITHUB_REPOSITORY}-${{ inputs.branch_name }} is unstable :rain_cloud: \n https://github.com/MOV-AI/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo ::set-output name=msg::$MESSAGE
+            echo ::set-output name=msg_error::$MESSAGE_ERR
 
+    - name: Slack message success
+      uses: slackapi/slack-github-action@v1.23.0
+      with:
+        channel-id: 'C02U028NMB7'
+        slack-message: ${{ steps.pre_slack.outputs.msg }}
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+
+    - name: Slack message failure
+      if: failure()
+      uses: slackapi/slack-github-action@v1.23.0
+      with:
+        channel-id: 'C02U028NMB7'
+        slack-message: ${{ steps.pre_slack.outputs.msg_error }}
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+        
     - name: Install CI Scripts 
       shell: bash
       run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
