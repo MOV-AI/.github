@@ -438,11 +438,11 @@ jobs:
             cp product-manifest.yaml deployment_artifacts
 
             product_version=$(cat product.version)
-            
             # danger zone. Everything will be deleted.
             git restore product.version
             git pull
             echo "$product_version" > product.version
+            
             
             git add product.version
             git commit -m "Automatic Raise"
@@ -457,8 +457,8 @@ jobs:
     - name: Prepare slack variables
       id: pre_slack
       run: |
-            MESSAGE="PIPELINE: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" 
-            MESSAGE_ERR="PIPELINE: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}) is unstable :rain_cloud: Details: https://github.com/MOV-AI/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            MESSAGE="PIPELINE: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" 
+            MESSAGE_ERR="PIPELINE: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is unstable :rain_cloud: Details: https://github.com/MOV-AI/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             echo ::set-output name=msg::$MESSAGE
             echo ::set-output name=msg_error::$MESSAGE_ERR
 
