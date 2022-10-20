@@ -227,37 +227,7 @@ jobs:
         name: manifest
         path: .
     
-    - name: unstash spawner_image_${{ matrix.distro }}
-      with:
-        name: spawner_image_${{ matrix.distro }}
-        path: .
-    
-    - name: Docker load spawner image
-      shell: bash
-      run: docker load < spawner_${{ matrix.distro }}.tar.gz
-
-    
-    - name: Installation
-      shell: bash
-      run: |
-            for robot in $(movai-cli robots list); do
-              movai-cli robots stop $robot
-              sleep 5
-              movai-cli robots remove $robot
-            done || true
-
-            mkdir -p artifacts
-            cp *.json artifacts/
-            CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.distro }}.json
-            export PATH="$HOME/.local/bin:$PATH"
-            integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
-            wget https://movai-scripts.s3.amazonaws.com/QuickStart.bash
-            chmod +x ./QuickStart.bash
-            ./QuickStart.bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
-            execution_status=$?
-            exit $execution_status
-            rm movai_service_version
-
+ 
 
   Build-Simulator:
     needs: [Validate-boostrap-configs]
