@@ -223,11 +223,96 @@ jobs:
         path: platform_configs
     
     - name: unstash manifest
+      uses: actions/download-artifact@v2
       with:
         name: manifest
         path: .
     
- 
+    - name: unstash spawner_image_${{ matrix.distro }}
+      with:
+        name: spawner_image_${{ matrix.distro }}
+        path: .
+    
+    - name: Docker load spawner image
+      shell: bash
+      run: docker load < spawner_${{ matrix.distro }}.tar.gz
+
+    
+    - name: Installation
+      shell: bash
+      run: |
+            for robot in $(movai-cli robots list); do
+              movai-cli robots stop $robot
+              sleep 5
+              movai-cli robots remove $robot
+            done || true
+
+            mkdir -p artifacts
+            cp *.json artifacts/
+            CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.distro }}.json
+            export PATH="$HOME/.local/bin:$PATH"
+            integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
+            wget https://movai-scripts.s3.amazonaws.com/QuickStart.bash
+            chmod +x ./QuickStart.bash
+            ./QuickStart.bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
+            execution_status=$?
+            exit $execution_status
+            rm movai_service_version
+
+    - name: Run mobtest
+      shell: bash
+      run: |
+            container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
+            docker exec -t "$container_id" bash -c '
+              set -e
+              export PATH="$HOME/.local/bin:$PATH"
+              python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
+              mobtest proj /opt/ros/${{ matrix.distro }}/share/ || true
+              '
+    - name: Collect Installed components
+      shell: bash
+      run: |
+            container_id=$(docker ps -q -f "ancestor=$REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)")
+            docker exec -t "$container_id" bash -c '
+              set -e
+              sudo apt update
+              export PATH="$HOME/.local/bin:$PATH"
+              python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple movai-package-deployer==${{ env.PACKAGE_DEPLOYER_VERSION }} --ignore-installed
+              package-deployer scan
+              ls -la /tmp
+            ' || true
+              docker cp $container_id:/tmp/deployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-deployable.dploy
+              docker cp $container_id:/tmp/undeployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-3rdParty.dploy
+              CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.distro }}.json
+
+              echo "$REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)">artifacts/product-${{ matrix.distro }}.image.artifact
+  
+    - name: Push image
+      uses: docker/build-push-action@v3
+      with:
+        context: .
+        platforms: linux/amd64
+        file: docker/${{ matrix.distro }}/Dockerfile
+        push: true
+        tags: "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}"
+        pull: true
+        build-args: |
+          DOCKER_REGISTRY=${{ env.REGISTRY }}
+          BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} 
+          TAG=${{ steps.pre_build.outputs.base_version }} 
+          CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
+
+    - name: Stash deploy_artifacts_noetic
+      uses: actions/upload-artifact@v2
+      with:
+        name: deploy_artifacts_noetic
+        path: artifacts/*
+    - name: Docker cleanups
+      if: always()
+      shell: bash
+      run: |
+        docker system prune -f
+        docker image prune --all -f
 
   Build-Simulator:
     needs: [Validate-boostrap-configs]
