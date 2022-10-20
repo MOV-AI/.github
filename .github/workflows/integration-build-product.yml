@@ -186,8 +186,7 @@ jobs:
   
     - name: Docker save spawner image
       shell: bash
-      run: |
-        $ docker save "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}" | gzip > spawner_${{ matrix.distro }}.tar.gz
+      run: docker save "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}" | gzip > spawner_${{ matrix.distro }}.tar.gz
     
     - name: Stash spawner_image_${{ matrix.distro }}
       uses: actions/upload-artifact@v2
@@ -203,7 +202,7 @@ jobs:
         docker image prune --all -f
   
   Install-Robot:
-    needs: [Validate-boostrap-configs]
+    needs: [Build-Spawner]
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
@@ -427,7 +426,7 @@ jobs:
         docker image prune --all -f
 
   publish:
-    needs: [Build-Spawner, Build-Simulator]
+    needs: [Install-Robot, Build-Simulator]
     runs-on: integration-pipeline-dev
     steps:
     - uses: rtCamp/action-cleanup@master
