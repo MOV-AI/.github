@@ -229,6 +229,7 @@ jobs:
         path: .
     
     - name: unstash spawner_image_${{ matrix.distro }}
+      uses: actions/download-artifact@v2
       with:
         name: spawner_image_${{ matrix.distro }}
         path: .
