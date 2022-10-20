@@ -200,6 +200,20 @@ jobs:
       run: |
         docker system prune -f
         docker image prune --all -f
+  
+  Install-Robot:
+    needs: [Build-Spawner]
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(inputs.ros_distro) }}
+    runs-on: integration-pipeline-dev
+    steps:
+    - uses: rtCamp/action-cleanup@master
+
+    - name: Checkout
+      uses: actions/checkout@v3
+    
+
 
   Build-Simulator:
     needs: [Validate-boostrap-configs]
@@ -321,7 +335,7 @@ jobs:
         docker image prune --all -f
 
   publish:
-    needs: [ Build-Simulator]
+    needs: [Install-Robot, Build-Simulator]
     runs-on: integration-pipeline-dev
     steps:
     - uses: rtCamp/action-cleanup@master
