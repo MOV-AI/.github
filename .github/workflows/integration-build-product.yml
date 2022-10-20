@@ -44,7 +44,7 @@ env:
 
 jobs:
   Validate-boostrap-configs:
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-dev
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -113,7 +113,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-dev
     steps:
     - uses: rtCamp/action-cleanup@master
     - name: Checkout
@@ -184,6 +184,53 @@ jobs:
           TAG=${{ steps.pre_build.outputs.base_version }} 
           CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
   
+    - name: Docker save spawner image
+      shell: bash
+      run: |
+        $ docker save "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}" | gzip > spawner_${{ matrix.distro }}.tar.gz
+    
+    - name: Stash spawner_image_${{ matrix.distro }}
+      uses: actions/upload-artifact@v2
+      with:
+        name: spawner_image_${{ matrix.distro }}
+        path: spawner_${{ matrix.distro }}.tar.gz
+
+    - name: Docker cleanups
+      if: always()
+      shell: bash
+      run: |
+        docker system prune -f
+        docker image prune --all -f
+  
+  Install-Robot:
+    needs: [Validate-boostrap-configs]
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(inputs.ros_distro) }}
+    runs-on: integration-pipeline-dev
+    steps:
+    - uses: rtCamp/action-cleanup@master
+    - name: Checkout
+      uses: actions/checkout@v3
+    - name: Agent info
+      run: curl ipinfo.io/ip
+    - name: unstash raised_meta
+      uses: actions/download-artifact@v2
+      with:
+        name: raised_meta
+        path: platform_configs
+    - name: unstash manifest
+      with:
+        name: manifest
+        path: .
+    - name: unstash spawner_image_${{ matrix.distro }}
+      with:
+        name: spawner_image_${{ matrix.distro }}
+        path: .
+    - name: Docker load spawner image
+      shell: bash
+      run: docker load < spawner_${{ matrix.distro }}.tar.gz
+
     - name: Installation
       shell: bash
       run: |
@@ -259,10 +306,10 @@ jobs:
       run: |
         docker system prune -f
         docker image prune --all -f
-  
+
   Build-Simulator:
     needs: [Validate-boostrap-configs]
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-dev
     env:
       DISTRO: noetic
     steps:
@@ -381,7 +428,7 @@ jobs:
 
   publish:
     needs: [Build-Spawner, Build-Simulator]
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-dev
     steps:
     - uses: rtCamp/action-cleanup@master
     - name: Checkout
