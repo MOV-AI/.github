@@ -175,24 +175,19 @@ jobs:
         context: .
         platforms: linux/amd64
         file: docker/${{ matrix.distro }}/Dockerfile
-        push: false
-        tags: "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}"
+        push: true
+        tags: "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}"
         pull: true
         build-args: |
           DOCKER_REGISTRY=${{ env.REGISTRY }}
           BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} 
           TAG=${{ steps.pre_build.outputs.base_version }} 
           CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
-  
-    - name: Docker save spawner image
-      shell: bash
-      run: docker save "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}" | gzip > spawner_${{ matrix.distro }}.tar.gz
-    
-    - name: Stash spawner_image_${{ matrix.distro }}
+    - name: Stash robot_jsons_${{ matrix.distro }}
       uses: actions/upload-artifact@v2
       with:
-        name: spawner_image_${{ matrix.distro }}
-        path: spawner_${{ matrix.distro }}.tar.gz
+        name: robot_jsons_${{ matrix.distro }}
+        path: *.json
 
     - name: Docker cleanups
       if: always()
@@ -227,17 +222,17 @@ jobs:
       with:
         name: manifest
         path: .
-    
-    - name: unstash spawner_image_${{ matrix.distro }}
+    - name: unstash robot_jsons_${{ matrix.distro }}
       uses: actions/download-artifact@v2
       with:
-        name: spawner_image_${{ matrix.distro }}
+        name: robot_jsons_${{ matrix.distro }}
         path: .
-    
+
     - name: Docker load spawner image
       shell: bash
-      run: docker load < spawner_${{ matrix.distro }}.tar.gz
-
+      run: |
+        docker pull "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}"
+        docker tag "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}"
     
     - name: Installation
       shell: bash
