@@ -189,7 +189,7 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: robot_jsons_${{ matrix.distro }}
-        path: "*.json"
+        path: "*.json*"
 
     - name: Docker cleanups
       if: always()
