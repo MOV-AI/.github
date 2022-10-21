@@ -479,6 +479,8 @@ jobs:
             mkdir -p artifacts
             cp *.json artifacts/
             CONFIG_FILE_NAME="standalone-${{ inputs.product_name }}-simulator-${{ matrix.distro }}.json"
+            mkdir -p userspace/models_database/
+            sed -i 's/[USERSPACE_DIR]/userspace/g' CONFIG_FILE_NAME
             export PATH="$HOME/.local/bin:$PATH"
             integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
             wget https://movai-scripts.s3.amazonaws.com/QuickStart.bash
