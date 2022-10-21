@@ -294,19 +294,8 @@ jobs:
               echo "$REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)">artifacts/product-${{ matrix.distro }}.image.artifact
   
     - name: Push image
-      uses: docker/build-push-action@v3
-      with:
-        context: .
-        platforms: linux/amd64
-        file: docker/${{ matrix.distro }}/Dockerfile
-        push: true
-        tags: "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }}"
-        pull: true
-        build-args: |
-          DOCKER_REGISTRY=${{ env.REGISTRY }}
-          BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} 
-          TAG=${{ steps.pre_build.outputs.base_version }} 
-          CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
+      shell: bash
+      run: docker push "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
 
     - name: Stash deploy_artifacts_noetic
       uses: actions/upload-artifact@v2
