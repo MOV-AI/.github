@@ -113,7 +113,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline-dev
+    runs-on: integration-pipeline
     outputs:
       raised_version: ${{ steps.pre_build.outputs.raised_version }}
     steps:
@@ -203,7 +203,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline-dev
+    runs-on: integration-pipeline
     steps:
     - uses: rtCamp/action-cleanup@master
 
@@ -314,6 +314,10 @@ jobs:
     runs-on: integration-pipeline-dev
     env:
       DISTRO: noetic
+    outputs:
+      image_name: "${{ env.REGISTRY }}/ci/${{ steps.pre_simulator_build.outputs.image_name }}"
+      skip_simulator: "${{ esteps.pre_simulator_build.outputs.skip_simulator_build }}"
+
     steps:
     - uses: rtCamp/action-cleanup@master
 
@@ -338,6 +342,7 @@ jobs:
             else
               echo ::set-output name=skip_simulator_build::"false"
             fi
+            echo ::set-output name=image_name::"${{ env.REGISTRY }}/qa/$(cat simulator_artifacts/simulator_name.ci)"
 
     - name: Lint docker image
       if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
@@ -370,7 +375,6 @@ jobs:
       if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
       id: pre_build
       run: |
-            echo ::set-output name=image_name::$(cat simulator_artifacts/simulator_name.ci)  
             echo ::set-output name=base_name::$(cat simulator_artifacts/simulator_base.ci)
 
     - name: Build with args and push:${{ inputs.deploy }}
@@ -380,29 +384,124 @@ jobs:
         context: .
         platforms: linux/amd64
         file: docker/${{ env.DISTRO }}/Dockerfile-simulator
-        push: false
-        tags: "${{ env.REGISTRY }}/qa/${{ steps.pre_build.outputs.image_name }}"
+        push: true
+        tags: ${{ steps.pre_simulator_build.outputs.image_name }}
         pull: true
         build-args: |
           BASE_IMAGE=${{ steps.pre_build.outputs.base_name }}
           CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
 
-    - name: Push image
-      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
-      uses: docker/build-push-action@v3
+    - name: Docker cleanups
+      if: always()
+      shell: bash
+      run: |
+        docker system prune -f
+        docker image prune --all -f
+
+  Install-Simulator-Robot:
+    needs: [Build-Spawner, Build-Simulator]
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(inputs.ros_distro) }}
+    runs-on: integration-pipeline-dev
+    steps:
+    - uses: rtCamp/action-cleanup@master
+      if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' }}
+
+    - name: Checkout
+      if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' }}
+      uses: actions/checkout@v3
+
+    - name: Agent info
+      run: curl ipinfo.io/ip
+    
+    - name: unstash raised_meta
+      if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' }}
+      uses: actions/download-artifact@v2
       with:
-        context: .
-        platforms: linux/amd64
-        file: docker/${{ env.DISTRO }}/Dockerfile-simulator
-        push: true
-        tags: "${{ env.REGISTRY }}/qa/${{ steps.pre_build.outputs.image_name }}"
-        pull: true
-        build-args: |
-          BASE_IMAGE=${{ steps.pre_build.outputs.base_name }}
-          CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
+        name: raised_meta
+        path: .
+
+    - name: unstash manifest
+      if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' }}
+      uses: actions/download-artifact@v2
+      with:
+        name: manifest
+        path: .
+
+    - name: unstash sim_configs
+      if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' }}
+      uses: actions/download-artifact@v2
+      with:
+        name: sim_configs
+        path: simulator_artifacts
+
+    - name: unstash robot_jsons_${{ matrix.distro }}
+      if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' }}
+      uses: actions/download-artifact@v2
+      with:
+        name: robot_jsons_${{ matrix.distro }}
+        path: .
+
+    - name: Login to Private Registry
+      if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' }}
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.registry_user }}
+        password: ${{ secrets.registry_password }}
+        registry: ${{ env.REGISTRY }} 
+  
+    - name: Docker load spawner image
+      if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' }}
+      shell: bash
+      run: |
+        docker pull "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+        docker tag "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+
+    - name: Docker load simulator image
+      if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' }}
+      shell: bash
+      run: |
+        promoted_name = $(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g")""
+        docker pull "${{ needs.Build-Simulator.outputs.image_name }}"
+        docker tag "${{ needs.Build-Simulator.outputs.image_name }}" $promoted_name
+
+    - name: Installation
+      if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' }}
+      shell: bash
+      run: |
+            for robot in $(movai-cli robots list); do
+              movai-cli robots stop $robot
+              sleep 5
+              movai-cli robots remove $robot
+            done || true
+
+            mkdir -p artifacts
+            cp *.json artifacts/
+            CONFIG_FILE_NAME="standalone-${{ inputs.product_name }}-simulator-${{ matrix.distro }}.json"
+            export PATH="$HOME/.local/bin:$PATH"
+            integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
+            wget https://movai-scripts.s3.amazonaws.com/QuickStart.bash
+            chmod +x ./QuickStart.bash
+            ./QuickStart.bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
+            execution_status=$?
+            exit $execution_status
+            rm movai_service_version
+
+    - name: Run mobtest
+      if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' }}
+      shell: bash
+      run: |
+            container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
+            docker exec -t "$container_id" bash -c '
+              set -e
+              export PATH="$HOME/.local/bin:$PATH"
+              python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
+              mobtest proj /opt/ros/${{ matrix.distro }}/share/ || true
+              '
 
     - name: Collect Installed components
-      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' }}
       shell: bash
       run: |
             export PATH="$HOME/.local/bin:$PATH"
@@ -413,7 +512,7 @@ jobs:
     - name: pre-stash
       shell: bash
       run: |
-            echo "$REGISTRY/qa/$(cat simulator_artifacts/simulator_name.ci)" > simulator.image.artifact
+            echo "${{ needs.Build-Simulator.outputs.image_name }}" > simulator.image.artifact
 
     - name: Stash deploy_simulator_artifacts
       uses: actions/upload-artifact@v2
@@ -421,15 +520,8 @@ jobs:
         name: deploy_simulator_artifacts
         path: simulator.image.artifact
 
-    - name: Docker cleanups
-      if: always()
-      shell: bash
-      run: |
-        docker system prune -f
-        docker image prune --all -f
-
   publish:
-    needs: [Install-Robot, Build-Simulator]
+    needs: [Install-Robot, Install-Simulator-Robot]
     runs-on: integration-pipeline-dev
     steps:
     - uses: rtCamp/action-cleanup@master
