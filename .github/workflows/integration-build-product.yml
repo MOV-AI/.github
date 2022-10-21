@@ -8,10 +8,10 @@ on:
         ros_distro:
           required: true
           type: string
-        stop_on_mobtest_error:
+        continue_on_mobtest_error:
           required: false
           type: string
-          default: true
+          default: false
 
     secrets:
       auto_commit_user:
