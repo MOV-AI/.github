@@ -10,7 +10,7 @@ on:
           type: string
         continue_on_mobtest_error:
           required: false
-          type: string
+          type: boolean
           default: false
 
     secrets:
