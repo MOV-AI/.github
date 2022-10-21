@@ -221,7 +221,13 @@ jobs:
       with:
         name: raised_meta
         path: platform_configs
-    
+
+    - name: Place artifacts in the right place
+      shell: bash
+      run: |
+            cp ./platform_configs/product.version product.version
+            cp ./platform_configs/product-manifest.yaml product-manifest.yaml
+
     - name: unstash manifest
       uses: actions/download-artifact@v2
       with:
