@@ -315,7 +315,7 @@ jobs:
     env:
       DISTRO: noetic
     outputs:
-      image_name: "${{ env.REGISTRY }}/ci/${{ steps.pre_simulator_build.outputs.image_name }}"
+      image_name: "${{ steps.pre_simulator_build.outputs.image_name }}"
       skip_simulator: "${{ steps.pre_simulator_build.outputs.skip_simulator_build }}"
 
     steps:
@@ -342,7 +342,7 @@ jobs:
             else
               echo ::set-output name=skip_simulator_build::"false"
             fi
-            echo ::set-output name=image_name::"${{ env.REGISTRY }}/qa/$(cat simulator_artifacts/simulator_name.ci)"
+            echo ::set-output name=image_name::"${{ env.REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)"
 
     - name: Lint docker image
       if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
