@@ -316,7 +316,7 @@ jobs:
       DISTRO: noetic
     outputs:
       image_name: "${{ env.REGISTRY }}/ci/${{ steps.pre_simulator_build.outputs.image_name }}"
-      skip_simulator: "${{ esteps.pre_simulator_build.outputs.skip_simulator_build }}"
+      skip_simulator: "${{ steps.pre_simulator_build.outputs.skip_simulator_build }}"
 
     steps:
     - uses: rtCamp/action-cleanup@master
