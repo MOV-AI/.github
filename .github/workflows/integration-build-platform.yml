@@ -199,7 +199,7 @@ jobs:
             integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
             integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
             integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
-            tests_dir=$(cat target_dir.txt)
+            tests_dir=$(cat /tmp/target_dir.txt)
             tests_version=$(cat /tmp/version.txt)
             tests_repo_name=$(cat /tmp/repo_name.txt)
 
