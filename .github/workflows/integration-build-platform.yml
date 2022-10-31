@@ -140,6 +140,7 @@ jobs:
         path: .
 
     - name: Setup QA UI tests
+      id: ui_tests_setup
       shell: bash
       run: |
             qa_key=ui_tests
@@ -155,8 +156,10 @@ jobs:
             rm -rf $tests_repo_name
             integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
             ls -la $tests_dir
+            echo ::set-output name=target_dir::$tests_dir
 
     - name: Setup QA install tests
+      id: install_tests_setup
       shell: bash
       run: |
             qa_key=install_tests
@@ -172,8 +175,10 @@ jobs:
             rm -rf $tests_repo_name
             integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
             ls -la $tests_dir
+            echo ::set-output name=target_dir::$tests_dir
 
     - name: Setup QA API tests
+      id: api_tests_setup
       shell: bash
       run: |
             qa_key=api_tests
@@ -189,8 +194,10 @@ jobs:
             rm -rf $tests_repo_name
             integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
             ls -la $tests_dir
+            echo ::set-output name=target_dir::$tests_dir
 
     - name: Setup QA Flow tests
+      id: flow_tests_setup
       shell: bash
       run: |
             qa_key=flow_tests
@@ -206,3 +213,16 @@ jobs:
             rm -rf $tests_repo_name
             integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
             ls -la $tests_dir
+            echo ::set-output name=target_dir::$tests_dir
+
+    - name: Install tests
+      working-directory: ${{ steps.install_tests_setup.outputs.target_dir }}
+      shell: bash
+      run: | 
+            python3 -m venv venv
+            . venv/bin/activate
+            pip install -r requirements.txt
+            rm -rf results/*
+            pytest --repository_user=${{secrets.registry_user}} --repository_token=${{secrets.registry_password}} --configFileTest --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci"
+            deactivate
+            rm -R venv
