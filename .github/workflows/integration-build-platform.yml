@@ -267,7 +267,7 @@ jobs:
             python3 -m pip install --upgrade pip
             pip install -r requirements.txt
             pytest src/tests \
-                --base_url https://${{ steps.agent_info.outputs.ip }}/ \
+                --base_url https://${{ steps.agent_info.outputs.ip }} \
                 --username ${{ steps.install.outputs.movai_user }} \
                 --password ${{ steps.install.outputs.movai_pwd }}
             deactivate
