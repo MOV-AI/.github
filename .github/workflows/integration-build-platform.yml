@@ -224,6 +224,7 @@ jobs:
             integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
             ls -la $tests_dir
             echo ::set-output name=target_dir::$tests_dir
+            echo ::set-output name=version::$tests_version
 
     - name: Install tests
       id: install
@@ -266,14 +267,14 @@ jobs:
             python3 -m pip install --upgrade pip
             pip install -r requirements.txt
             pytest src/tests \
-                --base_url https://${{ steps.agent_info.outputs.ip }} \
+                --base_url https://${{ steps.agent_info.outputs.ip }}/ \
                 --username ${{ steps.install.outputs.movai_user }} \
                 --password ${{ steps.install.outputs.movai_pwd }}
             deactivate
             rm -R venv
 
     - name: UI tests
-      working-directory: ${{ steps.api_tests_setup.outputs.target_dir }}
+      working-directory: ${{ steps.ui_tests_setup.outputs.target_dir }}
       shell: bash
       run: |
             echo "Movai user: ${{ steps.install.outputs.movai_user }}"
@@ -284,12 +285,35 @@ jobs:
             python3 -m pip install --upgrade pip
             pip install -r requirements.txt
             pytest -s \
-              --hub_url "http://selenoid.hel.mov.ai/" \
+              --hub_url http://selenoid.hel.mov.ai/ \
               --browser_name chrome \
               --browser_version 91.0 \
               --base_url https://${{ steps.agent_info.outputs.ip }}/ \
               --username ${{ steps.install.outputs.movai_user }} \
               --password ${{ steps.install.outputs.movai_pwd }} \
+              --tb=short
+            deactivate
+            rm -R venv
+
+    - name: Flow tests
+      working-directory: ${{ steps.flow_tests_setup.outputs.target_dir }}
+      shell: bash
+      run: |
+            container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
+            docker exec -t "$container_id" bash -c '
+              sudo apt update
+              sudo apt install -y ros-noetic-movai-qa-node-params=${{ steps.flow_tests_setup.outputs.version }}
+            '
+            echo "Movai user: ${{ steps.install.outputs.movai_user }}"
+            echo "Movai password: ${{ steps.install.outputs.movai_pwd }}"
+
+            python3 -m venv venv
+            . venv/bin/activate
+            python3 -m pip install --upgrade pip
+            pip install -r requirements.txt
+            pytest -s \
+              --movai-user ${{ steps.install.outputs.movai_user }} \
+              --movai-pw ${{ steps.install.outputs.movai_pwd }} \
               --tb=short
             deactivate
             rm -R venv
