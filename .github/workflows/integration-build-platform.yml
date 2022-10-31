@@ -129,7 +129,7 @@ jobs:
     - name: Agent info
       id: agent_info
       run: |
-            ip=$(hostname -I | awk '{print \$1}')
+            ip=$(hostname -I | awk '{print $1}')
             echo ::set-output name=ip::$ip
 
     - name: Install CI Scripts
