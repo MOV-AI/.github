@@ -86,7 +86,7 @@ jobs:
 
     - name: Bootstraping platform metadata
       run: |
-          integration-pipeline generate_meta_artifacts 
+          integration-pipeline generate_meta_artifacts \
                 --manifest_platform_base_key product_components
 
     - name: Stash robot_configs
