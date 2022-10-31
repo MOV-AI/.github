@@ -139,6 +139,13 @@ jobs:
         name: robot_configs
         path: .
 
+    - name: Patch robot_configs *.ci with the right full path
+      shell: bash
+      run: |
+            find -L . -type f -name '*.json.ci' -exec \
+              sed -i "s;/__w;$(pwd)/../..;g" {} \
+             \;
+
     - name: Setup QA UI tests
       id: ui_tests_setup
       shell: bash
@@ -226,3 +233,8 @@ jobs:
             pytest --repository_user=${{secrets.registry_user}} --repository_token=${{secrets.registry_password}} --configFileTest --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci"
             deactivate
             rm -R venv
+
+
+            find -L "robot_configs" -type f -name '*.json.ci' -exec cat {}  \;
+
+
