@@ -285,7 +285,7 @@ jobs:
             python3 -m pip install --upgrade pip
             pip install -r requirements.txt
             pytest -s \
-              --hub_url http://172.22.0.105:4444/ \
+              --hub_url http://172.22.0.105:4444 \
               --browser_name chrome \
               --browser_version 91.0 \
               --base_url https://${{ steps.agent_info.outputs.ip }}/ \
