@@ -95,10 +95,12 @@ jobs:
                 --branch ${GITHUB_REF#refs/heads/} \
                 --update_simulator \
                 --docker_registry $REGISTRY
-          fi
-
+          
           mkdir simulator_artifacts
           cp ci_artifacts/* ./simulator_artifacts
+          fi
+
+
 
     - name: Stash sim_configs
       if: ${{ inputs.with_simulation == 'true' }}
