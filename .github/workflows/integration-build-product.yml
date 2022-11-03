@@ -475,7 +475,7 @@ jobs:
             if [ "${{ inputs.with_simulation }}" = "true" ];
             then
               echo -e "$(cat ./artifacts/product-noetic.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
-            else:
+            else
               cp ./artifacts/product-noetic.image.artifact deployment_artifacts/product.image.artifact
             fi
 
