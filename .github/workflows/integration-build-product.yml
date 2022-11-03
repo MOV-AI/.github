@@ -8,6 +8,10 @@ on:
         ros_distro:
           required: true
           type: string
+        with_simulation:
+          required: false
+          type: string
+          default: true
         continue_on_mobtest_error:
           required: false
           type: boolean
@@ -82,17 +86,22 @@ jobs:
                 --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
                 --auto_fetch
 
+
+          if [ "${{ inputs.with_simulation }}" = "true" ];
+          then
           integration-pipeline generate_meta_simulator_artifacts \
                 --manifest_platform_base_key product-dependencies \
                 --product_name ${{ inputs.product_name }} \
                 --branch ${GITHUB_REF#refs/heads/} \
                 --update_simulator \
                 --docker_registry $REGISTRY
+          fi
 
           mkdir simulator_artifacts
           cp ci_artifacts/* ./simulator_artifacts
 
     - name: Stash sim_configs
+      if: ${{ inputs.with_simulation == 'true' }}
       uses: actions/upload-artifact@v2
       with:
         name: sim_configs
@@ -271,22 +280,28 @@ jobs:
     env:
       DISTRO: noetic
     steps:
-    - uses: rtCamp/action-cleanup@master
+    - name: Pre clean ups
+      if: ${{ inputs.with_simulation == 'true' }}
+      uses: rtCamp/action-cleanup@master
 
     - name: Checkout
+      if: ${{ inputs.with_simulation == 'true' }}
       uses: actions/checkout@v3
 
     - name: Install CI Scripts
+      if: ${{ inputs.with_simulation == 'true' }}
       shell: bash
       run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
     - name: unstash sim_configs
+      if: ${{ inputs.with_simulation == 'true' }}
       uses: actions/download-artifact@v2
       with:
         name: sim_configs
         path: simulator_artifacts
 
     - name: Prepare Skip variables
+      if: ${{ inputs.with_simulation == 'true' }}
       id: pre_simulator_build
       run: |
             if [ ! -f "simulator_artifacts/version" ]; then
@@ -296,7 +311,7 @@ jobs:
             fi
 
     - name: Lint docker image
-      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
       shell: bash
       run: |
             wget https://github.com/hadolint/hadolint/releases/download/v2.9.3/hadolint-Linux-x86_64
@@ -304,7 +319,7 @@ jobs:
             ./hadolint-Linux-x86_64 docker/$DISTRO/Dockerfile-simulator -t error
 
     - name: Fetch artifacts
-      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
       shell: bash
       run: |
             export PATH="$HOME/.local/bin:$PATH"
@@ -315,7 +330,7 @@ jobs:
             --target_dir "./models"
 
     - name: Login to Private Registry
-      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
       uses: docker/login-action@v1
       with:
         username: ${{ secrets.registry_user }}
@@ -323,14 +338,14 @@ jobs:
         registry: ${{ env.REGISTRY }}
 
     - name: Prepare docker build variables
-      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
       id: pre_build
       run: |
             echo ::set-output name=image_name::$(cat simulator_artifacts/simulator_name.ci)
             echo ::set-output name=base_name::$(cat simulator_artifacts/simulator_base.ci)
 
     - name: Build with args and push:${{ inputs.deploy }}
-      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
       uses: docker/build-push-action@v3
       with:
         context: .
@@ -344,7 +359,7 @@ jobs:
           CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
 
     - name: Push image
-      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
       uses: docker/build-push-action@v3
       with:
         context: .
@@ -358,7 +373,7 @@ jobs:
           CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
 
     - name: Collect Installed components
-      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
       shell: bash
       run: |
             export PATH="$HOME/.local/bin:$PATH"
@@ -367,11 +382,13 @@ jobs:
                   --product_name ${{ inputs.product_name }} \
                   --branch ${GITHUB_REF#refs/heads/}
     - name: pre-stash
+      if: ${{ inputs.with_simulation == 'true' }}
       shell: bash
       run: |
             echo "$REGISTRY/qa/$(cat simulator_artifacts/simulator_name.ci)" > simulator.image.artifact
 
     - name: Stash deploy_simulator_artifacts
+      if: ${{ inputs.with_simulation == 'true' }}
       uses: actions/upload-artifact@v2
       with:
         name: deploy_simulator_artifacts
@@ -389,24 +406,30 @@ jobs:
     runs-on: integration-pipeline
     steps:
     - uses: rtCamp/action-cleanup@master
+
     - name: Checkout
       uses: actions/checkout@v3
+    
     - name: unstash raised_meta
       uses: actions/download-artifact@v2
       with:
         name: raised_meta
         path: platform_configs
+    
     - name: unstash deploy_artifacts_noetic
       uses: actions/download-artifact@v2
       with:
         name: deploy_artifacts_noetic
         path: artifacts
+    
     - name: unstash manifest
       uses: actions/download-artifact@v2
       with:
         name: manifest
         path: .
+    
     - name: unstash deploy_simulator_artifacts
+      if: ${{ inputs.with_simulation == 'true' }}
       uses: actions/download-artifact@v2
       with:
         name: deploy_simulator_artifacts
@@ -447,7 +470,13 @@ jobs:
             rm -rf pkgs_deployable pkgs_undeployable
 
             cp artifacts/*.json deployment_artifacts
-            echo -e "$(cat ./artifacts/product-noetic.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
+            if [ "${{ inputs.with_simulation }}" = "true" ];
+            then
+              echo -e "$(cat ./artifacts/product-noetic.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
+            else:
+              cp ./artifacts/product-noetic.image.artifact deployment_artifacts/product.image.artifact
+            fi
+
             cp deployment_artifacts/product.image.artifact ./
 
             integration-pipeline patch_manifest_with_spawner
