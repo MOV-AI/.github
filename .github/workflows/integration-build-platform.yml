@@ -422,7 +422,7 @@ jobs:
             echo ::set-output name=target_dir::$install_infra_dir
 
     - name: Ansible install platform
-      working-directory: ${{ steps.ansible_install_setup.outputs.install_infra_dir }}
+      working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
       shell: bash
       run: |
               echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
@@ -447,6 +447,7 @@ jobs:
               python3 -m pip install awscli
               export PATH="$HOME/.local/bin:$PATH"
               aws ec2 terminate-instances --instance-ids $(cat aws_artifacts/infra_ids.txt)
+
   Build-Simulator:
     if: ${{ false }}
     needs: [Validate-boostrap-configs]
@@ -469,16 +470,83 @@ jobs:
     - name: Prepare Skip variables
       id: pre_simulator_build
       run: |
-            if [ ! -f "simulator_artifacts/version" ]; then
-              echo ::set-output name=skip_simulator_build::"true"
-            else
-              echo ::set-output name=skip_simulator_build::"false"
-            fi
+              if [ ! -f "simulator_artifacts/version" ]; then
+                echo ::set-output name=skip_simulator_build::"true"
+              else
+                echo ::set-output name=skip_simulator_build::"false"
+              fi
 
     - name: Lint docker image
       if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
       shell: bash
       run: |
-            wget https://github.com/hadolint/hadolint/releases/download/v2.9.3/hadolint-Linux-x86_64
-            chmod +x hadolint-Linux-x86_64
-            ./hadolint-Linux-x86_64 docker/$DISTRO/Dockerfile-simulator -t error
+              wget https://github.com/hadolint/hadolint/releases/download/v2.9.3/hadolint-Linux-x86_64
+              chmod +x hadolint-Linux-x86_64
+              ./hadolint-Linux-x86_64 docker/$DISTRO/Dockerfile-simulator -t error
+
+    - name: Download models
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      shell: bash
+      run: |
+              integration-pipeline fetch_simulator_models \
+                    --manifest_platform_base_key product_components \
+                    --gh_api_user $GITHUB_API_USR \
+                    --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
+                    --target_dir "./models"
+
+
+    - name: Login to Private Registry
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.registry_user }}
+        password: ${{ secrets.registry_password }}
+        registry: ${{ env.REGISTRY }}
+
+    - name: Prepare docker build variables
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      id: pre_build
+      run: |
+            echo ::set-output name=image_name::$(cat simulator_artifacts/simulator_name.ci)
+            echo ::set-output name=base_name::$(cat simulator_artifacts/simulator_base.ci)
+
+    - name: Build with args and push:${{ inputs.deploy }}
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      uses: docker/build-push-action@v3
+      with:
+        context: .
+        platforms: linux/amd64
+        file: docker/${{ env.DISTRO }}/Dockerfile-simulator
+        push: true
+        tags: "${{ env.REGISTRY }}/qa/${{ steps.pre_build.outputs.image_name }}"
+        pull: true
+        build-args: |
+          BASE_IMAGE=${{ steps.pre_build.outputs.base_name }}
+          CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
+
+    - name: Collect Installed components
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      shell: bash
+      run: |
+            cd simulator_artifacts
+            integration-pipeline publish_simulator_state_artifacts \
+                  --product_name ${{ inputs.product_name }} \
+                  --branch ${GITHUB_REF#refs/heads/}
+
+    - name: pre-stash
+      shell: bash
+      run: |
+            echo "$REGISTRY/qa/$(cat simulator_artifacts/simulator_name.ci)" > simulator.image.artifact
+
+    - name: Stash deploy_simulator_artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: deploy_simulator_artifacts
+        path: simulator.image.artifact
+
+    - name: Docker cleanups
+      if: always()
+      shell: bash
+      run: |
+        docker system prune -f
+        docker image prune --all -f
