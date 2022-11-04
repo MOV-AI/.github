@@ -425,7 +425,7 @@ jobs:
       working-directory: ${{ steps.ansible_install_setup.outputs.install_infra_dir }}
       shell: bash
       run: |
-              echo "${{ secrets.ssh_pem_fleet_aws_vm }}" ~/.ssh/aws_slave.pem
+              echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
               python3 -m venv ansible-venv
               source ansible-venv/bin/activate
               python3 -m pip install -r requirements.txt
@@ -447,3 +447,38 @@ jobs:
               python3 -m pip install awscli
               export PATH="$HOME/.local/bin:$PATH"
               aws ec2 terminate-instances --instance-ids $(cat aws_artifacts/infra_ids.txt)
+  Build-Simulator:
+    if: ${{ false }}
+    needs: [Validate-boostrap-configs]
+    runs-on: integration-pipeline
+    steps:
+    - uses: rtCamp/action-cleanup@master
+    - name: Checkout
+      uses: actions/checkout@v3
+    
+    - name: Install CI Scripts
+      shell: bash
+      run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+
+    - name: unstash sim_configs
+      uses: actions/download-artifact@v2
+      with:
+        name: sim_configs
+        path: simulator_artifacts
+
+    - name: Prepare Skip variables
+      id: pre_simulator_build
+      run: |
+            if [ ! -f "simulator_artifacts/version" ]; then
+              echo ::set-output name=skip_simulator_build::"true"
+            else
+              echo ::set-output name=skip_simulator_build::"false"
+            fi
+
+    - name: Lint docker image
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      shell: bash
+      run: |
+            wget https://github.com/hadolint/hadolint/releases/download/v2.9.3/hadolint-Linux-x86_64
+            chmod +x hadolint-Linux-x86_64
+            ./hadolint-Linux-x86_64 docker/$DISTRO/Dockerfile-simulator -t error
