@@ -550,3 +550,40 @@ jobs:
       run: |
         docker system prune -f
         docker image prune --all -f
+
+  publish:
+    needs: [Standalone-Validations, Fleet-Validations, Build-Simulator]
+    runs-on: integration-pipeline
+    steps:
+    - uses: rtCamp/action-cleanup@master
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: unstash raised_meta
+      uses: actions/download-artifact@v2
+      with:
+        name: raised_meta
+        path: platform_configs
+    - name: unstash deploy_artifacts_noetic
+      uses: actions/download-artifact@v2
+      with:
+        name: deploy_artifacts_noetic
+        path: artifacts
+    - name: unstash manifest
+      uses: actions/download-artifact@v2
+      with:
+        name: manifest
+        path: .
+    - name: unstash deploy_simulator_artifacts
+      uses: actions/download-artifact@v2
+      with:
+        name: deploy_simulator_artifacts
+        path: .
+
+    - name: Install CI Scripts
+      shell: bash
+      run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+
+    - name: Install Package Deployer
+      shell: bash
+      run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
