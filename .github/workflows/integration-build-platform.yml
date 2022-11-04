@@ -426,6 +426,7 @@ jobs:
       shell: bash
       run: |
               echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
+              sudo chmod 600 ~/.ssh/aws_slave.pem
               python3 -m venv ansible-venv
               source ansible-venv/bin/activate
               python3 -m pip install -r requirements.txt
