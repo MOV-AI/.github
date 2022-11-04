@@ -398,16 +398,27 @@ jobs:
         name: ci_infra_artifacts
         path: aws_artifacts/*
 
-    - name: Fetch and setup ansible playbook
+    - name: Setup ansible installation
+      id: ansible_install_setup
       shell: bash
       run: |
-              mkdir -p ansible
-              python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION
-              export PATH="$HOME/.local/bin:$PATH"
-              integration-pipeline fetch_by_tag --repo ansible-playbooks-deploy --version $ANSIBLE_DEPLOY_VERSION --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir ansible
+            install_key=ansible_deploy
+
+            rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
+            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installion.$install_key.target_dir --output_file /tmp/target_dir.txt
+            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installion.$install_key.version --output_file /tmp/version.txt
+            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installion.$install_key.name --output_file /tmp/repo_name.txt
+            install_infra_dir=$(cat /tmp/target_dir.txt)
+            install_infra_version=$(cat /tmp/version.txt)
+            install_infra_repo_name=$(cat /tmp/repo_name.txt)
+
+            rm -rf $install_infra_repo_name
+            integration-pipeline fetch_by_tag --repo $install_infra_repo_name --version $install_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $install_infra_dir
+            ls -la $install_infra_dir
+            echo ::set-output name=target_dir::$install_infra_dir
 
     - name: Ansible install platform
-      working-directory: ansible
+      working-directory: ${{ steps.ansible_install_setup.outputs.install_infra_dir }}
       shell: bash
       run: |
               echo "${{ secrets.ssh_pem_fleet_aws_vm }}" ~/.ssh/aws_slave.pem
