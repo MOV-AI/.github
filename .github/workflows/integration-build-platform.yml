@@ -46,6 +46,7 @@ env:
   GITHUB_API_USR: 'OttoMation-Movai'
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
+  AWS_DEFAULT_REGION: 'us-east-1'
   REGISTRY: registry.cloud.mov.ai
 
 jobs:
