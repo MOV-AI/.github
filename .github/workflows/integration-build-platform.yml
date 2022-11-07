@@ -134,6 +134,7 @@ jobs:
       id: agent_info
       run: |
             ip=$(hostname -I | awk '{print $1}')
+            echo $ip
             echo ::set-output name=ip::$ip
 
     - name: Install CI Scripts
@@ -374,6 +375,13 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
     
+    - name: Agent info
+      id: agent_info
+      run: |
+            ip=$(hostname -I | awk '{print $1}')
+            echo $ip
+            echo ::set-output name=ip::$ip
+
     - name: Install CI Scripts
       shell: bash
       run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
@@ -458,6 +466,13 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
     
+    - name: Agent info
+      id: agent_info
+      run: |
+            ip=$(hostname -I | awk '{print $1}')
+            echo $ip
+            echo ::set-output name=ip::$ip
+
     - name: Install CI Scripts
       shell: bash
       run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
@@ -588,3 +603,83 @@ jobs:
     - name: Install Package Deployer
       shell: bash
       run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
+
+    - name: Publish and create release
+      shell: bash
+      run: |
+              set -m
+              set -e
+              git config --global --add safe.directory $(pwd)
+              git config --global user.name '${{ secrets.auto_commit_user }}'
+              git config --global user.email '${{ secrets.auto_commit_mail }}'
+              git config --global user.password ${{ secrets.auto_commit_pwd }}
+
+              mkdir -p deployment_artifacts
+              package-deployer join --dploy_workspace \"$(pwd)/artifacts\"
+              integration-pipeline get_image_list_from_manifest --manifest_platform_base_key product_components --docker_registry $REGISTRY
+              cp *.json deployment_artifacts
+              cp artifacts/merged.dploy deployment_artifacts/deployable.dploy
+              echo -e "$(cat ./artifacts/product.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
+
+              cp product.version deployment_artifacts
+              cp product-manifest.yaml deployment_artifacts
+              product_version=$(cat product.version)
+              
+              # danger zone. Everything will be deleted.
+              git restore product.version
+              git pull
+              echo "$product_version" > product.version
+
+              git add product.version
+              git commit -m "Automatic Raise"
+      env:
+        GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+    - name: Prepare raise variables
+      id: pre_raise
+      run: |
+            echo ::set-output name=branch::${GITHUB_REF#refs/heads/}
+
+    - name: Raise App version
+      uses: CasperWA/push-protected@v2
+      with:
+        token: ${{ secrets.auto_commit_pwd }}
+        branch: ${{ steps.pre_raise.outputs.branch }}
+        unprotect_reviews: true
+
+    - name: Github Publish
+      shell: bash
+      run: |
+            commit_hash=$(git log --format="%H" -n 1)
+            product_version=$(cat product.version)
+            gh release create -p --generate-notes --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
+            # add all files in the deployment_artifacts folder
+            find deployment_artifacts -type f -exec gh release upload $product_version {} \;
+      env:
+        GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+    - name: Prepare slack variables
+      if: always()
+      id: pre_slack
+      run: |
+            MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is unstable :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo ::set-output name=msg::$MESSAGE
+            echo ::set-output name=msg_error::$MESSAGE_ERR
+
+    - name: Slack message success
+      uses: slackapi/slack-github-action@v1.23.0
+      with:
+        channel-id: 'C02U028NMB7'
+        slack-message: ${{ steps.pre_slack.outputs.msg }}
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+
+    - name: Slack message failure
+      if: failure()
+      uses: slackapi/slack-github-action@v1.23.0
+      with:
+        channel-id: 'C02U028NMB7'
+        slack-message: ${{ steps.pre_slack.outputs.msg_error }}
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
