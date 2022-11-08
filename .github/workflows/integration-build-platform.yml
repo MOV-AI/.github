@@ -38,7 +38,10 @@ on:
         required: true
       ssh_pem_fleet_aws_vm:
         required: true
-
+      proxmox_api_token_id:
+        required: true
+      proxmox_api_token_secret:
+        required: true
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: '2.1.0.15'
   MOBTEST_VERSION: '0.0.2.3'
@@ -392,7 +395,8 @@ jobs:
         name: robot_configs
         path: .
 
-    - name: Provision remote vms
+    - name: Provision remote vms (AWS)
+      if: ${{ false }}
       shell: bash
       run: |
               mkdir aws_artifacts
@@ -404,11 +408,42 @@ jobs:
               ./ec2_provision.sh
               cp -vf infra_ids.txt ../aws_artifacts/
 
-    - name: Stash ci_infra_artifacts
+    - name: Stash ci_infra_artifacts (AWS)
+      if: ${{ false }}
       uses: actions/upload-artifact@v2
       with:
         name: ci_infra_artifacts
         path: aws_artifacts/*
+
+    - name: Setup terraform proxmox provisioner
+      id: provision_infra_setup
+      shell: bash
+      run: |
+            provision_infra_dir=provision_scripts
+            provision_infra_version=0.0.1-6
+            provision_infra_repo_name=devops-tf-proxmox
+
+            rm -rf $provision_infra_dir
+            integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
+            ls -la $provision_infra_dir
+            echo ::set-output name=target_dir::"$provision_infra_dir/hosts/hel/"
+
+
+
+    - name: Provision remote vms (Proxmox)
+      working-directory: ${ steps.provision_infra_setup.outputs.target_dir}
+      shell: bash
+      run: |
+              terraform init
+              terraform plan
+              terraform apply -auto-approve
+              terraform output
+      env:
+        TF_VAR_number_agents: 3 
+        TF_VAR_proxmox_api_url: "https://hel.mov.ai:8006/api2/json"
+        TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
+        TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
+        TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
 
     - name: Setup ansible installation
       id: ansible_install_setup
@@ -444,8 +479,8 @@ jobs:
               deactivate
               exit $execution_status
 
-    - name: Teardown remote vms
-      if: always()
+    - name: Teardown remote vms (AWS)
+      if: ${{ false }}
       shell: bash
       run: |
               echo "Deleting $(cat aws_artifacts/infra_ids.txt)"
@@ -456,6 +491,18 @@ jobs:
               python3 -m pip install awscli
               export PATH="$HOME/.local/bin:$PATH"
               aws ec2 terminate-instances --instance-ids $(cat aws_artifacts/infra_ids.txt)
+
+    - name: Provision remote vms (Proxmox)
+      working-directory: ${ steps.provision_infra_setup.outputs.target_dir}
+      if: always()
+      shell: bash
+      run:  terraform destroy -auto-approve
+      env:
+        TF_VAR_number_agents: 3 
+        TF_VAR_proxmox_api_url: "https://hel.mov.ai:8006/api2/json"
+        TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
+        TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
+        TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
 
   Build-Simulator:
     if: ${{ false }}
