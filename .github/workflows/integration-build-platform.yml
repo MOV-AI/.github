@@ -508,7 +508,7 @@ jobs:
       working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
       if: always()
       shell: bash
-      run:  terraform destroy -auto-approve
+      run:  #terraform destroy -auto-approve
       env:
         TF_VAR_number_agents: 3 
         TF_VAR_proxmox_api_url: "https://hel.mov.ai:8006/api2/json"
