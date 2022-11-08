@@ -427,7 +427,7 @@ jobs:
       shell: bash
       run: |
             provision_infra_dir=provision_scripts
-            provision_infra_version=0.0.1-6
+            provision_infra_version=0.0.1-7
             provision_infra_repo_name=devops-tf-proxmox
 
             rm -rf $provision_infra_dir
@@ -444,13 +444,17 @@ jobs:
               terraform init
               terraform plan
               terraform apply -auto-approve
-              terraform output
+              
       env:
         TF_VAR_number_agents: 3 
         TF_VAR_proxmox_api_url: "https://hel.mov.ai:8006/api2/json"
         TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
         TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
         TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
+
+    - name: Apply ansible inventory
+      shell: bash
+      run: cp ${{ steps.provision_infra_setup.outputs.target_dir }}/hosts staging/hosts
 
     - name: Setup ansible installation
       id: ansible_install_setup
