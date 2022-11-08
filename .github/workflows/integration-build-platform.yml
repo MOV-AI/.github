@@ -427,7 +427,7 @@ jobs:
       shell: bash
       run: |
             provision_infra_dir=provision_scripts
-            provision_infra_version=0.0.1-7
+            provision_infra_version=0.0.1-8
             provision_infra_repo_name=devops-tf-proxmox
 
             rm -rf $provision_infra_dir
@@ -451,6 +451,7 @@ jobs:
         TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
         TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
         TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
+        TF_VAR_ip_list : "[\"172.22.0.41\",\"172.22.0.42\",\"172.22.0.43\"]"
 
     - name: Apply ansible inventory
       shell: bash
@@ -514,6 +515,7 @@ jobs:
         TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
         TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
         TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
+        TF_VAR_ip_list : "[\"172.22.0.41\",\"172.22.0.42\",\"172.22.0.43\"]"
 
   Build-Simulator:
     if: ${{ false }}
