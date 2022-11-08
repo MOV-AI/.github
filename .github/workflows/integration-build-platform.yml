@@ -431,7 +431,7 @@ jobs:
 
 
     - name: Provision remote vms (Proxmox)
-      working-directory: ${ steps.provision_infra_setup.outputs.target_dir}
+      working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
       shell: bash
       run: |
               terraform init
@@ -493,7 +493,7 @@ jobs:
               aws ec2 terminate-instances --instance-ids $(cat aws_artifacts/infra_ids.txt)
 
     - name: Provision remote vms (Proxmox)
-      working-directory: ${ steps.provision_infra_setup.outputs.target_dir}
+      working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
       if: always()
       shell: bash
       run:  terraform destroy -auto-approve
