@@ -427,7 +427,7 @@ jobs:
       shell: bash
       run: |
             provision_infra_dir=provision_scripts
-            provision_infra_version=0.0.1-8
+            provision_infra_version=0.0.1-9
             provision_infra_repo_name=devops-tf-proxmox
 
             rm -rf $provision_infra_dir
