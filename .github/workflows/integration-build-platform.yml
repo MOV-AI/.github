@@ -249,21 +249,7 @@ jobs:
           echo ::set-output name=target_dir::$tests_dir
           echo ::set-output name=version::$tests_version
 
-      - name: Installation
-        shell: bash
-        run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          integration-pipeline get_json_value --file basic-standalone-noetic.json.ci --key services_version --output_file movai_service_version
-          wget https://movai-scripts.s3.amazonaws.com/QuickStart.bash
-          chmod +x ./QuickStart.bash
-          CONFIG_FILE_NAME="basic-standalone-noetic.json"
-          ./QuickStart.bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
-          execution_status=$?
-          exit $execution_status
-          rm movai_service_version
-
       - name: Install tests
-        if: ${{ false }}
         id: install
         working-directory: ${{ steps.install_tests_setup.outputs.target_dir }}
         shell: bash
@@ -294,7 +280,6 @@ jobs:
             '
 
       - name: API tests
-        if: ${{ false }}
         working-directory: ${{ steps.api_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
@@ -312,7 +297,6 @@ jobs:
           rm -R venv
 
       - name: UI tests
-        if: ${{ false }}
         working-directory: ${{ steps.ui_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
@@ -335,7 +319,6 @@ jobs:
           rm -R venv
 
       - name: Flow tests
-        if: ${{ false }}
         working-directory: ${{ steps.flow_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
