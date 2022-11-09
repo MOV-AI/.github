@@ -709,7 +709,7 @@ jobs:
           git config --global user.password ${{ secrets.auto_commit_pwd }}
 
           mkdir -p deployment_artifacts
-          package-deployer join --dploy_workspace \"$(pwd)/artifacts\"
+          package-deployer join --dploy_workspace "$(pwd)/artifacts"
           export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_image_list_from_manifest --manifest_platform_base_key product_components --docker_registry $REGISTRY
           cp *.json deployment_artifacts
