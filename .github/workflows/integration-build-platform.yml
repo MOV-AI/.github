@@ -51,6 +51,7 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   AWS_DEFAULT_REGION: "us-east-1"
   REGISTRY: registry.cloud.mov.ai
+  ENV: qa
 
 jobs:
   Validate-boostrap-configs:
@@ -450,7 +451,7 @@ jobs:
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=0.0.1-10
+          provision_infra_version=0.0.1-11
           provision_infra_repo_name=devops-tf-proxmox
 
           rm -rf $provision_infra_dir
