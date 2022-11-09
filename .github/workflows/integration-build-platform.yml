@@ -288,6 +288,7 @@ jobs:
             '
 
       - name: API tests
+        if: ${{ false }}
         working-directory: ${{ steps.api_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
@@ -328,6 +329,7 @@ jobs:
           rm -R venv
 
       - name: Flow tests
+        if: ${{ false }}
         working-directory: ${{ steps.flow_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
