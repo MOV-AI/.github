@@ -550,7 +550,7 @@ jobs:
           TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
           TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
           TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
-          TF_VAR_ip_list: ${{ secrets.fleet_ips }}
+          TF_VAR_ip_list: ${{ inputs.fleet_ips }}
 
   Build-Simulator:
     needs: [Validate-boostrap-configs]
