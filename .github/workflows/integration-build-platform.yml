@@ -537,6 +537,8 @@ jobs:
   Build-Simulator:
     needs: [Validate-boostrap-configs]
     runs-on: integration-pipeline
+    env:
+      DISTRO: noetic
     steps:
       - uses: rtCamp/action-cleanup@master
       - name: Checkout
