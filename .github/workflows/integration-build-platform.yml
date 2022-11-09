@@ -163,6 +163,7 @@ jobs:
           qa_key=ui_tests
 
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
+          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
@@ -582,6 +583,7 @@ jobs:
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
         shell: bash
         run: |
+          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline fetch_simulator_models \
                 --manifest_platform_base_key product_components \
                 --gh_api_user $GITHUB_API_USR \
@@ -693,6 +695,7 @@ jobs:
 
           mkdir -p deployment_artifacts
           package-deployer join --dploy_workspace \"$(pwd)/artifacts\"
+          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_image_list_from_manifest --manifest_platform_base_key product_components --docker_registry $REGISTRY
           cp *.json deployment_artifacts
           cp artifacts/merged.dploy deployment_artifacts/deployable.dploy
