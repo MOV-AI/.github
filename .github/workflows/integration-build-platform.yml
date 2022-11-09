@@ -12,6 +12,12 @@ on:
         required: false
         type: boolean
         default: false
+      fleet_ips:
+        required: true
+        type: string
+      fleet_number_members:
+        required: true
+        type: number
 
     secrets:
       auto_commit_user:
@@ -355,13 +361,11 @@ jobs:
       - name: Collect Installed components
         shell: bash
         run: |
-          set -x
           mkdir -p artifacts
           
           used_images=($(docker images --format "{{.Repository}}:{{.Tag}}" | tr ' ' "\n"))
           for image in "${used_images[@]}"
           do
-            echo "$image"
             image_short_name=$(grep -oP "(?<=/$ENV/).*?(?=:)" <<< "$image" || grep -oP "(?<=/devops/).*?(?=:)" <<< "$image" || true)
             if [[ "$image_short_name" =~ .*"backend".* || "$image_short_name" =~ .*"spawner".* || "$image_short_name" =~ .*"redis"*.* || "$image_short_name" =~ .*"health-node".* ]];
             then
@@ -395,7 +399,7 @@ jobs:
       - name: Stash deploy_artifacts_${{ matrix.distro }}
         uses: actions/upload-artifact@v2
         with:
-          name: Stash deploy_artifacts_${{ matrix.distro }}
+          name: deploy_artifacts_${{ matrix.distro }}
           path: artifacts/*.dploy
 
       - name: Remove robots
@@ -489,12 +493,12 @@ jobs:
           terraform plan
           terraform apply -auto-approve
         env:
-          TF_VAR_number_agents: 3
+          TF_VAR_number_agents: ${{ inputs.fleet_number_members }}
           TF_VAR_proxmox_api_url: "https://hel.mov.ai:8006/api2/json"
           TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
           TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
           TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
-          TF_VAR_ip_list: '["172.22.0.41","172.22.0.42","172.22.0.43"]'
+          TF_VAR_ip_list: ${{ inputs.fleet_ips }}
 
       - name: Apply ansible inventory
         shell: bash
@@ -558,12 +562,12 @@ jobs:
         shell: bash
         run: terraform destroy -auto-approve
         env:
-          TF_VAR_number_agents: 3
+          TF_VAR_number_agents: ${{ inputs.fleet_number_members }}
           TF_VAR_proxmox_api_url: "https://hel.mov.ai:8006/api2/json"
           TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
           TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
           TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
-          TF_VAR_ip_list: '["172.22.0.41","172.22.0.42","172.22.0.43"]'
+          TF_VAR_ip_list: ${{ secrets.fleet_ips }}
 
   Build-Simulator:
     needs: [Validate-boostrap-configs]
