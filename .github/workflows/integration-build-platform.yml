@@ -122,7 +122,6 @@ jobs:
           path: platform_configs/*
 
   Standalone-Validations:
-    if: ${{ false }}
     needs: [Validate-boostrap-configs]
     strategy:
       matrix:
@@ -536,7 +535,6 @@ jobs:
           TF_VAR_ip_list: '["172.22.0.41","172.22.0.42","172.22.0.43"]'
 
   Build-Simulator:
-    if: ${{ false }}
     needs: [Validate-boostrap-configs]
     runs-on: integration-pipeline
     steps:
