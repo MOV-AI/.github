@@ -677,16 +677,13 @@ jobs:
         with:
           name: raised_meta
           path: platform_configs
+
       - name: unstash deploy_artifacts_noetic
         uses: actions/download-artifact@v2
         with:
           name: deploy_artifacts_noetic
           path: artifacts
-      - name: unstash manifest
-        uses: actions/download-artifact@v2
-        with:
-          name: manifest
-          path: .
+
       - name: unstash deploy_simulator_artifacts
         uses: actions/download-artifact@v2
         with:
