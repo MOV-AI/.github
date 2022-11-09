@@ -362,8 +362,7 @@ jobs:
           for image in "${used_images[@]}"
           do
             image_short_name=$(grep -oP "(?<=/$ENV/).*?(?=:)" <<< "$image" || grep -oP "(?<=/devops/).*?(?=:)" <<< "$image")
-            if 
-            if [[ "$image_short_name" =~ .*"backend".* || "$image_short_name" =~ .*"spawner".* || "$image_short_name" =~ .*"redis2".* || "$image_short_name" =~ .*"health-node".* ]];
+            if [[ "$image_short_name" =~ .*"backend".* || "$image_short_name" =~ .*"spawner".* || "$image_short_name" =~ .*"redis"*.* || "$image_short_name" =~ .*"health-node".* ]];
             then
               echo "scanning $image"
               container_ids=($(docker ps -q -f "ancestor=$image" | tr ' ' "\n"))
