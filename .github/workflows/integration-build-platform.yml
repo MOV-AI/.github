@@ -143,6 +143,10 @@ jobs:
         shell: bash
         run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
+      - name: Install Package Deployer
+        shell: bash
+        run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
+
       - name: unstash robot_configs
         uses: actions/download-artifact@v2
         with:
@@ -183,6 +187,7 @@ jobs:
           qa_key=install_tests
 
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
+          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
@@ -202,6 +207,7 @@ jobs:
           qa_key=api_tests
 
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
+          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
@@ -221,6 +227,7 @@ jobs:
           qa_key=flow_tests
 
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
+          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
@@ -358,7 +365,6 @@ jobs:
               echo "Skipping scan of $image"
             fi
           done
-          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple movai-package-deployer==$PACKAGE_DEPLOYER_VERSION
           export PATH="$HOME/.local/bin:$PATH"
           package-deployer scan
           cp /tmp/deployable.dploy artifacts/host-${{ matrix.distro }}-deployable.dploy
@@ -448,6 +454,7 @@ jobs:
           provision_infra_repo_name=devops-tf-proxmox
 
           rm -rf $provision_infra_dir
+          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
           ls -la $provision_infra_dir
           echo ::set-output name=target_dir::"$provision_infra_dir/hosts/hel/"
@@ -459,7 +466,6 @@ jobs:
           terraform init
           terraform plan
           terraform apply -auto-approve
-
         env:
           TF_VAR_number_agents: 3
           TF_VAR_proxmox_api_url: "https://hel.mov.ai:8006/api2/json"
@@ -472,6 +478,7 @@ jobs:
         shell: bash
         run: |
           cp ${{ steps.provision_infra_setup.outputs.target_dir }}/hosts staging/hosts
+          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file staging/hosts --key fleet.children.managers.hosts.manager.ansible_host --output_file ./staging/manager_private_ip.txt
 
 
@@ -482,6 +489,7 @@ jobs:
           install_key=ansible_deploy
 
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
+          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installion.$install_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installion.$install_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installion.$install_key.name --output_file /tmp/repo_name.txt
@@ -624,6 +632,7 @@ jobs:
         shell: bash
         run: |
           cd simulator_artifacts
+          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline publish_simulator_state_artifacts \
                 --product_name ${{ inputs.product_name }} \
                 --branch ${GITHUB_REF#refs/heads/}
