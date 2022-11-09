@@ -361,10 +361,9 @@ jobs:
           used_images=($(docker images --format "{{.Repository}}:{{.Tag}}" | tr ' ' "\n"))
           for image in "${used_images[@]}"
           do
-            echo "$image"
-            image_short_name=$(grep -oP "(?<=/$ENV/).*?(?=:)" <<< "$image")
-            echo "$image_short_name"
-            if [[ "$image_short_name" =~ .*"backend".* || "$image_short_name" =~ .*"spawner".* || "$image_short_name" =~ .*"redis".* || "$image_short_name" =~ .*"health-node".* ]];
+            image_short_name=$(grep -oP "(?<=/$ENV/).*?(?=:)" <<< "$image" || grep -oP "(?<=/devops/).*?(?=:)" <<< "$image")
+            if 
+            if [[ "$image_short_name" =~ .*"backend".* || "$image_short_name" =~ .*"spawner".* || "$image_short_name" =~ .*"redis2".* || "$image_short_name" =~ .*"health-node".* ]];
             then
               echo "scanning $image"
               container_ids=($(docker ps -q -f "ancestor=$image" | tr ' ' "\n"))
@@ -380,7 +379,7 @@ jobs:
                   python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple movai-package-deployer==${{ env.PACKAGE_DEPLOYER_VERSION }}
                   package-deployer scan
                   ls -la /tmp
-                '
+                ' || true
                   docker cp $container_id:/tmp/deployable.dploy artifacts/$container_name-${{ matrix.distro }}-deployable.dploy
                   docker cp $container_id:/tmp/undeployable.dploy artifacts/$container_name-${{ matrix.distro }}-3rdParty.dploy
               done
