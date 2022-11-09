@@ -243,7 +243,21 @@ jobs:
           echo ::set-output name=target_dir::$tests_dir
           echo ::set-output name=version::$tests_version
 
+      - name: Installation
+        shell: bash
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          integration-pipeline get_json_value --file basic-standalone-noetic.json.ci --key services_version --output_file movai_service_version
+          wget https://movai-scripts.s3.amazonaws.com/QuickStart.bash
+          chmod +x ./QuickStart.bash
+          CONFIG_FILE_NAME="basic-standalone-noetic.json"
+          ./QuickStart.bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
+          execution_status=$?
+          exit $execution_status
+          rm movai_service_version
+
       - name: Install tests
+        if: ${{ false }}
         id: install
         working-directory: ${{ steps.install_tests_setup.outputs.target_dir }}
         shell: bash
@@ -344,7 +358,7 @@ jobs:
           for image in "${used_images[@]}"
           do
             image_short_name=$(grep -oP "(?<=/$ENV/).*?(?=:)" <<< "$image")
-            if [[ "$image_short_name" =~ .*"backend".* || "$image_short_name" =~ .*"spawner".* || "$image_short_name" =~ .*"redis*".* || "$image_short_name" =~ .*"health-node".* ]];
+            if [[ "$image_short_name" =~ .*"backend".* || "$image_short_name" =~ .*"spawner".* || "$image_short_name" =~ .*"redis".* || "$image_short_name" =~ .*"health-node".* ]];
             then
               echo "scanning $image"
               container_ids=($(docker ps -q -f "ancestor=$image" | tr ' ' "\n"))
@@ -357,7 +371,7 @@ jobs:
                   sudo apt update || apt update
                   export PATH="$HOME/.local/bin:$PATH"
                   python3 -m pip install --upgrade pip || wget https://bootstrap.pypa.io/get-pip.py -O - | python3
-                  python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple movai-package-deployer==$PACKAGE_DEPLOYER_VERSION
+                  python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple movai-package-deployer==${{ env.PACKAGE_DEPLOYER_VERSION }}
                   package-deployer scan
                   ls -la /tmp
                 ' || true
