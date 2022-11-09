@@ -361,6 +361,7 @@ jobs:
           used_images=($(docker images --format "{{.Repository}}:{{.Tag}}" | tr ' ' "\n"))
           for image in "${used_images[@]}"
           do
+            echo "$image"
             image_short_name=$(grep -oP "(?<=/$ENV/).*?(?=:)" <<< "$image" || grep -oP "(?<=/devops/).*?(?=:)" <<< "$image" || true)
             if [[ "$image_short_name" =~ .*"backend".* || "$image_short_name" =~ .*"spawner".* || "$image_short_name" =~ .*"redis"*.* || "$image_short_name" =~ .*"health-node".* ]];
             then
