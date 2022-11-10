@@ -260,6 +260,9 @@ jobs:
           integration-pipeline get_json_value --file ../basic-standalone-noetic.json --key spawner.userspace --output_file robot_userspace
           mkdir -p $(cat robot_userspace)
 
+          export USERSPACE_FOLDER_PATH="$(pwd)/$USERSPACE_FOLDER_PATH"
+          chmod 777 -Rf $USERSPACE_FOLDER_PATH
+          
           python3 -m venv venv
           . venv/bin/activate
           pip install -r requirements.txt
