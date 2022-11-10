@@ -258,6 +258,7 @@ jobs:
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_json_value --file ../basic-standalone-noetic.json --key spawner.userspace --output_file robot_userspace
+          cat robot_userspace
           mkdir -p $(cat robot_userspace)
 
           export USERSPACE_FOLDER_PATH="$(pwd)/$USERSPACE_FOLDER_PATH"
