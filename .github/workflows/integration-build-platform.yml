@@ -714,6 +714,9 @@ jobs:
           git config --global user.email '${{ secrets.auto_commit_mail }}'
           git config --global user.password ${{ secrets.auto_commit_pwd }}
 
+          cp ./platform_configs/product.version product.version
+          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
+          
           mkdir -p deployment_artifacts
           package-deployer join --dploy_workspace "$(pwd)/artifacts"
           export PATH="$HOME/.local/bin:$PATH"
