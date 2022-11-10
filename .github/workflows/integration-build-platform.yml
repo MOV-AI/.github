@@ -256,9 +256,9 @@ jobs:
         working-directory: ${{ steps.install_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
-          #export PATH="$HOME/.local/bin:$PATH"
-          #integration-pipeline get_json_value --file ../basic-standalone-noetic.json --key spawner.userspace --output_file robot_userspace
-          #mkdir -p $(cat robot_userspace)
+          export PATH="$HOME/.local/bin:$PATH"
+          integration-pipeline get_json_value --file ../basic-standalone-noetic.json --key spawner.userspace --output_file robot_userspace
+          mkdir -p $(cat robot_userspace)
 
           python3 -m venv venv
           . venv/bin/activate
