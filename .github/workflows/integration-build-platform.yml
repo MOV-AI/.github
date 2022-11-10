@@ -672,6 +672,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: unstash robot_configs
+        uses: actions/download-artifact@v2
+        with:
+          name: robot_configs
+          path: .
+
       - name: unstash raised_meta
         uses: actions/download-artifact@v2
         with:
