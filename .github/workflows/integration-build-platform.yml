@@ -58,6 +58,9 @@ env:
   AWS_DEFAULT_REGION: "us-east-1"
   REGISTRY: registry.cloud.mov.ai
   ENV: qa
+  USERSPACE_FOLDER_PATH: userspace
+  SIMULATION_ID: ci_simulation
+
 
 jobs:
   Validate-boostrap-configs:
@@ -227,7 +230,6 @@ jobs:
           ls -la $tests_dir
           echo ::set-output name=target_dir::$tests_dir
 
-
       - name: Setup QA Flow tests
         id: flow_tests_setup
         shell: bash
@@ -254,6 +256,10 @@ jobs:
         working-directory: ${{ steps.install_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          integration-pipeline get_json_value --file ../basic-standalone-noetic.json --key spawner.userspace --output_file robot_userspace
+          mkdir -p $(cat robot_userspace)
+
           python3 -m venv venv
           . venv/bin/activate
           pip install -r requirements.txt
@@ -716,7 +722,7 @@ jobs:
 
           cp ./platform_configs/product.version product.version
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
-          
+
           mkdir -p deployment_artifacts
           package-deployer join --dploy_workspace "$(pwd)/artifacts"
           export PATH="$HOME/.local/bin:$PATH"
@@ -730,11 +736,15 @@ jobs:
           product_version=$(cat product.version)
 
           # danger zone. Everything will be deleted.
+          mv product-manifest.yaml product-manifest.yaml.bck
+
           git restore product.version
+          git restore product-manifest.yaml
           git pull
           echo "$product_version" > product.version
-
+          mv product-manifest.yaml.bck product-manifest.yaml
           git add product.version
+          git add product-manifest.yaml
           git commit -m "Automatic Raise"
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
