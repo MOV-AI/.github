@@ -138,7 +138,8 @@ jobs:
         distro: ${{ fromJSON(inputs.ros_distro) }}
     runs-on: integration-pipeline
     steps:
-      - uses: rtCamp/action-cleanup@master
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
       - name: Checkout
         uses: actions/checkout@v3
 
@@ -437,7 +438,8 @@ jobs:
     needs: [Validate-boostrap-configs]
     runs-on: integration-pipeline
     steps:
-      - uses: rtCamp/action-cleanup@master
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
       - name: Checkout
         uses: actions/checkout@v3
 
@@ -589,7 +591,8 @@ jobs:
     env:
       DISTRO: noetic
     steps:
-      - uses: rtCamp/action-cleanup@master
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
       - name: Checkout
         uses: actions/checkout@v3
 
@@ -699,7 +702,8 @@ jobs:
     needs: [Standalone-Validations, Fleet-Validations, Build-Simulator]
     runs-on: integration-pipeline
     steps:
-      - uses: rtCamp/action-cleanup@master
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
       - name: Checkout
         uses: actions/checkout@v3
 
