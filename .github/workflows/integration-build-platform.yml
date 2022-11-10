@@ -393,7 +393,22 @@ jobs:
         with:
           name: deploy_artifacts_${{ matrix.distro }}
           path: artifacts/*.dploy
+      
+      - name: Stash QA artifacts
+        if: always()
+        shell: bash
+        run: |
+          
+          mkdir qa_artifacts
+          cp -r install/results/*.log ./qa_artifacts
+          cp -r install/results/test_report_*.html ./qa_artifacts
 
+      - name: Stash QA artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: qa_artifacts
+          path: qa_artifacts/*
+      
       - name: Remove robots
         if: always()
         shell: bash
