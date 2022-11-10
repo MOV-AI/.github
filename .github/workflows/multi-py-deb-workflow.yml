@@ -129,14 +129,12 @@ jobs:
         fi
 
     - name: Create SonarCloud project and disable autoscan
-      if: ${{ !github.event.repository.private }}
       uses: MOV-AI/action-sonarcloud-proj-config@v1
       with:
         sonar_org: 'mov-ai'
         sonar_token: ${{ secrets.sonar_token }}
 
     - name: SonarCloud Scan
-      if: ${{ !github.event.repository.private }}
       uses: SonarSource/sonarcloud-github-action@master
       env:
         GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
@@ -155,7 +153,6 @@ jobs:
           -Dsonar.python.coverage.reportPaths=coverage.xml
 
     - name: Link to SonarCloud dashboard
-      if: ${{ !github.event.repository.private }}
       shell: bash
       run: |
         echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
