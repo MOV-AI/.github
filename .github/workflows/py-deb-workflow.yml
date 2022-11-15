@@ -14,6 +14,11 @@ on:
         required: false
         type: string
         default: 'false'
+      run_black:
+        required: false
+        type: string
+        default: 'false'
+        description: When 'true' black is run stopping the pipeline if any files are not properly formatted
       prod_publish_repos:
         required: false
         type: string
@@ -66,38 +71,76 @@ jobs:
     - name: install build-requirements
       run: python3 -m pip install -r build-requirements.txt
 
-    - name: Python Linter
-      if: ${{ inputs.skip_linting == 'true' }}
+    - name: Run Black
+      if: ${{ inputs.run_black == 'true' }}
       run: |
-        python3 -m pylint *
-        python3 -m black .
-        python3 -m flake8
+        python3 -m black \
+          --line-length 100 \
+          --diff \
+          --check \
+          .
 
-    - name: SonarQube Scan
-      if: ${{ false }}
-      uses: SonarSource/sonarqube-scan-action@v1.0.0
+    - name: Python Linters
+      # run linters isolated so no issues are masked from SonarCloud
+      run: |
+        python3 -m flake8 \
+          --isolated \
+          --exclude dist,.*\.egg-info,.git,__pycache__,.tox,venv \
+          --max-complexity 10 \
+          --max-line-length 100 \
+          --exit-zero \
+          --output-file flake8-report.txt
+
+        # pylint seems to not have a way to ignore configuration files
+        # so we need to provide it a dummy one
+        touch dummy-pylint-config
+        python3 -m pylint \
+          --rcfile dummy-pylint-config \
+          --ignore-patterns dist,.*\.egg-info,.git,__pycache__,.tox,venv \
+          --max-line-length 100 \
+          --exit-zero \
+          --recursive y \
+          --output pylint-report.txt \
+          .
+
+    - name: Run tests
+      run: |
+        if [ -f tox.ini ]; then
+            # run tests and generates coverage.xml
+            tox
+        else
+            # run tests
+            python3 -m pytest tests/
+        fi
+
+    - name: Create SonarCloud project and disable autoscan
+      uses: MOV-AI/action-sonarcloud-proj-config@v1
+      with:
+        sonar_org: 'mov-ai'
+        sonar_token: ${{ secrets.sonar_token }}
+
+    - name: SonarCloud Scan
+      uses: SonarSource/sonarcloud-github-action@master
       env:
+        GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
         SONAR_TOKEN: ${{ secrets.sonar_token }}
-        SONAR_HOST_URL: https://sonarqube.aws.cloud.mov.ai
       with:
         projectBaseDir: ./
         args: >
-          -Dsonar.organization=MOV-AI
-          -Dsonar.projectKey=${{ github.event.repository.name }}
-          -Dsonar.verbose=true
+          -Dsonar.organization=mov-ai
+          -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
           -Dsonar.sources=.
           -Dsonar.scm.provider=git
           -Dsonar.qualitygate.wait=true
           -Dsonar.qualitygate.timeout=300
+          -Dsonar.python.flake8.reportPaths=flake8-report.txt
+          -Dsonar.python.pylint.reportPaths=pylint-report.txt
+          -Dsonar.python.coverage.reportPaths=coverage.xml
 
-    - name: Link to SonarQube Dashboard
+    - name: Link to SonarCloud dashboard
       shell: bash
       run: |
-        echo "Please check report here: https://sonarqube.aws.cloud.mov.ai/dashboard?id=${{ github.event.repository.name }}"
-      id: sonar_links
-
-    - name: Run tests
-      run: python3 -m pytest
+        echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
     - name: Raise version
       if: ${{ inputs.deploy == 'true' }}
