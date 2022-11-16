@@ -101,7 +101,9 @@ jobs:
       run: mobros raise --workspace="$(pwd)"
 
     - name: Build
-      run: mobros build --mode ${{ matrix.build_mode }}
+      run: |
+        export ROSDEP_INSTALL_DEPENDENCY_TYPES="build"
+        mobros build --mode ${{ matrix.build_mode }}
 
     - name: Pack
       run: |
