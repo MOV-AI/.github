@@ -52,7 +52,7 @@ env:
 
 jobs:
   Validate-boostrap-configs:
-    runs-on: integration-pipeline-dev
+    runs-on: integration-pipeline
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
