@@ -1,4 +1,4 @@
-name: Build and pack Npm components 
+name: Build and pack Npm components
 on:
   workflow_call:
     inputs:
@@ -39,14 +39,14 @@ jobs:
       image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
       options: --user root
       credentials:
-        username: ${{secrets.registry_user}} 
+        username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     env:
       NODE_AUTH_TOKEN: ${{ secrets.npm_token }}
 
 
     steps:
-    - name: Checkout    
+    - name: Checkout
       uses: actions/checkout@v3
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
@@ -61,7 +61,7 @@ jobs:
         git config --global user.email '${{ secrets.auto_commit_mail }}'
         npm version prerelease --no-git-tag-version
 
-    - name: Setup Github as proxy Registry 
+    - name: Setup Github as proxy Registry
       uses: actions/setup-node@v2
       with:
         node-version: '${{ inputs.npm_version }}'
@@ -76,33 +76,36 @@ jobs:
     - name: Check NPM log on failure
       if: ${{ failure() }}
       run: cat /github/home/.npm/_logs/*.log
-    
+
     - name: Run tests
       if: ${{ inputs.run_tests == 'true' }}
       run: npm run test
 
-    - name: SonarQube Scan
-      if: ${{ false }}
-      uses: SonarSource/sonarqube-scan-action@v1.0.0
+    - name: Create SonarCloud project and disable autoscan
+      uses: MOV-AI/action-sonarcloud-proj-config@v1
+      with:
+        sonar_org: 'mov-ai'
+        sonar_token: ${{ secrets.sonar_token }}
+
+    - name: SonarCloud Scan
+      uses: SonarSource/sonarcloud-github-action@master
       env:
+        GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
         SONAR_TOKEN: ${{ secrets.sonar_token }}
-        SONAR_HOST_URL: https://sonarqube.aws.cloud.mov.ai
       with:
         projectBaseDir: ./
         args: >
-          -Dsonar.organization=MOV-AI
-          -Dsonar.projectKey=${{ github.event.repository.name }}
-          -Dsonar.verbose=true
+          -Dsonar.organization=mov-ai
+          -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
           -Dsonar.sources=.
           -Dsonar.scm.provider=git
           -Dsonar.qualitygate.wait=true
           -Dsonar.qualitygate.timeout=300
 
-    - name: Link to SonarQube Dashboard
+    - name: Link to SonarCloud dashboard
       shell: bash
       run: |
-        echo "Please check report here: https://sonarqube.aws.cloud.mov.ai/dashboard?id=${{ github.event.repository.name }}"
-      id: sonar_links
+        echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
     - name: Publish
       if: ${{ inputs.deploy == 'true' }}
@@ -117,13 +120,13 @@ jobs:
       image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
       options: --user root
       credentials:
-        username: ${{secrets.registry_user}} 
+        username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     env:
       NODE_AUTH_TOKEN: ${{ secrets.npm_token }}
 
     steps:
-    - name: Checkout    
+    - name: Checkout
       if: ${{ inputs.deploy == 'true' }}
       uses: actions/checkout@v3
       with:
@@ -131,25 +134,25 @@ jobs:
         fetch-depth: 0
         submodules: recursive
         token: ${{ secrets.npm_token }}
-        
+
     - name: Raise App version
       id: raise
       run: |
         git config --global --add safe.directory $(pwd)
         git config --global user.name '${{ secrets.auto_commit_user }}'
         git config --global user.email '${{ secrets.auto_commit_mail }}'
-        npm version prerelease -m "Automatic Bump of build version" 
+        npm version prerelease -m "[skip actions] Automatic Bump of build version"
         git add package.*
         git push
         commit_hash=$(git log --format="%H" -n 1)
-        echo ::set-output name=commit_id::$commit_hash  
+        echo ::set-output name=commit_id::$commit_hash
 
     - name: Find Package details
       id: vars
       run: |
         PACKAGE_VERSION=$(cat package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
         PACKAGE_NAME=$(cat package.json | grep name |head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
-        
+
         echo ::set-output name=npm_pkg_name::$PACKAGE_NAME
         echo ::set-output name=npm_pkg_version::$PACKAGE_VERSION
 

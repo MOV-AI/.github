@@ -60,8 +60,11 @@ jobs:
         fetch-depth: 0
         submodules: recursive
 
-    - name: install build-requirements
+    - name: Install build-requirements
       run: python3 -m pip install -r build-requirements.txt
+
+    - name: Install python package
+      run: python3 -m pip install .
 
     - name: Run Black
       if: ${{ inputs.run_black == 'true' }}
@@ -106,14 +109,12 @@ jobs:
         fi
 
     - name: Create SonarCloud project and disable autoscan
-      if: ${{ !github.event.repository.private }}
       uses: MOV-AI/action-sonarcloud-proj-config@v1
       with:
         sonar_org: 'mov-ai'
         sonar_token: ${{ secrets.sonar_token }}
 
     - name: SonarCloud Scan
-      if: ${{ !github.event.repository.private }}
       uses: SonarSource/sonarcloud-github-action@master
       env:
         GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
@@ -132,7 +133,6 @@ jobs:
           -Dsonar.python.coverage.reportPaths=coverage.xml
 
     - name: Link to SonarCloud dashboard
-      if: ${{ !github.event.repository.private }}
       shell: bash
       run: |
         echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
@@ -151,7 +151,7 @@ jobs:
         echo ::set-output name=py_pkg_version::$PACKAGE_VERSION
 
     - name: Sync setup.py
-      run: sed -i s/"$(cat setup.py | grep version)"/"    version=\"${{ steps.vars.outputs.py_pkg_version }}\","/g setup.py
+      run: sed -i s/"$(cat setup.py | grep version=)"/"    version=\"${{ steps.vars.outputs.py_pkg_version }}\","/g setup.py
 
     - name: Push auto raise version
       id: raise
@@ -162,7 +162,7 @@ jobs:
         git config --global user.email ${{ secrets.auto_commit_mail }}
         git add setup.py
         git add .bumpversion.cfg
-        git commit -m "Automatic Bump of build version"
+        git commit -m "[skip actions] Automatic Bump of build version"
         git pull
         git push --force-with-lease
         commit_hash=$(git log --format="%H" -n 1)
@@ -172,7 +172,7 @@ jobs:
       id: releasevars
       run: |
         PACKAGE_RELEASE_VERSION=$(echo ${{ steps.vars.outputs.py_pkg_version }} | sed s/"-"/"."/g)
-        sed -i s/"$(cat setup.py | grep version)"/"$(cat setup.py | grep version | sed s/"-"/"."/g)"/g setup.py
+        sed -i s/"$(cat setup.py | grep version=)"/"$(cat setup.py | grep version= | sed s/"-"/"."/g)"/g setup.py
 
         echo ::set-output name=py_pkg_version::$PACKAGE_RELEASE_VERSION
 

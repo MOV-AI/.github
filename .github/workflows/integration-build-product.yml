@@ -8,6 +8,14 @@ on:
         ros_distro:
           required: true
           type: string
+        with_simulation:
+          required: false
+          type: string
+          default: true
+        continue_on_mobtest_error:
+          required: false
+          type: boolean
+          default: false
 
     secrets:
       auto_commit_user:
@@ -34,10 +42,10 @@ on:
         required: true
 
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: '2.1.0.19'
-  MOBTEST_VERSION: '0.0.2.3'
-  PACKAGE_DEPLOYER_VERSION: '1.0.0.21'
-  GITHUB_API_USR: 'OttoMation-Movai'
+  CI_INTEGRATION_SCRIPTS_VERSION: "2.1.0.19"
+  MOBTEST_VERSION: "0.0.3.2"
+  PACKAGE_DEPLOYER_VERSION: "1.0.0.21"
+  GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   REGISTRY: registry.cloud.mov.ai
@@ -51,21 +59,21 @@ jobs:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     steps:
-    - name: Checkout
-      uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
 
-    - name: Validate Manifest
-      shell: bash
-      run: |
-            apt install -y yamllint
-            yamllint product-manifest.yaml
+      - name: Validate Manifest
+        shell: bash
+        run: |
+          apt install -y yamllint
+          yamllint product-manifest.yaml
 
-    - name: Install CI Scripts 
-      shell: bash
-      run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+      - name: Install CI Scripts
+        shell: bash
+        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
-    - name: Bootstraping simulator metadata
-      run: |
+      - name: Bootstraping simulator metadata
+        run: |
           git config --global --add safe.directory $(pwd)
           git fetch
           git checkout origin/${GITHUB_REF#refs/heads/} -- product.version
@@ -78,6 +86,9 @@ jobs:
                 --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
                 --auto_fetch
 
+
+          if [ "${{ inputs.with_simulation }}" = "true" ];
+          then
           integration-pipeline generate_meta_simulator_artifacts \
                 --manifest_platform_base_key product_dependencies \
                 --product_name ${{ inputs.product_name }} \
@@ -87,26 +98,28 @@ jobs:
 
           mkdir simulator_artifacts
           cp ci_artifacts/* ./simulator_artifacts
+          fi
 
-    - name: Stash sim_configs
-      uses: actions/upload-artifact@v2
-      with:
-        name: sim_configs
-        path: simulator_artifacts/*
+      - name: Stash sim_configs
+        if: ${{ inputs.with_simulation == 'true' }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: sim_configs
+          path: simulator_artifacts/*
 
-    - name: raise
-      run: |
-            rm -rf simulator_artifacts ci_artifacts
-            mkdir platform_configs
-            integration-pipeline raise
-            cp product.version ./platform_configs/product.version
-            cp product-manifest.yaml ./platform_configs/product-manifest.yaml
+      - name: raise
+        run: |
+          rm -rf simulator_artifacts ci_artifacts
+          mkdir platform_configs
+          integration-pipeline raise
+          cp product.version ./platform_configs/product.version
+          cp product-manifest.yaml ./platform_configs/product-manifest.yaml
 
-    - name: Stash raised_meta
-      uses: actions/upload-artifact@v2
-      with:
-        name: raised_meta
-        path: platform_configs/*
+      - name: Stash raised_meta
+        uses: actions/upload-artifact@v2
+        with:
+          name: raised_meta
+          path: platform_configs/*
 
   Build-Spawner:
     needs: [Validate-boostrap-configs]
@@ -117,51 +130,51 @@ jobs:
     outputs:
       raised_version: ${{ steps.pre_build.outputs.raised_version }}
     steps:
-    - uses: rtCamp/action-cleanup@master
-    - name: Checkout
-      uses: actions/checkout@v3
+      - uses: rtCamp/action-cleanup@master
+      - name: Checkout
+        uses: actions/checkout@v3
 
-    - name: Agent info
-      run: curl ipinfo.io/ip
-    
-    - name: Install CI Scripts 
-      shell: bash
-      run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+      - name: Agent info
+        run: curl ipinfo.io/ip
 
-    - name: unstash raised_meta
-      uses: actions/download-artifact@v2
-      with:
-        name: raised_meta
-        path: platform_configs
+      - name: Install CI Scripts
+        shell: bash
+        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
-    - name: Generate product configs from manifest
-      shell: bash
-      run: |
-            cp ./platform_configs/product.version product.version
-            cp ./platform_configs/product-manifest.yaml product-manifest.yaml
-            export PATH="$HOME/.local/bin:$PATH"
-            cat product-manifest.yaml
-            integration-pipeline generate_meta_artifacts --update_simulator --override_spawner ${{ inputs.product_name }} --manifest_platform_base_key "product_dependencies"
-    
-    - name: Stash manifest
-      uses: actions/upload-artifact@v2
-      with:
-        name: manifest
-        path: product-manifest.yaml
+      - name: unstash raised_meta
+        uses: actions/download-artifact@v2
+        with:
+          name: raised_meta
+          path: platform_configs
 
-    - name: Lint docker image
-      shell: bash
-      run: |
-            wget https://github.com/hadolint/hadolint/releases/download/v2.9.3/hadolint-Linux-x86_64
-            chmod +x hadolint-Linux-x86_64
-            ./hadolint-Linux-x86_64 docker/${{ matrix.distro }}/Dockerfile -t error
-    
-    - name: Login to Private Registry
-      uses: docker/login-action@v1
-      with:
-        username: ${{ secrets.registry_user }}
-        password: ${{ secrets.registry_password }}
-        registry: ${{ env.REGISTRY }} 
+      - name: Generate product configs from manifest
+        shell: bash
+        run: |
+          cp ./platform_configs/product.version product.version
+          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
+          export PATH="$HOME/.local/bin:$PATH"
+          cat product-manifest.yaml
+          integration-pipeline generate_meta_artifacts --update_simulator --override_spawner ${{ inputs.product_name }} --manifest_platform_base_key "product_dependencies"
+
+      - name: Stash manifest
+        uses: actions/upload-artifact@v2
+        with:
+          name: manifest
+          path: product-manifest.yaml
+
+      - name: Lint docker image
+        shell: bash
+        run: |
+          wget https://github.com/hadolint/hadolint/releases/download/v2.9.3/hadolint-Linux-x86_64
+          chmod +x hadolint-Linux-x86_64
+          ./hadolint-Linux-x86_64 docker/${{ matrix.distro }}/Dockerfile -t error
+
+      - name: Login to Private Registry
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.REGISTRY }}
 
     - name: Prepare docker build variables
       id: pre_build
@@ -274,7 +287,7 @@ jobs:
               export PATH="$HOME/.local/bin:$PATH"
               python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
               mobtest proj /opt/ros/${{ matrix.distro }}/share/ || true
-              '
+             '
     - name: Collect Installed components
       shell: bash
       run: |
@@ -302,12 +315,23 @@ jobs:
       with:
         name: deploy_artifacts_noetic
         path: artifacts/*
-    - name: Docker cleanups
-      if: always()
-      shell: bash
-      run: |
-        docker system prune -f
-        docker image prune --all -f
+
+      - name: Remove robots
+        if: always()
+        shell: bash
+        run: |
+          for robot in $(movai-cli robots list); do
+            movai-cli robots stop $robot
+            sleep 5
+            movai-cli robots remove $robot
+          done || true
+
+      - name: Docker cleanups
+        if: always()
+        shell: bash
+        run: |
+          docker system prune -f
+          docker image prune --all -f
 
   Build-Simulator:
     needs: [Validate-boostrap-configs]
@@ -319,22 +343,28 @@ jobs:
       skip_simulator: "${{ steps.pre_simulator_build.outputs.skip_simulator_build }}"
 
     steps:
-    - uses: rtCamp/action-cleanup@master
+    - name: Pre clean ups
+      if: ${{ inputs.with_simulation == 'true' }}
+      uses: rtCamp/action-cleanup@master
 
     - name: Checkout
+      if: ${{ inputs.with_simulation == 'true' }}
       uses: actions/checkout@v3
 
-    - name: Install CI Scripts 
+    - name: Install CI Scripts
+      if: ${{ inputs.with_simulation == 'true' }}
       shell: bash
       run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
     - name: unstash sim_configs
+      if: ${{ inputs.with_simulation == 'true' }}
       uses: actions/download-artifact@v2
       with:
         name: sim_configs
         path: simulator_artifacts
 
     - name: Prepare Skip variables
+      if: ${{ inputs.with_simulation == 'true' }}
       id: pre_simulator_build
       run: |
             if [ ! -f "simulator_artifacts/version" ]; then
@@ -345,7 +375,7 @@ jobs:
             echo ::set-output name=image_name::"${{ env.REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)"
 
     - name: Lint docker image
-      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
       shell: bash
       run: |
             wget https://github.com/hadolint/hadolint/releases/download/v2.9.3/hadolint-Linux-x86_64
@@ -353,7 +383,7 @@ jobs:
             ./hadolint-Linux-x86_64 docker/$DISTRO/Dockerfile-simulator -t error
 
     - name: Fetch artifacts
-      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
       shell: bash
       run: |
             export PATH="$HOME/.local/bin:$PATH"
@@ -364,21 +394,21 @@ jobs:
             --target_dir "./models"
 
     - name: Login to Private Registry
-      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
       uses: docker/login-action@v1
       with:
         username: ${{ secrets.registry_user }}
         password: ${{ secrets.registry_password }}
-        registry: ${{ env.REGISTRY }} 
+        registry: ${{ env.REGISTRY }}
 
     - name: Prepare docker build variables
-      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
       id: pre_build
       run: |
             echo ::set-output name=base_name::$(cat simulator_artifacts/simulator_base.ci)
 
     - name: Build with args and push:${{ inputs.deploy }}
-      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+      if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
       uses: docker/build-push-action@v3
       with:
         context: .
@@ -510,10 +540,10 @@ jobs:
               export PATH="$HOME/.local/bin:$PATH"
               python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
               mobtest proj /opt/ros/${{ matrix.distro }}/share/ || true
-              '
+            '
 
     - name: Collect Installed components
-      if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' }}
+      if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
       shell: bash
       run: |
             export PATH="$HOME/.local/bin:$PATH"
@@ -522,11 +552,13 @@ jobs:
                   --product_name ${{ inputs.product_name }} \
                   --branch ${GITHUB_REF#refs/heads/}
     - name: pre-stash
+      if: ${{ inputs.with_simulation == 'true' }}
       shell: bash
       run: |
             echo "${{ needs.Build-Simulator.outputs.image_name }}" > simulator.image.artifact
 
     - name: Stash deploy_simulator_artifacts
+      if: ${{ inputs.with_simulation == 'true' }}
       uses: actions/upload-artifact@v2
       with:
         name: deploy_simulator_artifacts
@@ -537,30 +569,36 @@ jobs:
     runs-on: integration-pipeline-dev
     steps:
     - uses: rtCamp/action-cleanup@master
+
     - name: Checkout
       uses: actions/checkout@v3
+
     - name: unstash raised_meta
       uses: actions/download-artifact@v2
       with:
         name: raised_meta
         path: platform_configs
+
     - name: unstash deploy_artifacts_noetic
       uses: actions/download-artifact@v2
       with:
         name: deploy_artifacts_noetic
         path: artifacts
+
     - name: unstash manifest
       uses: actions/download-artifact@v2
       with:
         name: manifest
         path: .
+
     - name: unstash deploy_simulator_artifacts
+      if: ${{ inputs.with_simulation == 'true' }}
       uses: actions/download-artifact@v2
       with:
         name: deploy_simulator_artifacts
         path: .
 
-    - name: Install CI Scripts 
+    - name: Install CI Scripts
       shell: bash
       run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
@@ -595,7 +633,13 @@ jobs:
             rm -rf pkgs_deployable pkgs_undeployable
 
             cp artifacts/*.json deployment_artifacts
-            echo -e "$(cat ./artifacts/product-noetic.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
+            if [ "${{ inputs.with_simulation }}" = "true" ];
+            then
+              echo -e "$(cat ./artifacts/product-noetic.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
+            else
+              cp ./artifacts/product-noetic.image.artifact deployment_artifacts/product.image.artifact
+            fi
+
             cp deployment_artifacts/product.image.artifact ./
 
             integration-pipeline patch_manifest_with_spawner
@@ -605,12 +649,12 @@ jobs:
             product_version=$(cat product.version)
             # danger zone. Everything will be deleted.
             git restore product.version
+            git restore product-manifest.yaml
             git pull
             echo "$product_version" > product.version
-            
-            
+
             git add product.version
-            git commit -m "Automatic Raise"
+            git commit -m "[skip actions] Automatic Raise"
       env:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -641,7 +685,7 @@ jobs:
       if: always()
       id: pre_slack
       run: |
-            MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" 
+            MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is unstable :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             echo ::set-output name=msg::$MESSAGE
             echo ::set-output name=msg_error::$MESSAGE_ERR

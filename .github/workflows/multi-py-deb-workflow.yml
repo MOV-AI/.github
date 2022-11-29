@@ -82,8 +82,17 @@ jobs:
         fetch-depth: 0
         submodules: recursive
 
-    - name: install build-requirements
-      run: python3 -m pip install -r build-requirements.txt
+    - name: Install build-requirements
+      run: |
+        if [ -f build-apt-requirements.txt ]; then
+          apt update
+          echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
+          apt install -y $(grep -vE "^\s*#" build-apt-requirements.txt  | tr "\n" " ")
+        fi
+        python3 -m pip install -r build-requirements.txt
+
+    - name: Install python package
+      run: python3 -m pip install .
 
     - name: Run Black
       if: ${{ inputs.run_black == 'true' }}
@@ -116,49 +125,11 @@ jobs:
           --recursive y \
           --output pylint-report.txt \
         .
-
-    - name: Run tests
-      if: ${{ inputs.skip_testing != 'true' }}
-      run: |
-        if [ -f tox.ini ]; then
-            # run tests and generates coverage.xml
-            tox
-        else
-            # run tests
-            python3 -m pytest tests/
-        fi
-
-    - name: Create SonarCloud project and disable autoscan
-      if: ${{ !github.event.repository.private }}
-      uses: MOV-AI/action-sonarcloud-proj-config@v1
+    - name: Store python Linters files
+      uses: actions/upload-artifact@v2
       with:
-        sonar_org: 'mov-ai'
-        sonar_token: ${{ secrets.sonar_token }}
-
-    - name: SonarCloud Scan
-      if: ${{ !github.event.repository.private }}
-      uses: SonarSource/sonarcloud-github-action@master
-      env:
-        GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
-        SONAR_TOKEN: ${{ secrets.sonar_token }}
-      with:
-        projectBaseDir: ./
-        args: >
-          -Dsonar.organization=mov-ai
-          -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
-          -Dsonar.sources=.
-          -Dsonar.scm.provider=git
-          -Dsonar.qualitygate.wait=true
-          -Dsonar.qualitygate.timeout=300
-          -Dsonar.python.flake8.reportPaths=flake8-report.txt
-          -Dsonar.python.pylint.reportPaths=pylint-report.txt
-          -Dsonar.python.coverage.reportPaths=coverage.xml
-
-    - name: Link to SonarCloud dashboard
-      if: ${{ !github.event.repository.private }}
-      shell: bash
-      run: |
-        echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
+        name: linting_reports
+        path: "./*-report.txt"
 
   Build:
     needs: [StaticAnalysis]
@@ -285,7 +256,7 @@ jobs:
           git config --global user.name ${{ secrets.auto_commit_user }}
           git config --global user.email ${{ secrets.auto_commit_mail }}
           git add .bumpversion.cfg
-          git commit -m "Automatic Bump of build version"
+          git commit -m "[skip actions] Automatic Bump of build version"
 
       - name: Set branch output
         id: var_branch
@@ -446,6 +417,15 @@ jobs:
     if: ${{ inputs.release == 'false' && inputs.install_test == 'true' }}
     runs-on: ubuntu-20.04
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Install test requirements
+        run: |
+          python3 -m pip install -r build-requirements.txt
+
       - name: Prereq Docker
         if: ${{ inputs.install_test_docker == 'true' }}
         run: |
@@ -464,6 +444,53 @@ jobs:
           sudo apt update
           cd artifacts/
           find ./ -name "*.deb" -not -name "*src*" -exec sudo apt install -y {} \;
+
+      - name: Download a single artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: linting_reports
+          path: ./
+
+      - name: Run tests
+        if: ${{ inputs.skip_testing != 'true' }}
+        run: |
+          if [ -f tox.ini ]; then
+              # run tests and generates coverage.xml
+              tox
+          else
+              # run tests
+              python3 -m pytest tests/
+          fi
+
+      - name: Create SonarCloud project and disable autoscan
+        uses: MOV-AI/action-sonarcloud-proj-config@v1
+        with:
+          sonar_org: 'mov-ai'
+          sonar_token: ${{ secrets.sonar_token }}
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
+          SONAR_TOKEN: ${{ secrets.sonar_token }}
+        with:
+          projectBaseDir: ./
+          args: >
+            -Dsonar.organization=mov-ai
+            -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
+            -Dsonar.sources=.
+            -Dsonar.scm.provider=git
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
+            -Dsonar.python.flake8.reportPaths=flake8-report.txt
+            -Dsonar.python.pylint.reportPaths=pylint-report.txt
+            -Dsonar.python.coverage.reportPaths=coverage.xml
+
+      - name: Link to SonarCloud dashboard
+        shell: bash
+        run: |
+          echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
+
 
   Rpm-Test:
     needs: [Raise, Rpm-Pack]

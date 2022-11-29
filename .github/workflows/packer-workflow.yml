@@ -40,7 +40,7 @@ jobs:
           TEMPLATE_ID=$(cat version)
           if [ ${TEMPLATE_ID: -2} ==  99 ]
           then
-            
+
             template_prefix=$(echo "${TEMPLATE_ID}" | head -c2)
             TEMPLATE_ID="$template_prefix"
             TEMPLATE_ID+="00"
@@ -79,7 +79,7 @@ jobs:
           git config --global user.password ${{ secrets.auto_commit_pwd }}
           echo "GIT_USER=${{ secrets.auto_commit_user }}:${{ secrets.auto_commit_pwd }}" >> $GITHUB_ENV
           git pull
-          git add version 
-          git commit -m "Automatic Bump of template id"
+          git add version
+          git commit -m "[skip actions] Automatic Bump of template id"
           git push --force-with-lease
         working-directory: "${{ inputs.build_dir }}"
