@@ -413,7 +413,9 @@ jobs:
       uses: actions/checkout@v3
 
     - name: Agent info
-      run: curl ipinfo.io/ip
+      run: |
+        echo "public ip: "$(curl ipinfo.io/ip)"
+        echo "private ip: $(hostname -I | awk '{print $1}')"
     
     - name: unstash raised_meta
       if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' }}
