@@ -58,7 +58,7 @@ jobs:
 
       - name: Ansible setup
         run: |
-          echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
+          echo "${{ secrets.ssh_ci_pem }}" > ~/.ssh/aws_slave.pem
           echo "${{ secrets.ssh_ci_pub_key }}" > ~/.ssh/aws_slave.pub
           
           sudo chmod 600 ~/.ssh/aws_slave.pem
