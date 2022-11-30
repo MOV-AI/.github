@@ -65,5 +65,6 @@ jobs:
 
       - name: Ansible setup
         run: |
-          sudo ansible-playbook playbook-create-template.yml -i proxmox_hosts -K --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/proxmox_config.yml
+          source ansible-venv/bin/activate
+          ansible-playbook playbook-create-template.yml -i proxmox_hosts -K --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/proxmox_config.yml
         working-directory: "ansible"
