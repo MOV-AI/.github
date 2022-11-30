@@ -36,6 +36,7 @@ jobs:
         id: template_info
         shell: bash
         run: |
+          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file ansible/group_vars/proxmox_config.yml --key template_id --output_file /tmp/id.txt
           echo "id=$(cat /tmp/id.txt)" >> $GITHUB_OUTPUT
 
