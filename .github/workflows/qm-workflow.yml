@@ -71,8 +71,20 @@ jobs:
           python3 -m pip install -r requirements.txt
         working-directory: "ansible"
 
-      - name: Ansible setup
+      - name: Create template definition
         run: |
           source ansible-venv/bin/activate
           ansible-playbook playbook-create-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/proxmox_config.yml
+        working-directory: "ansible"
+
+      - name: Install Template requirements
+        run: |
+          source ansible-venv/bin/activate
+          ansible-playbook playbook-configure-template.yml -i vm_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/template_config.yml
+        working-directory: "ansible"
+
+      - name: Store template
+        run: |
+          source ansible-venv/bin/activate
+          ansible-playbook playbook-deploy-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/proxmox_config.yml
         working-directory: "ansible"
