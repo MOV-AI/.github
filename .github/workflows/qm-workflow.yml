@@ -19,7 +19,7 @@ on:
 
 
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "2.1.0.19"
+  CI_INTEGRATION_SCRIPTS_VERSION: "2.1.0.20"
 
 jobs:
   Build:
