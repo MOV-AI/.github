@@ -1,0 +1,68 @@
+name: Build Packer images
+on:
+  workflow_call:
+    inputs:
+      deploy:
+        required: true
+        type: string
+        default: 'false'
+
+    secrets:
+      auto_commit_user:
+        required: true
+      auto_commit_mail:
+        required: true
+      auto_commit_pwd:
+        required: true
+      ssh_pem_fleet_aws_vm:
+        required: true
+
+
+env:
+  CI_INTEGRATION_SCRIPTS_VERSION: "2.1.0.19"
+
+jobs:
+  Build:
+    runs-on: proxmox-hel-deployer
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install CI Scripts
+        shell: bash
+        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+
+      - name: Get Template id
+        id: template_info
+        shell: bash
+        run: |
+          integration-pipeline get_yml_value --file ansible/group_vars/proxmox_config.yml --key template_id --output_file /tmp/id.txt
+          echo "id=$(cat /tmp/id.txt)" >> $GITHUB_OUTPUT
+
+      - name: Raise Template identifier
+        if: ${{ inputs.deploy == 'true' }}
+        id: raise
+        shell: bash
+        run: |
+          FULL_TEMPLATE_ID=${{ steps.template_info.outputs.id }}
+          TEMPLATE_ID=${FULL_TEMPLATE_ID:0 :6}
+          RAISED_TEMPLATE_ID="$(($TEMPLATE_ID+1))000"
+
+          echo "Raised to $RAISED_TEMPLATE_ID"
+          anchor=$(grep template_id ./ansible/group_vars/proxmox_config.yml)
+          new_value=$(grep template_id ./ansible/group_vars/proxmox_config.yml | sed -e "s/$FULL_TEMPLATE_ID/$RAISED_TEMPLATE_ID/g")
+          sed -i "s/$anchor/$new_value/g" ./ansible/group_vars/proxmox_config.yml
+
+      - name: Ansible setup
+        run: |
+          echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
+          sudo chmod 600 ~/.ssh/aws_slave.pem
+          python3 -m venv ansible-venv
+          source ansible-venv/bin/activate
+          python3 -m pip install -r requirements.txt
+        working-directory: "ansible"
+
+      - name: Ansible setup
+        run: |
+          sudo ansible-playbook playbook-create-template.yml -i proxmox_hosts -K --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/proxmox_config.yml
+        working-directory: "ansible"
