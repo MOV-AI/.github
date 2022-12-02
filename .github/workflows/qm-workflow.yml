@@ -76,7 +76,6 @@ jobs:
 
       - name: Install Template requirements
         run: |
-          sleep 5
           source ansible-venv/bin/activate
           ansible-playbook playbook-configure-template.yml -i vm_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/template_config.yml
         working-directory: "ansible"
