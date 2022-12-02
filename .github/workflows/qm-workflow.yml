@@ -22,6 +22,8 @@ on:
 
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "2.1.0.20"
+  ANSIBLE_PROXMOX_MANAGER: "0.0.0-1"
+  GITHUB_API_USR: "OttoMation-Movai"
 
 jobs:
   Build:
@@ -68,23 +70,31 @@ jobs:
           python3 -m pip install -r requirements.txt
         working-directory: "ansible"
 
+      - name: Setup ansible proxmox manager
+        shell: bash
+        id: proxmox_ansible_setup
+        run: |
+          target_dir=ansible_proxmox
+          integration-pipeline fetch_by_tag --repo ansible-playbook-proxmox --version $ANSIBLE_PROXMOX_MANAGER --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $target_dir
+          echo "target_dir=$target_dir" >> $GITHUB_OUTPUT
+
       - name: Create template definition
         run: |
-          source ansible-venv/bin/activate
-          ansible-playbook playbook-create-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/proxmox_config.yml
-        working-directory: "ansible"
+          source ../ansible-venv/bin/activate
+          ansible-playbook playbook-create-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@../group_vars/proxmox_config.yml
+        working-directory: ${{ steps.proxmox_ansible_setup.outputs.target_dir }}
 
       - name: Install Template requirements
         run: |
           source ansible-venv/bin/activate
-          ansible-playbook playbook-configure-template.yml -i vm_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/template_config.yml
+          ansible-playbook playbook-configure-template.yml -i ../${{ steps.proxmox_ansible_setup.outputs.target_dir }}/vm_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/template_config.yml
         working-directory: "ansible"
 
       - name: Store template
         run: |
-          source ansible-venv/bin/activate
-          ansible-playbook playbook-deploy-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/proxmox_config.yml
-        working-directory: "ansible"
+          source ../ansible-venv/bin/activate
+          ansible-playbook playbook-deploy-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@../group_vars/proxmox_config.yml
+        working-directory: ${{ steps.proxmox_ansible_setup.outputs.target_dir }}
 
       - name: Commit raise
         run: |
@@ -103,6 +113,6 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          source ansible-venv/bin/activate
-          ansible-playbook playbook-destroy-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/proxmox_config.yml
-        working-directory: "ansible"
+          source ../ansible-venv/bin/activate
+          ansible-playbook playbook-destroy-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@../group_vars/proxmox_config.yml
+        working-directory: ${{ steps.proxmox_ansible_setup.outputs.target_dir }}
