@@ -72,7 +72,7 @@ jobs:
         run: |
           source ansible-venv/bin/activate
           ansible-playbook playbook-create-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/proxmox_config.yml
-          ansible-playbook playbook-prepare-connection.yml -i localhost --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/proxmox_config.yml
+          ansible-playbook playbook-prepare-connection.yml --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/proxmox_config.yml
         working-directory: "ansible"
 
       - name: Install Template requirements
