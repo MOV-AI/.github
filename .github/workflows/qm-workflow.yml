@@ -80,7 +80,7 @@ jobs:
 
       - name: Create template definition
         run: |
-          source ../ansible-venv/bin/activate
+          source ../ansible/ansible-venv/bin/activate
           ansible-playbook playbook-create-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@../group_vars/proxmox_config.yml
         working-directory: ${{ steps.proxmox_ansible_setup.outputs.target_dir }}
 
@@ -92,7 +92,7 @@ jobs:
 
       - name: Store template
         run: |
-          source ../ansible-venv/bin/activate
+          source ../ansible/ansible-venv/bin/activate
           ansible-playbook playbook-deploy-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@../group_vars/proxmox_config.yml
         working-directory: ${{ steps.proxmox_ansible_setup.outputs.target_dir }}
 
@@ -113,6 +113,6 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          source ../ansible-venv/bin/activate
+          source ../ansible/ansible-venv/bin/activate
           ansible-playbook playbook-destroy-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@../group_vars/proxmox_config.yml
         working-directory: ${{ steps.proxmox_ansible_setup.outputs.target_dir }}
