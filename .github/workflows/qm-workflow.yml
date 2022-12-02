@@ -81,7 +81,7 @@ jobs:
       - name: Create template definition
         run: |
           source ../ansible/ansible-venv/bin/activate
-          ansible-playbook playbooks/playbook-create-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@../group_vars/proxmox_config.yml
+          ansible-playbook playbooks/playbook-create-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@../ansible/group_vars/proxmox_config.yml
         working-directory: ${{ steps.proxmox_ansible_setup.outputs.target_dir }}
 
       - name: Install Template requirements
@@ -93,7 +93,7 @@ jobs:
       - name: Store template
         run: |
           source ../ansible/ansible-venv/bin/activate
-          ansible-playbook playbooks/playbook-deploy-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@../group_vars/proxmox_config.yml
+          ansible-playbook playbooks/playbook-deploy-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@../ansible/group_vars/proxmox_config.yml
         working-directory: ${{ steps.proxmox_ansible_setup.outputs.target_dir }}
 
       - name: Commit raise
@@ -114,5 +114,5 @@ jobs:
         shell: bash
         run: |
           source ../ansible/ansible-venv/bin/activate
-          ansible-playbook playbooks/playbook-destroy-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@../group_vars/proxmox_config.yml
+          ansible-playbook playbooks/playbook-destroy-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@../ansible/group_vars/proxmox_config.yml
         working-directory: ${{ steps.proxmox_ansible_setup.outputs.target_dir }}
