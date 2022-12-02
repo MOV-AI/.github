@@ -99,3 +99,11 @@ jobs:
           git commit -m "[skip actions] Automatic Bump of template id"
           git push --force-with-lease
         working-directory: "ansible"
+      
+      - name: Teardown
+        if: failure()
+        shell: bash
+        run: |
+          source ansible-venv/bin/activate
+          ansible-playbook playbook-destroy-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/proxmox_config.yml
+        working-directory: "ansible"
