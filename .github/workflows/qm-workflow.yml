@@ -86,3 +86,16 @@ jobs:
           source ansible-venv/bin/activate
           ansible-playbook playbook-deploy-template.yml -i proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/proxmox_config.yml
         working-directory: "ansible"
+
+      - name: Commit raise
+        run: |
+          git config --global --add safe.directory $(pwd)
+          git config --global user.name '${{ secrets.auto_commit_user }}'
+          git config --global user.email '${{ secrets.auto_commit_mail }}'
+          git config --global user.password ${{ secrets.auto_commit_pwd }}
+          echo "GIT_USER=${{ secrets.auto_commit_user }}:${{ secrets.auto_commit_pwd }}" >> $GITHUB_ENV
+          git pull
+          git add ./group_vars/proxmox_config.yml
+          git commit -m "[skip actions] Automatic Bump of template id"
+          git push --force-with-lease
+        working-directory: "ansible"
