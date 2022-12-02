@@ -557,11 +557,19 @@ jobs:
               integration-pipeline publish_simulator_state_artifacts \
                     --product_name ${{ inputs.product_name }} \
                     --branch ${GITHUB_REF#refs/heads/}
+      - name: Push image
+        id: promote
+        shell: bash
+        run: |
+          image_name="${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+          docker push "$image_name"
+          echo "image_name=$image_name" >> $GITHUB_OUTPUT
+
       - name: pre-stash
         if: ${{ inputs.with_simulation == 'true' }}
         shell: bash
         run: |
-              echo "${{ needs.Build-Simulator.outputs.image_name }}" > simulator.image.artifact
+              echo "${{ steps.promote.outputs.image_name }}" > simulator.image.artifact
 
       - name: Stash deploy_simulator_artifacts
         if: ${{ inputs.with_simulation == 'true' }}
