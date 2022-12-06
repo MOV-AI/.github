@@ -385,7 +385,7 @@ jobs:
               --username ${{ steps.install.outputs.movai_user }} \
               --password ${{ steps.install.outputs.movai_pwd }} \
               --tb=short \
-              --jira_report ${{ steps.ui_tests_setup.outputs.report_jira }}
+              --jira_report
           else
               pytest -s \
                 --hub_url http://172.22.0.105:4444 \
