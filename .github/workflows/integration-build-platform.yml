@@ -376,16 +376,26 @@ jobs:
           . venv/bin/activate
           python3 -m pip install --upgrade pip
           pip install -r requirements.txt
-          pytest -s \
-            --cucumberjson="results/reports/result.json" \
-            --hub_url http://172.22.0.105:4444 \
-            --browser_name chrome \
-            --browser_version 91.0 \
-            --base_url https://${{ steps.agent_info.outputs.ip }}/ \
-            --username ${{ steps.install.outputs.movai_user }} \
-            --password ${{ steps.install.outputs.movai_pwd }} \
-            --tb=short \
-            --jira_report ${{ steps.ui_tests_setup.outputs.report_jira }}
+          if [ -n "${{ steps.ui_tests_setup.outputs.report_jira }}" ] ; then
+            pytest -s \
+              --hub_url http://172.22.0.105:4444 \
+              --browser_name chrome \
+              --browser_version 91.0 \
+              --base_url https://${{ steps.agent_info.outputs.ip }}/ \
+              --username ${{ steps.install.outputs.movai_user }} \
+              --password ${{ steps.install.outputs.movai_pwd }} \
+              --tb=short \
+              --jira_report ${{ steps.ui_tests_setup.outputs.report_jira }}
+          else
+              pytest -s \
+                --hub_url http://172.22.0.105:4444 \
+                --browser_name chrome \
+                --browser_version 91.0 \
+                --base_url https://${{ steps.agent_info.outputs.ip }}/ \
+                --username ${{ steps.install.outputs.movai_user }} \
+                --password ${{ steps.install.outputs.movai_pwd }} \
+                --tb=short
+          fi
           deactivate
           rm -R venv
 
