@@ -400,6 +400,7 @@ jobs:
           rm -R venv
 
       - name: Flow tests
+        continue-on-error: true
         working-directory: ${{ steps.flow_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
@@ -836,7 +837,7 @@ jobs:
           git restore product-manifest.yaml
           git pull
           echo "$product_version" > product.version
- 
+
           git add product.version
           git commit -m "[skip actions] Automatic Raise"
         env:
