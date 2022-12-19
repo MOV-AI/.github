@@ -136,6 +136,7 @@ jobs:
           -Dsonar.scm.provider=git
           -Dsonar.qualitygate.wait=true
           -Dsonar.qualitygate.timeout=300
+          -Dsonar.python.version=3
           -Dsonar.python.flake8.reportPaths=flake8-report.txt
           -Dsonar.python.pylint.reportPaths=pylint-report.txt
           -Dsonar.python.coverage.reportPaths=coverage.xml
