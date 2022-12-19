@@ -13,6 +13,14 @@ on:
       ros_distro:
         required: true
         type: string
+      prod_publish_repos:
+        required: false
+        type: string
+        default: '["ppa-main"]'
+      build_modes:
+        required: false
+        type: string
+        default: '["release"]'
 
     secrets:
       auto_commit_user:
@@ -43,7 +51,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-        build_mode: ["debug","release"]
+        build_mode: ${{ fromJSON(inputs.build_modes) }}
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-20.04
     container:
@@ -98,7 +106,10 @@ jobs:
       run: python3 -m pip install mobros==1.0.1.22 --ignore-installed
 
     - name: Install Mobtest
-      run: python3 -m pip install mobtest==0.0.1.4 --ignore-installed
+      run: |
+          python3 -m pip install \
+          -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple \
+          mobtest==0.0.2.2 --ignore-installed
 
     - name: Setup link to Ros userspace
       run: |
@@ -107,7 +118,7 @@ jobs:
 
     - name: Mobtest validations
       run: |
-        mobtest $(pwd)
+        mobtest repo --issues ./mobtest-issues.json .
 
     - name: Raise version and validate Ros repository
       run: mobros raise --workspace="$(pwd)"
@@ -130,6 +141,7 @@ jobs:
         IGNITION_VERSION: fortress
 
     - name: SonarQube Scan
+      if: ${{ false }}
       uses: SonarSource/sonarqube-scan-action@v1.0.0
       env:
         SONAR_TOKEN: ${{ secrets.sonar_token }}
@@ -179,7 +191,7 @@ jobs:
     runs-on: ubuntu-20.04
     needs:  [Build]
     container:
-      image: registry.aws.cloud.mov.ai/devops/ros-buildtools-noetic:latest
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:latest
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -220,7 +232,6 @@ jobs:
             VERSION="$main_version-$buildid"
             echo ::set-output name=ros_pkg_version::$VERSION
 
-
     - name: Publish to Nexus ppa-testing
       shell: bash
       run: |
@@ -256,11 +267,14 @@ jobs:
     - name: Commit auto raise version
       id: raise
       run: |
+        git config --global --add safe.directory $(pwd)
         git config --global user.name '${{ secrets.auto_commit_user }}'
         git config --global user.email '${{ secrets.auto_commit_mail }}'
         git pull
         git add **package.xml
-        git commit -m "Automatic Bump of build version"
+        git commit -m "[skip actions] Automatic Bump of build version"
+        commit_hash=$(git log --format="%H" -n 1)
+        echo ::set-output name=commit_id::$commit_hash
 
     - name: Push auto raise version
       uses: CasperWA/push-protected@v2
@@ -268,12 +282,6 @@ jobs:
         token: ${{ secrets.auto_commit_token }}
         branch: ${{ github.ref_name }}
         unprotect_reviews: true
-
-    - name: Get Commit id
-      id: raise
-      run: |
-        commit_hash=$(git log --format="%H" -n 1)
-        echo ::set-output name=commit_id::$commit_hash
 
     - name: Create Github Release
       uses: softprops/action-gh-release@v1
@@ -288,10 +296,13 @@ jobs:
         files: artifacts/*.deb
 
   Release:
+    strategy:
+      matrix:
+        publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-20.04
     container:
-      image: registry.aws.cloud.mov.ai/devops/ros-buildtools-noetic:latest
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:latest
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -311,16 +322,17 @@ jobs:
 
     - name: Fetch artifact from github release
       run: |
+        git config --global --add safe.directory $(pwd)
         mkdir artifacts
         cd artifacts
         gh release download ${{ steps.vars.outputs.tag}} -p *.deb
       env:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
 
-    - name: Publish to Nexus ppa-main
+    - name: Publish to Nexus ${{ matrix.publish_repo }}
       run: |
           NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-          NEXUS_REPO="ppa-main"
+          NEXUS_REPO="${{ matrix.publish_repo }}"
           FILE_LOCATION=$(find artifacts/*.deb)
           find artifacts -type f -name '*.deb' -exec curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
           -H "Content-Type: multipart/form-data" \

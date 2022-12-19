@@ -1,4 +1,4 @@
-name: Build and pack FE packages
+name: Build and pack Cpp packages
 on:
   workflow_call:
     inputs:
@@ -10,25 +10,19 @@ on:
         required: false
         type: string
         default: 'false'
-      run_tests:
+      components:
         required: false
         type: string
-        default: 'true'
-      npm_version:
+        default: ''
+      custom_requirements:
         required: false
         type: string
-        default: '16.x'
-      prod_publish_repos:
-        required: false
-        type: string
-        default: '["ppa-main"]'
+        default: ''
 
     secrets:
       auto_commit_user:
         required: true
       auto_commit_mail:
-        required: true
-      auto_commit_token:
         required: true
       registry_user:
         required: true
@@ -42,77 +36,66 @@ on:
         required: true
       sonar_token:
         required: true
-      npm_token:
-        required: true
 
 jobs:
   Build:
+    strategy:
+      matrix:
+        sub_component: ${{ fromJSON(inputs.components) }}
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-20.04
     container:
-      image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v1.1.5
+      options: --user root
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.npm_token }}
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v2
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
         submodules: recursive
-        token: ${{ secrets.npm_token }}
-
-    - name: Raise App version
-      run: |
-        git config --global --add safe.directory $(pwd)
-        git config --global user.name '${{ secrets.auto_commit_user }}'
-        git config --global user.email '${{ secrets.auto_commit_mail }}'
-        npm version prerelease --no-git-tag-version
-
-
-    - name: Setup Github as proxy Registry
-      uses: actions/setup-node@v2
-      with:
-        node-version: '${{ inputs.npm_version }}'
-        registry-url: 'https://npm.pkg.github.com/mov-ai'
 
     - name: Find Package details
       id: vars
       run: |
-        PACKAGE_VERSION=$(cat package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
-        PACKAGE_NAME=$(cat package.json | grep name |head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
+        PACKAGE_VERSION=$(dpkg-parsechangelog --show-field Version)
+        PACKAGE_NAME=$(dpkg-parsechangelog --show-field Source)
+        echo ::set-output name=pkg_name::$PACKAGE_NAME
+        echo ::set-output name=pkg_version::$PACKAGE_VERSION
+      working-directory: ${{ matrix.sub_component }}
 
-        echo ::set-output name=npm_pkg_name::$PACKAGE_NAME
-        echo ::set-output name=npm_pkg_version::$PACKAGE_VERSION
+    - name: Raise Version
+      id: vars-after-raise
+      run: |
+        PACKAGE_VERSION=${{ steps.vars.outputs.pkg_version }}
+        main_version=${PACKAGE_VERSION%-*}
+        build_id="${PACKAGE_VERSION#*-}"
+        raised_buildid=$(($build_id+1))
+        RAISED_PACKAGE_VERSION="$main_version-$raised_buildid"
+        echo ::set-output name=pkg_version::$RAISED_PACKAGE_VERSION
+      working-directory: ${{ matrix.sub_component }}
 
+    - name: Install requirements
+      shell: bash
+      run: |
+        apt-get update
+        IFS=';' read -r -a array <<< '${{ inputs.custom_requirements }}'
 
-    - name: Bump package.json metadata Version
-      uses: deef0000dragon1/json-edit-action/@v1
-      env:
-        KEY: movai.Version
-        VALUE: ${{steps.vars.outputs.npm_pkg_version}}
-        FILE: package.json
+        for cmd in "${array[@]}"
+        do
+            echo "$cmd"
+            eval $cmd
+        done
+        echo "finished custom script, now the requirement.apt"
+        apt-get install $(cat ./requirements.apt) -y
+      working-directory: ${{ matrix.sub_component}}
 
-    - name: Install dependencies
-      run: npm ci --loglevel verbose
+        #          curl -fsSL http://packages.osrfoundation.org/gazebo.key | apt-key add - ;add-apt-repository "deb http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main"
 
-    - name: Build
-      run: npm run build
-
-    - name: Check NPM log on failure
-      if: ${{ failure() }}
-      run: cat /github/home/.npm/_logs/*.log
-
-    - name: Run tests
-      if: ${{ inputs.run_tests == 'true' }}
-      run: npm run test
-
-    - name: Run test coverage
-      run: echo TODO
 
     - name: SonarQube Scan
       if: ${{ false }}
@@ -121,11 +104,12 @@ jobs:
         SONAR_TOKEN: ${{ secrets.sonar_token }}
         SONAR_HOST_URL: https://sonarqube.aws.cloud.mov.ai
       with:
-        projectBaseDir: ./
+        projectBaseDir: ./${{ matrix.sub_component }}
         args: >
           -Dsonar.organization=MOV-AI
           -Dsonar.projectKey=${{ github.event.repository.name }}
           -Dsonar.verbose=true
+          -Dsonar.sources=.
           -Dsonar.scm.provider=git
           -Dsonar.qualitygate.wait=true
           -Dsonar.qualitygate.timeout=300
@@ -136,63 +120,122 @@ jobs:
         echo "Please check report here: https://sonarqube.aws.cloud.mov.ai/dashboard?id=${{ github.event.repository.name }}"
       id: sonar_links
 
-    - name: Bump manifest.json metadata Version
-      uses: deef0000dragon1/json-edit-action/@v1
-      env:
-        KEY: version
-        VALUE: ${{steps.vars.outputs.npm_pkg_version}}
-        FILE: build/manifest.json
 
-    - name: Pack debian
+    - name: Build
       run: |
-        dch -v ${{ steps.vars.outputs.npm_pkg_version }} -b -D "UNRELEASED" "bump version"
-        dpkg-buildpackage && \
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu/ -DCMAKE_BUILD_TYPE=Release
+        make
+      working-directory: ${{ matrix.sub_component }}
+
+    - name: Pack
+      run: |
+        dch -v ${{ steps.vars-after-raise.outputs.pkg_version }} -b -D "UNRELEASED" "bump version"
+        dpkg-buildpackage -b && \
         mkdir artifacts && \
         cp ../*.deb artifacts
-
-    - name: Print generated packages
-      run: |
-        ls -la artifacts
-
-    - name: Publish npm
-      if: ${{ inputs.deploy == 'true' }}
-      run: npm publish
+      working-directory: ${{ matrix.sub_component }}
 
     - name: Archive binary
-      if: ${{ inputs.deploy == 'true' }}
       uses: actions/upload-artifact@v2
       with:
         name: packages
-        path: artifacts/*
+        path: ${{ matrix.sub_component }}/artifacts/*
 
+    - name: Print generated packages
+      run: ls -la artifacts
+      working-directory: ${{ matrix.sub_component }}
 
   Publish:
     if: ${{ inputs.deploy == 'true' }}
     runs-on: ubuntu-20.04
     needs:  [Build]
     container:
-      image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v1.1.5
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.npm_token }}
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v2
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
         submodules: recursive
-        token: ${{ secrets.npm_token }}
 
     - name: Download a single artifact
       uses: actions/download-artifact@v2
       with:
         name: packages
         path: artifacts
+
+    - name: Print generated packages
+      run: |
+        ls -la artifacts
+
+    - name: Raise Version
+      id: vars-after-raise
+      shell: bash
+      run: |
+        sub_component_expr="${{inputs.components}}"
+        sub_component_str=$(echo $sub_component_expr | sed -e 's/\[//g' | sed -e 's/\]//g')
+
+        IFS=',' read -r -a sub_components_array <<< $sub_component_str
+
+        for sub_component in "${sub_components_array[@]}"
+        do
+          echo "$sub_component"
+          pushd $sub_component >/dev/null
+
+          echo "raising component $sub_component"
+          PACKAGE_VERSION=$(dpkg-parsechangelog --show-field Version)
+          main_version=${PACKAGE_VERSION%-*}
+          build_id="${PACKAGE_VERSION#*-}"
+          raised_buildid=$(($build_id+1))
+          RAISED_PACKAGE_VERSION="$main_version-$raised_buildid"
+          dch -v $RAISED_PACKAGE_VERSION -b -D "UNRELEASED" "bump version"
+
+          popd >/dev/null
+        done
+
+        echo ::set-output name=pkg_version::$RAISED_PACKAGE_VERSION
+      working-directory: ${{ matrix.sub_component }}
+
+
+    - name: Publish to Nexus ppa-dev
+      shell: bash
+      run: |
+          NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+          NEXUS_REPO="ppa-dev"
+
+          for file in artifacts/*.deb
+          do
+            RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+            -H "Content-Type: multipart/form-data" \
+            --data-binary "@$file" \
+            -w '%{http_code}' \
+            "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
+
+            #retry
+            if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
+              echo "Failed upload with $RETURN_CODE. Retrying"
+
+              RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+                -H "Content-Type: multipart/form-data" \
+                --data-binary "@$file" \
+                -w '%{http_code}' \
+                "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
+            fi
+
+            if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
+              echo "Failed upload with $RETURN_CODE. Exiting"
+              exit 1
+            fi
+
+          done
 
     - name: Publish to Nexus ppa-testing
       shell: bash
@@ -226,54 +269,25 @@ jobs:
 
           done
 
-    - name: Raise App version
+    - name: Commit raise version
       id: raise
       run: |
         git config --global --add safe.directory $(pwd)
         git config --global user.name '${{ secrets.auto_commit_user }}'
         git config --global user.email '${{ secrets.auto_commit_mail }}'
-        npm version prerelease -m "[skip actions] Automatic Bump of build version"
-        git add package.*
-
-    - name: Push auto raise version
-      uses: CasperWA/push-protected@v2
-      with:
-        token: ${{ secrets.auto_commit_token }}
-        branch: ${{ github.ref_name }}
-        unprotect_reviews: true
-
-    - name: Get Commit id
-      id: raise
-      run: |
+        git pull
+        git add **changelog
+        git commit -m "[skip actions] Automatic Bump of build version"
+        git push
         commit_hash=$(git log --format="%H" -n 1)
         echo ::set-output name=commit_id::$commit_hash
-
-    - name: Find Package details
-      id: vars
-      run: |
-        PACKAGE_VERSION=$(cat package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
-        PACKAGE_NAME=$(cat package.json | grep name |head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
-
-        echo ::set-output name=npm_pkg_name::$PACKAGE_NAME
-        echo ::set-output name=npm_pkg_version::$PACKAGE_VERSION
-
-    - name: Grep manual release notes
-      shell: bash
-      run: |
-        # contains more than one release ?
-        if (( $(grep -o '# v' CHANGELOG.md | wc -l) > 1 )); then
-          # use the latest release notes
-          body=$(grep -m2 -A 9999 "# v" CHANGELOG.md | grep -B 9999 -m2 "# v" |sed '$ d')
-        else
-          body=$(cat CHANGELOG.md)
-        fi
 
     - name: Create Github Release
       uses: softprops/action-gh-release@v1
       with:
-        name: "Release of ${{ steps.vars.outputs.npm_pkg_version }}"
-        body_path: CHANGELOG.md
-        tag_name: ${{ steps.vars.outputs.npm_pkg_version }}
+        name: "Release of ${{ steps.vars-after-raise.outputs.pkg_version }}"
+        body: "Please add release notes"
+        tag_name: ${{ steps.vars-after-raise.outputs.pkg_version }}
         target_commitish: ${{ steps.raise.outputs.commit_id }}
         token: ${{ secrets.gh_token }}
         prerelease: true
@@ -281,22 +295,22 @@ jobs:
         files: artifacts/*.deb
 
   Release:
-    strategy:
-      matrix:
-        publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-20.04
     container:
-      image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v1.1.5
+      options: --user root
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.npm_token }}
 
     steps:
     - name: Checkout
       uses: actions/checkout@v2
+      with:
+        # Disabling shallow clone is recommended for improving relevancy of reporting
+        fetch-depth: 0
+        submodules: recursive
 
     - name: Set tag output
       id: vars
@@ -314,7 +328,7 @@ jobs:
     - name: Publish to Nexus ppa-main
       run: |
           NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-          NEXUS_REPO="${{ matrix.publish_repo }}"
+          NEXUS_REPO="ppa-main"
           FILE_LOCATION=$(find artifacts/*.deb)
           find artifacts -type f -name '*.deb' -exec curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
           -H "Content-Type: multipart/form-data" \

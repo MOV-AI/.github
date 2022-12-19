@@ -1,0 +1,118 @@
+name: Build Packer images
+on:
+  workflow_call:
+    inputs:
+      deploy:
+        required: true
+        type: string
+        default: 'false'
+
+    secrets:
+      auto_commit_user:
+        required: true
+      auto_commit_mail:
+        required: true
+      auto_commit_pwd:
+        required: true
+      ssh_ci_pem:
+        required: true
+      ssh_ci_pub_key:
+        required: true
+
+
+env:
+  CI_INTEGRATION_SCRIPTS_VERSION: "2.1.0.20"
+  ANSIBLE_PROXMOX_MANAGER: "0.0.0-4"
+  GITHUB_API_USR: "OttoMation-Movai"
+
+jobs:
+  Build:
+    runs-on: proxmox-hel-deployer
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install CI Scripts
+        shell: bash
+        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+
+      - name: Get Template id
+        id: template_info
+        shell: bash
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          integration-pipeline get_yml_value --file ansible/group_vars/proxmox_config.yml --key template_id --output_file /tmp/id.txt
+          echo "id=$(cat /tmp/id.txt)" >> $GITHUB_OUTPUT
+
+      - name: Raise Template identifier
+        if: ${{ inputs.deploy == 'true' }}
+        id: raise
+        shell: bash
+        run: |
+          FULL_TEMPLATE_ID=${{ steps.template_info.outputs.id }}
+          TEMPLATE_ID=${FULL_TEMPLATE_ID:0 :6}
+          RAISED_TEMPLATE_ID="$(($TEMPLATE_ID+1))000"
+
+          echo "Raised to $RAISED_TEMPLATE_ID"
+          anchor=$(grep template_id ./ansible/group_vars/proxmox_config.yml)
+          new_value=$(grep template_id ./ansible/group_vars/proxmox_config.yml | sed -e "s/$FULL_TEMPLATE_ID/$RAISED_TEMPLATE_ID/g")
+          sed -i "s/$anchor/$new_value/g" ./ansible/group_vars/proxmox_config.yml
+
+      - name: Ansible setup
+        run: |
+          echo "${{ secrets.ssh_ci_pem }}" > ~/.ssh/aws_slave.pem
+          echo "${{ secrets.ssh_ci_pub_key }}" > ~/.ssh/aws_slave.pub
+          
+          sudo chmod 600 ~/.ssh/aws_slave.pem
+          sudo chmod 600 ~/.ssh/aws_slave.pub
+          python3 -m venv ansible-venv
+          source ansible-venv/bin/activate
+          python3 -m pip install -r requirements.txt
+        working-directory: "ansible"
+
+      - name: Setup ansible proxmox manager
+        shell: bash
+        id: proxmox_ansible_setup
+        run: |
+          target_dir=ansible_proxmox
+          integration-pipeline fetch_by_tag --repo ansible-playbook-proxmox --version $ANSIBLE_PROXMOX_MANAGER --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $target_dir
+          echo "target_dir=$target_dir" >> $GITHUB_OUTPUT
+
+      - name: Create template definition
+        run: |
+          source ../ansible/ansible-venv/bin/activate
+          ansible-playbook playbooks/playbook-create-template.yml -i staging/proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@../ansible/group_vars/proxmox_config.yml
+        working-directory: ${{ steps.proxmox_ansible_setup.outputs.target_dir }}
+
+      - name: Install Template requirements
+        run: |
+          source ansible-venv/bin/activate
+          ansible-playbook playbook-configure-template.yml -i ../${{ steps.proxmox_ansible_setup.outputs.target_dir }}/vm_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@group_vars/template_config.yml
+        working-directory: "ansible"
+
+      - name: Store template
+        run: |
+          source ../ansible/ansible-venv/bin/activate
+          ansible-playbook playbooks/playbook-deploy-template.yml -i staging/proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@../ansible/group_vars/proxmox_config.yml
+        working-directory: ${{ steps.proxmox_ansible_setup.outputs.target_dir }}
+
+      - name: Commit raise
+        run: |
+          git config --global --add safe.directory $(pwd)
+          git config --global user.name '${{ secrets.auto_commit_user }}'
+          git config --global user.email '${{ secrets.auto_commit_mail }}'
+          git config --global user.password ${{ secrets.auto_commit_pwd }}
+          echo "GIT_USER=${{ secrets.auto_commit_user }}:${{ secrets.auto_commit_pwd }}" >> $GITHUB_ENV
+          git pull
+          git add ./group_vars/proxmox_config.yml
+          git commit -m "[skip actions] Automatic Bump of template id"
+          git push --force-with-lease
+        working-directory: "ansible"
+      
+      - name: Teardown
+        if: failure()
+        shell: bash
+        run: |
+          source ../ansible/ansible-venv/bin/activate
+          ansible-playbook playbooks/playbook-destroy-template.yml -i staging/proxmox_hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@../ansible/group_vars/proxmox_config.yml
+        working-directory: ${{ steps.proxmox_ansible_setup.outputs.target_dir }}

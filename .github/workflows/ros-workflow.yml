@@ -13,7 +13,14 @@ on:
       ros_distro:
         required: true
         type: string
-
+      prod_publish_repos:
+        required: false
+        type: string
+        default: '["ppa-main"]'
+      build_modes:
+        required: false
+        type: string
+        default: '["release"]'
 
     secrets:
       auto_commit_user:
@@ -44,11 +51,11 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-        build_mode: ["debug","release"]
+        build_mode: ${{ fromJSON(inputs.build_modes) }}
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-20.04
     container:
-      image: registry.aws.cloud.mov.ai/devops/ros-buildtools-${{ matrix.distro }}:latest
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:v1.1.5
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -58,8 +65,6 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
       with:
-        # Disabling shallow clone is recommended for improving relevancy of reporting
-        fetch-depth: 0
         submodules: recursive
 
     - name: Validate Repository Package.xml
@@ -92,17 +97,10 @@ jobs:
     - name: Install Mobros
       run: python3 -m pip install mobros==1.0.1.22 --ignore-installed
 
-    - name: Install Mobtest
-      run: python3 -m pip install mobtest==0.0.1.4 --ignore-installed
-
     - name: Setup link to Ros userspace
       run: |
         mkdir /opt/mov.ai/user/cache/ros/src/
         ln -s $(pwd)/* /opt/mov.ai/user/cache/ros/src/
-
-    - name: Mobtest validations
-      run: |
-        mobtest $(pwd)
 
     - name: Raise version and validate Ros repository
       run: mobros raise --workspace="$(pwd)"
@@ -114,28 +112,6 @@ jobs:
       run: |
         export MOVAI_OUTPUT_DIR="$(pwd)/artifacts"
         mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
-
-    - name: SonarQube Scan
-      uses: SonarSource/sonarqube-scan-action@v1.0.0
-      env:
-        SONAR_TOKEN: ${{ secrets.sonar_token }}
-        SONAR_HOST_URL: https://sonarqube.aws.cloud.mov.ai
-      with:
-        projectBaseDir: ./
-        args: >
-          -Dsonar.organization=MOV-AI
-          -Dsonar.projectKey=${{ github.event.repository.name }}
-          -Dsonar.verbose=true
-          -Dsonar.sources=.
-          -Dsonar.scm.provider=git
-          -Dsonar.qualitygate.wait=true
-          -Dsonar.qualitygate.timeout=300
-
-    - name: Link to SonarQube Dashboard
-      shell: bash
-      run: |
-        echo "Please check report here: https://sonarqube.aws.cloud.mov.ai/dashboard?id=${{ github.event.repository.name }}"
-      id: sonar_links
 
     - name: Archive binary
       uses: actions/upload-artifact@v2
@@ -160,12 +136,59 @@ jobs:
         mobros publish
         cat /usr/local/rosdep/ros-pkgs.yaml
 
+  Test:
+    if: ${{ inputs.release == 'false' }}
+    runs-on: ubuntu-20.04
+    needs: [Build]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          # Disabling shallow clone is recommended for improving relevancy of reporting
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install Mobtest
+        run: |
+          python3 -m pip install \
+          -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple \
+          mobtest==0.0.2.2 --ignore-installed
+
+      - name: Mobtest validations
+        run: |
+          mobtest repo --issues ./mobtest-issues.json .
+
+      - name: SonarQube Scan
+        if: ${{ false }}
+        uses: SonarSource/sonarqube-scan-action@v1.0.0
+        env:
+          SONAR_TOKEN: ${{ secrets.sonar_token }}
+          SONAR_HOST_URL: https://sonarqube.aws.cloud.mov.ai
+        with:
+          projectBaseDir: ./
+          args: >
+            -Dsonar.organization=MOV-AI
+            -Dsonar.projectKey=${{ github.event.repository.name }}
+            -Dsonar.verbose=true
+            -Dsonar.sources=.
+            -Dsonar.scm.provider=git
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
+            -Dsonar.externalIssuesReportPaths=./mobtest-issues.json
+
+      - name: Link to SonarQube Dashboard
+        shell: bash
+        run: |
+          echo "Please check report here: https://sonarqube.aws.cloud.mov.ai/dashboard?id=${{ github.event.repository.name }}"
+        id: sonar_links
+
   Publish:
     if: ${{ inputs.deploy == 'true' }}
     runs-on: ubuntu-20.04
-    needs:  [Build]
+    needs:  [Test]
     container:
-      image: registry.aws.cloud.mov.ai/devops/ros-buildtools-noetic:latest
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v1.1.5
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -175,8 +198,6 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
       with:
-        # Disabling shallow clone is recommended for improving relevancy of reporting
-        fetch-depth: 0
         submodules: recursive
 
     - name: Download a single artifact
@@ -205,7 +226,6 @@ jobs:
             buildid=$(echo $build_version_section | sed 's/ //g' | sed -e 's/<\w*>'//g | sed -e 's/<\/\w*>'//g)
             VERSION="$main_version-$buildid"
             echo ::set-output name=ros_pkg_version::$VERSION
-
 
     - name: Publish to Nexus ppa-testing
       shell: bash
@@ -242,11 +262,14 @@ jobs:
     - name: Commit raise version
       id: raise
       run: |
+        git config --global --add safe.directory $(pwd)
         git config --global user.name '${{ secrets.auto_commit_user }}'
         git config --global user.email '${{ secrets.auto_commit_mail }}'
         git pull
         git add **package.xml
-        git commit -m "Automatic Bump of build version"
+        git commit -m "[skip actions] Automatic Bump of build version"
+        commit_hash=$(git log --format="%H" -n 1)
+        echo ::set-output name=commit_id::$commit_hash
 
     - name: Push auto raise version
       uses: CasperWA/push-protected@v2
@@ -254,12 +277,6 @@ jobs:
         token: ${{ secrets.auto_commit_token }}
         branch: ${{ github.ref_name }}
         unprotect_reviews: true
-
-    - name: Get Commit id
-      id: raise
-      run: |
-        commit_hash=$(git log --format="%H" -n 1)
-        echo ::set-output name=commit_id::$commit_hash
 
     - name: Create Github Release
       uses: softprops/action-gh-release@v1
@@ -274,10 +291,14 @@ jobs:
         files: artifacts/*.deb
 
   Release:
+    strategy:
+      matrix:
+        publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-20.04
     container:
-      image: registry.aws.cloud.mov.ai/devops/ros-buildtools-noetic:latest
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v1.1.5
+
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -287,8 +308,6 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
       with:
-        # Disabling shallow clone is recommended for improving relevancy of reporting
-        fetch-depth: 0
         submodules: recursive
 
     - name: Set tag output
@@ -297,16 +316,17 @@ jobs:
 
     - name: Fetch artifact from github release
       run: |
+        git config --global --add safe.directory $(pwd)
         mkdir artifacts
         cd artifacts
         gh release download ${{ steps.vars.outputs.tag}} -p *.deb
       env:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
 
-    - name: Publish to Nexus ppa-main
+    - name: Publish to Nexus ${{ matrix.publish_repo }}
       run: |
           NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-          NEXUS_REPO="ppa-main"
+          NEXUS_REPO="${{ matrix.publish_repo }}"
           FILE_LOCATION=$(find artifacts/*.deb)
           find artifacts -type f -name '*.deb' -exec curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
           -H "Content-Type: multipart/form-data" \

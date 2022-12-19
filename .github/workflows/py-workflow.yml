@@ -14,7 +14,16 @@ on:
         required: false
         type: string
         default: 'false'
-
+        description: DEPRECATED - to be removed on v2
+      run_black:
+        required: false
+        type: string
+        default: 'false'
+        description: When 'true' black is run stopping the pipeline if any files are not properly formatted
+      prod_publish_repos:
+        required: false
+        type: string
+        default: '["pypi-edge"]'
     secrets:
       auto_commit_user:
         required: true
@@ -53,40 +62,82 @@ jobs:
         fetch-depth: 0
         submodules: recursive
 
-    - name: install build-requirements
+    - name: Install build-requirements
       run: python3 -m pip install -r build-requirements.txt
 
-    - name: Python Linter
-      if: ${{ inputs.skip_linting == 'true' }}
-      run: |
-        python3 -m pylint *
-        python3 -m black .
-        python3 -m flake8
+    - name: Install python package
+      run: python3 -m pip install .
 
-    - name: SonarQube Scan
-      uses: SonarSource/sonarqube-scan-action@v1.0.0
+    - name: Run Black
+      if: ${{ inputs.run_black == 'true' }}
+      run: |
+        python3 -m black \
+          --line-length 100 \
+          --diff \
+          --check \
+          .
+
+    - name: Python Linters
+      # run linters isolated so no issues are masked from SonarCloud
+      run: |
+        python3 -m flake8 \
+          --isolated \
+          --exclude dist,.*\.egg-info,.git,__pycache__,.tox,venv \
+          --max-complexity 10 \
+          --max-line-length 100 \
+          --exit-zero \
+          --output-file flake8-report.txt
+
+        # pylint seems to not have a way to ignore configuration files
+        # so we need to provide it a dummy one
+        touch dummy-pylint-config
+        python3 -m pylint \
+          --rcfile dummy-pylint-config \
+          --ignore-patterns dist,.*\.egg-info,.git,__pycache__,.tox,venv \
+          --max-line-length 100 \
+          --exit-zero \
+          --recursive y \
+          --output pylint-report.txt \
+          .
+
+    - name: Run tests
+      run: |
+        if [ -f tox.ini ]; then
+            # run tests and generates coverage.xml
+            tox
+        else
+            # run tests
+            python3 -m pytest tests/
+        fi
+
+    - name: Create SonarCloud project and disable autoscan
+      uses: MOV-AI/action-sonarcloud-proj-config@v1
+      with:
+        sonar_org: 'mov-ai'
+        sonar_token: ${{ secrets.sonar_token }}
+
+    - name: SonarCloud Scan
+      uses: SonarSource/sonarcloud-github-action@master
       env:
+        GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
         SONAR_TOKEN: ${{ secrets.sonar_token }}
-        SONAR_HOST_URL: https://sonarqube.aws.cloud.mov.ai
       with:
         projectBaseDir: ./
         args: >
-          -Dsonar.organization=MOV-AI
-          -Dsonar.projectKey=${{ github.event.repository.name }}
-          -Dsonar.verbose=true
+          -Dsonar.organization=mov-ai
+          -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
           -Dsonar.sources=.
           -Dsonar.scm.provider=git
           -Dsonar.qualitygate.wait=true
           -Dsonar.qualitygate.timeout=300
+          -Dsonar.python.flake8.reportPaths=flake8-report.txt
+          -Dsonar.python.pylint.reportPaths=pylint-report.txt
+          -Dsonar.python.coverage.reportPaths=coverage.xml
 
-    - name: Link to SonarQube Dashboard
+    - name: Link to SonarCloud dashboard
       shell: bash
       run: |
-        echo "Please check report here: https://sonarqube.aws.cloud.mov.ai/dashboard?id=${{ github.event.repository.name }}"
-      id: sonar_links
-
-    - name: Run tests
-      run: python3 -m pytest
+        echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
     - name: Raise version
       if: ${{ inputs.deploy == 'true' }}
@@ -102,16 +153,20 @@ jobs:
         echo ::set-output name=py_pkg_version::$PACKAGE_VERSION
 
     - name: Sync setup.py
-      run: sed -i s/"$(cat setup.py | grep version)"/"    version=\"${{ steps.vars.outputs.py_pkg_version }}\","/g setup.py
+      run: sed -i s/"$(cat setup.py | grep version=)"/"    version=\"${{ steps.vars.outputs.py_pkg_version }}\","/g setup.py
 
     - name: Commit auto raise version
+      id: raise
       if: ${{ inputs.deploy == 'true' }}
       run: |
+        git config --global --add safe.directory $(pwd)
         git config --global user.name ${{ secrets.auto_commit_user }}
         git config --global user.email ${{ secrets.auto_commit_mail }}
         git add setup.py
         git add .bumpversion.cfg
-        git commit -m "Automatic Bump of build version"
+        git commit -m "[skip actions] Automatic Bump of build version"
+        commit_hash=$(git log --format="%H" -n 1)
+        echo ::set-output name=commit_id::$commit_hash
 
     - name: Push auto raise version
       uses: CasperWA/push-protected@v2
@@ -124,7 +179,7 @@ jobs:
       id: releasevars
       run: |
         PACKAGE_RELEASE_VERSION=$(echo ${{ steps.vars.outputs.py_pkg_version }} | sed s/"-"/"."/g)
-        sed -i s/"$(cat setup.py | grep version)"/"$(cat setup.py | grep version | sed s/"-"/"."/g)"/g setup.py
+        sed -i s/"$(cat setup.py | grep version=)"/"$(cat setup.py | grep version= | sed s/"-"/"."/g)"/g setup.py
 
         echo ::set-output name=py_pkg_version::$PACKAGE_RELEASE_VERSION
 
@@ -144,7 +199,7 @@ jobs:
         password: ${{ secrets.nexus_publisher_password }}
         repository_url: https://artifacts.cloud.mov.ai/repository/pypi-experimental/
 
-    - name: Publish package to TestPyPI Testing
+    - name: Publish package to TestPyPI Integration
       if: ${{ inputs.deploy == 'true' }}
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
@@ -157,8 +212,12 @@ jobs:
       shell: bash
       run: |
         title="Release of ${{ steps.releasevars.outputs.py_pkg_version }}"
+        git config --global --add safe.directory $(pwd)
 
-        gh release create -p -t "$title" -n "Release notes for ${{ steps.vars.outputs.py_pkg_name }}" ${{ steps.releasevars.outputs.py_pkg_version }}
+        gh release create -p -t "$title" -n "Release notes for ${{ steps.vars.outputs.py_pkg_name }}" \
+        --target ${{ steps.raise.outputs.commit_id }} \
+        --generate-notes \
+        ${{ steps.releasevars.outputs.py_pkg_version }}
 
         # add all files in the artifacts folder
         assets=()
@@ -174,6 +233,9 @@ jobs:
 
 
   Release:
+    strategy:
+      matrix:
+        publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-20.04
     container:
@@ -192,6 +254,7 @@ jobs:
 
     - name: Fetch artifact from github release
       run: |
+        git config --global --add safe.directory $(pwd)
         mkdir dist
         cd dist
         gh release download ${{ steps.vars.outputs.tag}} -p *.whl
@@ -205,9 +268,9 @@ jobs:
         name: packages
         path: dist/*
 
-    - name: Publish package to TestPyPI
+    - name: Publish package to ${{ matrix.publish_repo }}
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         user: ${{ secrets.nexus_publisher_user }}
         password: ${{ secrets.nexus_publisher_password }}
-        repository_url: https://artifacts.cloud.mov.ai/repository/pypi-edge/
+        repository_url: https://artifacts.cloud.mov.ai/repository/${{ matrix.publish_repo }}/
