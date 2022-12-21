@@ -1,0 +1,72 @@
+name: Release Sim Models
+on:
+  workflow_call:
+    inputs:
+      deploy:
+        required: false
+        type: string
+        default: 'true'
+
+    secrets:
+      auto_commit_user:
+        required: true
+      auto_commit_mail:
+        required: true
+      auto_commit_pwd:
+        required: true
+      gh_token:
+        required: true
+
+jobs:
+  Deploy:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: install raise requirements
+        run: python3 -m pip install -r build-requirements.txt
+
+      - name: Raise Package version
+        id: raise
+        run: |
+          git config --global --add safe.directory $(pwd)
+          git config --global user.name ${{ secrets.auto_commit_user }}
+          git config --global user.email ${{ secrets.auto_commit_mail }}
+          bump2version patch --no-tag
+
+      - name: Set branch output
+        id: var_branch
+        run: |
+          echo "Branch name is: ${GITHUB_REF#refs/heads/}"
+          echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+
+      - name: Push auto raise version
+        uses: CasperWA/push-protected@v2
+        with:
+          token: ${{ secrets.auto_commit_pwd }}
+          branch: ${{ steps.var_branch.outputs.branch }}
+          unprotect_reviews: true
+
+      - name: Commit of version
+        id: commit_id
+        run: |
+          commit_hash=$(git log --format="%H" -n 1)
+          echo "commit_id=${commit_hash}" >> $GITHUB_OUTPUT
+
+      - name: Get version
+        id: vars-after-raise
+        run: |
+          pkg_version=$(cat version)
+          echo "pkg_version=${pkg_version}" >> $GITHUB_OUTPUT
+
+      - name: Create Github Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "Release of ${{ steps.vars-after-raise.outputs.pkg_version }}"
+          body: "Please add release notes"
+          tag_name: ${{ steps.vars-after-raise.outputs.pkg_version }}
+          target_commitish: ${{ steps.commit_id.outputs.commit_id }}
+          token: ${{ secrets.gh_token }}
+          prerelease: true
+          generate_release_notes: true
