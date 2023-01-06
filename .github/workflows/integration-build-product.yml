@@ -347,14 +347,13 @@ jobs:
     outputs:
       image_name: "${{ steps.pre_simulator_build.outputs.image_name }}"
       skip_simulator: "${{ steps.pre_simulator_build.outputs.skip_simulator_build }}"
+    if: ${{ inputs.with_simulation == 'true' }}
 
     steps:
       - name: Pre clean ups
-        if: ${{ inputs.with_simulation == 'true' }}
         uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        if: ${{ inputs.with_simulation == 'true' }}
         uses: actions/checkout@v3
 
       - name: Agent info
@@ -363,19 +362,22 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: Install CI Scripts
-        if: ${{ inputs.with_simulation == 'true' }}
         shell: bash
         run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash sim_configs
-        if: ${{ inputs.with_simulation == 'true' }}
         uses: actions/download-artifact@v2
         with:
           name: sim_configs
           path: simulator_artifacts
 
+      - name: unstash manifest
+        uses: actions/download-artifact@v2
+        with:
+          name: manifest
+          path: .
+
       - name: Prepare Skip variables
-        if: ${{ inputs.with_simulation == 'true' }}
         id: pre_simulator_build
         run: |
           if [ ! -f "simulator_artifacts/version" ]; then
@@ -386,7 +388,7 @@ jobs:
           echo ::set-output name=image_name::"${{ env.REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)"
 
       - name: Lint docker image
-        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
         shell: bash
         run: |
           wget https://github.com/hadolint/hadolint/releases/download/v2.9.3/hadolint-Linux-x86_64
@@ -394,7 +396,7 @@ jobs:
           ./hadolint-Linux-x86_64 docker/$DISTRO/Dockerfile-simulator -t error
 
       - name: Fetch artifacts
-        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
         shell: bash
         run: |
           export PATH="$HOME/.local/bin:$PATH"
@@ -405,7 +407,7 @@ jobs:
           --target_dir "./models"
 
       - name: Login to Private Registry
-        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
         uses: docker/login-action@v1
         with:
           username: ${{ secrets.registry_user }}
@@ -413,13 +415,13 @@ jobs:
           registry: ${{ env.REGISTRY }}
 
       - name: Prepare docker build variables
-        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
         id: pre_build
         run: |
           echo ::set-output name=base_name::$(cat simulator_artifacts/simulator_base.ci)
 
       - name: Build with args and push
-        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
         uses: docker/build-push-action@v3
         with:
           context: .
