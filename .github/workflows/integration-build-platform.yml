@@ -727,6 +727,7 @@ jobs:
                 --gh_api_user $GITHUB_API_USR \
                 --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
                 --target_dir "./models"
+          if [ ! -d ./models ]; then mkdir -p ./models; fi
 
       - name: Login to Private Registry
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
