@@ -26,7 +26,7 @@ on:
       prod_publish_pypi:
         required: false
         type: string
-        default: 'pypi-public'
+        default: 'pypi-edge'
 
     secrets:
       auto_commit_user:
@@ -136,6 +136,7 @@ jobs:
           -Dsonar.scm.provider=git
           -Dsonar.qualitygate.wait=true
           -Dsonar.qualitygate.timeout=300
+          -Dsonar.python.version=3
           -Dsonar.python.flake8.reportPaths=flake8-report.txt
           -Dsonar.python.pylint.reportPaths=pylint-report.txt
           -Dsonar.python.coverage.reportPaths=coverage.xml
@@ -392,7 +393,7 @@ jobs:
 
     - name: Fetch python artifact from github release
       run: |
-        mkdir dist
+        mkdir dist artifacts
         git config --global --add safe.directory $(pwd)
         cd dist
         gh release download ${{ steps.vars.outputs.tag}} -p *.whl
@@ -423,8 +424,12 @@ jobs:
 
     - name: Publish to Nexus
       run: |
-          NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
           NEXUS_REPO="${{ matrix.publish_repo }}"
+          if [ "$NEXUS_REPO" != "ppa-public" ]; then
+            NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+          else
+            NEXUS_ENDPOINT="artifacts.aws.cloud.mov.ai"
+          fi          
           FILE_LOCATION=$(find artifacts/*.deb)
           find artifacts -type f -name '*.deb' -exec curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
           -H "Content-Type: multipart/form-data" \
