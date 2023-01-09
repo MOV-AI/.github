@@ -482,6 +482,7 @@ jobs:
         shell: bash
         env:
           INSTALL_DIR: ${{ steps.install_tests_setup.outputs.target_dir }}
+          API_DIR: ${{ steps.api_tests_setup.outputs.target_dir }}
           FLOW_DIR: ${{ steps.flow_tests_setup.outputs.target_dir }}
         run: |
           mkdir qa_artifacts
@@ -492,6 +493,11 @@ jobs:
           cp -r "${INSTALL_DIR}"/results/*.log ./qa_artifacts/install || true
           cp -r "${INSTALL_DIR}"/results/*.zip ./qa_artifacts/install || true
           cp -r "${INSTALL_DIR}"/results/test_report_*.html ./qa_artifacts/install
+          
+          # api tests artifacts
+          # *.log and *.zip might not exist if the test fails early
+          mkdir -p qa_artifacts/api
+          cp -r "${API_DIR}"/results/*.zip ./qa_artifacts/api || true
 
           # flow tests artifacts, they might not exist
           mkdir -p qa_artifacts/flow
