@@ -166,6 +166,7 @@ jobs:
         git commit -m "[skip actions] Automatic Bump of build version"
 
     - name: Set branch output
+      if: ${{ inputs.deploy == 'true' }}
       id: var_branch
       run: |
         echo "Branch name is: ${GITHUB_REF#refs/heads/}"
@@ -180,6 +181,7 @@ jobs:
         unprotect_reviews: true
 
     - name: Commit of version
+      if: ${{ inputs.deploy == 'true' }}
       id: commit_id
       run: |
         commit_hash=$(git log --format="%H" -n 1)
