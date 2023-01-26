@@ -578,14 +578,28 @@ jobs:
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=0.0.1-19
+          provision_infra_version=0.0.1-26
           provision_infra_repo_name=devops-tf-proxmox-fleet
 
           rm -rf $provision_infra_dir
           export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
           ls -la $provision_infra_dir
-          echo ::set-output name=target_dir::"$provision_infra_dir/hosts/hel/"
+          echo ::set-output name=target_dir::"$provision_infra_dir/hosts/generic/"
+
+      - name: Define Instance names
+        id: infra_names
+        shell: bash
+        run: | 
+          branch=$(echo ${GITHUB_REF#refs/heads/} | sed "s;\.;-;g" )
+
+          local_manager_prefix="ip-manager-$branch"
+          local_worker_prefix="ip-worker-$branch"
+          echo "$local_manager_prefix"
+          echo "$local_worker_prefix"
+
+          echo ::set-output name=manager_prefix::$local_manager_prefix
+          echo ::set-output name=worker_prefix::$local_worker_prefix
 
       - name: Provision remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -601,6 +615,16 @@ jobs:
           TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
           TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
           TF_VAR_ip_list: ${{ inputs.fleet_ips }}
+          TF_VAR_proxmox_host: "hel"
+          TF_VAR_vm_gateway: "172.22.0.1"
+          TF_VAR_ip_mask: 24
+
+          TF_VAR_template_name: "ubuntu-2004-cloudinit-template1"
+          TF_VAR_fleet_manager_name: ${{ steps.infra_names.outputs.manager_prefix }}
+          TF_VAR_fleet_manager_memory: 8192
+          TF_VAR_template_name_no_gpu: "ubuntu-2004-cloudinit-template1"
+          TF_VAR_fleet_worker_name_prefix: ${{ steps.infra_names.outputs.worker_prefix }}
+          TF_VAR_fleet_worker_memory: 8192
 
       - name: Apply ansible inventory
         shell: bash
