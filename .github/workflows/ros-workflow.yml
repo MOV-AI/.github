@@ -21,6 +21,10 @@ on:
         required: false
         type: string
         default: '["release"]'
+      run_catkin_tests:
+        required: false
+        type: boolean
+        default: false
 
 
     secrets:
@@ -114,6 +118,11 @@ jobs:
       run: |
         export MOVAI_OUTPUT_DIR="$(pwd)/artifacts"
         mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
+
+    - name: Run Catkin tests
+      if: ${{ !inputs.run_catkin_tests }}
+      shell: bash
+      run: echo $ROS1_USER_WS
 
     - name: Archive binary
       uses: actions/upload-artifact@v2
