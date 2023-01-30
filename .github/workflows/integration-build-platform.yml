@@ -193,10 +193,13 @@ jobs:
         id: ui_tests_setup
         shell: bash
         run: |
+          # current key
           qa_key=ui_tests
 
-          rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/jira_report.txt /tmp/test_set.txt
+          # delete previous files
+          rm -f /tmp/continue_on_error.txt /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/jira_report.txt /tmp/test_set.txt
 
+          # get suite params
           export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
@@ -204,17 +207,21 @@ jobs:
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.jira_report --output_file /tmp/jira_report.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.test_set --output_file /tmp/test_set.txt
 
+          # suite params to var
+          continue_on_error=$(cat /tmp/continue_on_error.txt)
           tests_dir=$(cat /tmp/target_dir.txt)
           tests_version=$(cat /tmp/version.txt)
           tests_repo_name=$(cat /tmp/repo_name.txt)
           jira_report=$(cat /tmp/jira_report.txt)
           test_set=$(cat /tmp/test_set.txt)
 
+          # clone suite repository
           rm -rf $tests_repo_name
-
           integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
           ls -la $tests_dir
 
+          # output suite params
+          echo ::set-output name=continue_on_error::$continue_on_error
           echo ::set-output name=target_dir::$tests_dir
           echo ::set-output name=jira_report::$jira_report
           echo ::set-output name=test_set::$test_set
@@ -287,6 +294,7 @@ jobs:
           echo ::set-output name=movai_pwd::$MOVAI_PWD
 
       - name: UI tests
+        continue-on-error: ${{ steps.ui_tests_setup.outputs.continue_on_error }}
         working-directory: ${{ steps.ui_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
@@ -371,27 +379,36 @@ jobs:
         id: install_tests_setup
         shell: bash
         run: |
+          # current key
           qa_key=install_tests
 
-          rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/jira_report.txt /tmp/test_set.txt
+          # delete previous files
+          rm -f /tmp/continue_on_error.txt /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/jira_report.txt /tmp/test_set.txt
 
+          # get suite params
           export PATH="$HOME/.local/bin:$PATH"
+          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.continue_on_error --output_file /tmp/continue_on_error.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.jira_report --output_file /tmp/jira_report.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.test_set --output_file /tmp/test_set.txt
 
+          # suite params to var
+          continue_on_error=$(cat /tmp/continue_on_error.txt)
           tests_dir=$(cat /tmp/target_dir.txt)
           tests_version=$(cat /tmp/version.txt)
           tests_repo_name=$(cat /tmp/repo_name.txt)
           jira_report=$(cat /tmp/jira_report.txt)
           test_set=$(cat /tmp/test_set.txt)
 
+          # clone suite repository
           rm -rf $tests_repo_name
           integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
           ls -la $tests_dir
 
+          # output suite params
+          echo ::set-output name=continue_on_error::$continue_on_error
           echo ::set-output name=target_dir::$tests_dir
           echo ::set-output name=jira_report::$jira_report
           echo ::set-output name=test_set::$test_set
@@ -433,6 +450,7 @@ jobs:
 
       - name: Install tests
         id: install
+        continue-on-error: ${{ steps.install_tests_setup.outputs.continue_on_error }}
         working-directory: ${{ steps.install_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
@@ -596,23 +614,32 @@ jobs:
         id: api_tests_setup
         shell: bash
         run: |
+          # current key
           qa_key=api_tests
 
-          rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
-          export PATH="$HOME/.local/bin:$PATH"
+          # delete previous files
+          rm -f /tmp/continue_on_error.txt /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
 
+          # get suite params
+          export PATH="$HOME/.local/bin:$PATH"
+          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.continue_on_error --output_file /tmp/continue_on_error.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
 
+          # suite params to var
+          continue_on_error=$(cat /tmp/continue_on_error.txt)
           tests_dir=$(cat /tmp/target_dir.txt)
           tests_version=$(cat /tmp/version.txt)
           tests_repo_name=$(cat /tmp/repo_name.txt)
 
+          # clone suite repository
           rm -rf $tests_repo_name
           integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
           ls -la $tests_dir
 
+          # output suite params
+          echo ::set-output name=continue_on_error::$continue_on_error
           echo ::set-output name=target_dir::$tests_dir
 
       - name: Install
@@ -645,6 +672,7 @@ jobs:
           echo ::set-output name=movai_pwd::$MOVAI_PWD
 
       - name: API tests
+        continue-on-error: ${{ steps.api_tests_setup.outputs.continue_on_error }}
         working-directory: ${{ steps.api_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
@@ -739,22 +767,32 @@ jobs:
         id: flow_tests_setup
         shell: bash
         run: |
+          # current key
           qa_key=flow_tests
 
-          rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
-          export PATH="$HOME/.local/bin:$PATH"
+          # delete previous files
+          rm -f /tmp/continue_on_error.txt /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
 
+          # get suite params
+          export PATH="$HOME/.local/bin:$PATH"
+          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.continue_on_error --output_file /tmp/continue_on_error.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
+
+          # suite params to var
+          continue_on_error=$(cat /tmp/continue_on_error.txt)
           tests_dir=$(cat /tmp/target_dir.txt)
           tests_version=$(cat /tmp/version.txt)
           tests_repo_name=$(cat /tmp/repo_name.txt)
 
+          # clone suite repository
           rm -rf $tests_repo_name
           integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
           ls -la $tests_dir
 
+          # output suite params
+          echo ::set-output name=continue_on_error::$continue_on_error
           echo ::set-output name=target_dir::$tests_dir
           echo ::set-output name=version::$tests_version
 
@@ -791,7 +829,7 @@ jobs:
           rm movai_service_version
 
       - name: Flow tests
-        continue-on-error: true
+        continue-on-error: ${{ steps.flow_tests_setup.outputs.continue_on_error }}
         working-directory: ${{ steps.flow_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
