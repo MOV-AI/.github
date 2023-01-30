@@ -122,7 +122,9 @@ jobs:
     - name: Run Catkin tests
       if: ${{ !inputs.run_catkin_tests }}
       shell: bash
-      run: echo $ROS1_USER_WS
+      run: |
+        cd $ROS1_USER_WS
+        catkin test
 
     - name: Archive binary
       uses: actions/upload-artifact@v2
