@@ -85,7 +85,7 @@ jobs:
     - name: Create hard link to pip 3.8
       run: |
         ln /usr/bin/pip3 /usr/bin/pip3.8
-    
+
     - name: Install build-requirements
       run: |
         if [ -f build-apt-requirements.txt ]; then
@@ -414,9 +414,13 @@ jobs:
         path: artifacts/*.rpm
 
   Debian-Test:
+    strategy:
+      matrix:
+        distro: [ "20.04" ]
     needs: [Raise, Debian-Pack]
     if: ${{ inputs.release == 'false' && inputs.install_test == 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-${{ matrix.distro }}
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v3
