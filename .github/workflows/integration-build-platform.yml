@@ -1223,7 +1223,7 @@ jobs:
         run: |
           docker system prune -f
           docker image prune --all -f
-  
+
   Install-Simulator-Robot:
     needs: [Build-Simulator]
     runs-on: integration-pipeline
@@ -1448,6 +1448,59 @@ jobs:
           gh release create -p --generate-notes --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
           # add all files in the deployment_artifacts folder
           find deployment_artifacts -type f -exec gh release upload $product_version {} \;
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+      - name: Update release notes
+        continue-on-error: true
+        shell: bash
+        run: |
+          # release version
+          product_version=$(cat product.version)
+
+          # get existent release body
+          ORIGINAL_RN=$(gh release view "${product_version}" --json body | jq -r .body)
+
+          # get release PRs
+          PRS=$(echo "${ORIGINAL_RN}" | sed -rn "s/.*https:\/\/github\.com\/${{ github.repository_owner }}\/${{ github.event.repository.name }}\/pull\/([0-9]+).*/\1/p" | tr '\n' ' ')
+          # change to array
+          PRS=($PRS)
+          echo "Found the following PRs: ${PRS}"
+
+          # new release notes file
+          rm -rf notes.txt
+
+          # What's Changed - with info from PRs
+          echo "## What's Changed" >> notes.txt
+
+          if [ ${#PRS[@]} -eq 0 ]; then
+              # no PRs exist
+              echo "No relevant changes." >> notes.txt
+          else
+              # PRs exist
+              for pr in "${PRS[@]}"; do
+                  gh pr view "${pr}" --json body | jq -r .body >> notes.txt
+              done
+          fi
+          echo "" >> notes.txt
+
+          # PRs
+          echo "## PRs" >> notes.txt
+          if [ ${#PRS[@]} -eq 0 ]; then
+              # no PRs exist
+              echo "No PRs." >> notes.txt
+          else
+              # PRs exist
+              echo "${ORIGINAL_RN}" | grep "\* .*@.* in https://github.com/${{ github.repository_owner }}/" >> notes.txt
+          fi
+          echo "" >> notes.txt
+
+          ## Diff
+          echo "## Diff" >> notes.txt
+          echo "${ORIGINAL_RN}" | grep "\*\*Full Changelog\*\*" >> notes.txt
+
+          # set new release notes
+          gh release edit "${product_version}" --notes-file notes.txt
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
