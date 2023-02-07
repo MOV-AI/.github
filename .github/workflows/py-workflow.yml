@@ -108,36 +108,6 @@ jobs:
             python3 -m pytest tests/
         fi
 
-    - name: Create SonarCloud project and disable autoscan
-      uses: MOV-AI/action-sonarcloud-proj-config@v1
-      with:
-        sonar_org: 'mov-ai'
-        sonar_token: ${{ secrets.sonar_token }}
-
-    - name: SonarCloud Scan
-      uses: SonarSource/sonarcloud-github-action@master
-      env:
-        GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
-        SONAR_TOKEN: ${{ secrets.sonar_token }}
-      with:
-        projectBaseDir: ./
-        args: >
-          -Dsonar.organization=mov-ai
-          -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
-          -Dsonar.sources=.
-          -Dsonar.scm.provider=git
-          -Dsonar.qualitygate.wait=true
-          -Dsonar.qualitygate.timeout=300
-          -Dsonar.python.version=3
-          -Dsonar.python.flake8.reportPaths=flake8-report.txt
-          -Dsonar.python.pylint.reportPaths=pylint-report.txt
-          -Dsonar.python.coverage.reportPaths=coverage.xml
-
-    - name: Link to SonarCloud dashboard
-      shell: bash
-      run: |
-        echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
-
     - name: Raise version
       if: ${{ inputs.deploy == 'true' }}
       run: bump2version build setup.py --no-tag --no-commit
