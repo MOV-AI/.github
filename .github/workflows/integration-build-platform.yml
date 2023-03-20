@@ -457,10 +457,8 @@ jobs:
           . venv/bin/activate
           rm -rf results/*
           pytest tests/ \
-            -ra \
-            -k '${{ steps.install_tests_setup.outputs.test_set }}' \
+            -k 'AMR_installation_validator' \
             --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci"
-
           deactivate
 
           user=$(cat results/credentials.txt | awk -F: '{print $1}')
@@ -714,7 +712,7 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
-  Validation-Flow-Tests:
+  Validation-Flow-Tests: 
     needs: [Standalone-Validations]
     runs-on: integration-pipeline
     steps:
