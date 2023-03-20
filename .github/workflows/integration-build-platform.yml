@@ -456,19 +456,10 @@ jobs:
 
           . venv/bin/activate
           rm -rf results/*
-
-          if [ "${{ steps.install_tests_setup.outputs.jira_report }}" == "True" ] ; then
-            pytest tests/ \
-              -ra \
-              -k '${{ steps.install_tests_setup.outputs.test_set }}' \
-              --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci" \
-              --jira_report
-          else
-            pytest tests/ \
-              -ra \
-              -k '${{ steps.install_tests_setup.outputs.test_set }}' \
-              --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci"
-          fi
+          pytest tests/ \
+            -ra \
+            -k '${{ steps.install_tests_setup.outputs.test_set }}' \
+            --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci"
 
           deactivate
 
