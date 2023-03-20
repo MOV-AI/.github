@@ -833,11 +833,10 @@ jobs:
           ## get spawner container name
           CONTAINER_ID=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
           ## get apt dependencies
-          APT_DEPS=$(cat apt-requirements.txt | tr "\n" " ")
           ## install
           docker exec -t "${CONTAINER_ID}" bash -c "
             sudo apt update
-            sudo apt install -y ${APT_DEPS}
+            sudo apt install -y ros-noetic-movai-qa-node-params=${{ steps.flow_tests_setup.outputs.version }}
           "
 
           # run tests
