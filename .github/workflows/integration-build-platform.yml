@@ -928,18 +928,6 @@ jobs:
           name: deploy_artifacts_noetic
           path: artifacts
 
-      - name: unstash deploy_artifacts_simulator_noetic
-        uses: actions/download-artifact@v2
-        with:
-          name: deploy_artifacts_simulator_noetic
-          path: artifacts
-
-      - name: unstash deploy_simulator_artifacts
-        uses: actions/download-artifact@v2
-        with:
-          name: deploy_simulator_artifacts
-          path: .
-
       - name: Install CI Scripts
         shell: bash
         run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
@@ -968,8 +956,7 @@ jobs:
           integration-pipeline get_image_list_from_manifest --manifest_platform_base_key product_components --docker_registry $REGISTRY
           cp *.json deployment_artifacts
           cp artifacts/merged.dploy deployment_artifacts/deployable.dploy
-          echo -e "$(cat ./artifacts/product.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
-
+          cp ./artifacts/product.image.artifact deployment_artifacts/product.image.artifact
           cp product.version deployment_artifacts
           cp product-manifest.yaml deployment_artifacts
           product_version=$(cat product.version)
