@@ -299,28 +299,19 @@ jobs:
         run: |
           . venv/bin/activate
 
-          if [ "${{ steps.ui_tests_setup.outputs.jira_report }}" == "True" ] ; then
-            pytest \
-              -ra \
-              --hub_url http://172.22.0.105:4444 \
-              --browser_name chrome \
-              --browser_version 91.0 \
-              --base_url https://${{ steps.agent_info.outputs.ip }}/ \
-              --username ${{ steps.install.outputs.movai_user }} \
-              --password ${{ steps.install.outputs.movai_pwd }} \
-              --jira_report
-          else
-              pytest \
-                -ra \
-                --hub_url http://172.22.0.105:4444 \
-                --browser_name chrome \
-                --browser_version 91.0 \
-                --base_url https://${{ steps.agent_info.outputs.ip }}/ \
-                --username ${{ steps.install.outputs.movai_user }} \
-                --password ${{ steps.install.outputs.movai_pwd }}
-          fi
+          pytest -k 'UI_Automation' -s \
+            --cucumberjson='results/reports/result.json' \
+            --hub_url http://172.22.0.105:4444 \
+            --browser_name chrome \
+            --browser_version 91.0 \
+            --base_url https://${{ steps.agent_info.outputs.ip }}/ \
+            --username ${{ steps.install.outputs.movai_user }} \
+            --password ${{ steps.install.outputs.movai_pwd }} \
+            --jira_report FALSE \
+            --tb=short
 
           deactivate
+          rm -R venv
 
       - name: Remove robots
         if: always()
