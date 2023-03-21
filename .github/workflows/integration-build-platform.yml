@@ -449,7 +449,7 @@ jobs:
           rm -rf results/*
           pytest tests/ \
             -k 'AMR_installation_validator' \
-            --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci"
+            --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --full_clean
           deactivate
 
           user=$(cat results/credentials.txt | awk -F: '{print $1}')
