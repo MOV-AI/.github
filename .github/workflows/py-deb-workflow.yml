@@ -30,9 +30,9 @@ on:
 
     secrets:
       auto_commit_user:
-        false # only when deploy true
+        required: false # only when deploy true
       auto_commit_mail:
-        false # only when deploy true
+        required: false # only when deploy true
       auto_commit_password:
         required: false # only when deploy true
       registry_user:
@@ -60,7 +60,7 @@ jobs:
     outputs:
       package_name: ${{ steps.vars.outputs.py_pkg_name }}
       package_version: ${{ steps.releasevars.outputs.py_pkg_version }}
-      raise_commit : ${{steps.raise.outputs.commit_id}}
+      raise_commit : ${{steps.commit_id.outputs.commit_id}}
 
     steps:
     - name: Checkout
