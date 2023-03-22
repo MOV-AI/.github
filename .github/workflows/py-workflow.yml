@@ -26,9 +26,11 @@ on:
         default: '["pypi-edge"]'
     secrets:
       auto_commit_user:
-        required: true
+        required: false # only when deploy true
       auto_commit_mail:
-        required: true
+        required: false # only when deploy true
+      auto_commit_password:
+        required: false # only when deploy true
       registry_user:
         required: true
       registry_password:

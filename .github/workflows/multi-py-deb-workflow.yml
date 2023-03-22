@@ -46,11 +46,11 @@ on:
         default: 'false'
     secrets:
       auto_commit_user:
-        required: true
+        false # only when deploy true
       auto_commit_mail:
-        required: true
+        false # only when deploy true
       auto_commit_password:
-        required: true
+        false # only when deploy true
       registry_user:
         required: true
       registry_password:
