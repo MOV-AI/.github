@@ -1090,7 +1090,14 @@ jobs:
             ssh-keyscan -H $ip >> ~/.ssh/known_hosts
           done
 
-          ansible-playbook install.yml -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem --extra-vars=@"$(pwd)/.."/product-manifest.yaml -e fleet_domain_dns="" -e "{\"proxycerts__remote_redis_servers_fqn\": [$(cat ../staging/manager_private_ip.txt)]}" --skip-tags "ufw,hardening"
+          ansible-playbook install.yml \
+           -i ../staging/hosts \
+           --key-file ~/.ssh/aws_slave.pem \
+           --extra-vars=@"$(pwd)/.."/product-manifest.yaml \
+           -e fleet_domain_dns="" \
+           -e "{\"proxycerts__remote_redis_servers_fqn\": [$(cat ../staging/manager_private_ip.txt)]}" \
+           -e "{\"fleet_extra_hosts\": ["172.22.0.106    registry.hel.mov.ai traefik"]}" \
+           --skip-tags "ufw,hardening"
           execution_status=$?
           deactivate
           exit $execution_status
