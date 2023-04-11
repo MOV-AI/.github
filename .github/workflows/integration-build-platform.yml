@@ -1096,7 +1096,7 @@ jobs:
            --extra-vars=@"$(pwd)/.."/product-manifest.yaml \
            -e fleet_domain_dns="" \
            -e "{\"proxycerts__remote_redis_servers_fqn\": [$(cat ../staging/manager_private_ip.txt)]}" \
-           -e "{\"fleet_extra_hosts\": ["172.22.0.106    registry.hel.mov.ai traefik"]}" \
+           -e '{"fleet_extra_hosts": ["172.22.0.106    registry.hel.mov.ai traefik"]}' \
            --skip-tags "ufw,hardening"
           execution_status=$?
           deactivate
