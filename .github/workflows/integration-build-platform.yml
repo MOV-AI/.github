@@ -1635,6 +1635,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
+      - name: Propagate release
+        continue-on-error: true
+        shell: bash
+        run: |
+          gh workflow run "Propagate EE" --repo MOV-AI/qa-automations
+
       - name: Prepare slack variables
         if: always()
         id: pre_slack
