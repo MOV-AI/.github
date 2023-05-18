@@ -346,7 +346,7 @@ jobs:
           # cleanup
           rm -rf qa_artifacts
 
-          # api tests artifacts
+          # tests artifacts
           # *.log and *.zip might not exist if the test fails early
           mkdir -p qa_artifacts
           cp -r "${UI_DIR}"/*.log ./qa_artifacts || true
@@ -579,7 +579,7 @@ jobs:
           # cleanup
           rm -rf qa_artifacts
 
-          # install tests artifacts
+          # tests artifacts
           # *.log and *.zip might not exist if the test fails early
           mkdir -p qa_artifacts
           cp -r "${INSTALL_DIR}"/results/*.log ./qa_artifacts || true
@@ -747,7 +747,7 @@ jobs:
           # cleanup
           rm -rf qa_artifacts
 
-          # api tests artifacts
+          # tests artifacts
           # *.log and *.zip might not exist if the test fails early
           mkdir -p qa_artifacts
           cp -r "${API_DIR}"/*.log ./qa_artifacts || true
@@ -940,7 +940,7 @@ jobs:
           # cleanup
           rm -rf qa_artifacts
 
-          # flow tests artifacts, they might not exist
+          # tests artifacts, they might not exist
           mkdir -p qa_artifacts
           cp -r "${FLOW_DIR}"/*.log ./qa_artifacts || true
           cp -r "${FLOW_DIR}"/*.tar ./qa_artifacts || true
