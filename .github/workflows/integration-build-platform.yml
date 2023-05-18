@@ -322,6 +322,42 @@ jobs:
 
           deactivate
 
+      - name: Save docker container logs
+        working-directory: ${{ steps.ui_tests_setup.outputs.target_dir }}
+        shell: bash
+        run: |
+          # for sanity
+          docker ps -a
+
+          # backend
+          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^backend-.*")
+          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
+
+          # spawner
+          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^spawner-.*")
+          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
+
+      - name: Stash QA artifacts
+        if: always()
+        shell: bash
+        env:
+          UI_DIR: ${{ steps.ui_tests_setup.outputs.target_dir }}
+        run: |
+          # cleanup
+          rm -rf qa_artifacts
+
+          # api tests artifacts
+          # *.log and *.zip might not exist if the test fails early
+          mkdir -p qa_artifacts
+          cp -r "${UI_DIR}"/*.log ./qa_artifacts || true
+
+      - name: Stash QA artifacts
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: qa_artifacts_ui_tests
+          path: qa_artifacts/*
+
       - name: Remove robots
         if: always()
         shell: bash
@@ -540,14 +576,15 @@ jobs:
         env:
           INSTALL_DIR: ${{ steps.install_tests_setup.outputs.target_dir }}
         run: |
-          mkdir qa_artifacts
+          # cleanup
+          rm -rf qa_artifacts
 
           # install tests artifacts
           # *.log and *.zip might not exist if the test fails early
-          mkdir -p qa_artifacts/install
-          cp -r "${INSTALL_DIR}"/results/*.log ./qa_artifacts/install || true
-          cp -r "${INSTALL_DIR}"/results/*.zip ./qa_artifacts/install || true
-          cp -r "${INSTALL_DIR}"/results/test_report_*.html ./qa_artifacts/install || true
+          mkdir -p qa_artifacts
+          cp -r "${INSTALL_DIR}"/results/*.log ./qa_artifacts || true
+          cp -r "${INSTALL_DIR}"/results/*.zip ./qa_artifacts || true
+          cp -r "${INSTALL_DIR}"/results/test_report_*.html ./qa_artifacts || true
 
       - name: Stash QA artifacts
         if: always()
@@ -686,18 +723,35 @@ jobs:
 
           deactivate
 
+      - name: Save docker container logs
+        working-directory: ${{ steps.api_tests_setup.outputs.target_dir }}
+        shell: bash
+        run: |
+          # for sanity
+          docker ps -a
+
+          # backend
+          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^backend-.*")
+          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
+
+          # spawner
+          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^spawner-.*")
+          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
+
       - name: Stash QA artifacts
         if: always()
         shell: bash
         env:
           API_DIR: ${{ steps.api_tests_setup.outputs.target_dir }}
         run: |
-          mkdir qa_artifacts
+          # cleanup
+          rm -rf qa_artifacts
 
           # api tests artifacts
           # *.log and *.zip might not exist if the test fails early
-          mkdir -p qa_artifacts/api
-          cp -r "${API_DIR}"/results/*.zip ./qa_artifacts/api || true
+          mkdir -p qa_artifacts
+          cp -r "${API_DIR}"/*.log ./qa_artifacts || true
+          cp -r "${API_DIR}"/results/*.zip ./qa_artifacts || true
 
       - name: Stash QA artifacts
         if: always()
@@ -862,18 +916,34 @@ jobs:
 
           deactivate
 
+      - name: Save docker container logs
+        working-directory: ${{ steps.flow_tests_setup.outputs.target_dir }}
+        shell: bash
+        run: |
+          # for sanity
+          docker ps -a
+
+          # backend
+          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^backend-.*")
+          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
+
+          # spawner
+          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^spawner-.*")
+          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
+
       - name: Stash QA artifacts
         if: always()
         shell: bash
         env:
           FLOW_DIR: ${{ steps.flow_tests_setup.outputs.target_dir }}
         run: |
-          mkdir qa_artifacts
+          # cleanup
+          rm -rf qa_artifacts
 
           # flow tests artifacts, they might not exist
-          mkdir -p qa_artifacts/flow
-          cp -r "${FLOW_DIR}"/*.log ./qa_artifacts/flow || true
-          cp -r "${FLOW_DIR}"/*.tar ./qa_artifacts/flow || true
+          mkdir -p qa_artifacts
+          cp -r "${FLOW_DIR}"/*.log ./qa_artifacts || true
+          cp -r "${FLOW_DIR}"/*.tar ./qa_artifacts || true
 
       - name: Stash QA artifacts
         if: always()
