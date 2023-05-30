@@ -335,7 +335,7 @@ jobs:
           docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
 
           # movai-service
-          journalctl -u movai-service --no-pager --since '1hour ago' &> "movai-service.log"
+          journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
 
       - name: Stash QA artifacts
         if: always()
