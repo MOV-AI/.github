@@ -334,6 +334,9 @@ jobs:
           CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^spawner-.*")
           docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
 
+          # movai-service
+          journalctl -u movai-service --no-pager --since '1hour ago' &> "movai-service.log"
+
       - name: Stash QA artifacts
         if: always()
         shell: bash
