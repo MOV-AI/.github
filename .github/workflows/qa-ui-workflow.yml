@@ -64,9 +64,10 @@ jobs:
       - name: Agent info
         id: agent_info
         run: |
-          ip=$(hostname -I | awk '{print $1}')
-          echo $ip
-          echo ::set-output name=ip::$ip
+          ip_tmp=$(hostname -I | awk '{print $1}')
+          echo $ip_tmp
+          #echo ::set-output name=ip::$ip
+          echo "ip=$ip_tmp" >> $GITHUB_OUTPUT
 
       - name: Update/upgrade host packages
         run: |
@@ -121,8 +122,10 @@ jobs:
 
           user=$(cat results/credentials.txt | awk -F: '{print $1}')
           pwd=$(cat results/credentials.txt | awk -F: '{print $2}')
-          echo ::set-output name=movai_user::$user
-          echo ::set-output name=movai_pwd::$pwd
+          #echo ::set-output name=movai_user::$user
+          #echo ::set-output name=movai_pwd::$pwd
+          echo "movai_user=$user" >> $GITHUB_OUTPUT
+          echo "movai_pwd=$pwd" >> $GITHUB_OUTPUT
 
       - name: UI tests
         id: ui
@@ -180,7 +183,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: qa_artifacts_ui_tests
           path: qa_artifacts/*

@@ -135,24 +135,26 @@ jobs:
           LATEST: ${{ inputs.push_latest }}
         run: |
           PUB_DOCKER_IMAGE=""
-          DOCKER_IMAGES=${{ inputs.docker_registry }}/${{ inputs.docker_image }}:${{ inputs.version }}
+          DOCKER_IMAGES_TMP=${{ inputs.docker_registry }}/${{ inputs.docker_image }}:${{ inputs.version }}
 
           if [ "${LATEST}" = "true" ]; then
-            DOCKER_IMAGES="$DOCKER_IMAGES,${{ inputs.docker_registry }}/${{ inputs.docker_image }}:latest"
+            DOCKER_IMAGES_TMP="$DOCKER_IMAGES_TMP,${{ inputs.docker_registry }}/${{ inputs.docker_image }}:latest"
           fi
 
           # If public push is needed
           if [ "${PUBLIC_PUSH}" = "true" ]; then
-            PUB_DOCKER_IMAGE="${{ inputs.public_registry }}/${{ inputs.public_image }}:${{ inputs.version }}"
-            DOCKER_IMAGES="$DOCKER_IMAGES,$PUB_DOCKER_IMAGE"
-            echo "::set-output name=PUB_DOCKER_IMAGE::$PUB_DOCKER_IMAGE"
+            PUB_DOCKER_IMAGE_TMP="${{ inputs.public_registry }}/${{ inputs.public_image }}:${{ inputs.version }}"
+            DOCKER_IMAGES_TMP="$DOCKER_IMAGES_TMP,$PUB_DOCKER_IMAGE_TMP"
+            #echo "::set-output name=PUB_DOCKER_IMAGE::$PUB_DOCKER_IMAGE"
+            echo "PUB_DOCKER_IMAGE=$PUB_DOCKER_IMAGE_TMP" >> $GITHUB_OUTPUT
 
             if [ "${LATEST}" = "true" ]; then
-              DOCKER_IMAGES="$DOCKER_IMAGES,${{ inputs.public_registry }}/${{ inputs.public_image }}:latest"
+              DOCKER_IMAGES_TMP="$DOCKER_IMAGES_TMP,${{ inputs.public_registry }}/${{ inputs.public_image }}:latest"
             fi
           fi
 
-          echo "::set-output name=DOCKER_IMAGES::$DOCKER_IMAGES"
+          #echo "::set-output name=DOCKER_IMAGES::$DOCKER_IMAGES"
+          echo "DOCKER_IMAGES=$DOCKER_IMAGES_TMP" >> $GITHUB_OUTPUT
           echo -e "Docker images to publish:\n$DOCKER_IMAGES"
 
       - name: Compute docker build arguments
@@ -160,13 +162,14 @@ jobs:
         run: |
           BUILD_ARGS_STR_LIST="${{ inputs.build_args }}"
           if [ -n "$BUILD_ARGS_STR_LIST" ]; then
-            echo "::set-output name=build_args_str_list::$BUILD_ARGS_STR_LIST"
+            #echo "::set-output name=build_args_str_list::$BUILD_ARGS_STR_LIST"
+            echo "build_args_str_list=$BUILD_ARGS_STR_LIST" >> $GITHUB_OUTPUT
             echo -e "Docker build arguments:\n$BUILD_ARGS_STR_LIST"
           fi
 
       - name: Download packages to include in build
         if: inputs.download_artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: packages
           path: ${{ inputs.download_artifact_path }}

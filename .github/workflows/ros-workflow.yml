@@ -127,7 +127,7 @@ jobs:
         catkin test
 
     - name: Archive binary
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: packages
         path: artifacts/*
@@ -214,7 +214,7 @@ jobs:
         submodules: recursive
 
     - name: Download a single artifact
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v3
       with:
         name: packages
         path: artifacts
@@ -238,7 +238,8 @@ jobs:
             main_version=$(echo $version_section | sed 's/ //g' | sed -e 's/<\w*>'//g | sed -e 's/<\/\w*>'//g)
             buildid=$(echo $build_version_section | sed 's/ //g' | sed -e 's/<\w*>'//g | sed -e 's/<\/\w*>'//g)
             VERSION="$main_version-$buildid"
-            echo ::set-output name=ros_pkg_version::$VERSION
+            #echo ::set-output name=ros_pkg_version::$VERSION
+            echo "ros_pkg_version=$VERSION" >> $GITHUB_OUTPUT
 
     - name: Publish to Nexus ppa-testing
       shell: bash
@@ -283,7 +284,9 @@ jobs:
         git commit -m "[skip actions] Automatic Bump of build version"
         git push
         commit_hash=$(git log --format="%H" -n 1)
-        echo ::set-output name=commit_id::$commit_hash
+        #echo ::set-output name=commit_id::$commit_hash
+        echo "commit_id=$commit_hash" >> $GITHUB_OUTPUT
+        
 
     - name: Create Github Release
       uses: softprops/action-gh-release@v1
@@ -318,7 +321,7 @@ jobs:
 
     - name: Set tag output
       id: vars
-      run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
+      run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
 
     - name: Fetch artifact from github release
       run: |

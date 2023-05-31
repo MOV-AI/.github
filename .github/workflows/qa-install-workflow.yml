@@ -49,9 +49,10 @@ jobs:
       - name: Agent info
         id: agent_info
         run: |
-          ip=$(hostname -I | awk '{print $1}')
-          echo $ip
-          echo ::set-output name=ip::$ip
+          ip_tmp=$(hostname -I | awk '{print $1}')
+          echo $ip_tmp
+          #echo ::set-output name=ip::$ip
+          echo "ip=$ip_tmp" >> $GITHUB_OUTPUT
 
       - name: Update/upgrade host packages
         run: |
@@ -90,7 +91,8 @@ jobs:
           Feature File Validation Step FAILED and stopped install tests Pipeline :rain_cloud: \
           Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} \
           Validate logs for cause troubleshooting."
-          echo ::set-output name=msg_error::$MESSAGE_ERR
+          #echo ::set-output name=msg_error::$MESSAGE_ERR
+          echo "msg_error=$MESSAGE_ERR" >> $GITHUB_OUTPUT
 
       - name: Slack message failure
         if: failure()
@@ -123,7 +125,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: install_config_file
           path: ./results/*
@@ -165,7 +167,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: install_suite
           path: ./results/*
@@ -193,8 +195,10 @@ jobs:
         run: |
           MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), unstable :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          echo ::set-output name=msg::$MESSAGE
-          echo ::set-output name=msg_error::$MESSAGE_ERR
+          #echo ::set-output name=msg::$MESSAGE
+          #echo ::set-output name=msg_error::$MESSAGE_ERR
+          echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
+          echo "msg_error=$MESSAGE_ERR" >> $GITHUB_OUTPUT
 
       - name: Slack message success
         if: ${{ inputs.nightly }}

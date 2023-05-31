@@ -103,7 +103,7 @@ jobs:
 
       - name: Stash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: sim_configs
           path: simulator_artifacts/*
@@ -117,7 +117,7 @@ jobs:
           cp product-manifest.yaml ./platform_configs/product-manifest.yaml
 
       - name: Stash raised_meta
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: raised_meta
           path: platform_configs/*
@@ -145,7 +145,7 @@ jobs:
         run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: raised_meta
           path: platform_configs
@@ -160,7 +160,7 @@ jobs:
           integration-pipeline generate_meta_artifacts --update_simulator --override_spawner ${{ inputs.product_name }} --manifest_platform_base_key "product_dependencies"
 
       - name: Stash manifest
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: manifest
           path: product-manifest.yaml
@@ -204,7 +204,7 @@ jobs:
             CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
 
       - name: Stash robot_jsons_${{ matrix.distro }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: "*.json*"
@@ -234,19 +234,19 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: raised_meta
           path: .
 
       - name: unstash manifest
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: manifest
           path: .
 
       - name: unstash robot_jsons_${{ matrix.distro }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: .
@@ -322,7 +322,7 @@ jobs:
         run: docker push "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
 
       - name: Stash deploy_artifacts_noetic
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: deploy_artifacts_noetic
           path: artifacts/*
@@ -375,14 +375,14 @@ jobs:
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: sim_configs
           path: simulator_artifacts
 
       - name: unstash manifest
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: manifest
           path: .
@@ -478,28 +478,28 @@ jobs:
 
       - name: unstash raised_meta
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: raised_meta
           path: .
 
       - name: unstash manifest
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: manifest
           path: .
 
       - name: unstash sim_configs
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: sim_configs
           path: simulator_artifacts
 
       - name: unstash robot_jsons_${{ matrix.distro }}
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: .
@@ -597,7 +597,7 @@ jobs:
 
       - name: Stash deploy_simulator_artifacts
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: deploy_simulator_artifacts
           path: simulator.image.artifact
@@ -634,26 +634,26 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: raised_meta
           path: platform_configs
 
       - name: unstash deploy_artifacts_noetic
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: deploy_artifacts_noetic
           path: artifacts
 
       - name: unstash manifest
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: manifest
           path: .
 
       # - name: unstash deploy_simulator_artifacts
       #   if: ${{ inputs.with_simulation == 'true' }}
-      #   uses: actions/download-artifact@v2
+      #   uses: actions/download-artifact@v3
       #   with:
       #     name: deploy_simulator_artifacts
       #     path: .

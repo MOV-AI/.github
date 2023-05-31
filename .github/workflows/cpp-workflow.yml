@@ -64,8 +64,10 @@ jobs:
       run: |
         PACKAGE_VERSION=$(dpkg-parsechangelog --show-field Version)
         PACKAGE_NAME=$(dpkg-parsechangelog --show-field Source)
-        echo ::set-output name=pkg_name::$PACKAGE_NAME
-        echo ::set-output name=pkg_version::$PACKAGE_VERSION
+        #echo ::set-output name=pkg_name::$PACKAGE_NAME
+        #echo ::set-output name=pkg_version::$PACKAGE_VERSION
+        echo "pkg_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+        echo "pkg_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
       working-directory: ${{ matrix.sub_component }}
 
     - name: Raise Version
@@ -76,7 +78,8 @@ jobs:
         build_id="${PACKAGE_VERSION#*-}"
         raised_buildid=$(($build_id+1))
         RAISED_PACKAGE_VERSION="$main_version-$raised_buildid"
-        echo ::set-output name=pkg_version::$RAISED_PACKAGE_VERSION
+        #echo ::set-output name=pkg_version::$RAISED_PACKAGE_VERSION
+        echo "pkg_version=$RAISED_PACKAGE_VERSION" >> $GITHUB_OUTPUT
       working-directory: ${{ matrix.sub_component }}
 
     - name: Install requirements
@@ -138,7 +141,7 @@ jobs:
       working-directory: ${{ matrix.sub_component }}
 
     - name: Archive binary
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: packages
         path: ${{ matrix.sub_component }}/artifacts/*
@@ -167,7 +170,7 @@ jobs:
         submodules: recursive
 
     - name: Download a single artifact
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v3
       with:
         name: packages
         path: artifacts
@@ -201,7 +204,8 @@ jobs:
           popd >/dev/null
         done
 
-        echo ::set-output name=pkg_version::$RAISED_PACKAGE_VERSION
+        #echo ::set-output name=pkg_version::$RAISED_PACKAGE_VERSION
+        echo "pkg_version=$RAISED_PACKAGE_VERSION" >> $GITHUB_OUTPUT
       working-directory: ${{ matrix.sub_component }}
 
 
@@ -280,7 +284,8 @@ jobs:
         git commit -m "[skip actions] Automatic Bump of build version"
         git push
         commit_hash=$(git log --format="%H" -n 1)
-        echo ::set-output name=commit_id::$commit_hash
+        #echo ::set-output name=commit_id::$commit_hash
+        echo "commit_id=$commit_hash" >> $GITHUB_OUTPUT
 
     - name: Create Github Release
       uses: softprops/action-gh-release@v1
@@ -314,7 +319,7 @@ jobs:
 
     - name: Set tag output
       id: vars
-      run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
+      run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
 
     - name: Fetch artifact from github release
       run: |
