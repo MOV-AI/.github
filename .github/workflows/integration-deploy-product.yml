@@ -42,8 +42,10 @@ jobs:
     - name: Set tag output
       id: vars
       run: |
-        echo ::set-output name=tag::${GITHUB_REF#refs/*/}
-        echo ::set-output name=repository::$GITHUB_REPOSITORY
+        #echo ::set-output name=tag::${GITHUB_REF#refs/*/}
+        #echo ::set-output name=repository::$GITHUB_REPOSITORY
+        echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+        echo "repository=$GITHUB_REPOSITORY" >> $GITHUB_OUTPUT
 
     - uses: robinraju/release-downloader@v1.3
       with:
@@ -53,7 +55,7 @@ jobs:
         token: ${{ secrets.gh_token }}
 
     - name: Login to ${{ env.PUSH_REGISTRY }} Registry
-      uses: docker/login-action@v1
+      uses: docker/login-action@v2
       with:
         username: ${{ secrets.registry_user }}
         password: ${{ secrets.registry_password }}

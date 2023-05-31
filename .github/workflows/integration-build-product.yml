@@ -122,7 +122,7 @@ jobs:
 
       - name: Stash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: sim_configs
           path: simulator_artifacts/*
@@ -136,7 +136,7 @@ jobs:
           cp product-manifest.yaml ./platform_configs/product-manifest.yaml
 
       - name: Stash raised_meta
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: raised_meta
           path: platform_configs/*
@@ -164,7 +164,7 @@ jobs:
         run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: raised_meta
           path: platform_configs
@@ -179,7 +179,7 @@ jobs:
           integration-pipeline generate_meta_artifacts --update_simulator --override_spawner ${{ inputs.product_name }} --manifest_platform_base_key "product_dependencies"
 
       - name: Stash manifest
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: manifest
           path: product-manifest.yaml
@@ -192,14 +192,14 @@ jobs:
           ./hadolint-Linux-x86_64 docker/${{ matrix.distro }}/Dockerfile -t error
 
       - name: Login to ${{ env.REGISTRY }} Registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
           registry: ${{ env.REGISTRY }}
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -208,9 +208,12 @@ jobs:
       - name: Prepare docker build variables
         id: pre_build
         run: |
-          echo ::set-output name=base_name::$(cat ci_artifacts/spawner_base_name_${{ matrix.distro }}.ci)
-          echo ::set-output name=base_version::$(cat ci_artifacts/spawner_base_version_${{ matrix.distro }}.ci)
-          echo ::set-output name=raised_version::$(cat product.version)
+          #echo ::set-output name=base_name::$(cat ci_artifacts/spawner_base_name_${{ matrix.distro }}.ci)
+          #echo ::set-output name=base_version::$(cat ci_artifacts/spawner_base_version_${{ matrix.distro }}.ci)
+          #echo ::set-output name=raised_version::$(cat product.version)
+          echo "base_name=$(cat ci_artifacts/spawner_base_name_${{ matrix.distro }}.ci)" >> $GITHUB_OUTPUT
+          echo "base_version=$(cat ci_artifacts/spawner_base_version_${{ matrix.distro }}.ci)" >> $GITHUB_OUTPUT
+          echo "raised_version=$(cat product.version)" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -245,7 +248,7 @@ jobs:
       #       CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
 
       - name: Stash robot_jsons_${{ matrix.distro }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: "*.json*"
@@ -275,32 +278,32 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: raised_meta
           path: .
 
       - name: unstash manifest
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: manifest
           path: .
 
       - name: unstash robot_jsons_${{ matrix.distro }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: .
 
       - name: Login to ${{ env.REGISTRY }} Registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
           registry: ${{ env.REGISTRY }}
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -391,13 +394,13 @@ jobs:
         run: docker push "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
 
       - name: Stash project metadata
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: project_metadata
           path: metadata_artifact/*
 
       - name: Stash deploy_artifacts_noetic
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: deploy_artifacts_noetic
           path: artifacts/*
@@ -450,14 +453,14 @@ jobs:
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: sim_configs
           path: simulator_artifacts
 
       - name: unstash manifest
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: manifest
           path: .
@@ -467,11 +470,14 @@ jobs:
         if: ${{ inputs.with_simulation == 'true' }}
         run: |
           if [ ! -f "simulator_artifacts/version" ]; then
-            echo ::set-output name=skip_simulator_build::"true"
+            #echo ::set-output name=skip_simulator_build::"true"
+            echo "skip_simulator_build=true" >> $GITHUB_OUTPUT
           else
-            echo ::set-output name=skip_simulator_build::"false"
+            #echo ::set-output name=skip_simulator_build::"false"
+            echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
           fi
-          echo ::set-output name=image_name::"${{ env.REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)"
+          #echo ::set-output name=image_name::"${{ env.REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)"
+          echo "image_name=${{ env.REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
 
       - name: Lint docker image
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
@@ -495,7 +501,7 @@ jobs:
 
       - name: Login to ${{ env.REGISTRY }} Registry
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -503,7 +509,7 @@ jobs:
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -513,9 +519,12 @@ jobs:
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
         id: pre_build
         run: |
-          push_name=$(echo "${{ steps.pre_simulator_build.outputs.image_name }}" | sed "s-${{ env.REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
-          echo ::set-output name=base_name::$(cat simulator_artifacts/simulator_base.ci)
-          echo ::set-output name=push_name::$push_name
+          push_name_tmp=$(echo "${{ steps.pre_simulator_build.outputs.image_name }}" | sed "s-${{ env.REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
+          #echo ::set-output name=base_name::$(cat simulator_artifacts/simulator_base.ci)
+          #echo ::set-output name=push_name::$push_name
+          echo "base_name=$(cat simulator_artifacts/simulator_base.ci)" >> $GITHUB_OUTPUT
+          echo "push_name=$push_name_tmp" >> $GITHUB_OUTPUT
+          
 
       # - name: Build with args and push
       #   if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true'}}
@@ -576,35 +585,35 @@ jobs:
 
       - name: unstash raised_meta
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: raised_meta
           path: .
 
       - name: unstash manifest
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: manifest
           path: .
 
       - name: unstash sim_configs
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: sim_configs
           path: simulator_artifacts
 
       - name: unstash robot_jsons_${{ matrix.distro }}
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: .
 
       - name: Login to ${{ env.REGISTRY }} Registry
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -612,7 +621,7 @@ jobs:
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -711,7 +720,7 @@ jobs:
 
       - name: Stash deploy_simulator_artifacts
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: deploy_simulator_artifacts
           path: simulator.image.artifact
@@ -748,32 +757,32 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: raised_meta
           path: platform_configs
 
       - name: unstash deploy_artifacts_noetic
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: deploy_artifacts_noetic
           path: artifacts
 
       - name: unstash manifest
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: manifest
           path: .
 
       - name: unstash project metadata
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: project_metadata
           path: .
 
       - name: unstash deploy_simulator_artifacts
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: deploy_simulator_artifacts
           path: .
@@ -843,7 +852,9 @@ jobs:
       - name: Prepare raise variables
         id: pre_raise
         run: |
-          echo ::set-output name=branch::${GITHUB_REF#refs/heads/}
+          #echo ::set-output name=branch::${GITHUB_REF#refs/heads/}
+          echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+          
 
       - name: Raise App version
         uses: CasperWA/push-protected@v2
@@ -931,8 +942,10 @@ jobs:
         run: |
           MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is unstable :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          echo ::set-output name=msg::$MESSAGE
-          echo ::set-output name=msg_error::$MESSAGE_ERR
+          #echo ::set-output name=msg::$MESSAGE
+          #echo ::set-output name=msg_error::$MESSAGE_ERR
+          echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
+          echo "msg_error=$MESSAGE_ERR" >> $GITHUB_OUTPUT
 
       - name: Slack message success
         uses: slackapi/slack-github-action@v1.23.0

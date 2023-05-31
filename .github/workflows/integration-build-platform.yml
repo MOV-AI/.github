@@ -120,13 +120,13 @@ jobs:
                 --manifest_platform_base_key product_components
 
       - name: Stash robot_configs
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: robot_configs
           path: "*.json*"
 
       - name: Stash sim_configs
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: sim_configs
           path: simulator_artifacts/*
@@ -140,7 +140,7 @@ jobs:
           cp product-manifest.yaml ./platform_configs/product-manifest.yaml
 
       - name: Stash raised_meta
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: raised_meta
           path: platform_configs/*
@@ -177,7 +177,7 @@ jobs:
         run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: unstash robot_configs
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: robot_configs
           path: .
@@ -354,7 +354,7 @@ jobs:
 
       - name: Stash QA artifacts
         if: always()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: qa_artifacts_ui_tests
           path: qa_artifacts/*
@@ -401,7 +401,7 @@ jobs:
         run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: unstash robot_configs
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: robot_configs
           path: .
@@ -566,7 +566,7 @@ jobs:
           cp /tmp/undeployable.dploy artifacts/host-noetic-3rdParty.dploy
 
       - name: Stash deploy_artifacts_noetic
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: deploy_artifacts_noetic
           path: artifacts/*.dploy
@@ -589,7 +589,7 @@ jobs:
 
       - name: Stash QA artifacts
         if: always()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: qa_artifacts_install_tests
           path: qa_artifacts/*
@@ -636,7 +636,7 @@ jobs:
         run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: unstash robot_configs
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: robot_configs
           path: .
@@ -757,7 +757,7 @@ jobs:
 
       - name: Stash QA artifacts
         if: always()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: qa_artifacts_api_tests
           path: qa_artifacts/*
@@ -804,7 +804,7 @@ jobs:
         run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: unstash robot_configs
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: robot_configs
           path: .
@@ -950,7 +950,7 @@ jobs:
 
       - name: Stash QA artifacts
         if: always()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: qa_artifacts_flow_tests
           path: qa_artifacts/*
@@ -1000,7 +1000,7 @@ jobs:
   #       run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
   #     - name: unstash robot_configs
-  #       uses: actions/download-artifact@v2
+  #       uses: actions/download-artifact@v3
   #       with:
   #         name: robot_configs
   #         path: .
@@ -1020,7 +1020,7 @@ jobs:
 
   #     - name: Stash ci_infra_artifacts (AWS)
   #       if: ${{ false }}
-  #       uses: actions/upload-artifact@v2
+  #       uses: actions/upload-artifact@v3
   #       with:
   #         name: ci_infra_artifacts
   #         path: aws_artifacts/*
@@ -1209,7 +1209,7 @@ jobs:
 
   #     - name: Stash Fleet QA artifacts
   #       if: always()
-  #       uses: actions/upload-artifact@v2
+  #       uses: actions/upload-artifact@v3
   #       with:
   #         name: fleet_qa_artifacts
   #         path: ${{ steps.ansible_install_setup.outputs.target_dir }}/fleet_qa_artifacts/*
@@ -1263,7 +1263,7 @@ jobs:
         run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash sim_configs
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: sim_configs
           path: simulator_artifacts
@@ -1299,7 +1299,7 @@ jobs:
 
       - name: Login to Private Registry
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -1342,7 +1342,7 @@ jobs:
           echo "$REGISTRY/qa/$(cat simulator_artifacts/simulator_name.ci)" > simulator.image.artifact
 
       - name: Stash deploy_simulator_artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: deploy_simulator_artifacts
           path: simulator.image.artifact
@@ -1369,25 +1369,25 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: raised_meta
           path: .
 
       - name: unstash sim_configs
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: sim_configs
           path: simulator_artifacts
 
       - name: unstash robot_jsons_noetic
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: robot_configs
           path: .
 
       - name: Login to Private Registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -1539,7 +1539,7 @@ jobs:
           cp /tmp/undeployable.dploy artifacts/simulator-noetic-3rdParty.dploy
 
       - name: Stash deploy_artifacts_simulator_noetic
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: deploy_artifacts_simulator_noetic
           path: artifacts/*.dploy
@@ -1576,31 +1576,31 @@ jobs:
           echo $ip
           echo "ip=${ip}" >> $GITHUB_OUTPUT
       - name: unstash robot_configs
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: robot_configs
           path: .
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: raised_meta
           path: platform_configs
 
       - name: unstash deploy_artifacts_noetic
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: deploy_artifacts_noetic
           path: artifacts
 
       - name: unstash deploy_artifacts_simulator_noetic
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: deploy_artifacts_simulator_noetic
           path: artifacts
 
       - name: unstash deploy_simulator_artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: deploy_simulator_artifacts
           path: .
