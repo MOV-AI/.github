@@ -182,9 +182,12 @@ jobs:
       - name: Prepare docker build variables
         id: pre_build
         run: |
-          echo ::set-output name=base_name::$(cat ci_artifacts/spawner_base_name_${{ matrix.distro }}.ci)
-          echo ::set-output name=base_version::$(cat ci_artifacts/spawner_base_version_${{ matrix.distro }}.ci)
-          echo ::set-output name=raised_version::$(cat product.version)
+          #echo ::set-output name=base_name::$(cat ci_artifacts/spawner_base_name_${{ matrix.distro }}.ci)
+          #echo ::set-output name=base_version::$(cat ci_artifacts/spawner_base_version_${{ matrix.distro }}.ci)
+          #echo ::set-output name=raised_version::$(cat product.version)
+          echo "base_name=$(cat ci_artifacts/spawner_base_name_${{ matrix.distro }}.ci)" >> $GITHUB_OUTPUT
+          echo "base_version=$(cat ci_artifacts/spawner_base_version_${{ matrix.distro }}.ci)" >> $GITHUB_OUTPUT
+          echo "raised_version=$(cat product.version)" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -392,11 +395,14 @@ jobs:
         if: ${{ inputs.with_simulation == 'true' }}
         run: |
           if [ ! -f "simulator_artifacts/version" ]; then
-            echo ::set-output name=skip_simulator_build::"true"
+            #echo ::set-output name=skip_simulator_build::"true"
+            echo "skip_simulator_build=true" >> $GITHUB_OUTPUT
           else
-            echo ::set-output name=skip_simulator_build::"false"
+            #echo ::set-output name=skip_simulator_build::"false"
+            echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
           fi
-          echo ::set-output name=image_name::"${{ env.REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)"
+          #echo ::set-output name=image_name::"${{ env.REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)"
+          echo "image_name=${{ env.REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
 
       - name: Lint docker image
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
@@ -430,7 +436,8 @@ jobs:
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
         id: pre_build
         run: |
-          echo ::set-output name=base_name::$(cat simulator_artifacts/simulator_base.ci)
+          #echo ::set-output name=base_name::$(cat simulator_artifacts/simulator_base.ci)
+          echo "base_name=$(cat simulator_artifacts/simulator_base.ci)" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -721,7 +728,8 @@ jobs:
       - name: Prepare raise variables
         id: pre_raise
         run: |
-          echo ::set-output name=branch::${GITHUB_REF#refs/heads/}
+          #echo ::set-output name=branch::${GITHUB_REF#refs/heads/}
+          echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
       - name: Raise App version
         uses: CasperWA/push-protected@v2
@@ -800,8 +808,10 @@ jobs:
         run: |
           MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is unstable :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          echo ::set-output name=msg::$MESSAGE
-          echo ::set-output name=msg_error::$MESSAGE_ERR
+          #echo ::set-output name=msg::$MESSAGE
+          #echo ::set-output name=msg_error::$MESSAGE_ERR
+          echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
+          echo "msg_error=$MESSAGE_ERR" >> $GITHUB_OUTPUT
 
       - name: Slack message success
         uses: slackapi/slack-github-action@v1.23.0
