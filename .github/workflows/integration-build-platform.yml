@@ -302,7 +302,7 @@ jobs:
           if [ "${{ steps.ui_tests_setup.outputs.jira_report }}" == "True" ] ; then
             pytest \
               -ra \
-              --hub_url http://172.22.0.105:4444 \
+              --hub_url http://selenoid-ui.hel.mov.ai \
               --browser_name chrome \
               --browser_version 91.0 \
               --base_url https://${{ steps.agent_info.outputs.ip }}/ \
@@ -312,7 +312,7 @@ jobs:
           else
               pytest \
                 -ra \
-                --hub_url http://172.22.0.105:4444 \
+                --hub_url http://selenoid-ui.hel.mov.ai \
                 --browser_name chrome \
                 --browser_version 91.0 \
                 --base_url https://${{ steps.agent_info.outputs.ip }}/ \
@@ -719,6 +719,9 @@ jobs:
         shell: bash
         run: |
           . venv/bin/activate
+          # install ros
+          sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
+          export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages
 
           pytest src/tests \
               --base_url https://${{ steps.agent_info.outputs.ip }} \
