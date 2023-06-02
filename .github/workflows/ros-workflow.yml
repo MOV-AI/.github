@@ -28,7 +28,7 @@ on:
       MOBTEST_VERSION:
         required: false
         type: string
-        default: "0.0.4.1"
+        default: "0.0.4.2"
       ROS_BUILDTOOLS_TAG:
         required: false
         type: string
@@ -328,7 +328,7 @@ jobs:
         git pull
         git add **package.xml
         git commit -m "[skip actions] Automatic Bump of build version"
-    
+
     - name: Prepare raise variables
       id: pre_raise
       run: |
