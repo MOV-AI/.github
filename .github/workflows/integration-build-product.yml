@@ -354,6 +354,7 @@ jobs:
           '
 
       - name: Collect Installed components
+        if: always()
         shell: bash
         run: |
           container_id=$(docker ps -q -f "ancestor=$REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)")
@@ -394,6 +395,7 @@ jobs:
         run: docker push "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
 
       - name: Stash project metadata
+        if: always()
         uses: actions/upload-artifact@v3
         with:
           name: project_metadata
