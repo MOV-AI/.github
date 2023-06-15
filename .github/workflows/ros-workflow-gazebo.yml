@@ -45,7 +45,7 @@ on:
         required: true
 
 env:
-  MOBTEST_VERSION: "0.0.4.1"
+  MOBTEST_VERSION: "0.0.4.2"
 
 jobs:
   Build:

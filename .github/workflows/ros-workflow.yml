@@ -50,7 +50,7 @@ on:
         required: true
 
 env:
-  MOBTEST_VERSION: "0.0.4.1"
+  MOBTEST_VERSION: "0.0.4.2"
 
 jobs:
   Build:
@@ -286,7 +286,7 @@ jobs:
         commit_hash=$(git log --format="%H" -n 1)
         #echo ::set-output name=commit_id::$commit_hash
         echo "commit_id=$commit_hash" >> $GITHUB_OUTPUT
-        
+
 
     - name: Create Github Release
       uses: softprops/action-gh-release@v1

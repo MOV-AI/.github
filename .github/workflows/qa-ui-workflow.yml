@@ -137,7 +137,7 @@ jobs:
           # tests execution
           pytest \
             --ignore qa_install_tests \
-            --hub_url http://172.22.0.105:4444 \
+            --hub_url http://selenoid-ui.hel.mov.ai \
             --base_url https://${{ steps.agent_info.outputs.ip }}/ \
             --username ${{ steps.install.outputs.movai_user }} \
             --password ${{ steps.install.outputs.movai_pwd }}
