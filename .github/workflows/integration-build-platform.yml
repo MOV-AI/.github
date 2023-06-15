@@ -722,7 +722,7 @@ jobs:
 
           # install ros
           sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
-          export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages
+          export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
 
           pytest src/tests \
               --base_url https://${{ steps.agent_info.outputs.ip }} \
