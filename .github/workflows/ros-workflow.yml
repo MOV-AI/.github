@@ -13,6 +13,10 @@ on:
       ros_distro:
         required: true
         type: string
+      install_test:
+        required: false
+        type: boolean
+        default: false
       prod_publish_repos:
         required: false
         type: string
@@ -36,7 +40,7 @@ on:
       MOBROS_VERSION:
         required: false
         type: string
-        default: "2.0.0.26"
+        default: "2.0.1.4"
 
 
     secrets:
@@ -241,10 +245,59 @@ jobs:
         run: |
           echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
+  Package-Install-Test:
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(inputs.ros_distro) }}
+        build_mode: ${{ fromJSON(inputs.build_modes) }}
+    if: ${{ inputs.release == 'false' && inputs.install_test == 'true' }}
+    runs-on: ubuntu-20.04
+    timeout-minutes: 90
+    container:
+      image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
+#      options: --user root
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    needs: [Build]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Install test requirements
+        run: |
+          python3 -m pip install -r build-requirements.txt
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: packages
+          path: artifacts
+
+      - name: Install mobros
+        run: |
+          sudo apt install mobros==${{ inputs.MOBROS_VERSION }} -y
+      - name: Install debian artifacts
+        run: |
+          sudo apt update
+          cd artifacts/
+          PACKAGES_INSTALL="$(find -L ./ -name "*.deb")"
+          echo $PACKAGES_INSTALL
+          sudo mobros install -y $PACKAGES_INSTALL
+          
+      - name: Mobtest
+        run: |
+          mobtest repo --issues ./mobtest-issues.json .
+          export PATH="$HOME/.local/bin:$PATH"
+          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ inputs.MOBTEST_VERSION }} --ignore-installed
+          mobtest proj /opt/ros/${{ matrix.distro }}/share/
+
   Publish:
     if: ${{ inputs.deploy == 'true' }}
     runs-on: ubuntu-20.04
-    needs:  [Test]
+    needs:  [Package-Install-Test]
     container:
       image: registry.cloud.mov.ai/qa/ros-buildtools-noetic:${{ inputs.ROS_BUILDTOOLS_TAG }}
       options: --user root
