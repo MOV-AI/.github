@@ -288,22 +288,6 @@ jobs:
           echo "movai_user=${MOVAI_USER}" >> $GITHUB_OUTPUT
           echo "movai_pwd=${MOVAI_PWD}" >> $GITHUB_OUTPUT
 
-      - name: Collect Install logs
-        run: |
-          # cleanup
-          rm -rf install_logs
-
-          mkdir -p install_logs
-          journalctl -u movai-service -t mobros -n 100 > install_logs/spawner-firmware.log
-          journalctl -u movai-service > install_logs/movai-service.log
-
-      - name: Stash Install logs artifacts
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: install_logs
-          path: install_logs/*
-
       - name: UI tests
         timeout-minutes: 120
         working-directory: ${{ steps.ui_tests_setup.outputs.target_dir }}
@@ -363,6 +347,7 @@ jobs:
           # *.log and *.zip might not exist if the test fails early
           mkdir -p qa_artifacts
           cp -r "${UI_DIR}"/*.log ./qa_artifacts || true
+          journalctl -u movai-service -t mobros --since '1hour ago' > qa_artifacts/spawner-firmware.log || true
 
       - name: Stash QA artifacts
         if: always()
@@ -597,6 +582,7 @@ jobs:
           cp -r "${INSTALL_DIR}"/results/*.log ./qa_artifacts || true
           cp -r "${INSTALL_DIR}"/results/*.zip ./qa_artifacts || true
           cp -r "${INSTALL_DIR}"/results/test_report_*.html ./qa_artifacts || true
+          journalctl -u movai-service -t mobros --since '1hour ago' > qa_artifacts/spawner-firmware.log || true
 
       - name: Stash QA artifacts
         if: always()
@@ -721,22 +707,6 @@ jobs:
           echo "movai_user=${MOVAI_USER}" >> $GITHUB_OUTPUT
           echo "movai_pwd=${MOVAI_PWD}" >> $GITHUB_OUTPUT
 
-      - name: Collect Install logs
-        run: |
-          # cleanup
-          rm -rf install_logs
-
-          mkdir -p install_logs
-          journalctl -u movai-service -t mobros -n 100 > install_logs/spawner-firmware.log
-          journalctl -u movai-service > install_logs/movai-service.log
-
-      - name: Stash Install logs artifacts
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: install_logs
-          path: install_logs/*
-
       - name: API tests
         timeout-minutes: 30
         working-directory: ${{ steps.api_tests_setup.outputs.target_dir }}
@@ -785,6 +755,7 @@ jobs:
           mkdir -p qa_artifacts
           cp -r "${API_DIR}"/*.log ./qa_artifacts || true
           cp -r "${API_DIR}"/results/*.zip ./qa_artifacts || true
+          journalctl -u movai-service -t mobros --since '30min ago' > qa_artifacts/spawner-firmware.log || true
 
       - name: Stash QA artifacts
         if: always()
@@ -916,22 +887,6 @@ jobs:
           exit $execution_status
           rm movai_service_version
 
-      - name: Collect Install logs
-        run: |
-          # cleanup
-          rm -rf install_logs
-
-          mkdir -p install_logs
-          journalctl -u movai-service -t mobros -n 100 > install_logs/spawner-firmware.log
-          journalctl -u movai-service > install_logs/movai-service.log
-
-      - name: Stash Install logs artifacts
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: install_logs
-          path: install_logs/*
-
       - name: Flow tests
         timeout-minutes: 30
         working-directory: ${{ steps.flow_tests_setup.outputs.target_dir }}
@@ -994,6 +949,7 @@ jobs:
           mkdir -p qa_artifacts
           cp -r "${FLOW_DIR}"/*.log ./qa_artifacts || true
           cp -r "${FLOW_DIR}"/*.tar ./qa_artifacts || true
+          journalctl -u movai-service -t mobros --since '30min ago' > qa_artifacts/spawner-firmware.log || true
 
       - name: Stash QA artifacts
         if: always()
@@ -1515,12 +1471,13 @@ jobs:
           SIMULATION_ID: "CI"
 
       - name: Collect Install logs
+        if: always()
         run: |
           # cleanup
           rm -rf install_logs
 
           mkdir -p install_logs
-          journalctl -u movai-service -t mobros -n 100 > install_logs/spawner-firmware.log
+          journalctl -u movai-service -t mobros --since '30min ago' > qa_artifacts/spawner-firmware.log || true
           journalctl -u movai-service > install_logs/movai-service.log
 
       - name: Stash Install logs artifacts
