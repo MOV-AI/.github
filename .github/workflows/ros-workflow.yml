@@ -278,7 +278,7 @@ jobs:
 
       - name: Install mobros
         run: |
-          sudo apt install mobros==${{ inputs.MOBROS_VERSION }} -y
+          sudo apt install mobros=${{ inputs.MOBROS_VERSION }} -y
       - name: Install debian artifacts
         run: |
           sudo apt update
