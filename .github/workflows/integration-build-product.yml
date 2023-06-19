@@ -12,10 +12,6 @@ on:
         required: false
         type: string
         default: true
-      continue_on_mobtest_error:
-        required: false
-        type: boolean
-        default: false
       is_external_project:
         required: false
         type: boolean
@@ -51,7 +47,7 @@ on:
 
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "2.2.0.7"
-  MOBTEST_VERSION: "0.0.4.1"
+  MOBTEST_VERSION: "0.0.4.2"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.25"
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
@@ -342,7 +338,6 @@ jobs:
           rm movai_service_version
 
       - name: Run mobtest
-        continue-on-error: ${{ inputs.continue_on_mobtest_error }}
         shell: bash
         run: |
           container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
@@ -354,6 +349,7 @@ jobs:
           '
 
       - name: Collect Installed components
+        if: always()
         shell: bash
         run: |
           container_id=$(docker ps -q -f "ancestor=$REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)")
@@ -394,6 +390,8 @@ jobs:
         run: docker push "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
 
       - name: Stash project metadata
+
+        if: always()
         uses: actions/upload-artifact@v3
         with:
           name: project_metadata
@@ -524,7 +522,6 @@ jobs:
           #echo ::set-output name=push_name::$push_name
           echo "base_name=$(cat simulator_artifacts/simulator_base.ci)" >> $GITHUB_OUTPUT
           echo "push_name=$push_name_tmp" >> $GITHUB_OUTPUT
-          
 
       # - name: Build with args and push
       #   if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true'}}
@@ -679,7 +676,6 @@ jobs:
 
       - name: Run mobtest
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        continue-on-error: ${{ inputs.continue_on_mobtest_error }}
         shell: bash
         run: |
           container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
@@ -854,7 +850,6 @@ jobs:
         run: |
           #echo ::set-output name=branch::${GITHUB_REF#refs/heads/}
           echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
-          
 
       - name: Raise App version
         uses: CasperWA/push-protected@v2

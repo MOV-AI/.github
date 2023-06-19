@@ -8,10 +8,6 @@ on:
       ros_distro:
         required: true
         type: string
-      continue_on_mobtest_error:
-        required: false
-        type: boolean
-        default: false
       debug_fleet_keep_alive:
         required: false
         type: boolean
@@ -61,7 +57,7 @@ on:
         required: true
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "2.1.0.23"
-  MOBTEST_VERSION: "0.0.4.1"
+  MOBTEST_VERSION: "0.0.4.2"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.25"
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
@@ -516,7 +512,6 @@ jobs:
           echo "movai_pwd=${pwd}" >> $GITHUB_OUTPUT
 
       - name: Run mobtest
-        continue-on-error: ${{ inputs.continue_on_mobtest_error }}
         shell: bash
         run: |
           container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
@@ -719,7 +714,7 @@ jobs:
 
           # install ros
           sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
-          export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages
+          export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
 
           pytest src/tests \
               --base_url https://${{ steps.agent_info.outputs.ip }} \

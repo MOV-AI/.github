@@ -29,10 +29,14 @@ on:
         required: false
         type: boolean
         default: true
+      propagate_to_projects:
+        required: false
+        type: boolean
+        default: false
       MOBTEST_VERSION:
         required: false
         type: string
-        default: "0.0.4.1"
+        default: "0.0.4.2"
       ROS_BUILDTOOLS_TAG:
         required: false
         type: string
@@ -41,7 +45,6 @@ on:
         required: false
         type: string
         default: "2.0.1.4"
-
 
     secrets:
       auto_commit_user:
@@ -381,7 +384,7 @@ jobs:
         git pull
         git add **package.xml
         git commit -m "[skip actions] Automatic Bump of build version"
-    
+
     - name: Prepare raise variables
       id: pre_raise
       run: |
@@ -414,6 +417,18 @@ jobs:
         prerelease: true
         generate_release_notes: true
         files: artifacts/*.deb
+
+    - name: Propagate release
+      if: ${{ inputs.propagate_to_projects }}
+      continue-on-error: true
+      shell: bash
+      run: |
+        gh workflow run "Propagate ROS repository packages to projects - On Dispatch" \
+          --repo MOV-AI/qa-automations \
+          -f repo_name=${GITHUB_REPOSITORY#*/} \
+          -f repo_version=${{ steps.vars.outputs.ros_pkg_version }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
 
   Release:
     strategy:
