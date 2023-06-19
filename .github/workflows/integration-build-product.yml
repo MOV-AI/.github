@@ -337,6 +337,24 @@ jobs:
           exit $execution_status
           rm movai_service_version
 
+      - name: Collect Install logs
+        continue-on-error: true
+        run: |
+          # cleanup
+          rm -rf install_logs
+
+          mkdir -p install_logs
+          journalctl -u movai-service -t mobros -n 100 > install_logs/spawner-firmware.log
+          journalctl -u movai-service > install_logs/movai-service.log
+
+      - name: Stash Install logs artifacts
+        continue-on-error: true
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: install_logs
+          path: install_logs/*
+
       - name: Run mobtest
         shell: bash
         run: |
@@ -674,6 +692,24 @@ jobs:
         env:
           SIMULATION_ID: "CI"
 
+      - name: Collect Install logs
+        continue-on-error: true
+        run: |
+          # cleanup
+          rm -rf install_logs
+
+          mkdir -p install_logs
+          journalctl -u movai-service -t mobros -n 100 > install_logs/spawner-firmware.log
+          journalctl -u movai-service > install_logs/movai-service.log
+
+      - name: Stash Install logs artifacts
+        continue-on-error: true
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: install_logs
+          path: install_logs/*
+          
       - name: Run mobtest
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         shell: bash

@@ -288,6 +288,22 @@ jobs:
           echo "movai_user=${MOVAI_USER}" >> $GITHUB_OUTPUT
           echo "movai_pwd=${MOVAI_PWD}" >> $GITHUB_OUTPUT
 
+      - name: Collect Install logs
+        run: |
+          # cleanup
+          rm -rf install_logs
+
+          mkdir -p install_logs
+          journalctl -u movai-service -t mobros -n 100 > install_logs/spawner-firmware.log
+          journalctl -u movai-service > install_logs/movai-service.log
+
+      - name: Stash Install logs artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: install_logs
+          path: install_logs/*
+
       - name: UI tests
         timeout-minutes: 120
         working-directory: ${{ steps.ui_tests_setup.outputs.target_dir }}
@@ -705,6 +721,22 @@ jobs:
           echo "movai_user=${MOVAI_USER}" >> $GITHUB_OUTPUT
           echo "movai_pwd=${MOVAI_PWD}" >> $GITHUB_OUTPUT
 
+      - name: Collect Install logs
+        run: |
+          # cleanup
+          rm -rf install_logs
+
+          mkdir -p install_logs
+          journalctl -u movai-service -t mobros -n 100 > install_logs/spawner-firmware.log
+          journalctl -u movai-service > install_logs/movai-service.log
+
+      - name: Stash Install logs artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: install_logs
+          path: install_logs/*
+
       - name: API tests
         timeout-minutes: 30
         working-directory: ${{ steps.api_tests_setup.outputs.target_dir }}
@@ -883,6 +915,22 @@ jobs:
           execution_status=$?
           exit $execution_status
           rm movai_service_version
+
+      - name: Collect Install logs
+        run: |
+          # cleanup
+          rm -rf install_logs
+
+          mkdir -p install_logs
+          journalctl -u movai-service -t mobros -n 100 > install_logs/spawner-firmware.log
+          journalctl -u movai-service > install_logs/movai-service.log
+
+      - name: Stash Install logs artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: install_logs
+          path: install_logs/*
 
       - name: Flow tests
         timeout-minutes: 30
@@ -1466,6 +1514,22 @@ jobs:
         env:
           SIMULATION_ID: "CI"
 
+      - name: Collect Install logs
+        run: |
+          # cleanup
+          rm -rf install_logs
+
+          mkdir -p install_logs
+          journalctl -u movai-service -t mobros -n 100 > install_logs/spawner-firmware.log
+          journalctl -u movai-service > install_logs/movai-service.log
+
+      - name: Stash Install logs artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: install_logs
+          path: install_logs/*
+          
       - name: Simulator tests
         timeout-minutes: 30
         working-directory: ${{ steps.sim_flow_tests_setup.outputs.target_dir }}
