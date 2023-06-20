@@ -283,11 +283,10 @@ jobs:
           cd artifacts/
           PACKAGES_INSTALL="$(find -L ./ -name "*.deb")"
           echo $PACKAGES_INSTALL
-          sudo mobros install $PACKAGES_INSTALL -y
+          sudo mobros install $PACKAGES_INSTALL -y --upgrade_installed --fail-on-apt-update
 
       - name: Mobtest
         run: |
-          mobtest repo --issues ./mobtest-issues.json .
           export PATH="$HOME/.local/bin:$PATH"
           python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ inputs.MOBTEST_VERSION }} --ignore-installed
           mobtest proj /opt/ros/${{ matrix.distro }}/share/
