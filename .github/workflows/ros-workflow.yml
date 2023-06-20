@@ -40,7 +40,7 @@ on:
       ROS_BUILDTOOLS_TAG:
         required: false
         type: string
-        default: "v2.0.3"
+        default: "v2.0.5"
       MOBROS_VERSION:
         required: false
         type: string
@@ -283,7 +283,7 @@ jobs:
           cd artifacts/
           PACKAGES_INSTALL="$(find -L ./ -name "*.deb")"
           echo $PACKAGES_INSTALL
-          sudo mobros install $PACKAGES_INSTALL -y --upgrade_installed --fail-on-apt-update
+          sudo mobros install $PACKAGES_INSTALL -y --upgrade-installed --fail-on-apt-update
 
       - name: Mobtest
         run: |
