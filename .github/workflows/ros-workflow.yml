@@ -276,10 +276,10 @@ jobs:
 
       - name: Install mobros
         run: |
+          sudo apt update
           sudo apt install mobros=${{ inputs.MOBROS_VERSION }} -y
       - name: Install debian artifacts
         run: |
-          sudo apt update
           cd artifacts/
           PACKAGES_INSTALL="$(find -L ./ -name "*.deb")"
           echo $PACKAGES_INSTALL
