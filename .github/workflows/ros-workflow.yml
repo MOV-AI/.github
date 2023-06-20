@@ -257,7 +257,7 @@ jobs:
     timeout-minutes: 90
     container:
       image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
-#      options: --user root
+      options: --user root
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
