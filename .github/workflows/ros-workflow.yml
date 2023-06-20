@@ -283,8 +283,8 @@ jobs:
           cd artifacts/
           PACKAGES_INSTALL="$(find -L ./ -name "*.deb")"
           echo $PACKAGES_INSTALL
-          sudo mobros install -y $PACKAGES_INSTALL
-          
+          sudo mobros install $PACKAGES_INSTALL -y
+
       - name: Mobtest
         run: |
           mobtest repo --issues ./mobtest-issues.json .
