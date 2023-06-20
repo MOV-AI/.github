@@ -252,7 +252,7 @@ jobs:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
         build_mode: ${{ fromJSON(inputs.build_modes) }}
-    if: ${{ inputs.release == 'false' && inputs.install_test == 'true' }}
+    if: ${{ inputs.release == 'false' && inputs.install_test }}
     runs-on: ubuntu-20.04
     timeout-minutes: 90
     container:
