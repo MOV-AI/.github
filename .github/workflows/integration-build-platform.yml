@@ -8,10 +8,6 @@ on:
       ros_distro:
         required: true
         type: string
-      continue_on_mobtest_error:
-        required: false
-        type: boolean
-        default: false
       debug_fleet_keep_alive:
         required: false
         type: boolean
@@ -61,7 +57,7 @@ on:
         required: true
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "2.1.0.23"
-  MOBTEST_VERSION: "0.0.4.1"
+  MOBTEST_VERSION: "0.0.4.2"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.25"
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
@@ -338,6 +334,9 @@ jobs:
           CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^spawner-.*")
           docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
 
+          # movai-service
+          journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
+
       - name: Stash QA artifacts
         if: always()
         shell: bash
@@ -516,7 +515,6 @@ jobs:
           echo "movai_pwd=${pwd}" >> $GITHUB_OUTPUT
 
       - name: Run mobtest
-        continue-on-error: ${{ inputs.continue_on_mobtest_error }}
         shell: bash
         run: |
           container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
@@ -526,6 +524,49 @@ jobs:
             python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
             mobtest proj /opt/ros/noetic/share/
             '
+
+      - name: Save docker container logs
+        if: always()
+        working-directory: ${{ steps.install_tests_setup.outputs.target_dir }}
+        shell: bash
+        run: |
+          # for sanity
+          docker ps -a
+
+          # backend
+          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^backend-.*")
+          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
+
+          # spawner
+          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^spawner-.*")
+          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
+
+          # movai-service
+          journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
+
+      - name: Stash QA artifacts
+        if: always()
+        shell: bash
+        env:
+          INSTALL_DIR: ${{ steps.install_tests_setup.outputs.target_dir }}
+        run: |
+          # cleanup
+          rm -rf qa_artifacts
+
+          # tests artifacts
+          # *.log might not exist if the test fails early
+          mkdir -p qa_artifacts
+          cp -r "${INSTALL_DIR}"/*.log ./qa_artifacts || true
+          cp -r "${INSTALL_DIR}"/results/*.log ./qa_artifacts || true
+          cp -r "${INSTALL_DIR}"/results/*.zip ./qa_artifacts || true
+          cp -r "${INSTALL_DIR}"/results/test_report_*.html ./qa_artifacts || true
+
+      - name: Stash QA artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: qa_artifacts_install_tests
+          path: qa_artifacts/*
 
       - name: Collect Installed components
         shell: bash
@@ -579,20 +620,6 @@ jobs:
         run: |
           # cleanup
           rm -rf qa_artifacts
-
-          # tests artifacts
-          # *.log and *.zip might not exist if the test fails early
-          mkdir -p qa_artifacts
-          cp -r "${INSTALL_DIR}"/results/*.log ./qa_artifacts || true
-          cp -r "${INSTALL_DIR}"/results/*.zip ./qa_artifacts || true
-          cp -r "${INSTALL_DIR}"/results/test_report_*.html ./qa_artifacts || true
-
-      - name: Stash QA artifacts
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: qa_artifacts_install_tests
-          path: qa_artifacts/*
 
       - name: Remove robots
         if: always()
@@ -719,7 +746,7 @@ jobs:
 
           # install ros
           sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
-          export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages
+          export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
 
           pytest src/tests \
               --base_url https://${{ steps.agent_info.outputs.ip }} \
@@ -743,6 +770,9 @@ jobs:
           # spawner
           CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^spawner-.*")
           docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
+
+          # movai-service
+          journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
 
       - name: Stash QA artifacts
         if: always()
@@ -937,6 +967,9 @@ jobs:
           # spawner
           CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^spawner-.*")
           docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
+
+          # movai-service
+          journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
 
       - name: Stash QA artifacts
         if: always()
@@ -1503,6 +1536,46 @@ jobs:
             --tb=short
 
           deactivate
+
+      - name: Save docker container logs
+        if: always()
+        working-directory: ${{ steps.sim_flow_tests_setup.outputs.target_dir }}
+        shell: bash
+        run: |
+          # for sanity
+          docker ps -a
+
+          # backend
+          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^backend-.*")
+          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
+
+          # spawner
+          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^spawner-.*")
+          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
+
+          # movai-service
+          journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
+
+      - name: Stash QA artifacts
+        if: always()
+        shell: bash
+        env:
+          SIM_DIR: ${{ steps.sim_flow_tests_setup.outputs.target_dir }}
+        run: |
+          # cleanup
+          rm -rf qa_artifacts
+
+          # tests artifacts
+          # *.log might not exist if the test fails early
+          mkdir -p qa_artifacts
+          cp -r "${SIM_DIR}"/*.log ./qa_artifacts || true
+
+      - name: Stash QA artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: qa_artifacts_simulator_tests
+          path: qa_artifacts/*
 
       - name: Collect Installed components
         shell: bash
