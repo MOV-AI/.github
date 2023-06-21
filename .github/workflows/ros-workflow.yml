@@ -285,7 +285,7 @@ jobs:
           echo $PACKAGES_INSTALL
           sudo mobros install $PACKAGES_INSTALL -y --upgrade-installed --fail-on-apt-update
 
-      - name: Mobtest
+      - name: Mobtest project validations
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ inputs.MOBTEST_VERSION }} --ignore-installed
