@@ -1517,7 +1517,7 @@ jobs:
           echo "movai_pwd=${MOVAI_PWD}" >> $GITHUB_OUTPUT
         env:
           SIMULATION_ID: "CI"
-          
+
       - name: Simulator tests
         timeout-minutes: 30
         working-directory: ${{ steps.sim_flow_tests_setup.outputs.target_dir }}
