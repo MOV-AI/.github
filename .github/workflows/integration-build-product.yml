@@ -707,7 +707,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v3
         with:
-          name: install_logs
+          name: install_simulator_logs
           path: install_logs/*
           
       - name: Run mobtest
