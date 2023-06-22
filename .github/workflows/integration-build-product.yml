@@ -702,7 +702,7 @@ jobs:
           journalctl -u movai-service -t mobros -n 100 > install_logs/spawner-firmware.log
           journalctl -u movai-service > install_logs/movai-service.log
 
-      - name: Stash Install logs artifacts
+      - name: Stash Install simulator logs artifacts
         continue-on-error: true
         if: always()
         uses: actions/upload-artifact@v3
