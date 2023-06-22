@@ -1517,23 +1517,6 @@ jobs:
           echo "movai_pwd=${MOVAI_PWD}" >> $GITHUB_OUTPUT
         env:
           SIMULATION_ID: "CI"
-
-      - name: Collect Install logs
-        if: always()
-        run: |
-          # cleanup
-          rm -rf install_logs
-
-          mkdir -p install_logs
-          journalctl -u movai-service -t mobros --since '30min ago' > qa_artifacts/spawner-firmware.log || true
-          journalctl -u movai-service > install_logs/movai-service.log
-
-      - name: Stash Install logs artifacts
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: install_logs
-          path: install_logs/*
           
       - name: Simulator tests
         timeout-minutes: 30
