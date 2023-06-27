@@ -349,8 +349,8 @@ jobs:
 
           # movai-service
           journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
-          
-         # spawner (mobros firmware)
+
+          # spawner (mobros firmware)
           journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
 
       - name: Stash QA artifacts
@@ -559,7 +559,7 @@ jobs:
 
           # movai-service
           journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
-          
+
           # Spawner (mobros firmware)
           journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
 
@@ -792,7 +792,7 @@ jobs:
 
           # movai-service
           journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
-          
+
           # spawner (mobros firmware)
           journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
 
@@ -995,7 +995,7 @@ jobs:
 
           # movai-service
           journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
-          
+
           # spawner (mobros firmware)
           journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
 
@@ -1584,7 +1584,7 @@ jobs:
 
           # movai-service
           journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
-          
+
           # spawner (mobros firmware)
           journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
 
