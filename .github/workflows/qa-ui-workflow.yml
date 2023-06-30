@@ -11,10 +11,6 @@ on:
         type: string
         description: Test set to execute
     secrets:
-      registry_user:
-        required: true
-      registry_password:
-        required: true
       gh_token:
         required: true
       slack_token_id:
@@ -31,12 +27,6 @@ on:
 jobs:
   Validate-features:
     runs-on: ubuntu-20.04
-    container:
-      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
-
     steps:
 
       - name: Checkout
@@ -56,7 +46,10 @@ jobs:
           . venv/bin/activate
 
           # install tests requirements in venv
-          pip install -r requirements.txt
+          pip install \
+            -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple \
+            --extra-index-url https://pypi.org/simple \
+            -r requirements.txt
 
           python3 testcasemanagement/testcase_importer.py --target ${{ inputs.test_set }}
           python3 testcasemanagement/feature_file_processor.py --validate
@@ -95,7 +88,10 @@ jobs:
           . venv/bin/activate
 
           # install tests requirements in venv
-          pip install -r requirements.txt
+          pip install \
+            -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple \
+            --extra-index-url https://pypi.org/simple \
+            -r requirements.txt
 
           # deactivate venv
           deactivate
