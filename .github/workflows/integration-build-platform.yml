@@ -1594,6 +1594,7 @@ jobs:
 
       - name: Slack message failure
         uses: archive/github-actions-slack@master
+        if: failure()
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
@@ -1786,6 +1787,7 @@ jobs:
 
       - name: Slack message failure
         uses: archive/github-actions-slack@master
+        if: failure()
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
