@@ -163,6 +163,8 @@ jobs:
   Standalone-Validations:
     runs-on: ubuntu-20.04
     needs: [Validate-boostrap-configs]
+    outputs:
+      slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
     steps:
       - name: Pass through
         run: echo "Pass"
@@ -369,16 +371,17 @@ jobs:
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: "C02U028NMB7"
           slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          slack-optional-thread_ts: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
 
       - name: Slack message failure
         uses: archive/github-actions-slack@master
+        if: failure()
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: "C02U028NMB7"
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          slack-optional-thread_ts: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
 
       - name: Save docker container logs
         if: always()
@@ -606,16 +609,17 @@ jobs:
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: "C02U028NMB7"
           slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          slack-optional-thread_ts: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
 
       - name: Slack message failure
         uses: archive/github-actions-slack@master
+        if: failure()
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: "C02U028NMB7"
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          slack-optional-thread_ts: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
           
       - name: Save docker container logs
         if: always()
@@ -867,16 +871,17 @@ jobs:
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: "C02U028NMB7"
           slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          slack-optional-thread_ts: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
 
       - name: Slack message failure
         uses: archive/github-actions-slack@master
+        if: failure()
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: "C02U028NMB7"
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          slack-optional-thread_ts: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
 
 
       - name: Save docker container logs
@@ -1100,16 +1105,17 @@ jobs:
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: "C02U028NMB7"
           slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          slack-optional-thread_ts: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
 
       - name: Slack message failure
         uses: archive/github-actions-slack@master
+        if: failure()
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: "C02U028NMB7"
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          slack-optional-thread_ts: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
 
 
       - name: Save docker container logs
@@ -1414,6 +1420,7 @@ jobs:
 
       - name: Slack message failure
         uses: archive/github-actions-slack@master
+        if: failure()
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
@@ -1472,6 +1479,9 @@ jobs:
     runs-on: integration-pipeline
     env:
       DISTRO: noetic
+    outputs:
+      slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
@@ -1772,7 +1782,7 @@ jobs:
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: "C02U028NMB7"
           slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          slack-optional-thread_ts: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
 
       - name: Slack message failure
         uses: archive/github-actions-slack@master
@@ -1781,7 +1791,7 @@ jobs:
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: "C02U028NMB7"
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          slack-optional-thread_ts: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
 
 
       - name: Save docker container logs
