@@ -19,6 +19,10 @@ on:
         type: string
         default: linux/amd64 #,linux/arm/v7
         description: list of platform to build and optionally push (comma separated)
+      github_repo:
+        required: true
+        type: string
+        description: the git repository that triggered the workflow run
       github_ref:
         required: true
         type: string
@@ -221,7 +225,7 @@ jobs:
           file: ${{ inputs.docker_file }}
           push: ${{ inputs.deploy }}
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
-          labels: "org.opencontainers.image.source=https://github.com/mov-ai/${{ inputs.github_ref }}"
+          labels: "org.opencontainers.image.source=https://github.com/mov-ai/${{ inputs.github_repo }}"
           target: ${{ inputs.target }}
           pull: true
           build-args: ${{ steps.get_build_args.outputs.build_args_str_list }}
@@ -235,7 +239,7 @@ jobs:
           file: ${{ inputs.docker_file }}
           push: ${{ inputs.deploy }}
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
-          labels: "org.opencontainers.image.source=https://github.com/mov-ai/${{ inputs.github_ref }}"
+          labels: "org.opencontainers.image.source=https://github.com/mov-ai/${{ inputs.github_repo }}"
           target: ${{ inputs.target }}
           pull: true
 
