@@ -190,13 +190,13 @@ jobs:
       - name: Compute docker build arguments
         id: get_build_args
         run: |
-          LABEL_BUILD_ARGS_STR="--label org.opencontainers.image.source=https://github.com/mov-ai/${{ inputs.github_ref }}"
-          BUILD_ARGS_STR_LIST="${{ inputs.build_args }},$LABEL_BUILD_ARGS_STR"
-          if [ -n "$BUILD_ARGS_STR_LIST" ]; then
-            #echo "::set-output name=build_args_str_list::$BUILD_ARGS_STR_LIST"
-            echo "build_args_str_list=$BUILD_ARGS_STR_LIST" >> $GITHUB_OUTPUT
-            echo -e "Docker build arguments:\n$BUILD_ARGS_STR_LIST"
+          BUILD_ARGS_STR_LIST="--label org.opencontainers.image.source=https://github.com/mov-ai/${{ inputs.github_ref }}"
+          if [ -n "${{ inputs.build_args }}" ]; then
+            BUILD_ARGS_STR_LIST="${{ inputs.build_args }},$BUILD_ARGS_STR_LIST"
           fi
+          #echo "::set-output name=build_args_str_list::$BUILD_ARGS_STR_LIST"
+          echo "build_args_str_list=$BUILD_ARGS_STR_LIST" >> $GITHUB_OUTPUT
+          echo -e "Docker build arguments:\n$BUILD_ARGS_STR_LIST"
 
       - name: Download packages to include in build
         if: inputs.download_artifact
@@ -237,11 +237,6 @@ jobs:
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
           target: ${{ inputs.target }}
           pull: true
-
-      - name: Associate Github Container Registry image with github repository
-        if: ${{ inputs.public }}
-        run: |
-          ghcr.io/cli/ghcr repo set-image --org mov-ai --container "${{ inputs.github_ref }}" "${{ inputs.public_image }}"="${{ steps.get_image_names.outputs.GITHUB_DOCKER_IMAGE }}"
 
       - name: Snyk check
         if: inputs.public && inputs.snyk_check && inputs.deploy
