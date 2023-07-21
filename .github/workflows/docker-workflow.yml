@@ -53,6 +53,11 @@ on:
         type: string
         default: pubregistry.aws.cloud.mov.ai
         description: secondary public registry used for push
+      github_registry:
+        required: false
+        type: string
+        default: ghcr.io
+        description: github public registry used for push
       public_image:
         required: false
         type: string
@@ -85,6 +90,10 @@ on:
       pub_registry_user:
         required: false
       pub_registry_password:
+        required: false
+      github_registry_user:
+        required: false
+      github_token:
         required: false
       snyk_token:
         required: false
@@ -139,6 +148,14 @@ jobs:
           password: ${{ secrets.pub_registry_password }}
           registry: ${{ inputs.public_registry }}
 
+      - name: Login to Public Github Registry (for push permission)
+        if: ${{ inputs.public }}
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.github_registry_user }}
+          password: ${{ secrets.github_token }}
+          registry: ${{ inputs.github_registry }}
+
       - name: Compute docker image names
         id: get_image_names
         env:
@@ -155,12 +172,13 @@ jobs:
           # If public push is needed
           if [ "${PUBLIC_PUSH}" = "true" ]; then
             PUB_DOCKER_IMAGE_TMP="${{ inputs.public_registry }}/${{ inputs.public_image }}:${{ inputs.version }}"
-            DOCKER_IMAGES_TMP="$DOCKER_IMAGES_TMP,$PUB_DOCKER_IMAGE_TMP"
+            GITHUB_DOCKER_IMAGE_TMP="${{ inputs.github_registry }}/${{ inputs.public_image }}:${{ inputs.version }}"
+            DOCKER_IMAGES_TMP="$DOCKER_IMAGES_TMP,$PUB_DOCKER_IMAGE_TMP,$GITHUB_DOCKER_IMAGE_TMP"
             #echo "::set-output name=PUB_DOCKER_IMAGE::$PUB_DOCKER_IMAGE"
             echo "PUB_DOCKER_IMAGE=$PUB_DOCKER_IMAGE_TMP" >> $GITHUB_OUTPUT
 
             if [ "${LATEST}" = "true" ]; then
-              DOCKER_IMAGES_TMP="$DOCKER_IMAGES_TMP,${{ inputs.public_registry }}/${{ inputs.public_image }}:latest"
+              DOCKER_IMAGES_TMP="$DOCKER_IMAGES_TMP,${{ inputs.public_registry }}/${{ inputs.public_image }}:latest,${{ inputs.github_registry }}/${{ inputs.public_image }}:latest"
             fi
           fi
 
