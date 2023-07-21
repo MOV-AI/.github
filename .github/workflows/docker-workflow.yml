@@ -190,7 +190,8 @@ jobs:
       - name: Compute docker build arguments
         id: get_build_args
         run: |
-          BUILD_ARGS_STR_LIST="${{ inputs.build_args }}"
+          LABEL_BUILD_ARGS_STR="--label org.opencontainers.image.source=https://github.com/mov-ai/${{ inputs.github_ref }}"
+          BUILD_ARGS_STR_LIST="${{ inputs.build_args }},$LABEL_BUILD_ARGS_STR"
           if [ -n "$BUILD_ARGS_STR_LIST" ]; then
             #echo "::set-output name=build_args_str_list::$BUILD_ARGS_STR_LIST"
             echo "build_args_str_list=$BUILD_ARGS_STR_LIST" >> $GITHUB_OUTPUT
