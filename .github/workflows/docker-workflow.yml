@@ -56,7 +56,7 @@ on:
       github_registry:
         required: false
         type: string
-        default: ghcr.io
+        default: ghcr.io/mov-ai
         description: github public registry used for push
       public_image:
         required: false
