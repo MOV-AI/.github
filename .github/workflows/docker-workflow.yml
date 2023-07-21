@@ -176,6 +176,7 @@ jobs:
             DOCKER_IMAGES_TMP="$DOCKER_IMAGES_TMP,$PUB_DOCKER_IMAGE_TMP,$GITHUB_DOCKER_IMAGE_TMP"
             #echo "::set-output name=PUB_DOCKER_IMAGE::$PUB_DOCKER_IMAGE"
             echo "PUB_DOCKER_IMAGE=$PUB_DOCKER_IMAGE_TMP" >> $GITHUB_OUTPUT
+            echo "GITHUB_DOCKER_IMAGE=$GITHUB_DOCKER_IMAGE_TMP" >> $GITHUB_OUTPUT
 
             if [ "${LATEST}" = "true" ]; then
               DOCKER_IMAGES_TMP="$DOCKER_IMAGES_TMP,${{ inputs.public_registry }}/${{ inputs.public_image }}:latest,${{ inputs.github_registry }}/${{ inputs.public_image }}:latest"
@@ -235,6 +236,11 @@ jobs:
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
           target: ${{ inputs.target }}
           pull: true
+
+      - name: Associate Github Container Registry image with github repository
+        if: ${{ inputs.public }}
+        run: |
+          ghcr.io/cli/ghcr repo set-image --org mov-ai --container "${{ inputs.github_ref }}" "${{ inputs.public_image }}"="${{ steps.get_image_names.outputs.GITHUB_DOCKER_IMAGE }}"
 
       - name: Snyk check
         if: inputs.public && inputs.snyk_check && inputs.deploy
