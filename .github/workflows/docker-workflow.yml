@@ -225,7 +225,7 @@ jobs:
           file: ${{ inputs.docker_file }}
           push: ${{ inputs.deploy }}
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
-          labels: "org.opencontainers.image.source=https://github.com/mov-ai/${{ inputs.github_repo }}"
+          labels: "org.opencontainers.image.source=https://github.com/${{ inputs.github_repo }}"
           target: ${{ inputs.target }}
           pull: true
           build-args: ${{ steps.get_build_args.outputs.build_args_str_list }}
@@ -239,7 +239,7 @@ jobs:
           file: ${{ inputs.docker_file }}
           push: ${{ inputs.deploy }}
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
-          labels: "org.opencontainers.image.source=https://github.com/mov-ai/${{ inputs.github_repo }}"
+          labels: "org.opencontainers.image.source=https://github.com/${{ inputs.github_repo }}"
           target: ${{ inputs.target }}
           pull: true
 
