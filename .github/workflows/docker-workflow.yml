@@ -179,7 +179,6 @@ jobs:
             GITHUB_DOCKER_IMAGE_TMP="${{ inputs.github_registry }}/${{ inputs.public_image }}:${{ inputs.version }}"
             DOCKER_IMAGES_TMP="$DOCKER_IMAGES_TMP,$PUB_DOCKER_IMAGE_TMP,$GITHUB_DOCKER_IMAGE_TMP"
             #echo "::set-output name=PUB_DOCKER_IMAGE::$PUB_DOCKER_IMAGE"
-            echo "PUB_DOCKER_IMAGE=$PUB_DOCKER_IMAGE_TMP" >> $GITHUB_OUTPUT
             echo "GITHUB_DOCKER_IMAGE=$GITHUB_DOCKER_IMAGE_TMP" >> $GITHUB_OUTPUT
 
             if [ "${LATEST}" = "true" ]; then
@@ -225,7 +224,9 @@ jobs:
           file: ${{ inputs.docker_file }}
           push: ${{ inputs.deploy }}
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
-          labels: "org.opencontainers.image.source=https://github.com/${{ inputs.github_repo }}"
+          labels: |
+            org.opencontainers.image.source="https://github.com/${{ inputs.github_repo }}"
+            org.opencontainers.image.description="Version ${{ inputs.version }} of repo ${{ inputs.github_repo }}"
           target: ${{ inputs.target }}
           pull: true
           build-args: ${{ steps.get_build_args.outputs.build_args_str_list }}
@@ -252,7 +253,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.snyk_token }}
         with:
           args: --severity-threshold=high --file=${{ inputs.docker_file }}
-          image: ${{ steps.get_image_names.outputs.PUB_DOCKER_IMAGE }}
+          image: ${{ steps.get_image_names.outputs.GITHUB_DOCKER_IMAGE }}
 
       - name: Snyk upload result to GitHub Code Scanning
         if: inputs.public && inputs.snyk_check && inputs.deploy
