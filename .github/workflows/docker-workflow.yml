@@ -211,9 +211,8 @@ jobs:
           file: ${{ inputs.docker_file }}
           push: ${{ inputs.deploy }}
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
-          labels: |
-            org.opencontainers.image.source="https://github.com/${{ github.repository }}"
-            org.opencontainers.image.description="Version ${GITHUB_REF##*/} of repo ${{ github.repository }}"
+          labels: org.opencontainers.image.source="https://github.com/${{ github.repository }}"
+          annotations:  org.opencontainers.image.description="Version ${GITHUB_REF##*/} of repo ${{ github.repository }}"
           target: ${{ inputs.target }}
           pull: true
           build-args: ${{ steps.get_build_args.outputs.build_args_str_list }}
@@ -227,9 +226,8 @@ jobs:
           file: ${{ inputs.docker_file }}
           push: ${{ inputs.deploy }}
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
-          labels: |
-            org.opencontainers.image.source="https://github.com/${{ github.repository }}"
-            org.opencontainers.image.description="Version ${GITHUB_REF##*/} of repo ${{ github.repository }}"
+          labels: org.opencontainers.image.source="https://github.com/${{ github.repository }}"
+          annotations:  org.opencontainers.image.description="Version ${GITHUB_REF##*/} of repo ${{ github.repository }}"
           target: ${{ inputs.target }}
           pull: true
 
