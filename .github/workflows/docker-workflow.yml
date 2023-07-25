@@ -19,10 +19,6 @@ on:
         type: string
         default: linux/amd64 #,linux/arm/v7
         description: list of platform to build and optionally push (comma separated)
-      github_repo:
-        required: true
-        type: string
-        description: the git repository that triggered the workflow run
       github_ref:
         required: true
         type: string
@@ -225,8 +221,8 @@ jobs:
           push: ${{ inputs.deploy }}
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
           labels: |
-            org.opencontainers.image.source="https://github.com/${{ inputs.github_repo }}"
-            org.opencontainers.image.description="Version ${{ inputs.version }} of repo ${{ inputs.github_repo }}"
+            org.opencontainers.image.source="https://github.com/${{ github.repository }}"
+            org.opencontainers.image.description="Version ${{ inputs.version }} of repo ${{ github.repository }}"
           target: ${{ inputs.target }}
           pull: true
           build-args: ${{ steps.get_build_args.outputs.build_args_str_list }}
@@ -241,8 +237,8 @@ jobs:
           push: ${{ inputs.deploy }}
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
           labels: |
-            org.opencontainers.image.source="https://github.com/${{ inputs.github_repo }}"
-            org.opencontainers.image.description="Version ${{ inputs.version }} of repo ${{ inputs.github_repo }}"
+            org.opencontainers.image.source="https://github.com/${{ github.repository }}"
+            org.opencontainers.image.description="Version ${{ inputs.version }} of repo ${{ github.repository }}"
           target: ${{ inputs.target }}
           pull: true
 
