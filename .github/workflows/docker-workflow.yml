@@ -19,15 +19,6 @@ on:
         type: string
         default: linux/amd64 #,linux/arm/v7
         description: list of platform to build and optionally push (comma separated)
-      github_ref:
-        required: true
-        type: string
-        description: the git branch or tag ref that triggered the workflow run
-      version:
-        required: false
-        type: string
-        default: local
-        description: tag of image used for build step and optional push to registries
       deploy:
         required: false
         type: boolean
@@ -163,7 +154,7 @@ jobs:
           LATEST: ${{ inputs.push_latest }}
         run: |
           PUB_DOCKER_IMAGE=""
-          DOCKER_IMAGES_TMP=${{ inputs.docker_registry }}/${{ inputs.docker_image }}:${{ inputs.version }}
+          DOCKER_IMAGES_TMP=${{ inputs.docker_registry }}/${{ inputs.docker_image }}:${GITHUB_REF##*/}
 
           if [ "${LATEST}" = "true" ]; then
             DOCKER_IMAGES_TMP="$DOCKER_IMAGES_TMP,${{ inputs.docker_registry }}/${{ inputs.docker_image }}:latest"
@@ -171,8 +162,8 @@ jobs:
 
           # If public push is needed
           if [ "${PUBLIC_PUSH}" = "true" ]; then
-            PUB_DOCKER_IMAGE_TMP="${{ inputs.public_registry }}/${{ inputs.public_image }}:${{ inputs.version }}"
-            GITHUB_DOCKER_IMAGE_TMP="${{ inputs.github_registry }}/${{ inputs.public_image }}:${{ inputs.version }}"
+            PUB_DOCKER_IMAGE_TMP="${{ inputs.public_registry }}/${{ inputs.public_image }}:${GITHUB_REF##*/}"
+            GITHUB_DOCKER_IMAGE_TMP="${{ inputs.github_registry }}/${{ inputs.public_image }}:${GITHUB_REF##*/}"
             DOCKER_IMAGES_TMP="$DOCKER_IMAGES_TMP,$PUB_DOCKER_IMAGE_TMP,$GITHUB_DOCKER_IMAGE_TMP"
             #echo "::set-output name=PUB_DOCKER_IMAGE::$PUB_DOCKER_IMAGE"
             echo "GITHUB_DOCKER_IMAGE=$GITHUB_DOCKER_IMAGE_TMP" >> $GITHUB_OUTPUT
@@ -222,7 +213,7 @@ jobs:
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
           labels: |
             org.opencontainers.image.source="https://github.com/${{ github.repository }}"
-            org.opencontainers.image.description="Version ${{ inputs.version }} of repo ${{ github.repository }}"
+            org.opencontainers.image.description="Version ${GITHUB_REF##*/} of repo ${{ github.repository }}"
           target: ${{ inputs.target }}
           pull: true
           build-args: ${{ steps.get_build_args.outputs.build_args_str_list }}
@@ -238,7 +229,7 @@ jobs:
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
           labels: |
             org.opencontainers.image.source="https://github.com/${{ github.repository }}"
-            org.opencontainers.image.description="Version ${{ inputs.version }} of repo ${{ github.repository }}"
+            org.opencontainers.image.description="Version ${GITHUB_REF##*/} of repo ${{ github.repository }}"
           target: ${{ inputs.target }}
           pull: true
 
