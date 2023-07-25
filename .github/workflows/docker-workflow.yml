@@ -240,7 +240,9 @@ jobs:
           file: ${{ inputs.docker_file }}
           push: ${{ inputs.deploy }}
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
-          labels: "org.opencontainers.image.source=https://github.com/${{ inputs.github_repo }}"
+          labels: |
+            org.opencontainers.image.source="https://github.com/${{ inputs.github_repo }}"
+            org.opencontainers.image.description="Version ${{ inputs.version }} of repo ${{ inputs.github_repo }}"
           target: ${{ inputs.target }}
           pull: true
 
