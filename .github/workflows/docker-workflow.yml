@@ -196,7 +196,7 @@ jobs:
 
       - name: Set up QEMU for multi platform
         if: ${{ contains(inputs.platforms, 'arm') }}
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v2.2.0
       # https://github.com/docker/setup-buildx-action
 
       - name: Set up Docker Buildx
