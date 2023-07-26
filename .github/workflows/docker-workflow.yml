@@ -242,7 +242,8 @@ jobs:
           file: ${{ inputs.docker_file }}
           push: ${{ inputs.deploy }}
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
-          labels: ${{ steps.get_label_and_outputs_args.outputs.label_args_str_list }}
+          #labels: ${{ steps.get_label_and_outputs_args.outputs.label_args_str_list }}
+          labels: ${{ fromJSON('["org.opencontainers.image.source=https://github.com/MOV-AI/containers-mariana-test","org.opencontainers.image.description=Version v1.11 of repo MOV-AI/containers-mariana-test"]') }}
           outputs: ${{ steps.get_label_and_outputs_args.outputs.outputs_args_str_list }}
           target: ${{ inputs.target }}
           pull: true
