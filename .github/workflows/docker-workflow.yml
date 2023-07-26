@@ -191,10 +191,10 @@ jobs:
         id: get_label_and_outputs_args
         run: |
           LABEL_SRC="org.opencontainers.image.source=https://github.com/${{ github.repository }}"
+          LABEL_DESCRIPTION=""
           OUTPUTS_ARGS_STR_LIST=""
 
           IFS=', ' read -r -a platforms_array <<< "${{ inputs.platforms }}"
-          LABEL_DESCRIPTION=""
           if [ ${#platforms_array[@]} -gt 1 ]; then
             OUTPUTS_ARGS_STR_LIST="type=image,name=target,annotation-index.org.opencontainers.image.description=Version ${{ github.ref_name }} of repo ${{ github.repository }}"
           else
@@ -229,7 +229,9 @@ jobs:
           file: ${{ inputs.docker_file }}
           push: ${{ inputs.deploy }}
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
-          labels: ${{ steps.get_label_and_outputs_args.outputs.label_args_str_list }}
+          labels: |
+            ${{ steps.get_label_and_outputs_args.outputs.label_source }}
+            ${{ steps.get_label_and_outputs_args.outputs.label_description }}
           outputs: ${{ steps.get_label_and_outputs_args.outputs.outputs_args_str_list }}
           target: ${{ inputs.target }}
           pull: true
@@ -244,7 +246,6 @@ jobs:
           file: ${{ inputs.docker_file }}
           push: ${{ inputs.deploy }}
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
-          #labels: ${{ steps.get_label_and_outputs_args.outputs.label_args_str_list }}
           labels: |
             ${{ steps.get_label_and_outputs_args.outputs.label_source }}
             ${{ steps.get_label_and_outputs_args.outputs.label_description }}
