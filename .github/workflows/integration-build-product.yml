@@ -455,7 +455,7 @@ jobs:
             export PATH="$HOME/.local/bin:$PATH"
             python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple movai-package-deployer==${{ env.PACKAGE_DEPLOYER_VERSION }} --ignore-installed
             package-deployer scan
-            package-deployer scanAll
+            package-deployer scanAll --product_name ${{ inputs.product_name }} --product_version $(cat product.version)
             ls -la /tmp
 
             {
@@ -474,7 +474,7 @@ jobs:
           ' || true
             docker cp $container_id:/tmp/deployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-deployable.dploy
             docker cp $container_id:/tmp/undeployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-3rdParty.dploy
-            docker cp $container_id:/tmp/apt_packages.json artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-apt_packages.json
+            docker cp $container_id:/tmp/apt_packages.json artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-$(cat product.version)-apt_packages.json
 
             mkdir -p metadata_artifact tmp_meta
             docker cp $container_id:/tmp/proj_metadata/ ./
