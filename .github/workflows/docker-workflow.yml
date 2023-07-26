@@ -193,7 +193,7 @@ jobs:
           LABEL_ARGS_STR_LIST=org.opencontainers.image.source="https://github.com/${{ github.repository }}"
           OUTPUTS_ARGS_STR_LIST=""
 
-          if [ ${#{{ inputs.platforms }}[@]} > 1 ]; then
+          if [ ${#(${{ inputs.platforms }})[@]} > 1 ]; then
             OUTPUTS_ARGS_STR_LIST=type=image,name=target,annotation-index.org.opencontainers.image.description=Version ${{ github.ref_name }} of repo ${{ github.repository }}
           else
             LABEL_ARGS_STR_LIST="$LABEL_ARGS_STR_LIST,org.opencontainers.image.description=Version ${{ github.ref_name }} of repo ${{ github.repository }}"
