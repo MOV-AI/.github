@@ -60,7 +60,7 @@ on:
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "2.2.0.7"
   MOBTEST_VERSION: "0.0.4.3"
-  PACKAGE_DEPLOYER_VERSION: "1.0.0.26"
+  PACKAGE_DEPLOYER_VERSION: "1.0.0.27"
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
@@ -455,7 +455,7 @@ jobs:
             export PATH="$HOME/.local/bin:$PATH"
             python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple movai-package-deployer==${{ env.PACKAGE_DEPLOYER_VERSION }} --ignore-installed
             package-deployer scan
-            package-deployer scanAll --product_name ${{ inputs.product_name }} --product_version $(cat product.version)
+            package-deployer scanAll --product_name ${{ inputs.product_name }} --distro ${{ matrix.distro }} --product_version $(cat product.version)
             ls -la /tmp
 
             {
