@@ -72,9 +72,9 @@ env:
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
   # slack channel rd-platform
-  #SLACK_CHANNEL: "C02U028NMB7"
+  SLACK_CHANNEL: "C02U028NMB7"
   # development slack channel
-  SLACK_CHANNEL: "C05K2KF1UP8"
+  #SLACK_CHANNEL: "C05K2KF1UP8"
 
 jobs:
   Validate-boostrap-configs:
@@ -2220,7 +2220,7 @@ jobs:
           name: raised_meta
           path: platform_configs
 
-      - name: Publish and create release
+      - name: Copy product configs
         shell: bash
         run: |
           cp ./platform_configs/product.version product.version
@@ -2229,9 +2229,8 @@ jobs:
       - name: Prepare slack variables
         id: pre_slack
         run: |
-          MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version)(Attempt: #${{ github.run_attempt }}) is unstable (or cancelled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is unstable (or cancelled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
-
 
       - name: Slack message
         uses: archive/github-actions-slack@master

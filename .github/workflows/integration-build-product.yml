@@ -748,6 +748,8 @@ jobs:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
     runs-on: integration-pipeline
+    outputs:
+      slack_thread_id: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
     steps:
       - uses: rtCamp/action-cleanup@master
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
@@ -1420,8 +1422,6 @@ jobs:
           TF_VAR_provision_ssh_pem: ${{ secrets.ssh_priv_key }}
           TF_VAR_ip_list: '["dhcp"]'
   
-
-
   publish:
     needs: [Install-Robot, Install-Simulator-Robot, Validation-Simulator-Tests]
     runs-on: integration-pipeline
@@ -1619,34 +1619,48 @@ jobs:
         if: always()
         id: pre_slack
         run: |
-          MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           #echo ::set-output name=msg::$MESSAGE
           echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
 
-      - name: Slack message success
-        uses: slackapi/slack-github-action@v1.23.0
+      - name: Slack message
+        uses: archive/github-actions-slack@master
         with:
-          channel-id: 'C050L85R6VC'
-          slack-message: ${{ steps.pre_slack.outputs.msg }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
-
+          slack-function: update-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-update-message-text: ${{ steps.pre_slack.outputs.msg }}
+          slack-update-message-ts: ${{ needs.Install-Simulator-Robot.outputs.slack_thread_id }}
 
   Run-Status:
     runs-on: ubuntu-20.04
-    needs: [publish]
+    needs: [publish, Validate-boostrap-configs]
     if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled' ) }}
     steps:
+
+      - name: unstash raised_meta
+        uses: actions/download-artifact@v3
+        with:
+          name: raised_meta
+          path: platform_configs
+
+      - name: Copy product configs
+        shell: bash
+        run: |
+          cp ./platform_configs/product.version product.version
+          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
+
       - name: Prepare slack variables
         id: pre_slack
         run: |
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is unstable (or canceled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
 
-      - name: Slack message failure
-        uses: slackapi/slack-github-action@v1.23.0
+      - name: Slack message
+        uses: archive/github-actions-slack@master
         with:
-          channel-id: ${{ env.SLACK_CHANNEL }}
-          slack-message: ${{ steps.pre_slack.outputs.msg_error }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+          slack-function: update-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-update-message-text: ${{ steps.pre_slack.outputs.msg_error }}
+          slack-update-message-ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
