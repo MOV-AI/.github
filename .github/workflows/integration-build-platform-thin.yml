@@ -425,29 +425,26 @@ jobs:
           mkdir -p fleet_qa_artifacts/install
           source ansible-venv/bin/activate
           # install fleet_tests artifacts
-          for fleet_host in "manager" "member1" "member2"; do
+          for fleet_host in "manager" "member0" "member1"; do
             ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u movai-service' > fleet_qa_artifacts/install/$fleet_host.log || true
-          done
-          
-          for fleet_host in "manager" "member1" "member2"; do
-            ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker images --format "{{.Repository}}:{{.Tag}}" | tr ' ' "\n"' > /tmp/image_list.log || true
-            image_list=($(cat /tmp/image_list.log))
+
+            ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker images --format "{{.Repository}}:{{.Tag}}"' > /tmp/image_list.log || true
+            image_list=($(cat /tmp/image_list.log) | tr ' ' "\n")
             
             echo "From $fleet_host:"
             echo "$(ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -a')"
             
             for image in "${image_list[@]}"
             do
-              echo "scanning $image"
-              ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -q -f "ancestor=$image"' > /tmp/container_list.log || true 
+              echo "Collecting logs for $image"
+              ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a "docker ps -q -f \"ancestor=$image\"" > /tmp/container_list.log || true 
               container_ids=($(cat /tmp/container_list.log | tr ' ' "\n"))
               for container_id in "${container_ids[@]}"
               do
                 container_name=$( ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker inspect --format="{{.Name}}" $container_id' )
-                ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker logs "$container_id" ' > "fleet_qa_artifacts/install/$fleet_host-$container_name.log" || true
+                ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a "docker logs \"$container_id\"" > "fleet_qa_artifacts/install/$fleet_host-$container_name.log" || true
               done
             done
-
           done
 
           deactivate
