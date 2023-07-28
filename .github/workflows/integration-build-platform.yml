@@ -2214,6 +2214,18 @@ jobs:
     needs: [publish, Validate-boostrap-configs]
     if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled' ) }}
     steps:
+      - name: unstash raised_meta
+        uses: actions/download-artifact@v3
+        with:
+          name: raised_meta
+          path: platform_configs
+
+      - name: Publish and create release
+        shell: bash
+        run: |
+          cp ./platform_configs/product.version product.version
+          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
+  
       - name: Prepare slack variables
         id: pre_slack
         run: |
