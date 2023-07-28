@@ -434,7 +434,6 @@ jobs:
             echo "$(tail -n +2 fleet_qa_artifacts/install/$fleet_host-docker_ps.log )"
 
             ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u docker --boot --lines=all' > fleet_qa_artifacts/install/$fleet_host-all-docker.log || true
-
           done
 
           deactivate
@@ -471,3 +470,12 @@ jobs:
           TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
           TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
           TF_VAR_ip_list: ${{ inputs.fleet_ips }}
+
+  slack-failure:
+    runs-on: ubuntu-20.04
+    needs: [Fleet-Validations]
+    if: ${{ always()}}
+    steps:
+      - name: Quack
+        shell: bash
+        run: echo "${{needs.Fleet-Validations.result }}"
