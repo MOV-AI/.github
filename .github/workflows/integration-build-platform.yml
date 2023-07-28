@@ -705,7 +705,7 @@ jobs:
           for image in "${used_images[@]}"
           do
             image_short_name=$(grep -oP "(?<=/$ENV/).*?(?=:)" <<< "$image" || grep -oP "(?<=/devops/).*?(?=:)" <<< "$image" || true)
-            if [[ "$image_short_name" =~ .*"backend".* || "$image_short_name" =~ .*"spawner".* || "$image_short_name" =~ .*"redis"*.* || "$image_short_name" =~ .*"health-node".* ]];
+            if [[ "$image_short_name" =~ .*"backend".* || "$image_short_name" =~ .*"spawner".* || "$image_short_name" =~ .*"redis"*.* || "$image_short_name" =~ .*"health-node".* || "" =~ .*"message-server*.*" ]];
             then
               echo "scanning $image"
               container_ids=($(docker ps -q -f "ancestor=$image" | tr ' ' "\n"))
@@ -1508,6 +1508,28 @@ jobs:
           for fleet_host in "manager" "member1" "member2"; do
             ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u movai-service' > fleet_qa_artifacts/install/$fleet_host.log || true
           done
+          
+          for fleet_host in "manager" "member1" "member2"; do
+            ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker images --format "{{.Repository}}:{{.Tag}}" | tr ' ' "\n"' > /tmp/image_list.log || true
+            image_list=($(cat /tmp/image_list.log))
+            
+            echo "From $fleet_host:"
+            echo "$(ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -a')"
+            
+            for image in "${image_list[@]}"
+            do
+              echo "scanning $image"
+              ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -q -f "ancestor=$image"' > /tmp/container_list.log || true 
+              container_ids=($(cat /tmp/container_list.log | tr ' ' "\n"))
+              for container_id in "${container_ids[@]}"
+              do
+                container_name=$( ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker inspect --format="{{.Name}}" $container_id' )
+                ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker logs "$container_id" ' > "fleet_qa_artifacts/install/$fleet_host-$container_name.log" || true
+              done
+            done
+
+          done
+
           deactivate
 
       - name: Stash Fleet QA artifacts
