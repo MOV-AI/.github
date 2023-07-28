@@ -506,7 +506,7 @@ jobs:
           slack-channel: ${{ env.SLACK_CHANNEL }}
           slack-text: ${{ steps.pre_slack_result.outputs.msg }}
           slack-optional-thread_ts: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
-
+          
       - name: Slack message failure
         uses: archive/github-actions-slack@master
         if: failure()
@@ -1640,7 +1640,7 @@ jobs:
       - name: Prepare slack variables
         id: pre_slack
         run: |
-          MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is unstable (or canceled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is unstable (or canceled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
 
       - name: Slack message failure
