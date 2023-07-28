@@ -1635,7 +1635,7 @@ jobs:
   Run-Status:
     runs-on: ubuntu-20.04
     needs: [publish, Validate-boostrap-configs]
-    if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled' ) }}
+    if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled' || needs.publish.result == 'skipped' ) }}
     steps:
 
       - name: unstash raised_meta
