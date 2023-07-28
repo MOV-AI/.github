@@ -71,6 +71,7 @@ env:
   XRAY_SECRET: ${{ secrets.xray_secret}}
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
+  SLACK_CHANNEL: "C05K2KF1UP8"
 
 jobs:
   Validate-boostrap-configs:
@@ -151,7 +152,7 @@ jobs:
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: C02U028NMB7
+          slack-channel: C05K2KF1UP8
           slack-text: ${{ steps.pre_slack.outputs.msg }}
 
       - name: Stash raised_meta
@@ -403,7 +404,7 @@ jobs:
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: "C02U028NMB7"
+          slack-channel: ${{ env.SLACK_CHANNEL }}
           slack-text: ${{ steps.pre_slack_result.outputs.msg }}
           slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
 
@@ -413,7 +414,7 @@ jobs:
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: "C02U028NMB7"
+          slack-channel: ${{ env.SLACK_CHANNEL }}
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
           slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
 
@@ -429,7 +430,7 @@ jobs:
             ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u movai-service' > fleet_qa_artifacts/install/$fleet_host.log || true
 
             ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker images --format "{{.Repository}}:{{.Tag}}"' > /tmp/image_list.log || true
-            image_list=($(cat /tmp/image_list.log) | tr ' ' "\n")
+            image_list=($(cat /tmp/image_list.log | tr ' ' "\n") )
             
             echo "From $fleet_host:"
             echo "$(ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -a')"
