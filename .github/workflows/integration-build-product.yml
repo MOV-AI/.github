@@ -65,6 +65,7 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   REGISTRY: registry.hel.mov.ai
+  PT_REGISTRY: registry.lis.mov.ai
   PUSH_REGISTRY: registry.cloud.mov.ai
   USERSPACE_FOLDER_PATH: userspace
   REMOTE_WORKSPACE_PATH: workspace
@@ -1148,7 +1149,12 @@ jobs:
       - name: Remote - Login to Private Registry
         if: ${{ inputs.with_simulation_tests }}
         shell: bash
-        run: ssh robot "docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}"
+        run: |
+          ssh robot '
+            docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+            docker login ${{ env.PT_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+            
+            '
 
       - name: Remote - Docker load spawner image
         if: ${{ inputs.with_simulation_tests }}
@@ -1156,8 +1162,8 @@ jobs:
         run: |
           ssh robot '
             set -e
-            docker pull "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}"
-            docker tag "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}"
+            docker pull "${{ env.PT_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}"
+            docker tag "${{ env.PT_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}"
           '
 
       - name: Remote - Docker load simulator image
