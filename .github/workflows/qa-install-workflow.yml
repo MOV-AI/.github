@@ -204,7 +204,7 @@ jobs:
           echo "msg_error=$MESSAGE_ERR" >> $GITHUB_OUTPUT
 
       - name: Slack message success
-        if: ${{ inputs.nightly && success() }}
+        if: ${{ inputs.nightly && ( needs.Validate-features.result == 'success' && needs.Run-Tests.result == 'success' ) }}
         uses: slackapi/slack-github-action@v1.23.0
         with:
           channel-id: 'C03UR8XKNBB'
@@ -213,7 +213,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Slack message failure
-        if: ${{ inputs.nightly && failure() }}
+        if: ${{ inputs.nightly && ( needs.Validate-features.result == 'failure' || needs.Run-Tests.result == 'failure' ) }}
         uses: slackapi/slack-github-action@v1.23.0
         with:
           channel-id: 'C03UR8XKNBB'
