@@ -13,6 +13,8 @@ on:
     secrets:
       gh_token:
         required: true
+      sonar_token:
+        required: true
       slack_token_id:
         required: true
       jira_username:
