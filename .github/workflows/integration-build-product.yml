@@ -1249,7 +1249,7 @@ jobs:
           ssh robot '
           set -e
 
-          export DISPLAY="$(w -hs | grep GNOME |awk '{print $3}')"
+          export DISPLAY="$(w -hs | grep gdm-x-session | grep ':' | awk '{print $3}')"
           echo "Display detected is $DISPLAY"
 
           cd ${{ env.REMOTE_WORKSPACE_PATH }}
@@ -1296,7 +1296,7 @@ jobs:
           ssh robot '
             set -e
 
-            export DISPLAY="$(w -hs | grep GNOME |awk '{print $3}')"
+            export DISPLAY="$(w -hs | grep gdm-x-session | grep ':' | awk '{print $3}')"
             echo "Display detected is $DISPLAY"
             xhost +local:docker
 
