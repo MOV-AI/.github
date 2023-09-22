@@ -1249,7 +1249,7 @@ jobs:
           ssh robot '
           set -e
 
-          export DISPLAY: ":0"
+          export DISPLAY=":0"
 
           cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
@@ -1269,7 +1269,6 @@ jobs:
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
           export PUBLIC_IP=$(hostname -I | awk "{print $1}")
           export SIMULATION_ID="CI"
-          export DISPLAY=":1"
           rm -rf userspace
 
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
@@ -1296,7 +1295,7 @@ jobs:
           ssh robot '
             set -e
 
-            export DISPLAY: ":0"
+            export DISPLAY=":0"
             xhost +local:docker
 
             cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.simulator_tests_setup.outputs.target_dir }}
