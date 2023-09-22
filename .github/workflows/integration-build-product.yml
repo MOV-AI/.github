@@ -1249,7 +1249,8 @@ jobs:
           ssh robot '
           set -e
 
-          export DISPLAY=":0"
+          export DISPLAY="$(w -hs | grep GNOME |awk '{print $3}')"
+          echo "Display detected is $DISPLAY"
 
           cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
@@ -1295,7 +1296,8 @@ jobs:
           ssh robot '
             set -e
 
-            export DISPLAY=":0"
+            export DISPLAY="$(w -hs | grep GNOME |awk '{print $3}')"
+            echo "Display detected is $DISPLAY"
             xhost +local:docker
 
             cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.simulator_tests_setup.outputs.target_dir }}
