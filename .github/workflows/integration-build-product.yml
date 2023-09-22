@@ -1248,6 +1248,9 @@ jobs:
         run: |
           ssh robot '
           set -e
+
+          export DISPLAY: ":0"
+
           cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
           for robot in $(movai-cli robots list); do
@@ -1292,6 +1295,10 @@ jobs:
         run: |
           ssh robot '
             set -e
+
+            export DISPLAY: ":0"
+            xhost +local:docker
+
             cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.simulator_tests_setup.outputs.target_dir }}
 
             # install test dependencies on host
