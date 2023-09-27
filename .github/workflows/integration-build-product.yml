@@ -171,7 +171,7 @@ jobs:
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: C050L85R6VC
+          slack-channel: ${{ env.SLACK_CHANNEL }}
           slack-text: ${{ steps.pre_slack.outputs.msg }}
 
       - name: Stash raised_meta
@@ -245,7 +245,7 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.PUSH_REGISTRY }}
 
-      - name: Login to ${{ env.PUSH_REGISTRY }} Registry
+      - name: Login to ${{ env.MID_REGISTRY }} Registry
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
@@ -381,13 +381,20 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.PUSH_REGISTRY }}
 
+      - name: Login to ${{ env.MID_REGISTRY }} Registry
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.MID_REGISTRY }}
+
       - name: Docker load spawner image
         shell: bash
         run: |
-          docker pull "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-          docker tag "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-          docker tag "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-          
+          docker pull "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+
       - name: Installation
         shell: bash
         run: |
@@ -560,7 +567,7 @@ jobs:
     env:
       DISTRO: noetic
     outputs:
-      image_name: "${{ steps.pre_simulator_build.outputs.image_name }}"
+      image_name: "${{ steps.pre_build.outputs.push_name }}"
       skip_simulator: "${{ steps.pre_simulator_build.outputs.skip_simulator_build }}"
       simulator_tests_agent_name: "${{ steps.post_simulator_build.outputs.simul_tests_infra }}"
       slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
@@ -648,29 +655,21 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.PUSH_REGISTRY }}
 
+      - name: Login to ${{ env.MID_REGISTRY }} Registry
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.MID_REGISTRY }}
+
       - name: Prepare docker build variables
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
         id: pre_build
         run: |
-          push_name_tmp=$(echo "${{ steps.pre_simulator_build.outputs.image_name }}" | sed "s-${{ env.REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
-          #echo ::set-output name=base_name::$(cat simulator_artifacts/simulator_base.ci)
-          #echo ::set-output name=push_name::$push_name
+          push_name_tmp=$(echo "${{ steps.pre_simulator_build.outputs.image_name }}" | sed "s-${{ env.REGISTRY }}-${{ env.MID_REGISTRY }}-g")
           echo "base_name=$(cat simulator_artifacts/simulator_base.ci)" >> $GITHUB_OUTPUT
           echo "push_name=$push_name_tmp" >> $GITHUB_OUTPUT
-
-      # - name: Build with args and push
-      #   if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true'}}
-      #   uses: docker/build-push-action@v3
-      #   with:
-      #     context: .
-      #     platforms: linux/amd64
-      #     file: docker/${{ env.DISTRO }}/Dockerfile-simulator
-      #     push: true
-      #     tags: ${{ steps.pre_simulator_build.outputs.image_name }}
-      #     pull: true
-      #     build-args: |
-      #       BASE_IMAGE=${{ steps.pre_build.outputs.base_name }}
-      #       CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -815,19 +814,26 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.PUSH_REGISTRY }}
 
+      - name: Login to ${{ env.MID_REGISTRY }} Registry
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.MID_REGISTRY }}
+
       - name: Docker load spawner image
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         shell: bash
         run: |
-          docker pull "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-          docker tag "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-          docker tag "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+          docker pull "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
 
       - name: Docker load simulator image
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         shell: bash
         run: |
-          promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g")
+          promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.MID_REGISTRY }}-${{ env.REGISTRY }}-g")
 
           docker pull "${{ needs.Build-Simulator.outputs.image_name }}"
           docker tag "${{ needs.Build-Simulator.outputs.image_name }}" $promoted_name
@@ -1156,7 +1162,7 @@ jobs:
         shell: bash
         run: |
           ssh robot '
-            docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+            docker login ${{ env.MID_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
           '
 
       - name: Remote - Docker load spawner image
@@ -1165,8 +1171,8 @@ jobs:
         run: |
           ssh robot '
             set -e
-            docker pull "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}"
-            docker tag "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}"
+            docker pull "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}"
+            docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}"
           '
 
       - name: Remote - Docker load simulator image
@@ -1175,7 +1181,7 @@ jobs:
         run: |
           ssh robot '
             set -e
-            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g")
+            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.MID_REGISTRY }}-${{ env.REGISTRY }}-g")
             docker pull "${{ needs.Build-Simulator.outputs.image_name }}" || true
             docker tag "${{ needs.Build-Simulator.outputs.image_name }}" $promoted_name || true
           '
@@ -1504,12 +1510,12 @@ jobs:
         shell: bash
         run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
-      - name: Login to ${{ env.REGISTRY }} Registry
+      - name: Login to ${{ env.MID_REGISTRY }} Registry
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ env.MID_REGISTRY }}
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
         uses: docker/login-action@v2
@@ -1562,7 +1568,7 @@ jobs:
 
           for image in "${images[@]}"
           do
-            source=$(echo $image | sed "s-/qa/-/ci/-g" )
+            source=$(echo $image | sed "s-/qa/-/ci/-g" |  sed "s-${{ env.PUSH_REGISTRY }}-${{ env.MID_REGISTRY }}-g" )
             target=$image
             docker pull $source
             echo "tagging $source as $target"
