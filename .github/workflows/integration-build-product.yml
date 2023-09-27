@@ -76,9 +76,9 @@ env:
   PROVISION_INFRA_REPO: "devops-tf-proxmox-fleet"
   PROVISION_INFRA_VERSION: "0.1.0-7"
   # slack channel movai-projects
-  SLACK_CHANNEL: "C050L85R6VC"
+  #SLACK_CHANNEL: "C050L85R6VC"
   # development slack channel
-  # SLACK_CHANNEL: "C05K2KF1UP8"
+  SLACK_CHANNEL: "C05K2KF1UP8"
 
 jobs:
   Validate-boostrap-configs:
