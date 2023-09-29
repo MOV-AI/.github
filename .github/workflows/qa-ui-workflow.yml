@@ -60,6 +60,8 @@ jobs:
   Run-tests:
     runs-on: integration-pipeline
     steps:
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
 
       - name: Checkout
         uses: actions/checkout@v3
@@ -152,7 +154,6 @@ jobs:
         shell: bash
         run: |
           export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
-          
 
           # activate venv
           . venv/bin/activate

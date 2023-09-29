@@ -71,6 +71,8 @@ jobs:
   Run-Tests:
     runs-on: integration-pipeline
     steps:
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
 
       - name: Checkout
         uses: actions/checkout@v3
