@@ -1327,6 +1327,7 @@ jobs:
             pytest \
               -s \
               -ra \
+              -m ci \
               --movai-user ${{ steps.install.outputs.movai_user }} \
               --movai-pw ${{ steps.install.outputs.movai_pwd }} \
               --tb=short
