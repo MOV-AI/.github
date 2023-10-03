@@ -8,13 +8,21 @@ on:
       aws_cluster_name:
         required: true
         type: string
-    
+      deployment_slack_channel:
+        required: false
+        type: string
+        default: 'C05UYMX2U0K'
+      aws_region:
+        required: true
+        type: string
     secrets:
       auto_commit_user:
         required: true
       auto_commit_mail:
         required: true
       auto_commit_pwd:
+        required: true
+      slack_token_id:
         required: true
       registry_user:
         required: true
@@ -25,8 +33,6 @@ on:
       aws_access_key_id:
         required: true
       aws_secret_access_key:
-        required: true
-      aws_region:
         required: true
 
 
@@ -40,7 +46,7 @@ jobs:
   DeployHelmChart :
     runs-on: ubuntu-20.04
     container:
-      image: registry.cloud.mov.ai/qa/tf-buildserver:v1.0.4
+      image: registry.cloud.mov.ai/qa/tf-buildserver:v1.0.7
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -78,6 +84,7 @@ jobs:
   
       - name: Commit raise version
         id: raise
+        if: ${{ inputs.promotion == false }}
         run: |
           git config --global user.name '${{ secrets.auto_commit_user }}'
           git config --global user.email '${{ secrets.auto_commit_mail }}'
@@ -87,12 +94,14 @@ jobs:
           git commit -m "[skip actions] Automatic Bump of build version"
   
       - name: Prepare raise variables
+        if: ${{ inputs.promotion == false }}
         id: pre_raise
         run: |
           echo ::set-output name=branch::${GITHUB_REF#refs/heads/}
           
       - name: Raise App version
         uses: CasperWA/push-protected@v2
+        if: ${{ inputs.promotion == false }}
         with:
           token: ${{ secrets.auto_commit_pwd }}
           branch: ${{ steps.pre_raise.outputs.branch }}
@@ -100,12 +109,14 @@ jobs:
       
       - name: Commit info
         id: commit
+        if: ${{ inputs.promotion == false }}
         shell: bash
         run: |
           commit_hash=$(git log --format="%H" -n 1)
           echo ::set-output name=commit_id::$commit_hash
           
       - name: Create Github Release
+        if: ${{ inputs.promotion == false }}
         uses: softprops/action-gh-release@v1
         with:
           name: "Deployment ${{ steps.vars-after-raise.outputs.pkg_version }}"
@@ -116,3 +127,43 @@ jobs:
           prerelease: true
           generate_release_notes: true
 
+      
+      - name: Get current job id
+        if: always()
+        shell: bash
+        id: job_info
+        run: |
+          sudo apt install jq -y
+          job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
+          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
+          echo "$job_id"
+          echo "$job_html_url"
+          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+      - name: Prepare slack variables
+        if: always()
+        id: pre_slack_result
+        run: |
+          MESSAGE=":white_check_mark: UI tests (Attempt: #${{ github.run_attempt }}) job passed"
+          MESSAGE_ERR=":x: UI tests (Attempt: #${{ github.run_attempt }}) job failed"
+          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+
+      - name: Slack message success
+        uses: archive/github-actions-slack@master
+        with:
+          slack-function: send-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ inputs.deployment_slack_channel }}
+          slack-text: ${{ steps.pre_slack_result.outputs.msg }}
+
+      - name: Slack message failure
+        uses: archive/github-actions-slack@master
+        if: failure()
+        with:
+          slack-function: send-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ inputs.deployment_slack_channel }}
+          slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
