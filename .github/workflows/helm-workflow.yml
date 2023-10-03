@@ -5,6 +5,9 @@ on:
       promotion:
         required: true
         type: boolean
+      deployment_app_name:
+        required: true
+        type: string
       aws_cluster_name:
         required: true
         type: string
@@ -119,7 +122,7 @@ jobs:
         if: ${{ inputs.promotion == false }}
         uses: softprops/action-gh-release@v1
         with:
-          name: "Deployment ${{ steps.vars-after-raise.outputs.pkg_version }}"
+          name: "Deployment of ${{ steps.vars-after-raise.outputs.pkg_version }} of ${{ inputs.deployment_app_name }}"
           body: "Please add release notes"
           tag_name: ${{ steps.vars-after-raise.outputs.pkg_version }}
           target_commitish: ${{ steps.commit.outputs.commit_id }}
@@ -133,7 +136,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -146,8 +148,8 @@ jobs:
         if: always()
         id: pre_slack_result
         run: |
-          MESSAGE=":white_check_mark: UI tests (Attempt: #${{ github.run_attempt }}) job passed"
-          MESSAGE_ERR=":x: UI tests (Attempt: #${{ github.run_attempt }}) job failed"
+          MESSAGE=":white_check_mark: Deployment of ${{ inputs.deployment_app_name }} successfull (Attempt: #${{ github.run_attempt }})"
+          MESSAGE_ERR=":x: Deployment of ${{ inputs.deployment_app_name }} failed (Attempt: #${{ github.run_attempt }})"
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
           echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
