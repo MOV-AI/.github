@@ -127,7 +127,7 @@ jobs:
         id: create_gh_release
         uses: softprops/action-gh-release@v1
         with:
-          name: "Deployment of ${{ steps.vars-after-raise.outputs.pkg_version }} of ${{ inputs.deployment_app_name }}"
+          name: "Deployment ${{ steps.vars-after-raise.outputs.pkg_version }} of ${{ inputs.deployment_app_name }}"
           body: "Please add release notes"
           tag_name: ${{ steps.vars-after-raise.outputs.pkg_version }}
           target_commitish: ${{ steps.commit.outputs.commit_id }}
