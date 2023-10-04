@@ -42,7 +42,7 @@ on:
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_access_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_access_key }}
-  AWS_DEFAULT_REGION: ${{ secrets.aws_region }}
+  AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
 
 jobs:
 
