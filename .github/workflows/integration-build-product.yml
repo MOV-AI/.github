@@ -1130,9 +1130,10 @@ jobs:
           TF_VAR_fleet_hosts_user: "devops"
           TF_VAR_template_name: "u22dci-gpu"
           TF_VAR_fleet_manager_name: ${{ steps.infra_names.outputs.simul_prefix }}
-          TF_VAR_fleet_manager_memory: 30000
-          TF_VAR_fleet_manager_cores: 10
+          TF_VAR_fleet_manager_memory: 51200
+          TF_VAR_fleet_manager_cores: 14
           TF_VAR_fleet_manager_disk_size: "110G"
+          TF_VAR_fleet_manager_balloon: 0
 
       - name: Gather Terraform outputs
         if: ${{ inputs.with_simulation_tests }}
