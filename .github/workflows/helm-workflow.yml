@@ -67,6 +67,8 @@ jobs:
       - name: Deploy Helm Chart
         shell: bash
         run: ./deploy.bash
+        env:
+          IS_PROMOTION: ${{ inputs.promotion }}
 
       - name: Find Package details
         id: vars
