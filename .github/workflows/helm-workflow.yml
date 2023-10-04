@@ -71,6 +71,7 @@ jobs:
           IS_PROMOTION: ${{ inputs.promotion }}
 
       - name: Find Package details
+        if: ${{ inputs.promotion == false }}
         id: vars
         run: |
           git config --global --add safe.directory $(pwd)
@@ -80,6 +81,7 @@ jobs:
           echo "pkg_version=${PACKAGE_VERSION}" >> $GITHUB_OUTPUT
   
       - name: Raise Version
+        if: ${{ inputs.promotion == false }}
         id: vars-after-raise
         run: |
           PACKAGE_VERSION=${{ steps.vars.outputs.pkg_version }}
