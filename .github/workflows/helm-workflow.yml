@@ -148,12 +148,12 @@ jobs:
         if: always()
         id: pre_slack_result
         run: |
-          if [ "${{ inputs.promotion }}" == "true" ] ; then
+          if [ "${{ inputs.promotion }}" == "false" ] ; then
             MESSAGE=":white_check_mark: Deployment of ${{ inputs.deployment_app_name }} successfull (Attempt: #${{ github.run_attempt }})"
             MESSAGE_ERR=":x: Deployment of ${{ inputs.deployment_app_name }} failed (Attempt: #${{ github.run_attempt }})"
           else
-            MESSAGE=":white_check_mark: (Promoting to production) Deployment of ${{ inputs.deployment_app_name }} successfull (Attempt: #${{ github.run_attempt }})"
-            MESSAGE_ERR=":x: (Promoting to production) Deployment of ${{ inputs.deployment_app_name }} failed (Attempt: #${{ github.run_attempt }})"
+            MESSAGE=":white_check_mark: (Promoting to production) Deployment of ${{ inputs.deployment_app_name }} version:$(cat version) successfull (Attempt: #${{ github.run_attempt }})"
+            MESSAGE_ERR=":x: (Promoting to production) Deployment of ${{ inputs.deployment_app_name }} version:$(cat version) failed (Attempt: #${{ github.run_attempt }})"
           fi
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
           echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
