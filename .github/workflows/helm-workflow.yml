@@ -74,7 +74,7 @@ jobs:
         id: vars
         run: |
           PACKAGE_VERSION=$(cat version)
-          echo ::set-output name=pkg_version::$PACKAGE_VERSION
+          echo "pkg_version=${PACKAGE_VERSION}" >> $GITHUB_OUTPUT
   
       - name: Raise Version
         id: vars-after-raise
@@ -85,7 +85,7 @@ jobs:
           raised_buildid=$(($build_id+1))
           RAISED_PACKAGE_VERSION="$main_version-$raised_buildid"
           echo $RAISED_PACKAGE_VERSION>version
-          echo ::set-output name=pkg_version::$RAISED_PACKAGE_VERSION
+          echo "pkg_version=${RAISED_PACKAGE_VERSION}" >> $GITHUB_OUTPUT
   
       - name: Commit raise version
         id: raise
@@ -103,7 +103,7 @@ jobs:
         if: ${{ inputs.promotion == false }}
         id: pre_raise
         run: |
-          echo ::set-output name=branch::${GITHUB_REF#refs/heads/}
+          echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
           
       - name: Raise App version
         uses: CasperWA/push-protected@v2
@@ -119,10 +119,12 @@ jobs:
         shell: bash
         run: |
           commit_hash=$(git log --format="%H" -n 1)
-          echo ::set-output name=commit_id::$commit_hash
+          echo "commit_id=${commit_hash}" >> $GITHUB_OUTPUT
+          
           
       - name: Create Github Release
         if: ${{ inputs.promotion == false }}
+        id: create_gh_release
         uses: softprops/action-gh-release@v1
         with:
           name: "Deployment of ${{ steps.vars-after-raise.outputs.pkg_version }} of ${{ inputs.deployment_app_name }}"
@@ -152,7 +154,7 @@ jobs:
         id: pre_slack_result
         run: |
           if [ "${{ inputs.promotion }}" == "false" ] ; then
-            MESSAGE=":white_check_mark: Deployment of ${{ inputs.deployment_app_name }} successfull (Attempt: #${{ github.run_attempt }})"
+            MESSAGE=":white_check_mark: Deployment of ${{ inputs.deployment_app_name }} version:$(cat version) successfull (Attempt: #${{ github.run_attempt }}) \n Check deployment notes: ${{ steps.create_gh_release.outputs.url }}"
             MESSAGE_ERR=":x: Deployment of ${{ inputs.deployment_app_name }} failed (Attempt: #${{ github.run_attempt }})"
           else
             MESSAGE=":white_check_mark: (Promoting to production) Deployment of ${{ inputs.deployment_app_name }} version:$(cat version) successfull (Attempt: #${{ github.run_attempt }})"
