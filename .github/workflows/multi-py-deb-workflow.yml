@@ -677,12 +677,12 @@ jobs:
               fi
             done
 
-      - name: Publish to Nexus yum-testing (new Nexus)
+      - name: Publish to Nexus yum-integration (new Nexus)
         if: ${{ inputs.rpm_build == 'true' }}
         shell: bash
         run: |
             NEXUS_ENDPOINT="artifacts.aws.cloud.mov.ai"
-            NEXUS_REPO="yum-testing"
+            NEXUS_REPO="yum-integration"
 
             cd artifacts
             for file in $(find -name "*.rpm" -not -name "*src*" -printf '%f\n')
