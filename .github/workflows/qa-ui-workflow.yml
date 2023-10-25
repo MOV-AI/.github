@@ -229,6 +229,7 @@ jobs:
         with:
           name: qa_artifacts_ui_tests
           path: qa_artifacts/*
+          retention-days: 3
 
       - name: Remove robots
         if: always()

@@ -218,6 +218,7 @@ jobs:
       with:
         name: packages
         path: dist/*
+        retention-days: 5
 
     - name: Publish package to TestPyPI Experimental
       uses: pypa/gh-action-pypi-publish@release/v1
@@ -294,6 +295,7 @@ jobs:
       with:
         name: packages
         path: dist/*
+        retention-days: 5
 
     - name: Publish package to ${{ matrix.publish_repo }}
       uses: pypa/gh-action-pypi-publish@release/v1

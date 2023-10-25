@@ -222,6 +222,7 @@ jobs:
       with:
         name: packages
         path: dist/*
+        retention-days: 5
 
     - name: Publish package to TestPyPI Experimental
       uses: pypa/gh-action-pypi-publish@release/v1
@@ -286,6 +287,7 @@ jobs:
       with:
         name: artifacts
         path: artifacts/*.deb
+        retention-days: 5
 
   Publish:
     needs: [Debian-Pack]
@@ -443,12 +445,14 @@ jobs:
       with:
         name: packages
         path: dist/*
+        retention-days: 5
 
     - name: Archive debian artifact
       uses: actions/upload-artifact@v3
       with:
         name: artifacts
         path: artifacts/*.deb
+        retention-days: 5
 
     - name: Publish package to prod PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
