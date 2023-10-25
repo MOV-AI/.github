@@ -166,6 +166,7 @@ jobs:
       with:
         name: packages
         path: artifacts/*
+        retention-days: 5
 
 
   Publish:

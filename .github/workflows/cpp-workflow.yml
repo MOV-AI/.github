@@ -147,6 +147,7 @@ jobs:
       with:
         name: packages
         path: ${{ matrix.sub_component }}/artifacts/*
+        retention-days: 5
 
     - name: Print generated packages
       run: ls -la artifacts

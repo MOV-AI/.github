@@ -179,6 +179,7 @@ jobs:
         with:
           name: sim_configs
           path: simulator_artifacts/*
+          retention-days: 5
 
       - name: raise
         run: |
@@ -215,6 +216,7 @@ jobs:
         with:
           name: raised_meta
           path: platform_configs/*
+          retention-days: 5
 
   Build-Spawner:
     needs: [Validate-boostrap-configs]
@@ -259,6 +261,7 @@ jobs:
         with:
           name: manifest
           path: product-manifest.yaml
+          retention-days: 5
 
       - name: Lint docker image
         shell: bash
@@ -309,6 +312,7 @@ jobs:
         with:
           name: manifest
           path: dependency_version
+          retention-days: 10
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -374,6 +378,7 @@ jobs:
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: "*.json*"
+          retention-days: 10
 
       - name: Docker cleanups
         if: always()
@@ -488,6 +493,7 @@ jobs:
         with:
           name: install_logs
           path: install_logs/*
+          retention-days: 5
 
       - name: Run mobtest
         shell: bash
@@ -617,12 +623,14 @@ jobs:
         with:
           name: project_metadata
           path: metadata_artifact/*
+          retention-days: 3
 
       - name: Stash deploy_artifacts_noetic
         uses: actions/upload-artifact@v3
         with:
           name: deploy_artifacts_noetic
           path: artifacts/*
+          retention-days: 5
 
       - name: Remove robots
         if: always()
@@ -962,6 +970,7 @@ jobs:
         with:
           name: install_simulator_logs
           path: install_logs/*
+          retention-days: 5
 
       - name: Run mobtest
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
@@ -1039,6 +1048,7 @@ jobs:
         with:
           name: deploy_simulator_artifacts
           path: simulator.image.artifact
+          retention-days: 5
 
       - name: Remove robots
         if: always()
@@ -1498,6 +1508,7 @@ jobs:
         with:
           name: qa_artifacts_simulator_tests
           path: qa_artifacts/*
+          retention-days: 5
 
       - name: Teardown ssh setup
         shell: bash

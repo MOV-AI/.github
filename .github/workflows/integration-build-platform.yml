@@ -126,12 +126,14 @@ jobs:
         with:
           name: robot_configs
           path: "*.json*"
+          retention-days: 5
 
       - name: Stash sim_configs
         uses: actions/upload-artifact@v3
         with:
           name: sim_configs
           path: simulator_artifacts/*
+          retention-days: 5
 
       - name: raise
         run: |
@@ -163,6 +165,7 @@ jobs:
         with:
           name: raised_meta
           path: platform_configs/*
+          retention-days: 5
 
   Standalone-Validations:
     runs-on: ubuntu-20.04
@@ -463,6 +466,7 @@ jobs:
         with:
           name: qa_artifacts_ui_tests
           path: qa_artifacts/*
+          retention-days: 5
 
       - name: Remove robots
         if: always()
@@ -722,6 +726,7 @@ jobs:
         with:
           name: qa_artifacts_install_tests
           path: qa_artifacts/*
+          retention-days: 5
 
       - name: Collect Installed components
         shell: bash
@@ -766,6 +771,7 @@ jobs:
         with:
           name: deploy_artifacts_noetic
           path: artifacts/*.dploy
+          retention-days: 5
 
       - name: Stash QA artifacts
         if: always()
@@ -1002,6 +1008,7 @@ jobs:
         with:
           name: qa_artifacts_api_tests
           path: qa_artifacts/*
+          retention-days: 5
 
       - name: Remove robots
         if: always()
@@ -1250,6 +1257,7 @@ jobs:
         with:
           name: qa_artifacts_flow_tests
           path: qa_artifacts/*
+          retention-days: 5
 
       - name: Remove robots
         if: always()
@@ -1322,6 +1330,7 @@ jobs:
         with:
           name: ci_infra_artifacts
           path: aws_artifacts/*
+          retention-days: 5
 
       - name: Install terraform
         shell: bash
@@ -1560,6 +1569,7 @@ jobs:
         with:
           name: fleet_qa_artifacts
           path: ${{ steps.ansible_install_setup.outputs.target_dir }}/fleet_qa_artifacts/*
+          retention-days: 10
 
       - name: Teardown remote vms (AWS)
         if: ${{ false }}
@@ -1741,6 +1751,7 @@ jobs:
         with:
           name: deploy_simulator_artifacts
           path: simulator.image.artifact
+          retention-days: 5
 
       - name: Docker cleanups
         if: always()
@@ -1985,6 +1996,7 @@ jobs:
         with:
           name: qa_artifacts_simulator_tests
           path: qa_artifacts/*
+          retention-days: 5
 
       - name: Collect Installed components
         shell: bash
@@ -2029,6 +2041,7 @@ jobs:
         with:
           name: deploy_artifacts_simulator_noetic
           path: artifacts/*.dploy
+          retention-days: 5
 
       - name: Remove robots
         if: always()
