@@ -400,7 +400,7 @@ jobs:
         echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
     - name: Raise App version
-      uses: CasperWA/push-protected@v2
+      uses: CasperWA/push-protected@v2.14.0
       with:
         token: ${{ secrets.auto_commit_pwd }}
         branch: ${{ steps.pre_raise.outputs.branch }}
