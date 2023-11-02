@@ -48,7 +48,6 @@ on:
         required: false
         type: boolean
         default: false
-  
 
     secrets:
       auto_commit_user:
@@ -117,11 +116,11 @@ jobs:
     steps:
       - name: Checkout
         if: ${{ inputs.is_nightly_run == false }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.1.1
 
       - name: Nightly Checkout
         if: ${{ inputs.is_nightly_run }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.1.1
         with:
           ref: ${{ inputs.nightly_run_branch }}
 
@@ -195,7 +194,7 @@ jobs:
         shell: bash
         run: |
           MESSAGE="CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version)(Attempt: #${{ github.run_attempt }}) is starting to be validated :construction: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          
+
           if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
             MESSAGE="NIGHTLY: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is starting to be validated :construction: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           fi
@@ -230,7 +229,7 @@ jobs:
     steps:
       - uses: rtCamp/action-cleanup@master
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
 
       - name: Agent info
         run: |
@@ -290,7 +289,7 @@ jobs:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
           registry: ${{ env.MID_REGISTRY }}
-  
+
       - name: Prepare docker build variables
         id: pre_build
         shell: bash
@@ -398,7 +397,7 @@ jobs:
       - uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
 
       - name: Agent info
         run: |
@@ -665,7 +664,7 @@ jobs:
         if: ${{ inputs.with_simulation == 'true' }}
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
         if: ${{ inputs.with_simulation == 'true' }}
 
       - name: Agent info
@@ -851,7 +850,7 @@ jobs:
 
       - name: Checkout
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
 
       - name: Agent info
         if: ${{ inputs.with_simulation == 'true' }}
@@ -1075,7 +1074,7 @@ jobs:
         if: ${{ inputs.with_simulation_tests }}
       - name: Checkout
         if: ${{ inputs.with_simulation_tests }}
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
 
       - name: Agent info
         run: |
@@ -1335,7 +1334,7 @@ jobs:
           ssh robot '
           set -e
 
-          export DISPLAY="$(w -oush | grep -Eo " :[0-9]+" | uniq | cut -d \  -f 2)"            
+          export DISPLAY="$(w -oush | grep -Eo " :[0-9]+" | uniq | cut -d \  -f 2)"
           echo "Display detected (dinamic) is $DISPLAY"
           export DISPLAY=":0"
           echo "Display detected is $DISPLAY"
@@ -1384,7 +1383,7 @@ jobs:
           ssh robot '
             set -e
 
-            export DISPLAY="$(w -oush | grep -Eo " :[0-9]+" | uniq | cut -d \  -f 2)"           
+            export DISPLAY="$(w -oush | grep -Eo " :[0-9]+" | uniq | cut -d \  -f 2)"
             echo "Display detected (dinamic) is $DISPLAY"
             export DISPLAY=":0"
             echo "Display detected is $DISPLAY"
@@ -1553,7 +1552,7 @@ jobs:
       - uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
 
       - name: Agent info
         run: |
@@ -1800,7 +1799,7 @@ jobs:
         shell: bash
         run: |
           MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          
+
           if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
             MESSAGE=":white_check_mark: NIGHTLY: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           fi
@@ -1838,7 +1837,7 @@ jobs:
         shell: bash
         run: |
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is unstable (or canceled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          
+
           if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
             MESSAGE_ERR=":x: NIGHTLY: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is unstable (or canceled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           fi

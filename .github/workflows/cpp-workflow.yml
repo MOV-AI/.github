@@ -55,7 +55,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4.1.1
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -101,7 +101,6 @@ jobs:
 
         #          curl -fsSL http://packages.osrfoundation.org/gazebo.key | apt-key add - ;add-apt-repository "deb http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main"
 
-
     - name: SonarQube Scan
       if: ${{ false }}
       uses: SonarSource/sonarqube-scan-action@v1.0.0
@@ -124,7 +123,6 @@ jobs:
       run: |
         echo "Please check report here: https://sonarqube.aws.cloud.mov.ai/dashboard?id=${{ github.event.repository.name }}"
       id: sonar_links
-
 
     - name: Build
       run: |
@@ -163,10 +161,13 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
+    permissions:
+      contents: write # needed for publishing to github release
+      packages: write # needed for package publishing
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4.1.1
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -308,7 +309,7 @@ jobs:
         commit_hash=$(git log --format="%H" -n 1)
         #echo ::set-output name=commit_id::$commit_hash
         echo "commit_id=$commit_hash" >> $GITHUB_OUTPUT
-  
+
     - name: Create Github Release
       uses: softprops/action-gh-release@v1
       with:
@@ -333,7 +334,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4.1.1
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0

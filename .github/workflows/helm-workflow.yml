@@ -55,10 +55,12 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
-
+    permissions:
+      contents: write # needed for publishing to github release
+      packages: write # needed for package publishing
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
 
       - name: Set eks context and get pods
         shell: bash

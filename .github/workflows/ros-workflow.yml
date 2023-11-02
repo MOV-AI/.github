@@ -112,7 +112,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4.1.1
       with:
         submodules: recursive
 
@@ -207,7 +207,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4.1.1
         with:
           # Disabling shallow clone is recommended for improving relevancy of reporting
           fetch-depth: 0
@@ -270,7 +270,7 @@ jobs:
     steps:
       - name: Checkout
         if: ${{ inputs.install_test }}
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
         with:
           submodules: recursive
 
@@ -286,6 +286,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install mobros=${{ inputs.MOBROS_VERSION }} -y
+
       - name: Install debian artifacts
         if: ${{ inputs.install_test }}
         run: |
@@ -315,10 +316,13 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
+    permissions:
+      contents: write # needed for publishing to github release
+      packages: write # needed for package publishing
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4.1.1
       with:
         submodules: recursive
 
@@ -450,10 +454,13 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
+    permissions:
+      contents: write # needed for publishing to github release
+      packages: write # needed for package publishing
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4.1.1
       with:
         submodules: recursive
 

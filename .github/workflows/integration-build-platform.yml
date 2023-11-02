@@ -88,7 +88,7 @@ jobs:
       slack_thread_id: ${{ fromJson(steps.send-message.outputs.slack-result).response.message.ts }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
 
       - name: Validate Manifest
         shell: bash
@@ -185,7 +185,7 @@ jobs:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
 
       - name: Agent info
         id: agent_info
@@ -492,7 +492,7 @@ jobs:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
 
       - name: Agent info
         id: agent_info
@@ -806,7 +806,7 @@ jobs:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
 
       - name: Agent info
         id: agent_info
@@ -1034,7 +1034,7 @@ jobs:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
 
       - name: Agent info
         id: agent_info
@@ -1292,7 +1292,7 @@ jobs:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
 
       - name: Agent info
         id: agent_info
@@ -1610,7 +1610,7 @@ jobs:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
 
       - name: Agent info
         id: agent_info
@@ -1767,7 +1767,7 @@ jobs:
       - uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
 
       - name: Agent info
         run: |
@@ -2069,7 +2069,7 @@ jobs:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
       - name: Agent info
         id: agent_info
         run: |

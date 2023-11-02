@@ -116,7 +116,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4.1.1
 
       - name: Hadolint ${{ inputs.docker_file }}
         uses: hadolint/hadolint-action@v1.6.0
