@@ -53,8 +53,8 @@ jobs:
             --extra-index-url https://pypi.org/simple \
             -r requirements.txt
 
-          python3 testcasemanagement/testcase_importer.py --target ${{ inputs.test_set }}
-          python3 testcasemanagement/feature_file_processor.py --validate
+          xray download ${{ inputs.test_set }}
+          xray compare ./tests/feature/
 
           # deactivate venv
           deactivate
@@ -62,6 +62,8 @@ jobs:
   Run-tests:
     runs-on: integration-pipeline
     steps:
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
 
       - name: Checkout
         uses: actions/checkout@v3
@@ -121,7 +123,7 @@ jobs:
         run: |
           echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
-      - name: Setup venv
+      - name: Setup environment
         shell: bash
         run: |
           # create virtual environment
@@ -134,6 +136,10 @@ jobs:
 
           # deactivate venv
           deactivate
+
+          # install test dependencies on host
+          sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic tcpdump pcap2har
+          sudo setcap cap_net_raw,cap_net_admin=eip /usr/sbin/tcpdump
 
       - name: Setup QA install tests
         uses: actions/checkout@v3
@@ -176,8 +182,6 @@ jobs:
         id: ui
         shell: bash
         run: |
-          # install test dependencies on host
-          sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
           export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
 
           # activate venv
@@ -237,6 +241,10 @@ jobs:
           mkdir -p qa_artifacts
           cp -r *.log ./qa_artifacts || true
           cp -r *.tar ./qa_artifacts || true
+          cp -r *.json ./qa_artifacts || true
+          cp -r *.pcap ./qa_artifacts || true
+          cp -r *.har ./qa_artifacts || true
+          cp -r *.html ./qa_artifacts || true
 
           # install
           mkdir -p qa_artifacts/install
@@ -250,6 +258,7 @@ jobs:
         with:
           name: qa_artifacts_ui_tests
           path: qa_artifacts/*
+          retention-days: 3
 
       - name: Remove robots
         if: always()

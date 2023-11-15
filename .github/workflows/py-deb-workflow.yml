@@ -128,7 +128,7 @@ jobs:
         sonar_token: ${{ secrets.sonar_token }}
 
     - name: SonarCloud Scan
-      uses: SonarSource/sonarcloud-github-action@v1.8
+      uses: SonarSource/sonarcloud-github-action@v2.0.2
       env:
         GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
         SONAR_TOKEN: ${{ secrets.sonar_token }}
@@ -191,7 +191,7 @@ jobs:
 
     - name: Raise App version
       if: ${{ inputs.deploy == 'true' }}
-      uses: CasperWA/push-protected@v2
+      uses: CasperWA/push-protected@v2.14.0
       with:
         token: ${{ secrets.auto_commit_password }}
         branch: ${{ steps.var_branch.outputs.branch }}
@@ -222,6 +222,7 @@ jobs:
       with:
         name: packages
         path: dist/*
+        retention-days: 5
 
     - name: Publish package to TestPyPI Experimental
       uses: pypa/gh-action-pypi-publish@release/v1
@@ -286,6 +287,7 @@ jobs:
       with:
         name: artifacts
         path: artifacts/*.deb
+        retention-days: 5
 
   Publish:
     needs: [Debian-Pack]
@@ -443,12 +445,14 @@ jobs:
       with:
         name: packages
         path: dist/*
+        retention-days: 5
 
     - name: Archive debian artifact
       uses: actions/upload-artifact@v3
       with:
         name: artifacts
         path: artifacts/*.deb
+        retention-days: 5
 
     - name: Publish package to prod PyPI
       uses: pypa/gh-action-pypi-publish@release/v1

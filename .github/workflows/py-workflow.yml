@@ -129,7 +129,7 @@ jobs:
         sonar_token: ${{ secrets.sonar_token }}
 
     - name: SonarCloud Scan
-      uses: SonarSource/sonarcloud-github-action@v1.8
+      uses: SonarSource/sonarcloud-github-action@v2.0.2
       env:
         GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
         SONAR_TOKEN: ${{ secrets.sonar_token }}
@@ -189,7 +189,7 @@ jobs:
 
     - name: Raise App version
       if: ${{ inputs.deploy == 'true' }}
-      uses: CasperWA/push-protected@v2
+      uses: CasperWA/push-protected@v2.14.0
       with:
         token: ${{ secrets.auto_commit_password }}
         branch: ${{ steps.var_branch.outputs.branch }}
@@ -218,13 +218,14 @@ jobs:
       with:
         name: packages
         path: dist/*
+        retention-days: 5
 
     - name: Publish package to TestPyPI Experimental
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         user: ${{ secrets.nexus_publisher_user }}
         password: ${{ secrets.nexus_publisher_password }}
-        repository_url: https://artifacts.cloud.mov.ai/repository/pypi-experimental/
+        repository_url: https://artifacts.aws.cloud.mov.ai/repository/pypi-experimental/
 
     - name: Publish package to TestPyPI Integration
       if: ${{ inputs.deploy == 'true' }}
@@ -232,7 +233,7 @@ jobs:
       with:
         user: ${{ secrets.nexus_publisher_user }}
         password: ${{ secrets.nexus_publisher_password }}
-        repository_url: https://artifacts.cloud.mov.ai/repository/pypi-integration/
+        repository_url: https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/
 
     - name: Create Github Release
       if: ${{ inputs.deploy == 'true' }}
@@ -294,10 +295,11 @@ jobs:
       with:
         name: packages
         path: dist/*
+        retention-days: 5
 
     - name: Publish package to ${{ matrix.publish_repo }}
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         user: ${{ secrets.nexus_publisher_user }}
         password: ${{ secrets.nexus_publisher_password }}
-        repository_url: https://artifacts.cloud.mov.ai/repository/${{ matrix.publish_repo }}/
+        repository_url: https://artifacts.aws.cloud.mov.ai/repository/${{ matrix.publish_repo }}/

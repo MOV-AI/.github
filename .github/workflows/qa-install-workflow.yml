@@ -71,6 +71,8 @@ jobs:
   Run-Tests:
     runs-on: integration-pipeline
     steps:
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
 
       - name: Checkout
         uses: actions/checkout@v3
@@ -130,6 +132,7 @@ jobs:
         with:
           name: install_config_file
           path: ./results/*
+          retention-days: 3
 
       - name: Clean results folder
         if: always()
@@ -172,6 +175,7 @@ jobs:
         with:
           name: install_suite
           path: ./results/*
+          retention-days: 3
 
       - name: Remove robots
         if: always()

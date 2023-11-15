@@ -140,6 +140,7 @@ jobs:
       with:
         name: linting_reports
         path: "./*-report.txt"
+        retention-days: 5
 
   Build:
     needs: [StaticAnalysis]
@@ -208,6 +209,7 @@ jobs:
       with:
         name: packages
         path: dist/*
+        retention-days: 5
 
     - name: Publish package to TestPyPI Experimental
       uses: pypa/gh-action-pypi-publish@release/v1
@@ -282,7 +284,7 @@ jobs:
 
       - name: Raise App version
         if: ${{ inputs.deploy == 'true' }}
-        uses: CasperWA/push-protected@v2
+        uses: CasperWA/push-protected@v2.14.0
         with:
           token: ${{ secrets.auto_commit_password }}
           branch: ${{ steps.var_branch.outputs.branch }}
@@ -350,6 +352,7 @@ jobs:
       with:
         name: artifacts
         path: artifacts/*.deb
+        retention-days: 5
 
     - name: Remove hardlinks for package ${{ matrix.pack_path }}
       run: |
@@ -433,6 +436,7 @@ jobs:
       with:
         name: artifacts
         path: artifacts/*.rpm
+        retention-days: 5
 
   Debian-Test:
     strategy:
@@ -495,7 +499,7 @@ jobs:
           sonar_token: ${{ secrets.sonar_token }}
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@v1.8
+        uses: SonarSource/sonarcloud-github-action@v2.0.2
         env:
           GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.sonar_token }}
@@ -531,6 +535,7 @@ jobs:
         with:
           name: debian_test_journal
           path: ./logs/*
+          retention-days: 5
 
 
   Rpm-Test:
@@ -581,6 +586,7 @@ jobs:
         with:
           name: rpm_test_journal
           path: ./logs/*
+          retention-days: 5
 
   Publish:
     needs: [Raise, Debian-Pack, Rpm-Pack, Debian-Test]
@@ -671,18 +677,18 @@ jobs:
               fi
             done
 
-      - name: Publish to Nexus yum-testing (new Nexus)
+      - name: Publish to Nexus yum-integration (new Nexus)
         if: ${{ inputs.rpm_build == 'true' }}
         shell: bash
         run: |
             NEXUS_ENDPOINT="artifacts.aws.cloud.mov.ai"
-            NEXUS_REPO="yum-testing"
+            NEXUS_REPO="yum-integration"
 
             cd artifacts
             for file in $(find -name "*.rpm" -not -name "*src*" -printf '%f\n')
             do
               echo "Uploading $file"
-              RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.registry_user }}:${{ secrets.registry_password }}" \
+              RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
                 "https://$NEXUS_ENDPOINT/service/rest/v1/components?repository=$NEXUS_REPO" \
                 -H 'accept: application/json' \
                 -H 'Content-Type: multipart/form-data' \
@@ -696,7 +702,7 @@ jobs:
               if [[ ! "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
                 echo "Failed upload $file with $RETURN_CODE. Retrying"
 
-                RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.registry_user }}:${{ secrets.registry_password }}" \
+                RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
                   "https://$NEXUS_ENDPOINT/service/rest/v1/components?repository=$NEXUS_REPO" \
                   -H 'accept: application/json' \
                   -H 'Content-Type: multipart/form-data' \
@@ -779,18 +785,21 @@ jobs:
       with:
         name: packages
         path: dist/*
+        retention-days: 5
 
     - name: Archive binary
       uses: actions/upload-artifact@v3
       with:
         name: artifacts
         path: artifacts/*.deb
+        retention-days: 5
 
     - name: Archive binary
       uses: actions/upload-artifact@v3
       with:
         name: artifacts
         path: artifacts/*.rpm
+        retention-days: 5
 
     - name: Publish package to prod PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
