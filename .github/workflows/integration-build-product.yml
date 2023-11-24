@@ -1310,7 +1310,7 @@ jobs:
 
             test_exec_dir=$tests_dir
             if [ -f /tmp/test_dir.txt ]; then
-              test_exec_dir="$test_exec_dir/$(cat /tmp/test_dir.txt)
+              test_exec_dir="$test_exec_dir/$(cat /tmp/test_dir.txt)"
             fi 
             echo "$test_exec_dir">/tmp/test_exec_dir.txt
             rm -rf $tests_repo_name
