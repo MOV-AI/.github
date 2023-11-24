@@ -1308,7 +1308,7 @@ jobs:
             tests_repo_name=$(cat /tmp/repo_name.txt)
             test_set=$(cat /tmp/test_set.txt)
 
-            test_exec_dir=$tests_dir
+            test_exec_dir="./"
             if [ -f /tmp/test_dir.txt ]; then
               test_exec_dir="$test_exec_dir/$(cat /tmp/test_dir.txt)"
             fi 
@@ -1318,7 +1318,7 @@ jobs:
             ls -la $tests_dir
 
             # setup venv in a step that is always executed
-            pushd "${test_exec_dir}"
+            pushd "${tests_dir}"
             rm -rf venv
             python3 -m venv venv
             . venv/bin/activate
@@ -1331,9 +1331,10 @@ jobs:
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt /tmp/test_exec_dir.txt
           scp -r robot:/tmp/*.txt /tmp/
 
-          echo "target_dir=$(cat /tmp/test_exec_dir.txt)" >> $GITHUB_OUTPUT
+          echo "target_dir=$(cat /tmp/target_dir.txt)" >> $GITHUB_OUTPUT
           echo "version=$(cat /tmp/version.txt)" >> $GITHUB_OUTPUT
           echo "test_set=$(cat /tmp/test_set.txt)" >> $GITHUB_OUTPUT
+          echo "test_exec_dir=$(cat /tmp/test_exec_dir.txt)" >> $GITHUB_OUTPUT
 
       - name: Remote - Install
         if: ${{ inputs.with_simulation_tests }}
@@ -1413,6 +1414,7 @@ jobs:
             fi
 
             pytest \
+              ${{ steps.simulator_tests_setup.outputs.test_exec_dir }} \
               -s \
               -ra \
               -m $marker \
