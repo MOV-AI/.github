@@ -1302,13 +1302,12 @@ jobs:
             integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.test_set --output_file /tmp/test_set.txt
             integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.test_dir --output_file /tmp/test_dir.txt | true
 
-
             tests_dir=$(cat /tmp/target_dir.txt)
             tests_version=$(cat /tmp/version.txt)
             tests_repo_name=$(cat /tmp/repo_name.txt)
             test_set=$(cat /tmp/test_set.txt)
 
-            test_exec_dir="./"
+            test_exec_dir="."
             if [ -f /tmp/test_dir.txt ]; then
               test_exec_dir="$test_exec_dir/$(cat /tmp/test_dir.txt)"
             fi 
