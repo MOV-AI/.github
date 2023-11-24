@@ -85,7 +85,7 @@ on:
         required: false
 
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "2.2.0.7"
+  CI_INTEGRATION_SCRIPTS_VERSION: "2.2.0.10"
   MOBTEST_VERSION: "0.0.4.3"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.26"
   GITHUB_API_USR: "OttoMation-Movai"
@@ -1300,18 +1300,25 @@ jobs:
             integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
             integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
             integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.test_set --output_file /tmp/test_set.txt
+            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.test_dir --output_file /tmp/test_dir.txt | true
+
 
             tests_dir=$(cat /tmp/target_dir.txt)
             tests_version=$(cat /tmp/version.txt)
             tests_repo_name=$(cat /tmp/repo_name.txt)
             test_set=$(cat /tmp/test_set.txt)
 
+            test_exec_dir=$tests_dir
+            if [ -f /tmp/test_dir.txt ]; then
+              test_exec_dir="$test_exec_dir/$(cat /tmp/test_dir.txt)
+            fi 
+            echo "$test_exec_dir">/tmp/test_exec_dir.txt
             rm -rf $tests_repo_name
             integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user ${{ env.GITHUB_API_USR }} --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
             ls -la $tests_dir
 
             # setup venv in a step that is always executed
-            pushd "${tests_dir}"
+            pushd "${test_exec_dir}"
             rm -rf venv
             python3 -m venv venv
             . venv/bin/activate
@@ -1321,10 +1328,10 @@ jobs:
             popd
 
           '
-          rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt
+          rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt /tmp/test_exec_dir.txt
           scp -r robot:/tmp/*.txt /tmp/
 
-          echo "target_dir=$(cat /tmp/target_dir.txt)" >> $GITHUB_OUTPUT
+          echo "target_dir=$(cat /tmp/test_exec_dir.txt)" >> $GITHUB_OUTPUT
           echo "version=$(cat /tmp/version.txt)" >> $GITHUB_OUTPUT
           echo "test_set=$(cat /tmp/test_set.txt)" >> $GITHUB_OUTPUT
 
