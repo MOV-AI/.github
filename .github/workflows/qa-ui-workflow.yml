@@ -74,15 +74,6 @@ jobs:
           #echo ::set-output name=ip::$ip
           echo "ip=$ip_tmp" >> $GITHUB_OUTPUT
 
-      - name: Update/upgrade host packages
-        run: |
-          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
-          sudo apt-get update
-          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
-          sudo apt-get upgrade -y
-          # needed for pre-commit execution
-          sudo apt install python-is-python3
-
       - name: Check if pre-commit config exists
         id: check_files
         uses: andstor/file-existence-action@v1
