@@ -81,6 +81,8 @@ jobs:
     - name: Install package deployer
       if: ${{ inputs.deploy_pkgs == 'true' }}
       run: |
+        python3 -m pip install pip --upgrade
+        python3 -m pip install pyopenssl --upgrade
         python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-edge/simple --extra-index-url https://pypi.org/simple movai-package-deployer==${{ env.PACKAGE_DEPLOYER_VERSION }} --ignore-installed
 
     - name: Download staging packages
