@@ -133,7 +133,10 @@ jobs:
 
       - name: Install CI Scripts
         shell: bash
-        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        run: |
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: Bootstraping simulator metadata
         run: |
@@ -239,7 +242,10 @@ jobs:
 
       - name: Install CI Scripts
         shell: bash
-        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        run: |
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash raised_meta
         uses: actions/download-artifact@v3
@@ -677,7 +683,10 @@ jobs:
       - name: Install CI Scripts
         if: ${{ inputs.with_simulation == 'true' }}
         shell: bash
-        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        run: |
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
@@ -1086,7 +1095,10 @@ jobs:
       - name: Install CI Scripts
         if: ${{ inputs.with_simulation_tests }}
         shell: bash
-        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        run: |
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash raised_meta
         if: ${{ inputs.with_simulation_tests }}
@@ -1321,7 +1333,8 @@ jobs:
             rm -rf venv
             python3 -m venv venv
             . venv/bin/activate
-            python3 -m pip install --upgrade pip
+            python3 -m pip install pip --upgrade
+            python3 -m pip install pyopenssl --upgrade
             pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r requirements.txt
             deactivate
             popd
@@ -1614,7 +1627,10 @@ jobs:
       - name: Install CI Scripts
         if: ${{ inputs.is_nightly_run == false }}
         shell: bash
-        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        run: |
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: Install Package Deployer
         if: ${{ inputs.is_nightly_run == false }}
