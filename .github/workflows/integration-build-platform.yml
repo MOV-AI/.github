@@ -98,7 +98,10 @@ jobs:
 
       - name: Install CI Scripts
         shell: bash
-        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        run: |
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: Bootstraping simulator metadata
         run: |
@@ -196,7 +199,10 @@ jobs:
 
       - name: Install CI Scripts
         shell: bash
-        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        run: |
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: Install Package Deployer
         shell: bash
@@ -250,7 +256,8 @@ jobs:
           rm -rf venv
           python3 -m venv venv
           . venv/bin/activate
-          python3 -m pip install --upgrade pip
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade
           pip install -r requirements.txt
           deactivate
 
@@ -503,7 +510,10 @@ jobs:
 
       - name: Install CI Scripts
         shell: bash
-        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        run: |
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: Install Package Deployer
         shell: bash
@@ -556,7 +566,8 @@ jobs:
           rm -rf venv
           python3 -m venv venv
           . venv/bin/activate
-          python3 -m pip install --upgrade pip
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade
           pip install -r requirements.txt
           deactivate
           popd
@@ -817,7 +828,10 @@ jobs:
 
       - name: Install CI Scripts
         shell: bash
-        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        run: |
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: Install Package Deployer
         shell: bash
@@ -864,7 +878,8 @@ jobs:
           rm -rf venv
           python3 -m venv venv
           . venv/bin/activate
-          python3 -m pip install --upgrade pip
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade
           pip install -r requirements.txt
           deactivate
           popd
@@ -1046,7 +1061,10 @@ jobs:
 
       - name: Install CI Scripts
         shell: bash
-        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        run: |
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: Install Package Deployer
         shell: bash
@@ -1097,7 +1115,8 @@ jobs:
           rm -rf venv
           python3 -m venv venv
           . venv/bin/activate
-          python3 -m pip install --upgrade pip
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade
           pip install -r requirements.txt
           deactivate
           popd
@@ -1304,7 +1323,10 @@ jobs:
 
       - name: Install CI Scripts
         shell: bash
-        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        run: |
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash robot_configs
         uses: actions/download-artifact@v3
@@ -1570,20 +1592,7 @@ jobs:
         with:
           name: fleet_qa_artifacts
           path: ${{ steps.ansible_install_setup.outputs.target_dir }}/fleet_qa_artifacts/*
-          retention-days: 10
-
-      - name: Teardown remote vms (AWS)
-        if: ${{ false }}
-        shell: bash
-        run: |
-          echo "Deleting $(cat aws_artifacts/infra_ids.txt)"
-          python3 -m pip install awscli
-          export PATH="$HOME/.local/bin:$PATH"
-          aws ec2 terminate-instances --instance-ids $(cat aws_artifacts/infra_ids.txt)
-          echo "Deleting $(cat aws_artifacts/infra_ids.txt)"
-          python3 -m pip install awscli
-          export PATH="$HOME/.local/bin:$PATH"
-          aws ec2 terminate-instances --instance-ids $(cat aws_artifacts/infra_ids.txt)
+          retention-days: 1
 
       - name: Teardown remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -1622,7 +1631,10 @@ jobs:
 
       - name: Install CI Scripts
         shell: bash
-        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        run: |
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash sim_configs
         uses: actions/download-artifact@v3
@@ -1832,7 +1844,8 @@ jobs:
           rm -rf venv
           python3 -m venv venv
           . venv/bin/activate
-          python3 -m pip install --upgrade pip
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade          
           pip install -r requirements.txt
           deactivate
           popd
@@ -2109,7 +2122,10 @@ jobs:
 
       - name: Install CI Scripts
         shell: bash
-        run: python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        run: | 
+          python3 -m pip install pip --upgrade
+          python3 -m pip install pyopenssl --upgrade
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: Install Package Deployer
         shell: bash
