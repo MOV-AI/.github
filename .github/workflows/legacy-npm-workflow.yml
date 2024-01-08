@@ -1,0 +1,191 @@
+name: Build and pack Npm components
+on:
+  workflow_call:
+    inputs:
+      deploy:
+        required: false
+        type: string
+        default: 'false'
+      run_tests:
+        required: false
+        type: string
+        default: 'true'
+      npm_version:
+        required: false
+        type: string
+        default: '16.x'
+
+    secrets:
+      auto_commit_user:
+        required: true
+      auto_commit_mail:
+        required: true
+      auto_commit_pwd:
+        required: true
+      registry_user:
+        required: true
+      registry_password:
+        required: true
+      gh_token:
+        required: true
+      sonar_token:
+        required: true
+      npm_token:
+        required: true
+
+jobs:
+  Build:
+
+    runs-on: ubuntu-20.04
+    container:
+      image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
+      options: --user root
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.npm_token }}
+
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        # Disabling shallow clone is recommended for improving relevancy of reporting
+        fetch-depth: 0
+        submodules: recursive
+        token: ${{ secrets.npm_token }}
+
+    - name: Raise App version
+      run: |
+        git config --global --add safe.directory $(pwd)
+        git config --global user.name '${{ secrets.auto_commit_user }}'
+        git config --global user.email '${{ secrets.auto_commit_mail }}'
+        git config --global user.password ${{ secrets.auto_commit_pwd }}
+        npm version prerelease --no-git-tag-version
+
+    - name: Setup Github as proxy Registry
+      uses: actions/setup-node@v2
+      with:
+        node-version: '${{ inputs.npm_version }}'
+        registry-url: 'https://npm.pkg.github.com/mov-ai'
+
+    - name: Install dependencies
+      run: npm ci --loglevel verbose --legacy-peer-deps
+
+    - name: Build
+      run: npm run build
+
+    - name: Check NPM log on failure
+      if: ${{ failure() }}
+      run: cat /github/home/.npm/_logs/*.log
+
+    - name: Run tests
+      if: ${{ inputs.run_tests == 'true' }}
+      run: npm run test
+
+    - name: Create SonarCloud project and disable autoscan
+      uses: MOV-AI/action-sonarcloud-proj-config@v1
+      with:
+        sonar_org: 'mov-ai'
+        sonar_token: ${{ secrets.sonar_token }}
+
+    - name: SonarCloud Scan
+      uses: SonarSource/sonarcloud-github-action@v1.8
+      env:
+        GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
+        SONAR_TOKEN: ${{ secrets.sonar_token }}
+      with:
+        projectBaseDir: ./
+        args: >
+          -Dsonar.organization=mov-ai
+          -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
+          -Dsonar.sources=.
+          -Dsonar.scm.provider=git
+          -Dsonar.qualitygate.wait=true
+          -Dsonar.qualitygate.timeout=300
+
+    - name: Link to SonarCloud dashboard
+      shell: bash
+      run: |
+        echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
+
+    - name: Publish
+      if: ${{ inputs.deploy == 'true' }}
+      run: npm publish
+
+
+  Post-publish:
+    if: ${{ inputs.deploy == 'true' }}
+    runs-on: ubuntu-20.04
+    needs:  [Build]
+    container:
+      image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
+      options: --user root
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.npm_token }}
+
+    steps:
+    - name: Checkout
+      if: ${{ inputs.deploy == 'true' }}
+      uses: actions/checkout@v3
+      with:
+        # Disabling shallow clone is recommended for improving relevancy of reporting
+        fetch-depth: 0
+        submodules: recursive
+        token: ${{ secrets.npm_token }}
+
+    - name: Raise App version
+      id: raise
+      run: |
+        git config --global --add safe.directory $(pwd)
+        git config --global user.name '${{ secrets.auto_commit_user }}'
+        git config --global user.email '${{ secrets.auto_commit_mail }}'
+        git config --global user.password ${{ secrets.auto_commit_pwd }}
+        npm version prerelease -m "[skip actions] Automatic Bump of build version"
+        git add package.*
+
+    - name: Prepare raise variables
+      id: pre_raise
+      run: |
+        #echo ::set-output name=branch::${GITHUB_REF#refs/heads/}
+        echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+
+    - name: Raise App version
+      uses: CasperWA/push-protected@v2.14.0
+      with:
+        token: ${{ secrets.auto_commit_pwd }}
+        branch: ${{ steps.pre_raise.outputs.branch }}
+        unprotect_reviews: true
+
+    - name: Commit info
+      id: commit
+      shell: bash
+      run: |
+        commit_hash=$(git log --format="%H" -n 1)
+        #echo ::set-output name=commit_id::$commit_hash
+        echo "commit_id=$commit_hash" >> $GITHUB_OUTPUT
+
+    - name: Find Package details
+      id: vars
+      run: |
+        PACKAGE_VERSION=$(cat package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
+        PACKAGE_NAME=$(cat package.json | grep name |head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
+
+        #echo ::set-output name=npm_pkg_name::$PACKAGE_NAME
+        #echo ::set-output name=npm_pkg_version::$PACKAGE_VERSION
+        echo "npm_pkg_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+        echo "npm_pkg_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Create Github Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: "Release of ${{ steps.vars.outputs.npm_pkg_version }}"
+        tag_name: ${{ steps.vars.outputs.npm_pkg_version }}
+        target_commitish: ${{ steps.commit.outputs.commit_id }}
+        token: ${{ secrets.gh_token }}
+        prerelease: true
+        generate_release_notes: true
