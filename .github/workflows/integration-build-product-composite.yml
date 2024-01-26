@@ -449,10 +449,52 @@ jobs:
           exit $execution_status
           rm movai_service_version
 
+      - name: Run mobtest
+        shell: bash
+        run: |
+          container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
+          docker exec -t "$container_id" bash -c '
+            set -e
+            export PATH="$HOME/.local/bin:$PATH"
+            python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
+            mobtest proj /opt/ros/noetic/share/
+            '
       - name: Collect Installed components
         if: always()
         shell: bash
         run: |
+          container_id=$(docker ps -q -f "ancestor=$REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)")
+          docker exec -t "$container_id" bash -c '
+            set -e
+            sudo apt update
+            export PATH="$HOME/.local/bin:$PATH"
+            python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple movai-package-deployer==${{ env.PACKAGE_DEPLOYER_VERSION }} --ignore-installed
+            package-deployer scan
+            package-deployer scanAll
+            ls -la /tmp
+
+            {
+                echo 'Annotation:*'
+                echo 'Callback:*'
+                echo 'Configuration:*'
+                echo 'Flow:*'
+                echo 'GraphicScene:*'
+                echo 'Layout:*'
+                echo 'Node:*'
+                echo 'Package:*'
+            } >> /tmp/manifest.txt
+            mkdir /tmp/proj_metadata
+            python3 -m tools.backup -p /tmp/proj_metadata/ -m /tmp/manifest.txt -a export -i
+
+          ' || true
+            docker cp $container_id:/tmp/deployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-deployable.dploy
+            docker cp $container_id:/tmp/undeployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-3rdParty.dploy
+            docker cp $container_id:/tmp/apt_packages.json artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-apt_packages.json
+
+            mkdir -p metadata_artifact tmp_meta
+            docker cp $container_id:/tmp/proj_metadata/ ./
+            tar cvzf ./metadata_artifact/metadata.tar.gz ./proj_metadata
+
             echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)">artifacts/product-${{ matrix.distro }}.image.artifact
   
       - name: Get current job id
@@ -739,19 +781,11 @@ jobs:
           cp ../${{ steps.provision_infra_setup.outputs.target_dir }}/hosts hosts
           cp -r ../*.json ./templates/fleet/
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
-          
-          echo "---" >> inventory.yaml
-          echo "fleet:" >> inventory.yaml
-          echo "  hosts:" >> inventory.yaml
-          echo "    host:" >> inventory.yaml
-          echo "      ansible_host: localhost" >> inventory.yaml
-
-
           cat hosts
-          echo "------------"
-          cat inventory.yaml
-          ./fleet_install.sh setup --product-artifacts ./templates/fleet/ -i hosts -m purge
-
+          ./fleet_install.sh setup --product-artifacts ./templates/fleet/ -i hosts -m install
+        env:
+          GITHUB_USER: ${{ env.GITHUB_API_USR }}
+          GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
 
       - name: Collect Installed components
         if: always()
@@ -920,6 +954,19 @@ jobs:
           mkdir -p deployment_artifacts
 
           export PATH="$HOME/.local/bin:$PATH"
+
+          ls -la
+          mkdir -p pkgs_deployable
+          cp artifacts/*deployable.dploy pkgs_deployable
+          package-deployer join --dploy_workspace "$(pwd)/pkgs_deployable"
+          mv "$(pwd)/pkgs_deployable/merged.dploy" deployment_artifacts/deployable.dploy
+
+          mkdir -p pkgs_undeployable
+          cp artifacts/*3rdParty.dploy pkgs_undeployable
+          package-deployer join --dploy_workspace "$(pwd)/pkgs_undeployable"
+          mv "$(pwd)/pkgs_undeployable/merged.dploy" deployment_artifacts/3rdParty.dploy
+
+          rm -rf pkgs_deployable pkgs_undeployable
 
           cp artifacts/*.json deployment_artifacts
           cp ./artifacts/product-noetic.image.artifact deployment_artifacts/product.image.artifact
