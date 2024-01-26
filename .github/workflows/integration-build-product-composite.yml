@@ -750,7 +750,7 @@ jobs:
           cat hosts
           echo "------------"
           cat inventory.yaml
-          ./fleet_install.sh setup --product-artifacts ./templates/fleet/ -i hosts -m purge
+          ./fleet_install.sh setup --product-artifacts ./templates/fleet/ -i hosts -m install
 
 
       - name: Collect Installed components
