@@ -27,10 +27,16 @@ on:
         required: false
         type: boolean
         default: false
-      fleet_ips:
+      single_vm_fleet_ips:
         required: true
         type: string
-      fleet_number_members:
+      single_vm_fleet_number_members:
+        required: true
+        type: number
+      multi_vm_fleet_ips:
+        required: true
+        type: string
+      multi_vm_fleet_number_members:
         required: true
         type: number
       with_simulation:
@@ -94,9 +100,9 @@ env:
   PROVISION_INFRA_REPO: "devops-tf-proxmox-fleet"
   PROVISION_INFRA_VERSION: "0.1.0-7"
   # slack channel movai-projects
-  #SLACK_CHANNEL: ${{ inputs.overwrite_slack_channel }}
+  SLACK_CHANNEL: ${{ inputs.overwrite_slack_channel }}
   # development slack channel
-  SLACK_CHANNEL: "C05K2KF1UP8"
+  #SLACK_CHANNEL: "C05K2KF1UP8"
   PROJECT_DATA_VIEWER_API: "https://personal-7vf0v2cu.outsystemscloud.com/ProjectDataViewer5/rest/V1//CreateProject"
   MINIO_S3_URL: "https://s3.mov.ai"
 
@@ -104,13 +110,14 @@ jobs:
   Validate-boostrap-configs:
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v2.0.1
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     outputs:
       slack_thread_id: ${{ fromJson(steps.send-message.outputs.slack-result).response.message.ts }}
     steps:
+
       - name: Checkout
         if: ${{ inputs.is_nightly_run == false }}
         uses: actions/checkout@v4
@@ -802,9 +809,240 @@ jobs:
           else
             echo "simul_tests_infra=integration-pipeline" >> $GITHUB_OUTPUT
           fi
-    
 
-  Install-Heterogeneos-Fleet:
+  Install-Simulator-Robot:
+    needs: [Build-Spawner, Build-Simulator]
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(inputs.ros_distro) }}
+    runs-on: integration-pipeline
+    outputs:
+      slack_thread_id: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
+      skip_simulator: ${{ needs.Build-Simulator.outputs.skip_simulator }}
+    steps:
+      - uses: rtCamp/action-cleanup@master
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+
+      - name: Checkout
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        uses: actions/checkout@v3
+
+      - name: Agent info
+        if: ${{ inputs.with_simulation == 'true' }}
+        run: |
+          echo "public ip: $(curl ipinfo.io/ip)"
+          echo "private ip: $(hostname -I | awk '{print $1}')"
+
+      - name: unstash raised_meta
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        uses: actions/download-artifact@v3
+        with:
+          name: raised_meta
+          path: .
+
+      - name: unstash manifest
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        uses: actions/download-artifact@v3
+        with:
+          name: manifest
+          path: .
+
+      - name: unstash robot_jsons_${{ matrix.distro }}
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        uses: actions/download-artifact@v3
+        with:
+          name: robot_jsons_${{ matrix.distro }}
+          path: .
+
+      - name: Login to ${{ env.REGISTRY }} Registry
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.REGISTRY }}
+
+      - name: Login to ${{ env.PUSH_REGISTRY }} Registry
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.PUSH_REGISTRY }}
+
+      - name: Login to ${{ env.MID_REGISTRY }} Registry
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.MID_REGISTRY }}
+
+      - name: Docker load spawner image
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        shell: bash
+        run: |
+          docker pull "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+
+      - name: Docker load simulator image
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        shell: bash
+        run: |
+          promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.MID_REGISTRY }}-${{ env.REGISTRY }}-g")
+
+          docker pull "${{ needs.Build-Simulator.outputs.image_name }}"
+          docker tag "${{ needs.Build-Simulator.outputs.image_name }}" $promoted_name
+
+
+      - name: Installation
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        shell: bash
+        run: |
+          for robot in $(movai-cli robots list); do
+            movai-cli robots stop $robot
+            sleep 5
+            movai-cli robots remove $robot
+          done || true
+
+          mkdir -p artifacts
+          cp *.json artifacts/
+          CONFIG_FILE_NAME="standalone-manager-${{ matrix.distro }}-simulation-template.json"
+          mkdir -p userspace/models_database/ userspace/tugbot_ignition/
+
+          export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
+          export PUBLIC_IP=$(hostname -I | awk '{print $1}')
+
+          export PATH="$HOME/.local/bin:$PATH"
+          integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
+          integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
+
+          wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
+          chmod +x ./QuickStart_$(cat quickstart_version).bash
+          ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
+
+          execution_status=$?
+          exit $execution_status
+          rm movai_service_version
+        env:
+          SIMULATION_ID: "CI"
+
+      - name: Collect Install logs
+        continue-on-error: true
+        run: |
+          # cleanup
+          rm -rf install_logs
+
+          mkdir -p install_logs
+          journalctl -u movai-service -t mobros --since "1hour ago" > install_logs/spawner-firmware.log
+          journalctl -u movai-service --since "1hour ago" > install_logs/movai-service.log
+
+      - name: Stash Install simulator logs artifacts
+        continue-on-error: true
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: install_simulator_logs
+          path: install_logs/*
+          retention-days: 5
+
+      - name: Run mobtest
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        shell: bash
+        run: |
+          container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
+          docker exec -t "$container_id" bash -c '
+            set -e
+            export PATH="$HOME/.local/bin:$PATH"
+            python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
+            mobtest proj /opt/ros/${{ matrix.distro }}/share/
+          '
+
+      - name: Output simulator image
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        id: promote
+        shell: bash
+        run: |
+          sim_img_name="$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g")"
+          push_name=$(echo "$sim_img_name" | sed "s-${{ env.REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
+
+          echo "image_name=$push_name" >> $GITHUB_OUTPUT
+
+      - name: Get current job id
+        if: always()
+        shell: bash
+        id: job_info
+        run: |
+          sudo apt install jq -y
+          job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
+          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
+          echo "$job_id"
+          echo "$job_html_url"
+          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+      - name: Prepare slack variables
+        if: always()
+        id: pre_slack_result
+        run: |
+          MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
+          MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
+          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+
+      - name: Slack message success
+        uses: archive/github-actions-slack@master
+        with:
+          slack-function: send-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-text: ${{ steps.pre_slack_result.outputs.msg }}
+          slack-optional-thread_ts: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
+
+      - name: Slack message failure
+        uses: archive/github-actions-slack@master
+        if: failure()
+        with:
+          slack-function: send-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
+          slack-optional-thread_ts: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
+
+      - name: pre-stash
+        if: ${{ inputs.with_simulation == 'true' }}
+        shell: bash
+        run: |
+          echo "${{ steps.promote.outputs.image_name }}" > simulator.image.artifact
+
+      - name: Stash deploy_simulator_artifacts
+        if: ${{ inputs.with_simulation == 'true' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: deploy_simulator_artifacts
+          path: simulator.image.artifact
+          retention-days: 5
+
+      - name: Remove robots
+        if: always()
+        shell: bash
+        run: |
+          for robot in $(movai-cli robots list); do
+            movai-cli robots stop $robot
+            sleep 5
+            movai-cli robots remove $robot
+          done || true
+
+      - name: Docker cleanups
+        if: always()
+        shell: bash
+        run: |
+          docker system prune -f
+          docker image prune --all -f
+        
+
+  Install-Heterogeneos-Fleet-Single-VM:
     needs: [Build-Spawner]
     strategy:
       matrix:
@@ -868,8 +1106,8 @@ jobs:
         run: |
           branch=$(echo ${GITHUB_REF#refs/heads/} | sed "s;\.;-;g" )
 
-          local_manager_prefix="ip-hgf-$branch-manager"
-          local_worker_prefix="ip-$branch-worker"
+          local_manager_prefix="ip-hgf-multi-$branch-manager"
+          local_worker_prefix="ip-hgf-multi-$branch-worker"
           echo "$local_manager_prefix"
           echo "$local_worker_prefix"
 
@@ -880,16 +1118,16 @@ jobs:
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
         run: |
-          terraform init -backend-config="key=hel-fleet-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
+          terraform init -backend-config="key=hel-fleet-composite-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
           terraform plan
           terraform apply -auto-approve
         env:
-          TF_VAR_number_agents: ${{ inputs.fleet_number_members }}
+          TF_VAR_number_agents: ${{ inputs.single_vm_fleet_number_members }}
           TF_VAR_proxmox_api_url: "https://hel.mov.ai:8006/api2/json"
           TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
           TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
           TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
-          TF_VAR_ip_list: ${{ inputs.fleet_ips }}
+          TF_VAR_ip_list: ${{ inputs.single_vm_fleet_ips }}
           TF_VAR_proxmox_host: "hel"
           TF_VAR_vm_gateway: "172.22.0.1"
           TF_VAR_ip_mask: 24
@@ -953,7 +1191,7 @@ jobs:
           echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
           sudo chmod 600 ~/.ssh/aws_slave.pem
 
-          stripped_ips=$(echo ${{ inputs.fleet_ips }} | sed "s;\[;;g" | sed "s;];;g" | sed "s; ;;g")
+          stripped_ips=$(echo ${{ inputs.single_vm_fleet_ips }} | sed "s;\[;;g" | sed "s;];;g" | sed "s; ;;g")
           touch ~/.ssh/known_hosts
           sudo chmod 600 ~/.ssh/known_hosts
           IFS=',' read -r -a stripped_ips_arr <<< $stripped_ips
@@ -1019,12 +1257,25 @@ jobs:
           sudo apt install -y python3.9 python3.9-venv
           python3.9 -m venv ansible-venv
           source ansible-venv/bin/activate
-
+          echo "./fleet_install.sh setup --product-artifacts ./templates/fleet/ -i hosts -m install" >> INSTALL.TXT
           ./fleet_install.sh setup --product-artifacts ./templates/fleet/ -i hosts -m install
         env:
           GITHUB_USER: ${{ env.GITHUB_API_USR }}
           GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
 
+      - name: Compress install
+        shell: bash
+        run: |
+          rm -rf ${{ steps.ansible_install_setup.outputs.target_dir }}/ansible-venv
+          tar -czf fleet_install.tar.gz -C ${{ steps.ansible_install_setup.outputs.target_dir }} .
+
+      - name: Stash Install scripts
+        uses: actions/upload-artifact@v3
+        with:
+          name: install_archive
+          path: fleet_install.tar.gz
+          retention-days: 3
+  
       - name: Collect Installed components
         if: always()
         shell: bash
@@ -1079,12 +1330,12 @@ jobs:
         shell: bash
         run: terraform destroy -auto-approve
         env:
-          TF_VAR_number_agents: ${{ inputs.fleet_number_members }}
+          TF_VAR_number_agents: ${{ inputs.single_vm_fleet_number_members }}
           TF_VAR_proxmox_api_url: "https://hel.mov.ai:8006/api2/json"
           TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
           TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
           TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
-          TF_VAR_ip_list: ${{ inputs.fleet_ips }}
+          TF_VAR_ip_list: ${{ inputs.single_vm_fleet_ips }}
   
       - name: Stash project metadata
         if: always()
@@ -1120,10 +1371,316 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
+  Install-Heterogeneos-Fleet-Multi-VM:
+    needs: [Build-Spawner]
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(inputs.ros_distro) }}
+    runs-on: integration-pipeline
+
+    steps:
+      - uses: rtCamp/action-cleanup@master
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Agent info
+        run: |
+          echo "public ip: $(curl ipinfo.io/ip)"
+          echo "private ip: $(hostname -I | awk '{print $1}')"
+
+      - name: unstash raised_meta
+        uses: actions/download-artifact@v3
+        with:
+          name: raised_meta
+          path: .
+
+      - name: unstash manifest
+        uses: actions/download-artifact@v3
+        with:
+          name: manifest
+          path: .
+
+      - name: unstash robot_jsons_${{ matrix.distro }}
+        uses: actions/download-artifact@v3
+        with:
+          name: robot_jsons_${{ matrix.distro }}
+          path: .
+
+
+      - name: Install terraform
+        shell: bash
+        run: |
+          wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt update && sudo apt install terraform -y
+  
+      - name: Setup terraform proxmox provisioner
+        id: provision_infra_setup
+        shell: bash
+        run: |
+          provision_infra_dir=provision_scripts
+          provision_infra_version=0.0.1-38
+          provision_infra_repo_name=devops-tf-proxmox-fleet
+
+          rm -rf $provision_infra_dir
+          export PATH="$HOME/.local/bin:$PATH"
+          integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
+          ls -la $provision_infra_dir
+          echo "target_dir=${provision_infra_dir}/hosts/generic/" >> $GITHUB_OUTPUT
+
+      - name: Define Instance names
+        id: infra_names
+        shell: bash
+        run: |
+          branch=$(echo ${GITHUB_REF#refs/heads/} | sed "s;\.;-;g" )
+
+          local_manager_prefix="ip-hgf-$branch-manager"
+          local_worker_prefix="ip-hgf-$branch-worker"
+          echo "$local_manager_prefix"
+          echo "$local_worker_prefix"
+
+          echo "manager_prefix=${local_manager_prefix}" >> $GITHUB_OUTPUT
+          echo "worker_prefix=${local_worker_prefix}" >> $GITHUB_OUTPUT
+
+      - name: Provision remote vms (Proxmox)
+        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        shell: bash
+        run: |
+          terraform init -backend-config="key=hel-fleet-composite-${{ steps.infra_names.outputs.manager_prefix }}-multi.tfstate"
+          terraform plan
+          terraform apply -auto-approve
+        env:
+          TF_VAR_number_agents: ${{ inputs.multi_vm_fleet_number_members }}
+          TF_VAR_proxmox_api_url: "https://hel.mov.ai:8006/api2/json"
+          TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
+          TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
+          TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
+          TF_VAR_ip_list: ${{ inputs.multi_vm_fleet_ips }}
+          TF_VAR_proxmox_host: "hel"
+          TF_VAR_vm_gateway: "172.22.0.1"
+          TF_VAR_ip_mask: 24
+          TF_VAR_bios: "seabios"
+          TF_VAR_pool: "IP-Temp-VMs"
+          TF_VAR_tags: "ip-fleet"
+
+          TF_VAR_fleet_hosts_user: "devops"
+          TF_VAR_template_name: "ubuntu-2004-cloudinit-template2"
+          TF_VAR_fleet_manager_name: ${{ steps.infra_names.outputs.manager_prefix }}
+          TF_VAR_fleet_manager_memory: 8192
+          TF_VAR_template_name_no_gpu: "ubuntu-2004-cloudinit-template2"
+          TF_VAR_fleet_worker_name_prefix: ${{ steps.infra_names.outputs.worker_prefix }}
+          TF_VAR_fleet_worker_memory: 8192
+
+      - name: Prepare Devops provisioning slack message
+        if: always()
+        id: pre_slack_infra
+        run: |
+          MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is being impacted by an infrastructural issue. \
+          Provisioning of fleet infrastructure failed. Please take a look! \
+          Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+
+      - name: Slack message failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          channel-id: "G0102LEV1CL"
+          slack-message: ${{ steps.pre_slack_infra.outputs.msg_error }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+
+      - name: Wait for machines getting up
+        id: wait_for_machines
+        shell: bash
+        run: |
+          function ensure_agent_up(){
+            vm_ip=$1
+            i="0"
+            max=15
+            success=1
+            while [ $success -ne 0 ]
+            do
+            echo "Checking if $vm_ip is reachable ($i/$max)"
+            ping -c1 $vm_ip &>/dev/null
+            success=$?
+
+            if [ $i -lt $max ]
+            then
+              i=$[$i+1]
+            else
+              echo "Timeout waiting for $vm_ip"
+              exit 2
+            fi
+
+            sleep 2
+            done
+
+          }
+          echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
+          sudo chmod 600 ~/.ssh/aws_slave.pem
+
+          stripped_ips=$(echo ${{ inputs.multi_vm_fleet_ips }} | sed "s;\[;;g" | sed "s;];;g" | sed "s; ;;g")
+          touch ~/.ssh/known_hosts
+          sudo chmod 600 ~/.ssh/known_hosts
+          IFS=',' read -r -a stripped_ips_arr <<< $stripped_ips
+          manager_ip=${stripped_ips_arr[0]}
+          echo $manager_ip
+          echo "manager_ip=${manager_ip}" >> $GITHUB_OUTPUT
+          echo "manager_ssh_conn_string=devops@${manager_ip}" >> $GITHUB_OUTPUT
+          for ip in "${stripped_ips_arr[@]}"
+          do
+            ensure_agent_up $ip
+            ssh-keygen -f ~/.ssh/known_hosts -R $ip
+            ssh-keyscan -H $ip >> ~/.ssh/known_hosts
+          done
+
+      - name: Docker load manager spawner (Remote)
+        shell: bash
+        run: |
+          ssh_conn_string=${{ steps.wait_for_machines.outputs.manager_ssh_conn_string }}
+          ssh $ssh_conn_string -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
+            sudo cp /etc/hosts /etc/hosts.bak
+            echo '172.22.0.106 registry.hel.mov.ai' | sudo tee -a /etc/hosts
+            docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+            docker login ${{ env.PUSH_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+            docker login ${{ env.MID_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+
+            docker pull "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+            docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+            docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+          '
+
+      - name: Setup ansible installation
+        id: ansible_install_setup
+        shell: bash
+        run: |
+          install_key=ansible_deploy
+
+          rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
+          export PATH="$HOME/.local/bin:$PATH"
+          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.target_dir --output_file /tmp/target_dir.txt
+          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.version --output_file /tmp/version.txt
+          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.name --output_file /tmp/repo_name.txt
+          install_infra_dir=$(cat /tmp/target_dir.txt)
+          install_infra_version=$(cat /tmp/version.txt)
+          install_infra_repo_name=$(cat /tmp/repo_name.txt)
+
+          rm -rf $install_infra_repo_name
+          integration-pipeline fetch_by_tag --repo $install_infra_repo_name --version $install_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $install_infra_dir
+          ls -la $install_infra_dir
+          echo "target_dir=${install_infra_dir}" >> $GITHUB_OUTPUT
+  
+      - name: Ansible install platform
+        id: ansible_install_platform
+        working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
+        shell: bash
+        run: |
+          
+          cp ../${{ steps.provision_infra_setup.outputs.target_dir }}/hosts hosts
+          cp -r ../*.json ./templates/fleet/
+          cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
+          cat hosts
+          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
+          
+          sudo apt install -y python3.9 python3.9-venv
+          python3.9 -m venv ansible-venv
+          source ansible-venv/bin/activate
+          echo "./fleet_install.sh setup --product-artifacts ./templates/fleet/ -i hosts -m install" >> INSTALL.TXT
+          ./fleet_install.sh setup --product-artifacts ./templates/fleet/ -i hosts -m install
+        env:
+          GITHUB_USER: ${{ env.GITHUB_API_USR }}
+          GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
+  
+      - name: Collect Installed components
+        if: always()
+        shell: bash
+        run: |
+            echo "PLACEHOLDER"
+  
+      - name: Get current job id
+        if: always()
+        shell: bash
+        id: job_info
+        run: |
+          sudo apt install jq -y
+          job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
+          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
+          echo "$job_id"
+          echo "$job_html_url"
+          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+      - name: Prepare slack variables
+        if: always()
+        id: pre_slack_result
+        run: |
+          MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
+          MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
+          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+
+      - name: Slack message success
+        uses: archive/github-actions-slack@master
+        with:
+          slack-function: send-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-text: ${{ steps.pre_slack_result.outputs.msg }}
+          slack-optional-thread_ts: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
+
+      - name: Slack message failure
+        uses: archive/github-actions-slack@master
+        if: failure()
+        with:
+          slack-function: send-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
+          slack-optional-thread_ts: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
+
+      - name: Teardown remote vms (Proxmox)
+        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        if: ${{ ( !inputs.debug_fleet_keep_alive && success() ) || cancelled() || ( !inputs.debug_fleet_keep_alive && failure() ) }}
+        shell: bash
+        run: terraform destroy -auto-approve
+        env:
+          TF_VAR_number_agents: ${{ inputs.multi_vm_fleet_number_members }}
+          TF_VAR_proxmox_api_url: "https://hel.mov.ai:8006/api2/json"
+          TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
+          TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
+          TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
+          TF_VAR_ip_list: ${{ inputs.multi_vm_fleet_ips }}
+
+      - name: Remove robots
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          for robot in $(movai-cli robots list); do
+            movai-cli robots stop $robot
+            sleep 5
+            movai-cli robots remove $robot
+          done || true
+
+      - name: Docker cleanups
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          docker system prune -f
+          docker image prune --all -f
+        
 
   publish:
-    needs: [Install-Robot, Install-Heterogeneos-Fleet]
+    needs: [Install-Robot, Install-Heterogeneos-Fleet-Single-VM,Install-Heterogeneos-Fleet-Multi-VM, Install-Simulator-Robot]
     runs-on: integration-pipeline
+    container:
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v2.0.1
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
     steps:
       - uses: rtCamp/action-cleanup@master
 
@@ -1152,13 +1709,33 @@ jobs:
         with:
           name: manifest
           path: .
-
+      - name: unstash sim_configs
+        if: ${{ inputs.with_simulation == 'true' }}
+        uses: actions/download-artifact@v3
+        with:
+          name: sim_configs
+          path: simulator_artifacts
+      - name: unstash deploy_simulator_artifacts
+        if: ${{ inputs.with_simulation == 'true' }}
+        uses: actions/download-artifact@v3
+        with:
+          name: deploy_simulator_artifacts
+          path: .
+      - name: unstash install_archive
+        uses: actions/download-artifact@v3
+        with:
+          name: install_archive
+          path: .
+          
       - name: Install CI Scripts
         shell: bash
         run: |
+          python3 -m venv ci_scripts
+          source ci_scripts/bin/activate
           python3 -m pip install pip --upgrade
           python3 -m pip install pyopenssl --upgrade
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          deactivate
 
       - name: Install Package Deployer
         shell: bash
@@ -1178,7 +1755,17 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.PUSH_REGISTRY }}
 
-
+      - name: Publish simulator state
+        if: ${{ needs.Install-Simulator-Robot.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        shell: bash
+        run: |
+          source ci_scripts/bin/activate
+          cd simulator_artifacts
+          integration-pipeline publish_simulator_state_artifacts \
+                --product_name ${{ inputs.product_name }} \
+                --branch ${GITHUB_REF#refs/heads/}
+          deactivate
+  
       - name: Publish and create release
         id: bump
         shell: bash
@@ -1208,7 +1795,14 @@ jobs:
           rm -rf pkgs_deployable pkgs_undeployable
 
           cp artifacts/*.json deployment_artifacts
-          cp ./artifacts/product-noetic.image.artifact deployment_artifacts/product.image.artifact
+
+          if [ "${{ inputs.with_simulation }}" = "true" ];
+          then
+            echo -e "$(cat ./artifacts/product-noetic.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
+          else
+            cp ./artifacts/product-noetic.image.artifact deployment_artifacts/product.image.artifact
+          fi
+          cp fleet_install.tar.gz deployment_artifacts/
           cp deployment_artifacts/product.image.artifact ./
 
           SAVEIFS=$IFS
