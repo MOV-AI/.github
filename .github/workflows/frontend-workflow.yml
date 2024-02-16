@@ -58,7 +58,7 @@ jobs:
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-20.04
     container:
-      image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
+      image: registry.aws.cloud.mov.ai/qa/npm-buildserver:v1.0.0
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
