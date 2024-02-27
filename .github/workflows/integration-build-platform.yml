@@ -1969,6 +1969,7 @@ jobs:
           echo "movai_user=${MOVAI_USER}" >> $GITHUB_OUTPUT
           echo "movai_pwd=${MOVAI_PWD}" >> $GITHUB_OUTPUT
         env:
+          DISPLAY: ":0"
           SIMULATION_ID: "CI"
 
       - name: Simulator tests
