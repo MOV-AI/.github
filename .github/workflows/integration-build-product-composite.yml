@@ -1095,6 +1095,7 @@ jobs:
           python3 -m pip install pip --upgrade
           python3 -m pip install pyopenssl --upgrade
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install ansible
 
       - name: Install terraform
         shell: bash
@@ -1461,6 +1462,7 @@ jobs:
           python3 -m pip install pip --upgrade
           python3 -m pip install pyopenssl --upgrade
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install ansible
 
       - name: Install terraform
         shell: bash
