@@ -1268,7 +1268,7 @@ jobs:
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
           export PATH="$HOME/.local/bin:$PATH"
 
-          integration_pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory hosts --nb_workers_per_squad ${{ inputs.multi_vm_fleet_number_members }}
+          integration-pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory hosts --nb_workers_per_squad ${{ inputs.multi_vm_fleet_number_members }}
           ansible localhost -m template -a "src=./examples/inventories/fleet.yml.j2 dest=hosts"  --extra-vars "@inputs"
           cat hosts
 
@@ -1461,6 +1461,7 @@ jobs:
           python3 -m pip install pip --upgrade
           python3 -m pip install pyopenssl --upgrade
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+
       - name: Install terraform
         shell: bash
         run: |
@@ -1630,7 +1631,7 @@ jobs:
           cp -r ../*.json ./templates/fleet/
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
           
-          integration_pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory hosts --nb_workers_per_squad 1
+          integration-pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory hosts --nb_workers_per_squad 1
           ansible localhost -m template -a "src=./examples/inventories/fleet.yml.j2 dest=hosts"  --extra-vars "@inputs"
           cat hosts
           while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
