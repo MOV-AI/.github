@@ -1269,7 +1269,7 @@ jobs:
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
           export PATH="$HOME/.local/bin:$PATH"
           
-          nb_squads=$(cat ./templates/fleet/product-manifest.yaml | yq .product_dependencies.products[].squad |  wc -w)
+          nb_squads=$(grep -o 'squad: [^"]*' ./templates/fleet/product-manifest.yaml | cut -d' ' -f2- | wc -w)
           nb_workers_per_squad=$((${{ inputs.multi_vm_fleet_number_members }} / $nb_squads))
           integration-pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory hosts --nb_workers_per_squad $nb_workers_per_squad
           ansible localhost -m template -a "src=./examples/inventories/fleet.yml.j2 dest=hosts"  --extra-vars "@inputs"
@@ -1635,7 +1635,7 @@ jobs:
           cp -r ../*.json ./templates/fleet/
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
           
-          nb_squads=$(cat ./templates/fleet/product-manifest.yaml | yq .product_dependencies.products[].squad |  wc -w)
+          nb_squads=$(grep -o 'squad: [^"]*' ./templates/fleet/product-manifest.yaml | cut -d' ' -f2- | wc -w)
           nb_workers_per_squad=$((${{ inputs.multi_vm_fleet_number_members }} / $nb_squads))
           integration-pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory hosts --nb_workers_per_squad $nb_workers_per_squad
           ansible localhost -m template -a "src=./examples/inventories/fleet.yml.j2 dest=hosts"  --extra-vars "@inputs"
