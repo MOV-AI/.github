@@ -1274,6 +1274,9 @@ jobs:
           nb_squads=$(grep -o 'squad: [^"]*' ./templates/fleet/product-manifest.yaml | cut -d' ' -f2- | wc -w)
           nb_workers_per_squad=$((${{ inputs.multi_vm_fleet_number_members }} / $nb_squads))
           integration-pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory hosts --nb_workers_per_squad $nb_workers_per_squad
+
+          cat inputs
+
           ansible localhost -m template -a "src=./examples/inventories/fleet.yml.j2 dest=hosts"  --extra-vars "@inputs"
           cat hosts
 
@@ -1642,8 +1645,12 @@ jobs:
           nb_squads=$(grep -o 'squad: [^"]*' ./templates/fleet/product-manifest.yaml | cut -d' ' -f2- | wc -w)
           nb_workers_per_squad=$((${{ inputs.multi_vm_fleet_number_members }} / $nb_squads))
           integration-pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory hosts --nb_workers_per_squad $nb_workers_per_squad
+
+          cat inputs
+
           ansible localhost -m template -a "src=./examples/inventories/fleet.yml.j2 dest=hosts"  --extra-vars "@inputs"
           cat hosts
+          
           while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
           
           apt install -y python3.9 python3.9-venv
