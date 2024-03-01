@@ -1268,6 +1268,8 @@ jobs:
           cp -r ../*.json ./templates/fleet/
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
           export PATH="$HOME/.local/bin:$PATH"
+
+          cat hosts
           
           nb_squads=$(grep -o 'squad: [^"]*' ./templates/fleet/product-manifest.yaml | cut -d' ' -f2- | wc -w)
           nb_workers_per_squad=$((${{ inputs.multi_vm_fleet_number_members }} / $nb_squads))
@@ -1634,6 +1636,8 @@ jobs:
           cp ../${{ steps.provision_infra_setup.outputs.target_dir }}/hosts hosts
           cp -r ../*.json ./templates/fleet/
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
+
+          cat hosts
           
           nb_squads=$(grep -o 'squad: [^"]*' ./templates/fleet/product-manifest.yaml | cut -d' ' -f2- | wc -w)
           nb_workers_per_squad=$((${{ inputs.multi_vm_fleet_number_members }} / $nb_squads))
