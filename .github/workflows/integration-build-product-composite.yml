@@ -1270,10 +1270,8 @@ jobs:
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
           export PATH="$HOME/.local/bin:$PATH"
 
-          # Extract number of squads in fleet based on product manifest
-          nb_squads=$(grep -o 'squad: [^"]*' ./templates/fleet/product-manifest.yaml | cut -d' ' -f2- | wc -w)
-          # Compute number of workers per squad from number of fleet members and number of available squads
-          nb_workers_per_squad=$((${{ inputs.multi_vm_fleet_number_members }} / $nb_squads))
+          # It is assumed the nb of squads matches the number of members of the fleet
+          nb_workers_per_squad=1
           # generate inputs variable file from terraform generated hosts file
           integration-pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory hosts --nb_workers_per_squad $nb_workers_per_squad
           # generate new format hosts file from inputs file
@@ -1640,10 +1638,8 @@ jobs:
           cp -r ../*.json ./templates/fleet/
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
           
-          # Extract number of squads in fleet based on product manifest
-          nb_squads=$(grep -o 'squad: [^"]*' ./templates/fleet/product-manifest.yaml | cut -d' ' -f2- | wc -w)
-          # Compute number of workers per squad from number of fleet members and number of available squads
-          nb_workers_per_squad=$((${{ inputs.multi_vm_fleet_number_members }} / $nb_squads))
+          # It is assumed the nb of squads matches the number of members of the fleet
+          nb_workers_per_squad=1
           # generate inputs variable file from terraform generated hosts file
           integration-pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory hosts --nb_workers_per_squad $nb_workers_per_squad
           # generate new format hosts file from inputs file
