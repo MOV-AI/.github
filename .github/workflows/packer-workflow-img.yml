@@ -98,9 +98,6 @@ jobs:
     outputs:
       raised_version: ${{ steps.raise.outputs.raised_version }}
       artifact_url: ${{ steps.minio_upload.outputs.artifact_url }}
-    strategy:
-      matrix:
-        image_type: ${{ fromJSON(inputs.image_type_list) }}
     steps:
       - name: Pre clean ups
         uses: rtCamp/action-cleanup@master
@@ -121,45 +118,7 @@ jobs:
           echo $RAISED_COMP_VERSION
           echo "raised_version=$RAISED_COMP_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Packer build
-        shell: bash
-        run: |
-          echo "Running ./build.bash ${{ matrix.image_type }} with version ${{ steps.raise.outputs.raised_version }}"
-          ./build.bash ${{ matrix.image_type }}
-        env:
-          PACKER_VERSION: ${{ steps.raise.outputs.raised_version }}
-
-      - name: Run tests
-        if: ${{ inputs.run_tests }}
-        run: |
-          echo "Running tests for ${{ matrix.image_type }}"
-          ./build.bash test-${{ matrix.image_type }}
-
-      - name: Upload artifacts (Minio)
-        if: ${{ inputs.deploy == 'true' }}
-        shell: bash
-        id: minio_upload
-        run: |
-          S3_ARTIFACT_URL="s3://ci-artifacts/${{ github.repository }}/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}/"
-          PUBLIC_URL="$MINIO_PUBLIC_URL/browser/ci-artifacts/${{ github.repository }}/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}/${{ matrix.image_type }}"
-          aws --endpoint-url ${{ env.MINIO_S3_URL }} s3 cp \
-          ./output/${{ matrix.image_type }} $S3_ARTIFACT_URL \
-          --recursive
-
-          echo "::group::Download link"
-          echo "Artifact uploaded to: $PUBLIC_URL"
-          echo "::endgroup::"
-
-          echo "artifact_url=$PUBLIC_URL" >> $GITHUB_OUTPUT
-
-          echo "::group::Artifact local copy to staging area $RUN_STAGING_DIR"
-          mkdir -p $RUN_STAGING_DIR
-          mv -f ./output/${{ matrix.image_type }} $RUN_STAGING_DIR
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.minio_key_id }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.minio_secret_key_id }}
-          AWS_DEFAULT_REGION: "us-east-1"
-          AWS_DEFAULT_OUTPUT: "none"
+   
 
   Create-Release:
     runs-on: ubuntu-latest
@@ -222,20 +181,23 @@ jobs:
 
       - name: Deploy images to NFS server
         run: |
+
+          mkdir -p $RUN_STAGING_DIR
+          touch $RUN_STAGING_DIR/benfica.img
           nb_files=$(find $RUN_STAGING_DIR -name "*.img" | wc -l)
           if [ $nb_files -eq 0 ]; then
             echo "No images found to deploy"
             exit 1
           fi
 
-          mkdir -p $PROXMOX_NFS_SERVER_PATH/${{ needs.Build.outputs.raised_version }}
+          sudo mkdir -p $PROXMOX_NFS_SERVER_PATH/${{ needs.Build.outputs.raised_version }}
           for file in $(find $RUN_STAGING_DIR -name "*.img"); do
             echo "Copying $file to $PROXMOX_NFS_SERVER_PATH/${{ needs.Build.outputs.raised_version }}"
             if [ -f $PROXMOX_NFS_SERVER_PATH/${{ needs.Build.outputs.raised_version }} ]; then
               echo "File $PROXMOX_NFS_SERVER_PATH/${{ needs.Build.outputs.raised_version }} exists."
               exit 1
             else
-              cp $file $PROXMOX_NFS_SERVER_PATH/${{ needs.Build.outputs.raised_version }}
+              sudo cp $file $PROXMOX_NFS_SERVER_PATH/${{ needs.Build.outputs.raised_version }}
             fi
           done
           echo "Images copied to NFS server to $PROXMOX_NFS_SERVER_URL"
