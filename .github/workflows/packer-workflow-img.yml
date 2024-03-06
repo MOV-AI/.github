@@ -222,7 +222,6 @@ jobs:
 
       - name: Deploy images to NFS server
         run: |
-
           nb_files=$(find $RUN_STAGING_DIR -name "*.img" | wc -l)
           if [ $nb_files -eq 0 ]; then
             echo "No images found to deploy"
