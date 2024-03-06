@@ -206,7 +206,7 @@ jobs:
         if: always()
         id: pre_slack
         run: |
-          PUBLIC_URL="$MINIO_PUBLIC_URL/browser/ci-artifacts/${{ github.repository }}/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}/
+          PUBLIC_URL="$MINIO_PUBLIC_URL/browser/ci-artifacts/${{ github.repository }}/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}/"
           MESSAGE=":arrow_forward: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), new pre-version ${{ needs.Build.outputs.raised_version }}  of packer images available :sunny:\
             Download link: $PUBLIC_URL"
 
