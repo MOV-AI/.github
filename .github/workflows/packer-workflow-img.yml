@@ -134,6 +134,7 @@ jobs:
         run: |
           echo "Running tests for ${{ matrix.image_type }}"
           ./build.bash test-${{ matrix.image_type }}
+
       - name: Upload artifacts (Minio)
         if: ${{ inputs.deploy == 'true' }}
         shell: bash
@@ -144,10 +145,13 @@ jobs:
           aws --endpoint-url ${{ env.MINIO_S3_URL }} s3 cp \
           ./output/${{ matrix.image_type }} $S3_ARTIFACT_URL \
           --recursive
+
           echo "::group::Download link"
           echo "Artifact uploaded to: $PUBLIC_URL"
           echo "::endgroup::"
+
           echo "artifact_url=$PUBLIC_URL" >> $GITHUB_OUTPUT
+
           echo "::group::Artifact local copy to staging area $RUN_STAGING_DIR"
           mkdir -p $RUN_STAGING_DIR
           mv -f ./output/${{ matrix.image_type }} $RUN_STAGING_DIR
@@ -155,7 +159,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.minio_key_id }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.minio_secret_key_id }}
           AWS_DEFAULT_REGION: "us-east-1"
-          AWS_DEFAULT_OUTPUT: "none"   
+          AWS_DEFAULT_OUTPUT: "none"
 
   Create-Release:
     runs-on: ubuntu-latest
