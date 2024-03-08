@@ -1,0 +1,372 @@
+name: Build Packer images
+on:
+  workflow_call:
+    inputs:
+      deploy:
+        required: true
+        type: string
+        default: 'false'
+      image_type_list:
+        required: true
+        type: string
+      slack_channel:
+        required: false
+        type: string
+        default: "C05UYMX2U0K"
+      run_tests:
+        required: false
+        type: boolean
+        default: false
+      release:
+        required: false
+        type: string
+        default: 'false'
+
+    secrets:
+      auto_commit_user:
+        required: true
+      auto_commit_mail:
+        required: true
+      auto_commit_pwd:
+        required: true
+      packer_token_id:
+        required: true
+      minio_key_id:
+        required: true
+      minio_secret_key_id:
+        required: true
+      gh_user:
+        required: true
+      gh_token:
+        required: true
+      slack_token_id:
+        required: true
+      img_default_password:
+        required: true
+
+env:
+  MINIO_S3_URL: "https://s3.mov.ai"
+  MINIO_PUBLIC_URL: "https://minio.mov.ai"
+  RUN_STAGING_DIR: "/home/devops/packer-ci/staging/${{ github.repository }}/${{ github.run_id}}/"
+  PROXMOX_NFS_SERVER_PATH: "/media/nas-mary/template/iso"
+  PROXMOX_NFS_SERVER_URL: "https://mary.mov.ai:8006/#v1:0:=storage%2Fbb-8%2Fnas-mary:4:5:=contentIso"
+  PACKER_GITHUB_API_TOKEN: ${{ secrets.packer_token_id }}
+  GITHUB_USER: ${{ secrets.gh_user }}
+  GITHUB_TOKEN: ${{ secrets.gh_token }}
+  DEFAULT_USER_PASSWORD: ${{ secrets.img_default_password }}
+
+jobs:
+
+  RefreshSource:
+    if: ${{ inputs.deploy == 'false' && inputs.release == 'false' }}
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: docker://chinthakagodawita/autoupdate-action:v1
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: '${{ secrets.auto_commit_pwd }}'
+          MERGE_MSG: "Branch was auto-updated."
+
+  Validate:
+    runs-on: ubuntu-latest
+    if: ${{ inputs.release == 'false' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install pre-reqs
+        run: |
+          curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+          sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+          sudo apt update
+          sudo apt install -y --no-install-recommends qemu qemu-kvm qemu-utils virt-manager bridge-utils cloud-init genisoimage packer
+
+      - name: Validate packer files
+        run: |
+          make validate
+
+      - name: Install dependencies
+        run: pip install pre-commit
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+
+  Build:
+    runs-on: packer-runner
+    if: ${{ inputs.release == 'false' }}
+    needs: Validate
+    outputs:
+      raised_version: ${{ steps.raise.outputs.raised_version }}
+      artifact_url: ${{ steps.minio_upload.outputs.artifact_url }}
+    strategy:
+      matrix:
+        image_type: ${{ fromJSON(inputs.image_type_list) }}
+    steps:
+      - name: Pre clean ups
+        uses: rtCamp/action-cleanup@master
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Raise Version
+        id: raise
+        shell: bash
+        run: |
+          COMP_VERSION=$(cat version)
+          main_version=${COMP_VERSION%-*}
+          build_id="${COMP_VERSION#*-}"
+          raised_buildid=$(($build_id+1))
+          RAISED_COMP_VERSION="$main_version-$raised_buildid"
+          echo $RAISED_COMP_VERSION>version
+          echo $RAISED_COMP_VERSION
+          echo "raised_version=$RAISED_COMP_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Packer build
+        shell: bash
+        run: |
+          echo "Running ./build.bash ${{ matrix.image_type }} with version ${{ steps.raise.outputs.raised_version }}"
+          ./build.bash ${{ matrix.image_type }}
+        env:
+          PACKER_VERSION: ${{ steps.raise.outputs.raised_version }}
+
+      - name: Run tests
+        if: ${{ inputs.run_tests }}
+        run: |
+          echo "Running tests for ${{ matrix.image_type }}"
+          ./build.bash test-${{ matrix.image_type }}
+
+      - name: Upload artifacts (Minio)
+        if: ${{ inputs.deploy == 'true' }}
+        shell: bash
+        id: minio_upload
+        run: |
+          S3_ARTIFACT_URL="s3://ci-artifacts/${{ github.repository }}/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}/"
+          PUBLIC_URL="$MINIO_PUBLIC_URL/browser/ci-artifacts/${{ github.repository }}/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}/${{ matrix.image_type }}"
+          aws --endpoint-url ${{ env.MINIO_S3_URL }} s3 cp \
+          ./output/${{ matrix.image_type }} $S3_ARTIFACT_URL \
+          --recursive
+
+          echo "::group::Download link"
+          echo "Artifact uploaded to: $PUBLIC_URL"
+          echo "::endgroup::"
+
+          echo "artifact_url=$PUBLIC_URL" >> $GITHUB_OUTPUT
+
+          echo "::group::Artifact local copy to staging area $RUN_STAGING_DIR"
+          mkdir -p $RUN_STAGING_DIR
+          mv -f ./output/${{ matrix.image_type }} $RUN_STAGING_DIR
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.minio_key_id }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.minio_secret_key_id }}
+          AWS_DEFAULT_REGION: "us-east-1"
+          AWS_DEFAULT_OUTPUT: "none"
+
+  Create-Release:
+    runs-on: ubuntu-latest
+    needs: Build
+    if: ${{ inputs.deploy == 'true' && inputs.release == 'false' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Commit raise
+        if: ${{ inputs.deploy == 'true' }}
+        run: |
+          git config --global --add safe.directory $(pwd)
+          git config --global user.name '${{ secrets.auto_commit_user }}'
+          git config --global user.email '${{ secrets.auto_commit_mail }}'
+          git config --global user.password ${{ secrets.auto_commit_pwd }}
+          git restore version
+          git pull
+          echo "${{ needs.Build.outputs.raised_version }}">version
+          git add version
+          git commit -m "[skip actions] Automatic Bump of image version to ${{ needs.Build.outputs.raised_version }}"
+
+      - name: Prepare raise variables
+        id: pre_raise_push
+        run: |
+          echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+
+      - name: Raise App version
+        uses: CasperWA/push-protected@v2
+        with:
+          token: ${{ secrets.auto_commit_pwd }}
+          branch: ${{ steps.pre_raise_push.outputs.branch }}
+          unprotect_reviews: true
+
+      - name: Commit info
+        id: commit
+        shell: bash
+        run: |
+          commit_hash=$(git log --format="%H" -n 1)
+          echo "commit_id=$commit_hash" >> $GITHUB_OUTPUT
+
+      - name: Create Github Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "Release of ${{ needs.Build.outputs.raised_version }}"
+          body: "Please add release notes"
+          tag_name: ${{ needs.Build.outputs.raised_version }}
+          target_commitish: ${{ steps.commit.outputs.commit_id }}
+          token: ${{ secrets.auto_commit_pwd }}
+          prerelease: true
+          generate_release_notes: true
+
+  Deploy-Images:
+    runs-on: packer-runner
+    needs: [ Build, Create-Release ]
+    if: ${{ inputs.deploy == 'true' && inputs.release == 'false' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Test NFS server
+        run: |
+          if [ ! -d "$PROXMOX_NFS_SERVER_PATH" ]; then
+            echo "ERROR: NFS server path $PROXMOX_NFS_SERVER_PATH does not exist."
+            exit 1
+          fi
+
+      - name: Deploy images to NFS server
+        run: |
+          nb_files=$(find $RUN_STAGING_DIR -name "*.img" | wc -l)
+          if [ $nb_files -eq 0 ]; then
+            echo "No images found to deploy"
+            exit 1
+          fi
+
+          sudo mkdir -p $PROXMOX_NFS_SERVER_PATH/
+          for file in $(find $RUN_STAGING_DIR -name "*.img"); do
+            basename=$(basename $file)
+            versioned_file="${{ needs.Build.outputs.raised_version }}-${basename%.*}.img"
+
+            if [ -f "$PROXMOX_NFS_SERVER_PATH/$versioned_file" ]; then
+              echo "ERROR: File $PROXMOX_NFS_SERVER_PATH/$versioned_file exists."
+              exit 1
+            else
+              echo "Copying $file to $PROXMOX_NFS_SERVER_PATH/$versioned_file"
+              sudo cp $file "$PROXMOX_NFS_SERVER_PATH/$versioned_file"
+            fi
+          done
+          echo "Images copied to NFS server to $PROXMOX_NFS_SERVER_URL"
+
+      - name: Prepare slack variables
+        if: always()
+        id: pre_slack
+        run: |
+          PUBLIC_URL="$MINIO_PUBLIC_URL/browser/ci-artifacts/${{ github.repository }}/${{ github.run_id}}/Build/attempts/${{ github.run_attempt }}/"
+          MESSAGE=":arrow_forward: New pre-version ${{ needs.Build.outputs.raised_version }}  of packer images available :sunny:\
+            Download link: $PUBLIC_URL"
+
+          MESSAGE_ERR=":x: Build of pre-version ${{ needs.Build.outputs.raised_version }} is unstable :rain_cloud:\
+            Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+
+      - name: Slack message success
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          channel-id: ${{ inputs.slack_channel }}
+          slack-message: ${{ steps.pre_slack.outputs.msg }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN_ID }}
+
+      - name: Slack message failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          channel-id: ${{ inputs.slack_channel }}
+          slack-message: ${{ steps.pre_slack.outputs.msg_error }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN_ID }}
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: |
+          rm -rf $RUN_STAGING_DIR
+
+  Release-Images:
+    runs-on: packer-runner
+    if: ${{ inputs.release == 'true' }}
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+      PUBLIC_URL: ${{ steps.minio_upload.outputs.PUBLIC_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Test NFS server
+        run: |
+          if [ ! -d "$PROXMOX_NFS_SERVER_PATH" ]; then
+            echo "ERROR: NFS server path $PROXMOX_NFS_SERVER_PATH does not exist."
+            exit 1
+          fi
+
+      - name: Set tag output
+        id: vars
+        run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+
+      - name: Upload images from NFS to Minio bucket vm-templates
+        id: minio_upload
+        run: |
+          NFS_PATH="${PROXMOX_NFS_SERVER_PATH}/"
+          PUBLIC_URL="$MINIO_PUBLIC_URL/browser/vm-templates/${{ steps.vars.outputs.tag}}/"
+
+          pushd $NFS_PATH
+          for files in $(find . -name "${{ steps.vars.outputs.tag}}-*.img"); do
+            echo "Uploading $files to minio"
+            aws --endpoint-url ${{ env.MINIO_S3_URL }} s3 cp $files s3://vm-templates/${{ steps.vars.outputs.tag}}/ --no-progress
+
+            # remove the version from the file name
+            echo "Creating symlink for $files"
+            unversioned_filename=$(basename $files | sed "s/${{ steps.vars.outputs.tag}}-//")
+            sudo ln -sf $files "${unversioned_filename%.*}-latest.img"
+          done
+          popd
+
+          echo "::group::Download link"
+          echo "Artifact uploaded to: $PUBLIC_URL"
+          echo "::endgroup::"
+
+          echo "PUBLIC_URL=$PUBLIC_URL" >> $GITHUB_OUTPUT
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.minio_key_id }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.minio_secret_key_id }}
+          AWS_DEFAULT_REGION: "us-east-1"
+          AWS_DEFAULT_OUTPUT: "none"
+
+      - name: Slack message
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          channel-id: ${{ inputs.slack_channel }}
+          slack-message: ":white_check_mark: New version ${{ steps.vars.outputs.tag }}  of packer images available :sunny:\
+            Download link: ${{ steps.minio_upload.outputs.PUBLIC_URL }}"
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN_ID }}
+
+  Write-Build-Summary:
+    runs-on: ubuntu-latest
+    needs: [ Build, Create-Release, Deploy-Images ]
+    if: ${{ inputs.release == 'false' }}
+    steps:
+      - name: Write Summary
+        id: summary
+        run: |
+          summary_message=":construction_worker: new pre-version ${{ needs.Build.outputs.raised_version }}  of packer images available here: ${{ needs.Build.outputs.artifact_url }}\n"
+
+          echo -e "### Build Summary\n${summary_message}" >> $GITHUB_STEP_SUMMARY
+
+  Write-Release-Summary:
+    runs-on: ubuntu-latest
+    needs: [ Release-Images ]
+    if: ${{ inputs.release == 'true' }}
+    steps:
+      - name: Write Summary
+        id: summary
+        run: |
+          summary_message=":rocket: new version ${{ needs.Release-Images.outputs.tag }}  of packer images available here: ${{ needs.Release-Images.outputs.PUBLIC_URL }}\n"
+
+          echo -e "### Release Summary \n${summary_message}" >> $GITHUB_STEP_SUMMARY
+
