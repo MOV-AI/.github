@@ -75,9 +75,9 @@ on:
         required: true
       proxmox_api_url:
         required: true
-      proxmox_api_token_id:
+      proxmox_ve_username:
         required: true
-      proxmox_api_token_secret:
+      proxmox_ve_password:
         required: true
       ssh_priv_key:
         required: true
@@ -100,12 +100,12 @@ env:
   MID_REGISTRY: registry.cloud.mov.ai
   USERSPACE_FOLDER_PATH: userspace
   REMOTE_WORKSPACE_PATH: workspace
-  PROVISION_INFRA_REPO: "devops-tf-proxmox-fleet"
-  PROVISION_INFRA_VERSION: "0.1.0-7"
+  PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
+  PROVISION_INFRA_VERSION: "0.0.0-10"
   # slack channel movai-projects
-  SLACK_CHANNEL: ${{ inputs.overwrite_slack_channel }}
+  #SLACK_CHANNEL: ${{ inputs.overwrite_slack_channel }}
   # development slack channel
-  #SLACK_CHANNEL: "C05K2KF1UP8"
+  SLACK_CHANNEL: "C05K2KF1UP8"
   PROJECT_DATA_VIEWER_API: "https://personal-7vf0v2cu.outsystemscloud.com/ProjectDataViewer5/rest/V1//CreateProject"
   MINIO_S3_URL: "https://s3.mov.ai"
 
@@ -405,268 +405,6 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
-  Install-Robot:
-    needs: [Build-Spawner]
-    strategy:
-      matrix:
-        distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline
-
-    steps:
-      - uses: rtCamp/action-cleanup@master
-
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Agent info
-        run: |
-          echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | awk '{print $1}')"
-
-      - name: unstash raised_meta
-        uses: actions/download-artifact@v3
-        with:
-          name: raised_meta
-          path: .
-
-      - name: unstash manifest
-        uses: actions/download-artifact@v3
-        with:
-          name: manifest
-          path: .
-
-      - name: unstash robot_jsons_${{ matrix.distro }}
-        uses: actions/download-artifact@v3
-        with:
-          name: robot_jsons_${{ matrix.distro }}
-          path: .
-
-      - name: Login to ${{ env.REGISTRY }} Registry
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.registry_user }}
-          password: ${{ secrets.registry_password }}
-          registry: ${{ env.REGISTRY }}
-
-      - name: Login to ${{ env.PUSH_REGISTRY }} Registry
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.registry_user }}
-          password: ${{ secrets.registry_password }}
-          registry: ${{ env.PUSH_REGISTRY }}
-
-      - name: Login to ${{ env.MID_REGISTRY }} Registry
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.registry_user }}
-          password: ${{ secrets.registry_password }}
-          registry: ${{ env.MID_REGISTRY }}
-
-      - name: Docker load spawner image
-        shell: bash
-        run: |
-          docker pull "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-
-      - name: Installation
-        shell: bash
-        run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
-
-          mkdir -p artifacts
-          cp *.json artifacts/
-          CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.distro }}.json
-          export PATH="$HOME/.local/bin:$PATH"
-          mkdir -p userspace/
-          export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
-          integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
-          integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
-          wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
-          chmod +x ./QuickStart_$(cat quickstart_version).bash
-          ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
-
-          execution_status=$?
-          exit $execution_status
-          rm movai_service_version
-
-      - name: Collect Install logs
-        continue-on-error: true
-        run: |
-          # cleanup
-          rm -rf install_logs
-
-          mkdir -p install_logs
-          journalctl -u movai-service -t mobros --since "1hour ago" > install_logs/spawner-firmware.log
-          journalctl -u movai-service --since "1hour ago" > install_logs/movai-service.log
-
-      - name: Stash Install logs artifacts
-        continue-on-error: true
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: install_logs
-          path: install_logs/*
-          retention-days: 5
-
-      - name: Run mobtest
-        shell: bash
-        run: |
-          container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
-          docker exec -t "$container_id" bash -c '
-            set -e
-            export PATH="$HOME/.local/bin:$PATH"
-            python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==0.0.4.3 --ignore-installed
-            mobtest proj /opt/ros/noetic/share/
-          '
-
-      - name: Collect Installed components
-        if: always()
-        shell: bash
-        run: |
-          container_id=$(docker ps -q -f "ancestor=$REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)")
-          docker exec -t "$container_id" bash -c '
-            set -e
-            sudo apt update
-            export PATH="$HOME/.local/bin:$PATH"
-            python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple movai-package-deployer==${{ env.PACKAGE_DEPLOYER_VERSION }} --ignore-installed
-            package-deployer scan
-            package-deployer scanAll
-            ls -la /tmp
-
-            {
-                echo 'Annotation:*'
-                echo 'Callback:*'
-                echo 'Configuration:*'
-                echo 'Flow:*'
-                echo 'GraphicScene:*'
-                echo 'Layout:*'
-                echo 'Node:*'
-                echo 'Package:*'
-            } >> /tmp/manifest.txt
-            mkdir /tmp/proj_metadata
-            python3 -m tools.backup -p /tmp/proj_metadata/ -m /tmp/manifest.txt -a export -i
-
-          ' || true
-            docker cp $container_id:/tmp/deployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-deployable.dploy
-            docker cp $container_id:/tmp/undeployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-3rdParty.dploy
-            docker cp $container_id:/tmp/apt_packages.json artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-apt_packages.json
-
-            mkdir -p metadata_artifact tmp_meta
-            docker cp $container_id:/tmp/proj_metadata/ ./
-            tar cvzf ./metadata_artifact/metadata.tar.gz ./proj_metadata
-            CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.distro }}.json
-
-            echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)">artifacts/product-${{ matrix.distro }}.image.artifact
-
-      - name: Un stash dependency_version
-        if: ${{ inputs.propagate_project == false }}
-        uses: actions/download-artifact@v3
-        with:
-          name: manifest
-          path: dependency_version
-
-      - name: Get project and solution version
-        id: project_and_solution_version
-        if: ${{ inputs.use_project_data_viewer == true &&  inputs.propagate_project == false }}
-        continue-on-error: true
-        shell: bash
-        run: |
-          PROJECT_VERSION=$(cat product.version)
-          echo "PROJECT_VERSION=$PROJECT_VERSION" >> $GITHUB_OUTPUT
-          MOVAI_SOLUTION_VERSION=$(cat dependency_version/base_version)
-          echo "MOVAI_SOLUTION_VERSION=$MOVAI_SOLUTION_VERSION" >> $GITHUB_OUTPUT
-
-      - name: Publish to project data viewer
-        id: publish_to_pdv
-        if: ${{ inputs.use_project_data_viewer == true &&  inputs.propagate_project == false }}
-        continue-on-error: true
-        shell: bash
-        run: |
-          curl --location '${{ env.PROJECT_DATA_VIEWER_API}}?Name=${{ inputs.product_name }}-${{ matrix.distro }}&Version=${{ steps.project_and_solution_version.outputs.PROJECT_VERSION }}&SolutionVersion=${{ steps.project_and_solution_version.outputs.MOVAI_SOLUTION_VERSION }}' \
-          --header 'Content-Type: application/json' \
-          --header 'Authorization: Basic ${{ secrets.pdv_auth_token }}' \
-          --data @artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-apt_packages.json
-
-      - name: Get current job id
-        if: always()
-        shell: bash
-        id: job_info
-        run: |
-          sudo apt install jq -y
-          job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
-          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "$job_id"
-          echo "$job_html_url"
-          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.gh_token }}
-
-      - name: Prepare slack variables
-        if: always()
-        id: pre_slack_result
-        run: |
-          MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
-          MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
-
-      - name: Slack message success
-        uses: archive/github-actions-slack@master
-        with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
-
-      - name: Slack message failure
-        uses: archive/github-actions-slack@master
-        if: failure()
-        with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
-
-      - name: Stash project metadata
-
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: project_metadata
-          path: metadata_artifact/*
-          retention-days: 3
-
-      - name: Stash deploy_artifacts_noetic
-        uses: actions/upload-artifact@v3
-        with:
-          name: deploy_artifacts_noetic
-          path: artifacts/*
-          retention-days: 5
-
-      - name: Remove robots
-        if: always()
-        shell: bash
-        run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
-
-      - name: Docker cleanups
-        if: always()
-        shell: bash
-        run: |
-          docker system prune -f
-          docker image prune --all -f
-
   Build-Simulator:
     needs: [Validate-boostrap-configs, Build-Spawner]
     runs-on: integration-pipeline
@@ -857,237 +595,6 @@ jobs:
             echo "simul_tests_infra=integration-pipeline" >> $GITHUB_OUTPUT
           fi
 
-  Install-Simulator-Robot:
-    needs: [Build-Spawner, Build-Simulator]
-    strategy:
-      matrix:
-        distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline
-    outputs:
-      slack_thread_id: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
-      skip_simulator: ${{ needs.Build-Simulator.outputs.skip_simulator }}
-    steps:
-      - uses: rtCamp/action-cleanup@master
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-
-      - name: Checkout
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/checkout@v3
-
-      - name: Agent info
-        if: ${{ inputs.with_simulation == 'true' }}
-        run: |
-          echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | awk '{print $1}')"
-
-      - name: unstash raised_meta
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
-        with:
-          name: raised_meta
-          path: .
-
-      - name: unstash manifest
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
-        with:
-          name: manifest
-          path: .
-
-      - name: unstash robot_jsons_${{ matrix.distro }}
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
-        with:
-          name: robot_jsons_${{ matrix.distro }}
-          path: .
-
-      - name: Login to ${{ env.REGISTRY }} Registry
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.registry_user }}
-          password: ${{ secrets.registry_password }}
-          registry: ${{ env.REGISTRY }}
-
-      - name: Login to ${{ env.PUSH_REGISTRY }} Registry
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.registry_user }}
-          password: ${{ secrets.registry_password }}
-          registry: ${{ env.PUSH_REGISTRY }}
-
-      - name: Login to ${{ env.MID_REGISTRY }} Registry
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.registry_user }}
-          password: ${{ secrets.registry_password }}
-          registry: ${{ env.MID_REGISTRY }}
-
-      - name: Docker load spawner image
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        shell: bash
-        run: |
-          docker pull "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-
-      - name: Docker load simulator image
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        shell: bash
-        run: |
-          promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.MID_REGISTRY }}-${{ env.REGISTRY }}-g")
-
-          docker pull "${{ needs.Build-Simulator.outputs.image_name }}"
-          docker tag "${{ needs.Build-Simulator.outputs.image_name }}" $promoted_name
-
-
-      - name: Installation
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        shell: bash
-        run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
-
-          mkdir -p artifacts
-          cp *.json artifacts/
-          CONFIG_FILE_NAME="standalone-${{ inputs.product_name }}-simulator-${{ matrix.distro }}.json"
-          mkdir -p userspace/models_database/ userspace/tugbot_ignition/
-
-          export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
-          export PUBLIC_IP=$(hostname -I | awk '{print $1}')
-
-          export PATH="$HOME/.local/bin:$PATH"
-          integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
-          integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
-
-          wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
-          chmod +x ./QuickStart_$(cat quickstart_version).bash
-          ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
-
-          execution_status=$?
-          exit $execution_status
-          rm movai_service_version
-        env:
-          SIMULATION_ID: "CI"
-
-      - name: Collect Install logs
-        continue-on-error: true
-        run: |
-          # cleanup
-          rm -rf install_logs
-
-          mkdir -p install_logs
-          journalctl -u movai-service -t mobros --since "1hour ago" > install_logs/spawner-firmware.log
-          journalctl -u movai-service --since "1hour ago" > install_logs/movai-service.log
-
-      - name: Stash Install simulator logs artifacts
-        continue-on-error: true
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: install_simulator_logs
-          path: install_logs/*
-          retention-days: 5
-
-      - name: Run mobtest
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        shell: bash
-        run: |
-          container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
-          docker exec -t "$container_id" bash -c '
-            set -e
-            export PATH="$HOME/.local/bin:$PATH"
-            python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
-            mobtest proj /opt/ros/${{ matrix.distro }}/share/
-          '
-
-      - name: Output simulator image
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        id: promote
-        shell: bash
-        run: |
-          sim_img_name="$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g")"
-          push_name=$(echo "$sim_img_name" | sed "s-${{ env.REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
-
-          echo "image_name=$push_name" >> $GITHUB_OUTPUT
-
-      - name: Get current job id
-        if: always()
-        shell: bash
-        id: job_info
-        run: |
-          sudo apt install jq -y
-          job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
-          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "$job_id"
-          echo "$job_html_url"
-          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.gh_token }}
-
-      - name: Prepare slack variables
-        if: always()
-        id: pre_slack_result
-        run: |
-          MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
-          MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
-
-      - name: Slack message success
-        uses: archive/github-actions-slack@master
-        with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
-
-      - name: Slack message failure
-        uses: archive/github-actions-slack@master
-        if: failure()
-        with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
-
-      - name: pre-stash
-        if: ${{ inputs.with_simulation == 'true' }}
-        shell: bash
-        run: |
-          echo "${{ steps.promote.outputs.image_name }}" > simulator.image.artifact
-
-      - name: Stash deploy_simulator_artifacts
-        if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v3
-        with:
-          name: deploy_simulator_artifacts
-          path: simulator.image.artifact
-          retention-days: 5
-
-      - name: Remove robots
-        if: always()
-        shell: bash
-        run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
-
-      - name: Docker cleanups
-        if: always()
-        shell: bash
-        run: |
-          docker system prune -f
-          docker image prune --all -f
-
   Validation-Simulator-Tests:
     needs: [Build-Spawner, Build-Simulator]
     runs-on: ${{ needs.Build-Simulator.outputs.simulator_tests_agent_name }}
@@ -1160,8 +667,9 @@ jobs:
           rm -rf $provision_infra_dir
           export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
+          
           ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}/hosts/generic/" >> $GITHUB_OUTPUT
+          echo "target_dir=${provision_infra_dir}/" >> $GITHUB_OUTPUT
 
       - name: Define Instance names
         if: ${{ inputs.with_simulation_tests }}
@@ -1184,31 +692,48 @@ jobs:
           terraform init -backend-config="key=mary-standalone-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
           terraform plan
           terraform apply -auto-approve
+          terraform refresh
 
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
           sudo chmod 600 ~/.ssh/ci_priv_key.pem
 
         env:
           TF_VAR_number_agents: 0
-          TF_VAR_proxmox_api_url: ${{ secrets.proxmox_api_url }}
-          TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
-          TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
           TF_VAR_provision_ssh_pem: ${{ secrets.ssh_priv_key }}
-          TF_VAR_ip_list: '["dhcp"]'
+          TF_VAR_ip_main: "dhcp"
           TF_VAR_storage: "local-lvm"
           TF_VAR_proxmox_host_list: '["mary"]'
-          TF_VAR_vm_gateway: "10.10.1.254"
-          TF_VAR_ip_mask: 23
+          #TF_VAR_vm_gateway: "10.10.1.254"
+          #TF_VAR_ip_mask: 23
           TF_VAR_bios: "ovmf"
           TF_VAR_pool: "IP-Temp-VMs"
-          TF_VAR_tags: "ip-simul-ci"
+          TF_VAR_tags: '["ip-simul-ci"]'
           TF_VAR_fleet_hosts_user: "devops"
-          TF_VAR_template_name: "u22dci-gpu"
           TF_VAR_fleet_manager_name: ${{ steps.infra_names.outputs.simul_prefix }}
           TF_VAR_fleet_manager_memory: 51200
           TF_VAR_fleet_manager_cores: 14
-          TF_VAR_fleet_manager_disk_size: "110G"
+          TF_VAR_fleet_manager_disk_size: "110"
           TF_VAR_fleet_manager_balloon: 0
+          TF_VAR_proxmox_ve_username: ${{ secrets.proxmox_ve_username }}
+          TF_VAR_proxmox_ve_password: ${{ secrets.proxmox_ve_password }}
+          TF_VAR_proxmox_api_url: ${{ secrets.proxmox_api_url }}
+          TF_VAR_vm_core_type: "host"
+          TF_VAR_vm_disk_size: 110
+          TF_VAR_vm_disk_interface: "scsi0"
+          TF_VAR_vm_type: "q35"
+          TF_VAR_vm_os_type: "l26"
+          TF_VAR_vm_network_bridge: "vmbr0"
+          TF_VAR_vm_network_ip_address: "dhcp"
+          TF_VAR_vm_disk_storage: "nas-mary"
+          TF_VAR_vm_img_id: "nas-mary:iso/0.0.1-13-desktop-jammy_local.img"
+          TF_VAR_vm_bios: "ovmf"
+          TF_VAR_cloud_init_storage: "local"
+          TF_VAR_hostpci_device: '["hostpci0"]'
+          TF_VAR_hostpci_device_id: '["0000:01:00.0"]'
+          TF_VAR_hostpci_device_pcie: "true"
+          TF_VAR_hostpci_device_xvga: "true"
+          TF_VAR_sleep: "40"
+          # TF_VAR_hostpci_device_rombar: "true"
 
       - name: Gather Terraform outputs
         if: ${{ inputs.with_simulation_tests }}
@@ -1397,7 +922,8 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
           set -e
-
+          wget https://download.nomachine.com/download/8.11/Linux/nomachine_8.11.3_4_amd64.deb
+          sudo dpkg -i nomachine_8.11.3_4_amd64.deb
           export DISPLAY="$(w -oush | grep -Eo " :[0-9]+" | uniq | cut -d \  -f 2)"
           echo "Display detected (dinamic) is $DISPLAY"
           export DISPLAY=":0"
@@ -1418,10 +944,12 @@ jobs:
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
 
-          export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
+          export USERSPACE_FOLDER_PATH="/opt/movai/robots/userspace"
           export PUBLIC_IP=$(hostname -I | awk "{print $1}")
           export SIMULATION_ID="CI"
-          rm -rf userspace
+          sudo rm -rf $USERSPACE_FOLDER_PATH
+          sudo mkdir -p $USERSPACE_FOLDER_PATH/.git/
+          sudo chmod -R 777 /opt/movai
 
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
@@ -1446,10 +974,10 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
-
+            sleep 40
             export DISPLAY="$(w -oush | grep -Eo " :[0-9]+" | uniq | cut -d \  -f 2)"
             echo "Display detected (dinamic) is $DISPLAY"
-            export DISPLAY=":0"
+            export DISPLAY=":1"
             echo "Display detected is $DISPLAY"
             xhost +local:docker
 
@@ -1596,356 +1124,42 @@ jobs:
           AWS_DEFAULT_OUTPUT: "none"
 
 
-      - name: Teardown remote vms (Proxmox)
-        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
-        if: ${{ inputs.with_simulation_tests && inputs.debug_simulation_tests_keep_alive == false && always() }}
-        shell: bash
-        run: terraform destroy -auto-approve
-        env:
-          TF_VAR_number_agents: 0
-          TF_VAR_proxmox_api_url: ${{ secrets.proxmox_api_url }}
-          TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
-          TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
-          TF_VAR_provision_ssh_pem: ${{ secrets.ssh_priv_key }}
-          TF_VAR_ip_list: '["dhcp"]'
-          TF_VAR_proxmox_host_list: '["mary"]'
-          TF_VAR_vm_gateway: "10.10.1.254"
-          TF_VAR_ip_mask: 23
-          TF_VAR_bios: "ovmf"
-          TF_VAR_pool: "IP-Temp-VMs"
-          TF_VAR_tags: "ip-simul-ci"
-          TF_VAR_fleet_hosts_user: "devops"
-          TF_VAR_template_name: "u22dci-gpu"
-          TF_VAR_fleet_manager_name: ${{ steps.infra_names.outputs.simul_prefix }}
-          TF_VAR_fleet_manager_memory: 30000
-          TF_VAR_fleet_manager_cores: 10
-          TF_VAR_fleet_manager_disk_size: "110G"
+      # - name: Teardown remote vms (Proxmox)
+      #   working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+      #   if: ${{ inputs.with_simulation_tests && inputs.debug_simulation_tests_keep_alive == false && always() }}
+      #   shell: bash
+      #   run: terraform destroy -auto-approve
+      #   env:
+      #     TF_VAR_number_agents: 0
+      #     TF_VAR_proxmox_api_url: ${{ secrets.proxmox_api_url }}
+      #     TF_VAR_proxmox_ve_username: ${{ secrets.proxmox_ve_username }}
+      #     TF_VAR_proxmox_ve_password: ${{ secrets.proxmox_ve_password }}
+      #     TF_VAR_provision_ssh_pem: ${{ secrets.ssh_priv_key }}
+      #     TF_VAR_ip_main: "dhcp"
+      #     TF_VAR_proxmox_host_list: '["mary"]'
+      #     #TF_VAR_vm_gateway: "10.10.1.254"
+      #     # TF_VAR_ip_mask: 23
+      #     TF_VAR_bios: "ovmf"
+      #     TF_VAR_pool: "IP-Temp-VMs"
+      #     TF_VAR_tags: '["ip-simul-ci"]'
+      #     TF_VAR_fleet_hosts_user: "devops"
+      #     # TF_VAR_template_name: "u22dci-gpu"
+      #     TF_VAR_fleet_manager_name: ${{ steps.infra_names.outputs.simul_prefix }}
+      #     TF_VAR_fleet_manager_memory: 30000
+      #     TF_VAR_fleet_manager_cores: 10
+      #     TF_VAR_fleet_manager_disk_size: "110"
+      #     TF_VAR_sleep: "20"
+      #     TF_VAR_vm_core_type: "host"
+      #     TF_VAR_vm_disk_interface: "scsi0"
+      #     TF_VAR_vm_type: "q35"
+      #     TF_VAR_vm_os_type: "l26"
+      #     TF_VAR_vm_network_bridge: "vmbr0"
+      #     TF_VAR_vm_disk_storage: "nas-mary"
+      #     TF_VAR_vm_img_id: "nas-mary:iso/0.0.1-13-desktop-jammy_local.img"
+      #     TF_VAR_vm_bios: "ovmf"
+      #     TF_VAR_cloud_init_storage: "local"
+      #     TF_VAR_hostpci_device: '["hostpci0"]'
+      #     TF_VAR_hostpci_device_id: '["0000:01:00.0"]'
+      #     TF_VAR_hostpci_device_pcie: "true"
+      #     TF_VAR_hostpci_device_xvga: "true"
 
-  publish:
-    needs: [Install-Robot, Install-Simulator-Robot, Validation-Simulator-Tests]
-    runs-on: integration-pipeline
-    container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v2.0.1
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
-    steps:
-      - uses: rtCamp/action-cleanup@master
-        if: ${{ inputs.is_nightly_run == false }}
-
-      - name: Checkout
-        uses: actions/checkout@v3
-        if: ${{ inputs.is_nightly_run == false }}
-
-      - name: Agent info
-        if: ${{ inputs.is_nightly_run == false }}
-        run: |
-          echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | awk '{print $1}')"
-
-      - name: unstash raised_meta
-        if: ${{ inputs.is_nightly_run == false }}
-        uses: actions/download-artifact@v3
-        with:
-          name: raised_meta
-          path: platform_configs
-
-      - name: unstash deploy_artifacts_noetic
-        if: ${{ inputs.is_nightly_run == false }}
-        uses: actions/download-artifact@v3
-        with:
-          name: deploy_artifacts_noetic
-          path: artifacts
-
-      - name: unstash manifest
-        if: ${{ inputs.is_nightly_run == false }}
-        uses: actions/download-artifact@v3
-        with:
-          name: manifest
-          path: .
-      - name: unstash sim_configs
-        if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run == false }}
-        uses: actions/download-artifact@v3
-        with:
-          name: sim_configs
-          path: simulator_artifacts
-      - name: unstash project metadata
-        if: ${{ inputs.is_nightly_run == false }}
-        uses: actions/download-artifact@v3
-        with:
-          name: project_metadata
-          path: .
-
-      - name: unstash deploy_simulator_artifacts
-        if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run == false }}
-        uses: actions/download-artifact@v3
-        with:
-          name: deploy_simulator_artifacts
-          path: .
-
-      - name: Install CI Scripts
-        if: ${{ inputs.is_nightly_run == false }}
-        shell: bash
-        run: |
-          python3 -m venv ci_scripts
-          source ci_scripts/bin/activate
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-          deactivate
-
-      - name: Install Package Deployer
-        if: ${{ inputs.is_nightly_run == false }}
-        shell: bash
-        run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
-
-      - name: Login to ${{ env.MID_REGISTRY }} Registry
-        if: ${{ inputs.is_nightly_run == false }}
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.registry_user }}
-          password: ${{ secrets.registry_password }}
-          registry: ${{ env.MID_REGISTRY }}
-
-      - name: Login to ${{ env.PUSH_REGISTRY }} Registry
-        if: ${{ inputs.is_nightly_run == false }}
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.registry_user }}
-          password: ${{ secrets.registry_password }}
-          registry: ${{ env.PUSH_REGISTRY }}
-
-      - name: Publish simulator state
-        if: ${{ needs.Install-Simulator-Robot.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' && inputs.is_nightly_run == false }}
-        shell: bash
-        run: |
-          source ci_scripts/bin/activate
-          cd simulator_artifacts
-          integration-pipeline publish_simulator_state_artifacts \
-                --product_name ${{ inputs.product_name }} \
-                --branch ${GITHUB_REF#refs/heads/}
-          deactivate
-      - name: Publish and create release
-        if: ${{ inputs.is_nightly_run == false }}
-        id: bump
-        shell: bash
-        run: |
-          git config --global --add safe.directory $(pwd)
-          git config --global user.name '${{ secrets.auto_commit_user }}'
-          git config --global user.email '${{ secrets.auto_commit_mail }}'
-          git config --global user.password ${{ secrets.auto_commit_pwd }}
-
-          cp ./platform_configs/product.version product.version
-          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
-          mkdir -p deployment_artifacts
-
-          source ci_scripts/bin/activate
-          ls -la
-          mkdir -p pkgs_deployable
-          cp artifacts/*deployable.dploy pkgs_deployable
-          package-deployer join --dploy_workspace "$(pwd)/pkgs_deployable"
-          mv "$(pwd)/pkgs_deployable/merged.dploy" deployment_artifacts/deployable.dploy
-
-          mkdir -p pkgs_undeployable
-          cp artifacts/*3rdParty.dploy pkgs_undeployable
-          package-deployer join --dploy_workspace "$(pwd)/pkgs_undeployable"
-          mv "$(pwd)/pkgs_undeployable/merged.dploy" deployment_artifacts/3rdParty.dploy
-
-          rm -rf pkgs_deployable pkgs_undeployable
-
-          cp artifacts/*.json deployment_artifacts
-          if [ "${{ inputs.with_simulation }}" = "true" ];
-          then
-            echo -e "$(cat ./artifacts/product-noetic.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
-          else
-            cp ./artifacts/product-noetic.image.artifact deployment_artifacts/product.image.artifact
-          fi
-          #cp ./artifacts/product-noetic.image.artifact deployment_artifacts/product.image.artifact
-          cp deployment_artifacts/product.image.artifact ./
-
-          SAVEIFS=$IFS
-          IFS=$'\n'
-          images=($(cat product.image.artifact))
-          IFS=$SAVEIFS   # Restore original IFS
-
-          for image in "${images[@]}"
-          do
-            source=$(echo $image | sed "s-/qa/-/ci/-g" |  sed "s-${{ env.PUSH_REGISTRY }}-${{ env.MID_REGISTRY }}-g" )
-            target=$(echo $image | sed "s-${{ env.MID_REGISTRY }}-${{ env.PUSH_REGISTRY }}-g" )
-            docker pull $source
-            echo "tagging $source as $target"
-            docker tag $source $target
-            docker push $target
-          done
-
-          integration-pipeline patch_manifest_with_spawner
-          cat product-manifest.yaml
-          cp product-manifest.yaml deployment_artifacts
-
-          cp metadata.tar.gz deployment_artifacts
-
-          product_version=$(cat product.version)
-          # danger zone. Everything will be deleted.
-          git restore product.version
-          git restore product-manifest.yaml
-          git pull
-          echo "$product_version" > product.version
-
-          git add product.version
-          git commit -m "[skip actions] Automatic Raise"
-
-          echo "version=${product_version}" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.gh_token }}
-
-      - name: Prepare raise variables
-        if: ${{ inputs.is_nightly_run == false }}
-        id: pre_raise
-        run: |
-          #echo ::set-output name=branch::${GITHUB_REF#refs/heads/}
-          echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
-
-      - name: Raise App version
-        if: ${{ inputs.is_nightly_run == false }}
-        uses: CasperWA/push-protected@v2.14.0
-        with:
-          token: ${{ secrets.auto_commit_pwd }}
-          branch: ${{ steps.pre_raise.outputs.branch }}
-          unprotect_reviews: true
-
-      - name: Github Publish
-        if: ${{ inputs.is_nightly_run == false }}
-        shell: bash
-        run: |
-          commit_hash=$(git log --format="%H" -n 1)
-          product_version=$(cat product.version)
-          gh release create -p --generate-notes --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
-          # add all files in the deployment_artifacts folder
-          find deployment_artifacts -type f -exec gh release upload $product_version {} \;
-        env:
-          GITHUB_TOKEN: ${{ secrets.gh_token }}
-
-      - name: Update release notes
-        shell: bash
-        if: ${{ inputs.is_nightly_run == false }}
-        run: |
-          # release version
-          product_version=$(cat product.version)
-
-          # get existent release body
-          ORIGINAL_RN=$(gh release view "${product_version}" --json body | jq -r .body)
-          echo -e "ORIGINAL_RN:\n ${ORIGINAL_RN}"
-
-          # get release PRs
-          PRS=$(echo "${ORIGINAL_RN}" | sed -rn "s/.* by @.* in https:\/\/github\.com\/${{ github.repository_owner }}\/${{ github.event.repository.name }}\/pull\/([0-9]+).*/\1/p" | tr '\n' ' ')
-          # change to array
-          PRS=($PRS)
-          echo "Found the following PRs: ${PRS[@]}"
-
-          # new release notes file
-          rm -rf notes.txt
-
-          # What's Changed - with info from PRs
-          echo "## What's Changed" >> notes.txt
-
-          if [ ${#PRS[@]} -eq 0 ]; then
-              # no PRs exist
-              echo "No relevant changes." >> notes.txt
-          else
-              # PRs exist
-              for pr in "${PRS[@]}"; do
-                  gh pr view "${pr}" --json body | jq -r .body >> notes.txt
-              done
-          fi
-          echo "" >> notes.txt
-
-          # PRs
-          echo "## PRs" >> notes.txt
-          if [ ${#PRS[@]} -eq 0 ]; then
-              # no PRs exist
-              echo "No PRs." >> notes.txt
-          else
-              # PRs exist
-              echo "${ORIGINAL_RN}" | grep "\* .* by @.* in https://github.com/${{ github.repository_owner }}/" >> notes.txt
-          fi
-          echo "" >> notes.txt
-
-          ## Diff
-          echo "## Diff" >> notes.txt
-          echo "${ORIGINAL_RN}" | grep "\*\*Full Changelog\*\*" >> notes.txt
-
-          # set new release notes
-          gh release edit "${product_version}" --notes-file notes.txt
-        env:
-          GITHUB_TOKEN: ${{ secrets.gh_token }}
-
-      - name: Propagate release
-        continue-on-error: true
-        if: ${{ inputs.propagate_project && inputs.is_nightly_run == false }}
-        shell: bash
-        run: |
-          gh workflow run "Propagate base project dependency to projects - On Dispatch" \
-            --repo MOV-AI/qa-automations \
-            -f repo_name=${GITHUB_REPOSITORY#*/} \
-            -f repo_version=${{ steps.bump.outputs.version }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.gh_token }}
-
-      - name: Prepare slack variables
-        if: always()
-        id: pre_slack
-        shell: bash
-        run: |
-          MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-
-          if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
-            MESSAGE=":white_check_mark: NIGHTLY: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          fi
-          echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
-
-      - name: Slack message
-        uses: archive/github-actions-slack@master
-        with:
-          slack-function: update-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-update-message-text: ${{ steps.pre_slack.outputs.msg }}
-          slack-update-message-ts: ${{ needs.Install-Simulator-Robot.outputs.slack_thread_id }}
-
-  Run-Status:
-    runs-on: ubuntu-20.04
-    needs: [publish, Validate-boostrap-configs]
-    if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled' || needs.publish.result == 'skipped' ) }}
-    steps:
-
-      - name: unstash raised_meta
-        uses: actions/download-artifact@v3
-        with:
-          name: raised_meta
-          path: platform_configs
-
-      - name: Copy product configs
-        shell: bash
-        run: |
-          cp ./platform_configs/product.version product.version
-          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
-
-      - name: Prepare slack variables
-        id: pre_slack
-        shell: bash
-        run: |
-          MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is unstable (or canceled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-
-          if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
-            MESSAGE_ERR=":x: NIGHTLY: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is unstable (or canceled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          fi
-          echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
-
-      - name: Slack message
-        uses: archive/github-actions-slack@master
-        with:
-          slack-function: update-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-update-message-text: ${{ steps.pre_slack.outputs.msg_error }}
-          slack-update-message-ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
