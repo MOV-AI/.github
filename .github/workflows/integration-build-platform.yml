@@ -1362,19 +1362,33 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
           sudo apt update && sudo apt install terraform -y
 
+      - name: Setup infra environment configs
+        id: infra_env_configs_setup
+        shell: bash
+        run: |
+          env_configs_dir=infra_env_configs
+          env_configs_version=0.0.0-3
+          env_configs_repo_name=devops-tf-env-conf
+
+          rm -rf $env_configs_dir
+          export PATH="$HOME/.local/bin:$PATH"
+          integration-pipeline fetch_by_tag --repo $env_configs_repo_name --version $env_configs_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $env_configs_dir
+          ls -la $env_configs_dir
+          echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
+
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=0.0.1-38
-          provision_infra_repo_name=devops-tf-proxmox-fleet
+          provision_infra_version=0.0.2-6
+          provision_infra_repo_name=devops-tf-proxmox-bpg
 
           rm -rf $provision_infra_dir
           export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
           ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}/hosts/generic/" >> $GITHUB_OUTPUT
+          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
 
       - name: Define Instance names
         id: infra_names
@@ -1389,35 +1403,31 @@ jobs:
 
           echo "manager_prefix=${local_manager_prefix}" >> $GITHUB_OUTPUT
           echo "worker_prefix=${local_worker_prefix}" >> $GITHUB_OUTPUT
+          echo "total_resources=${total_resources}" >> $GITHUB_OUTPUT
 
       - name: Provision remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
         run: |
-          terraform init -backend-config="key=hel-fleet-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
-          terraform plan
-          terraform apply -auto-approve
-        env:
-          TF_VAR_number_agents: ${{ inputs.fleet_number_members }}
-          TF_VAR_proxmox_api_url: "https://hel.mov.ai:8006/api2/json"
-          TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
-          TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
-          TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
-          TF_VAR_ip_list: ${{ inputs.fleet_ips }}
-          TF_VAR_proxmox_host: "hel"
-          TF_VAR_vm_gateway: "172.22.0.1"
-          TF_VAR_ip_mask: 24
-          TF_VAR_bios: "seabios"
-          TF_VAR_pool: "IP-Temp-VMs"
-          TF_VAR_tags: "ip-fleet"
+          multiply_node=$(printf '"hel",%.0s' {1..${{ steps.infra_names.outputs.total_resources }}})
+          node_list_str=${multiply_node::-1}
 
-          TF_VAR_fleet_hosts_user: "devops"
-          TF_VAR_template_name: "ubuntu-2004-cloudinit-template2"
-          TF_VAR_fleet_manager_name: ${{ steps.infra_names.outputs.manager_prefix }}
-          TF_VAR_fleet_manager_memory: 8192
-          TF_VAR_template_name_no_gpu: "ubuntu-2004-cloudinit-template2"
-          TF_VAR_fleet_worker_name_prefix: ${{ steps.infra_names.outputs.worker_prefix }}
-          TF_VAR_fleet_worker_memory: 8192
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/hel_fleet_test.tfvars'
+
+          echo "proxmox_host_list=[$node_list_str]">>input.tfvars
+          echo "fleet_peer_nr=${{ inputs.fleet_number_members }}">>input.tfvars
+          echo 'fleet_manager_name="${{ steps.infra_names.outputs.manager_prefix }}"'>>input.tfvars
+          echo 'fleet_peer_name_prefix="${{ steps.infra_names.outputs.worker_prefix }}"'>>input.tfvars
+          echo 'ip_list=${{ inputs.fleet_ips }}'>>input.tfvars
+          echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
+          echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
+          echo "\n">>input
+
+          echo "File args: $var_file_arg"
+          echo "Input File args: $(cat input.tfvars)"
+          terraform init -backend-config="key=hel-fleet-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
+          terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
+          terraform refresh $var_file_arg -var-file=input.tfvars
 
       - name: Prepare Devops provisioning slack message
         if: always()
@@ -1440,9 +1450,10 @@ jobs:
       - name: Apply ansible inventory
         shell: bash
         run: |
-          cp ${{ steps.provision_infra_setup.outputs.target_dir }}/hosts staging/hosts
+          cp ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml staging/provisioned_inventory.yml
+          cat staging/provisioned_inventory.yml
           export PATH="$HOME/.local/bin:$PATH"
-          integration-pipeline get_yml_value --file staging/hosts --key fleet.children.managers.hosts.manager.ansible_host --output_file ./staging/manager_private_ip.txt
+          integration-pipeline get_yml_value --file staging/provisioned_inventory.yml --key fleet.children.managers.hosts.manager.ansible_host --output_file ./staging/manager_private_ip.txt
 
       - name: Setup ansible installation
         id: ansible_install_setup
@@ -1470,29 +1481,6 @@ jobs:
         shell: bash
         run: |
 
-          function ensure_agent_up(){
-            vm_ip=$1
-            i="0"
-            max=15
-            success=1
-            while [ $success -ne 0 ]
-            do
-            echo "Checking if $vm_ip is reachable ($i/$max)"
-            ping -c1 $vm_ip &>/dev/null
-            success=$?
-
-            if [ $i -lt $max ]
-            then
-              i=$[$i+1]
-            else
-              echo "Timeout waiting for $vm_ip"
-              exit 2
-            fi
-
-            sleep 2
-            done
-
-          }
           echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
           sudo chmod 600 ~/.ssh/aws_slave.pem
           while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
@@ -1506,18 +1494,26 @@ jobs:
           touch ~/.ssh/known_hosts
           sudo chmod 600 ~/.ssh/known_hosts
           IFS=',' read -r -a stripped_ips_arr <<< $stripped_ips
+
           manager_ip=${stripped_ips_arr[0]}
           echo $manager_ip
           echo "manager_ip=${manager_ip}" >> $GITHUB_OUTPUT
+
           for ip in "${stripped_ips_arr[@]}"
           do
-            ensure_agent_up $ip
+            if [[ $ip == *"/"* ]]; then
+              ip=${ip%/*}
+            fi
             ssh-keygen -f ~/.ssh/known_hosts -R $ip
             ssh-keyscan -H $ip >> ~/.ssh/known_hosts
+            ssh devops@${ip} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
+              set -e
+              cloud-init status --wait
+            '
           done
-
+          python3 -c 'import fcntl, sys; fcntl.fcntl(sys.stdin.fileno(), fcntl.F_SETFL, 0); fcntl.fcntl(sys.stdout.fileno(), fcntl.F_SETFL, 0); fcntl.fcntl(sys.stderr.fileno(), fcntl.F_SETFL, 0)'
           ansible-playbook install.yml \
-            -i ../staging/hosts \
+            -i ../staging/provisioned_inventory.yml \
             --key-file ~/.ssh/aws_slave.pem \
             --extra-vars=@"$(pwd)/.."/product-manifest.yaml \
             -e fleet_domain_dns="" \
@@ -1648,13 +1644,13 @@ jobs:
           source ansible-venv/bin/activate
           # install fleet_tests artifacts
           for fleet_host in "manager" "member0" "member1"; do
-            ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u movai-service --since "1hour ago"' > fleet_qa_artifacts/install/$fleet_host.log || true
+            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u movai-service --since "1hour ago"' > fleet_qa_artifacts/install/$fleet_host.log || true
 
             echo "From $fleet_host:"
-            ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -a' > fleet_qa_artifacts/install/$fleet_host-docker_ps.log || true
+            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -a' > fleet_qa_artifacts/install/$fleet_host-docker_ps.log || true
             echo "$(tail -n +2 fleet_qa_artifacts/install/$fleet_host-docker_ps.log )"
 
-            ansible $fleet_host -i ../staging/hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u docker --boot --lines=all' > fleet_qa_artifacts/install/$fleet_host-all-docker.log || true
+            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u docker --boot --lines=all' > fleet_qa_artifacts/install/$fleet_host-all-docker.log || true
           done
 
           deactivate
@@ -1678,14 +1674,10 @@ jobs:
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         if: ${{ ( !inputs.debug_fleet_keep_alive && success() ) || cancelled() || ( !inputs.debug_fleet_keep_alive && failure() ) }}
         shell: bash
-        run: terraform destroy -auto-approve
-        env:
-          TF_VAR_number_agents: ${{ inputs.fleet_number_members }}
-          TF_VAR_proxmox_api_url: "https://hel.mov.ai:8006/api2/json"
-          TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
-          TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
-          TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
-          TF_VAR_ip_list: ${{ inputs.fleet_ips }}
+        run: |
+          
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/hel_fleet_test.tfvars'
+          terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
 
 
   Build-Simulator:
