@@ -1367,7 +1367,7 @@ jobs:
         shell: bash
         run: |
           env_configs_dir=infra_env_configs
-          env_configs_version=0.0.0-3
+          env_configs_version=0.0.1-2
           env_configs_repo_name=devops-tf-env-conf
 
           rm -rf $env_configs_dir
@@ -1381,7 +1381,7 @@ jobs:
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=0.0.2-6
+          provision_infra_version=1.0.0-2
           provision_infra_repo_name=devops-tf-proxmox-bpg
 
           rm -rf $provision_infra_dir
@@ -1416,6 +1416,7 @@ jobs:
 
           echo "proxmox_host_list=[$node_list_str]">>input.tfvars
           echo "fleet_peer_nr=${{ inputs.fleet_number_members }}">>input.tfvars
+          echo 'fleet_password="n/a"'>>input.tfvars
           echo 'fleet_manager_name="${{ steps.infra_names.outputs.manager_prefix }}"'>>input.tfvars
           echo 'fleet_peer_name_prefix="${{ steps.infra_names.outputs.worker_prefix }}"'>>input.tfvars
           echo 'ip_list=${{ inputs.fleet_ips }}'>>input.tfvars
