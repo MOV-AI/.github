@@ -63,6 +63,10 @@ jobs:
       run: |
         commit_hash=$(git log --format="%H" -n 1)
         product_version=${{ steps.vars-after-raise.outputs.pkg_version }}
-        gh release create -p --generate-notes --notes-start-tag ${{ steps.vars.outputs.pkg_version }} --target $commit_hash -t "Release of ${{ steps.vars-after-raise.outputs.pkg_version }}" $product_version
+        previous_version_option=""
+        if gh release view ${{ steps.vars.outputs.pkg_version }} &>/dev/null; then
+          previous_version_option="--notes-start-tag ${{ steps.vars.outputs.pkg_version }}"
+        fi
+        gh release create -p --generate-notes $previous_version_option --target $commit_hash -t "Release of ${{ steps.vars-after-raise.outputs.pkg_version }}" $product_version
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
