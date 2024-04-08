@@ -58,20 +58,11 @@ jobs:
         branch: ${{ steps.pre_raise.outputs.branch }}
         unprotect_reviews: true
 
-    - name: Commit info
-      id: commit
+    - name: Create Github Release
       shell: bash
       run: |
         commit_hash=$(git log --format="%H" -n 1)
-        echo "commit_id=${commit_hash}" >> $GITHUB_OUTPUT
-
-    - name: Create Github Release
-      uses: softprops/action-gh-release@v1
-      with:
-        name: "Release of ${{ steps.vars-after-raise.outputs.pkg_version }}"
-        body: "Please add release notes"
-        tag_name: ${{ steps.vars-after-raise.outputs.pkg_version }}
-        target_commitish: ${{ steps.commit.outputs.commit_id }}
-        token: ${{ secrets.GITHUB_TOKEN }}
-        prerelease: true
-        generate_release_notes: true
+        product_version=${{ steps.vars-after-raise.outputs.pkg_version }}
+        gh release create -p --generate-notes --notes-start-tag ${{ steps.vars.outputs.pkg_version }} --target $commit_hash -t "Release of ${{ steps.vars-after-raise.outputs.pkg_version }}" $product_version
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

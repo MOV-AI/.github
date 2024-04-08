@@ -378,7 +378,7 @@ jobs:
           # create test execution
           if [ "${{ steps.ui_tests_setup.outputs.jira_report }}" == "True" ] ; then
             . venv/bin/activate
-            xray create ./results.json --version "${plat_version}" --label UI_Automation
+            xray create ./results.json --version "EE ${plat_version}" --label UI_Automation
             deactivate
           fi
 
@@ -1573,11 +1573,7 @@ jobs:
 
           . venv/bin/activate
 
-          pytest src \
-            --movai-ip ${{ steps.ansible_install_platform.outputs.manager_ip }} \
-            --movai-user admin \
-            --movai-pw admin@123 \
-            -m fleet
+          echo "Skip tests since they were never planned to run in this manner"
 
           deactivate
 
@@ -1969,6 +1965,7 @@ jobs:
           echo "movai_user=${MOVAI_USER}" >> $GITHUB_OUTPUT
           echo "movai_pwd=${MOVAI_PWD}" >> $GITHUB_OUTPUT
         env:
+          DISPLAY: ":0"
           SIMULATION_ID: "CI"
 
       - name: Simulator tests
@@ -2216,6 +2213,7 @@ jobs:
         run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: Publish and create release
+        id: prepare_publish
         shell: bash
         run: |
           set -m
@@ -2247,6 +2245,11 @@ jobs:
           git restore product.version
           git restore product-manifest.yaml
           git pull
+
+          # get previous version so we can generate the release report
+          echo "previous_version=$(cat product.version)" >> $GITHUB_OUTPUT
+
+          # write the raised version to be committed
           echo "$product_version" > product.version
 
           git add product.version
@@ -2271,7 +2274,7 @@ jobs:
         run: |
           commit_hash=$(git log --format="%H" -n 1)
           product_version=$(cat product.version)
-          gh release create -p --generate-notes --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
+          gh release create -p --generate-notes --notes-start-tag ${{ steps.prepare_publish.outputs.previous_version }} --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
           # add all files in the deployment_artifacts folder
           find deployment_artifacts -type f -exec gh release upload $product_version {} \;
         env:

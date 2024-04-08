@@ -89,7 +89,7 @@ on:
         required: false
 
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "2.2.0.10"
+  CI_INTEGRATION_SCRIPTS_VERSION: "2.2.0.27"
   MOBTEST_VERSION: "0.0.4.3"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.26"
   GITHUB_API_USR: "OttoMation-Movai"
@@ -113,7 +113,7 @@ jobs:
   Validate-boostrap-configs:
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v2.0.1
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -139,17 +139,22 @@ jobs:
       - name: Install CI Scripts
         shell: bash
         run: |
+          python3 -m venv ci_scripts
+          source ci_scripts/bin/activate
           python3 -m pip install pip --upgrade
           python3 -m pip install pyopenssl --upgrade
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-
+          deactivate
       - name: Bootstraping simulator metadata
+        shell: bash
         run: |
           git config --global --add safe.directory $(pwd)
           git fetch
           git checkout origin/${GITHUB_REF#refs/heads/} -- product.version
           cat product.version
           rm -rf simulator_artifacts ci_artifacts
+
+          source ci_scripts/bin/activate
 
           merge_manifest_args=" --dependency_name product-platform"
           merge_manifest_args="$merge_manifest_args --gh_api_user $GITHUB_API_USR"
@@ -190,9 +195,11 @@ jobs:
           retention-days: 5
 
       - name: raise
+        shell: bash
         run: |
           rm -rf simulator_artifacts ci_artifacts
           mkdir platform_configs
+          source ci_scripts/bin/activate
           integration-pipeline raise
           cp product.version ./platform_configs/product.version
           cp product-manifest.yaml ./platform_configs/product-manifest.yaml
@@ -968,6 +975,7 @@ jobs:
           SIMULATION_ID: "CI"
 
       - name: Collect Install logs
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         continue-on-error: true
         run: |
           # cleanup
@@ -979,7 +987,7 @@ jobs:
 
       - name: Stash Install simulator logs artifacts
         continue-on-error: true
-        if: always()
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         uses: actions/upload-artifact@v3
         with:
           name: install_simulator_logs
@@ -1008,6 +1016,41 @@ jobs:
 
           echo "image_name=$push_name" >> $GITHUB_OUTPUT
 
+      - name: Collect Installed components
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        shell: bash
+        run: |
+          container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
+          docker exec -t "$container_id" bash -c '
+            set -e
+            ls -la /tmp
+            {
+                echo 'Annotation:*'
+                echo 'Callback:*'
+                echo 'Configuration:*'
+                echo 'Flow:*'
+                echo 'GraphicScene:*'
+                echo 'Layout:*'
+                echo 'Node:*'
+                echo 'Package:*'
+            } >> /tmp/manifest.txt
+            mkdir /tmp/proj_metadata
+            python3 -m tools.backup -p /tmp/proj_metadata/ -m /tmp/manifest.txt -a export -i
+
+          ' || true
+
+            mkdir -p metadata_artifact tmp_meta
+            docker cp $container_id:/tmp/proj_metadata/ ./
+            tar cvzf ./metadata_artifact/sim_metadata.tar.gz ./proj_metadata
+
+      - name: stash Sim project metadata
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: project_sim_metadata
+          path: metadata_artifact/*
+          retention-days: 3
+              
       - name: Get current job id
         if: always()
         shell: bash
@@ -1224,8 +1267,28 @@ jobs:
           ssh-keyscan -H ${{ steps.infra_outputs.outputs.host_ip }} >> ~/.ssh/known_hosts || true
 
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
             cloud-init status --wait; rm -rf ./${{ env.REMOTE_WORKSPACE_PATH }}; mkdir -p ./${{ env.REMOTE_WORKSPACE_PATH }}
           '
+
+
+      - name: Prepare Devops provisioning slack message
+        if: ${{ inputs.with_simulation_tests && always() }} 
+        id: pre_slack_infra
+        run: |
+          MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is being impacted by an infrastructural issue. \
+          Provisioning of fleet infrastructure failed. Please take a look! \
+          Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+
+      - name: Slack message failure
+        if: ${{ inputs.with_simulation_tests && failure() }}
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          channel-id: "G0102LEV1CL"
+          slack-message: ${{ steps.pre_slack_infra.outputs.msg_error }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
 
       - name: Remote - Agent info
@@ -1233,16 +1296,35 @@ jobs:
         id: agent_info
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
             ip=$(hostname -I | awk "{print $1}")
             echo $ip
           '
 
-      - name: Remote - Login to Private Registry
+      - name: Remote - Login to ${{ env.MID_REGISTRY }} Registry
         if: ${{ inputs.with_simulation_tests }}
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
             docker login ${{ env.MID_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+          '
+
+      - name: Remote - Login to ${{ env.REGISTRY }} Registry
+        if: ${{ inputs.with_simulation_tests }}
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+          '
+      - name: Remote - Login to ${{ env.PUSH_REGISTRY }} Registry
+        if: ${{ inputs.with_simulation_tests }}
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            docker login ${{ env.PUSH_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
           '
 
       - name: Remote - Docker load spawner image
@@ -1260,10 +1342,14 @@ jobs:
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
-            set -e
+            
             promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.MID_REGISTRY }}-${{ env.REGISTRY }}-g")
-            docker pull "${{ needs.Build-Simulator.outputs.image_name }}" || true
-            docker tag "${{ needs.Build-Simulator.outputs.image_name }}" $promoted_name || true
+            docker manifest inspect "$promoted_name"
+            if [ $? -ne 0 ]; then
+              set -e
+              docker pull "${{ needs.Build-Simulator.outputs.image_name }}"
+              docker tag "${{ needs.Build-Simulator.outputs.image_name }}" $promoted_name
+            fi
           '
 
       - name: Remote - Install CI Scripts
@@ -1574,6 +1660,11 @@ jobs:
   publish:
     needs: [Install-Robot, Install-Simulator-Robot, Validation-Simulator-Tests]
     runs-on: integration-pipeline
+    container:
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v2.0.1
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
     steps:
       - uses: rtCamp/action-cleanup@master
         if: ${{ inputs.is_nightly_run == false }}
@@ -1620,7 +1711,7 @@ jobs:
         with:
           name: project_metadata
           path: .
-
+          
       - name: unstash deploy_simulator_artifacts
         if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run == false }}
         uses: actions/download-artifact@v3
@@ -1632,9 +1723,12 @@ jobs:
         if: ${{ inputs.is_nightly_run == false }}
         shell: bash
         run: |
+          python3 -m venv ci_scripts
+          source ci_scripts/bin/activate
           python3 -m pip install pip --upgrade
           python3 -m pip install pyopenssl --upgrade
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          deactivate
 
       - name: Install Package Deployer
         if: ${{ inputs.is_nightly_run == false }}
@@ -1661,12 +1755,12 @@ jobs:
         if: ${{ needs.Install-Simulator-Robot.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' && inputs.is_nightly_run == false }}
         shell: bash
         run: |
-          export PATH="$HOME/.local/bin:$PATH"
+          source ci_scripts/bin/activate
           cd simulator_artifacts
           integration-pipeline publish_simulator_state_artifacts \
                 --product_name ${{ inputs.product_name }} \
                 --branch ${GITHUB_REF#refs/heads/}
-
+          deactivate
       - name: Publish and create release
         if: ${{ inputs.is_nightly_run == false }}
         id: bump
@@ -1681,7 +1775,7 @@ jobs:
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
           mkdir -p deployment_artifacts
 
-          export PATH="$HOME/.local/bin:$PATH"
+          source ci_scripts/bin/activate
           ls -la
           mkdir -p pkgs_deployable
           cp artifacts/*deployable.dploy pkgs_deployable
@@ -1724,13 +1818,17 @@ jobs:
           cat product-manifest.yaml
           cp product-manifest.yaml deployment_artifacts
 
-          cp metadata.tar.gz deployment_artifacts
+          cp *.tar.gz deployment_artifacts
 
           product_version=$(cat product.version)
           # danger zone. Everything will be deleted.
           git restore product.version
           git restore product-manifest.yaml
           git pull
+
+          # get previous version so we can generate the release report
+          echo "previous_version=$(cat product.version)" >> $GITHUB_OUTPUT
+          
           echo "$product_version" > product.version
 
           git add product.version
@@ -1761,7 +1859,7 @@ jobs:
         run: |
           commit_hash=$(git log --format="%H" -n 1)
           product_version=$(cat product.version)
-          gh release create -p --generate-notes --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
+          gh release create -p --generate-notes --notes-start-tag ${{ steps.bump.outputs.previous_version }} --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
           # add all files in the deployment_artifacts folder
           find deployment_artifacts -type f -exec gh release upload $product_version {} \;
         env:
