@@ -29,17 +29,17 @@ on:
         type: string
         default: "UNDEFINED"
       cluster:
-          required: false
-          default: "mary"
-          type: choice
-          options: 
-            - mary
-            - bb-8
-            - bb-9
+        required: false
+        default: "mary"
+        type: choice
+        options: 
+          - mary
+          - bb-8
+          - bb-9
       duration:
         required: false
         type: string
-        default: None
+        default: "UNDEFINED"
       propagate_project:
         required: false
         type: boolean
