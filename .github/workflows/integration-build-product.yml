@@ -30,8 +30,16 @@ on:
         default: "UNDEFINED"
       cluster:
           required: false
-          type: string
           default: "mary"
+          type: choice
+          options: 
+            - mary
+            - bb-8
+            - bb-9
+      duration:
+        required: false
+        type: string
+        default: None
       propagate_project:
         required: false
         type: boolean
