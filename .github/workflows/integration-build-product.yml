@@ -1515,7 +1515,7 @@ jobs:
 
             duration_option=""
             if [ "${{ inputs.duration }}" != "UNDEFINED" ] ; then
-            duration_option="--duration ${{ inputs.duration }}"
+              duration_option="--duration ${{ inputs.duration }}"
             fi
 
             pytest \
