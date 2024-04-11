@@ -1513,11 +1513,17 @@ jobs:
               marker="nightly"
             fi
 
+            duration_option=""
+            if [ "${{ inputs.duration }}" != "UNDEFINED" ] ; then
+            duration_option="--duration ${{ inputs.duration }}"
+            fi
+
             pytest \
               ${{ steps.simulator_tests_setup.outputs.test_exec_dir }} \
               -m $marker \
               --movai-user ${{ steps.install.outputs.movai_user }} \
-              --movai-pw ${{ steps.install.outputs.movai_pwd }}
+              --movai-pw ${{ steps.install.outputs.movai_pwd }} \
+              $duration_option
 
             deactivate
           '
