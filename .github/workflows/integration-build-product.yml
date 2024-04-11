@@ -31,11 +31,7 @@ on:
       cluster:
         required: false
         default: "mary"
-        type: choice
-        options: 
-          - mary
-          - bb-8
-          - bb-9
+        type: string
       duration:
         required: false
         type: string
