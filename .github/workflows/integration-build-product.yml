@@ -32,10 +32,6 @@ on:
           required: false
           type: string
           default: "mary"
-          options:
-            - "mary"
-            - "bb-8"
-            - "bb-9"
       propagate_project:
         required: false
         type: boolean
