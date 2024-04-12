@@ -1251,7 +1251,7 @@ jobs:
           TF_VAR_pool: "IP-Temp-VMs"
           TF_VAR_tags: "ip-simul-ci"
           TF_VAR_fleet_hosts_user: "devops"
-          TF_VAR_template_name: "u22dci-gpu2"
+          TF_VAR_template_name: "u22dci-gpu-3"
           TF_VAR_fleet_manager_name: ${{ steps.infra_names.outputs.simul_prefix }}
           TF_VAR_fleet_manager_memory: 51200
           TF_VAR_fleet_manager_cores: 14
@@ -1668,7 +1668,7 @@ jobs:
           TF_VAR_pool: "IP-Temp-VMs"
           TF_VAR_tags: "ip-simul-ci"
           TF_VAR_fleet_hosts_user: "devops"
-          TF_VAR_template_name: "u22dci-gpu2"
+          TF_VAR_template_name: "u22dci-gpu-3"
           TF_VAR_fleet_manager_name: ${{ steps.infra_names.outputs.simul_prefix }}
           TF_VAR_fleet_manager_memory: 30000
           TF_VAR_fleet_manager_cores: 10
