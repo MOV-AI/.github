@@ -206,10 +206,7 @@ jobs:
 
       - name: Deploy images to NFS server
         run: |
-          echo "::group::Artifact local copy to staging area $RUN_STAGING_DIR"
-          mkdir -p $RUN_STAGING_DIR
-          mv -f ./output/${{ matrix.image_type }} $RUN_STAGING_DIR
-          
+
           nb_files=$(find $RUN_STAGING_DIR -name "*.img" | wc -l)
           if [ $nb_files -eq 0 ]; then
             echo "No images found to deploy"
