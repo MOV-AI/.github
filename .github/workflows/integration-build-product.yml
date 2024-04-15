@@ -358,7 +358,7 @@ jobs:
       - name: Docker build
         shell: bash
         run: |
-          docker build --add-host ${{ env.MID_REGISTRY }}:172.22.0.106 \
+          docker build --add-host ${{ env.REGISTRY }}:172.22.0.106 \
             --build-arg DOCKER_REGISTRY=${{ env.REGISTRY }} \
             --build-arg BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} \
             --build-arg TAG=${{ steps.pre_build.outputs.base_version }} \
