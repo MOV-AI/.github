@@ -143,7 +143,7 @@ jobs:
         shell: bash
         run: |
           if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
-            TITLE="Nightly Report of ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}"
+            TITLE="Long Run Report of ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}"
           else
             TITLE="Run Report of ${GITHUB_REPOSITORY} ${GITHUB_REF#refs/heads/}"
           fi
@@ -233,7 +233,7 @@ jobs:
           MESSAGE="CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version)(Attempt: #${{ github.run_attempt }}) is starting to be validated on ${{ inputs.cluster }} :construction: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
           if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
-            MESSAGE="NIGHTLY: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is starting to be validated on ${{ inputs.cluster }} :construction: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            MESSAGE="LONG RUN: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is starting to be validated on ${{ inputs.cluster }} :construction: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           fi
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
 
@@ -1968,7 +1968,7 @@ jobs:
           MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
           if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
-            MESSAGE=":white_check_mark: NIGHTLY: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            MESSAGE=":white_check_mark: LONG RUN: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           fi
           echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
 
@@ -2006,7 +2006,7 @@ jobs:
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is unstable (or canceled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
           if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
-            MESSAGE_ERR=":x: NIGHTLY: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is unstable (or canceled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            MESSAGE_ERR=":x: LONG RUN: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is unstable (or canceled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           fi
           echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
 
