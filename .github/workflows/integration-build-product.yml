@@ -1160,6 +1160,8 @@ jobs:
     needs: [Compute-timeout, Build-Spawner, Build-Simulator]
     runs-on: ${{ needs.Build-Simulator.outputs.simulator_tests_agent_name }}
     timeout-minutes: ${{ fromJSON(needs.Compute-timeout.outputs.timeout) }}
+    outputs:
+      nb_delivered: ${{ steps.nb_delivered.outputs.contents }}
     steps:
       - uses: rtCamp/action-cleanup@master
         if: ${{ inputs.with_simulation_tests }}
@@ -1547,6 +1549,13 @@ jobs:
 
             deactivate
           '
+
+      - name: Remote - Save delivery info
+        if: ${{ always() && inputs.with_simulation_tests }}
+        id: nb_delivered
+        uses: andstor/file-reader-action@v1
+        with:
+          path: "nb_delivered.log"
 
       - name: Remote - Save docker container logs
         if: ${{ always() &&  inputs.with_simulation_tests }}
