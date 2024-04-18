@@ -1551,12 +1551,13 @@ jobs:
             deactivate
           '
 
-      - name: Remote - Save test info
+      - name: Stash simulation test outputs 
         if: ${{ always() && inputs.with_simulation_tests }}
-        id: output_values
-        uses: zoexx/github-action-json-file-properties@release
+        uses: actions/upload-artifact@v4
         with:
-          file_path: "test-output.json"
+          name: sim-outputs
+          path: test-output.json
+          retention-days: 5
 
       - name: Remote - Save docker container logs
         if: ${{ always() &&  inputs.with_simulation_tests }}
