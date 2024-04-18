@@ -1161,7 +1161,7 @@ jobs:
     runs-on: ${{ needs.Build-Simulator.outputs.simulator_tests_agent_name }}
     timeout-minutes: ${{ fromJSON(needs.Compute-timeout.outputs.timeout) }}
     outputs:
-      nb_delivered: ${{ steps.nb_delivered.outputs.contents }}
+      output_values: ${{ steps.output_values.outputs }}
     steps:
       - uses: rtCamp/action-cleanup@master
         if: ${{ inputs.with_simulation_tests }}
@@ -1545,17 +1545,18 @@ jobs:
               -m $marker \
               --movai-user ${{ steps.install.outputs.movai_user }} \
               --movai-pw ${{ steps.install.outputs.movai_pwd }} \
+              --out-values test-output.json \
               $duration_option
 
             deactivate
           '
 
-      - name: Remote - Save delivery info
+      - name: Remote - Save test info
         if: ${{ always() && inputs.with_simulation_tests }}
-        id: nb_delivered
-        uses: andstor/file-reader-action@v1
+        id: output_values
+        uses: zoexx/github-action-json-file-properties@release
         with:
-          path: "nb_delivered.log"
+          file_path: "test-output.json"
 
       - name: Remote - Save docker container logs
         if: ${{ always() &&  inputs.with_simulation_tests }}
