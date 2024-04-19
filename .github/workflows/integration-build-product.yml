@@ -1160,8 +1160,7 @@ jobs:
     needs: [Compute-timeout, Build-Spawner, Build-Simulator]
     runs-on: ${{ needs.Build-Simulator.outputs.simulator_tests_agent_name }}
     timeout-minutes: ${{ fromJSON(needs.Compute-timeout.outputs.timeout) }}
-    outputs:
-      output_values: ${{ steps.output_values.outputs }}
+
     steps:
       - uses: rtCamp/action-cleanup@master
         if: ${{ inputs.with_simulation_tests }}
