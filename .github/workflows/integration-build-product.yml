@@ -1540,7 +1540,7 @@ jobs:
             fi
             if [[ "$(echo -e "${{ steps.simulator_tests_setup.outputs.version }}\n2.0.0-24" | sort -V | head -n1)" == "2.0.0-24" ]]; then
               echo "save_outputs=true" >> $GITHUB_OUTPUT
-              extra_options="--out-values test-output.json"
+              extra_options="$extra_options --out-values test-output.json"
             fi
 
             pytest \
