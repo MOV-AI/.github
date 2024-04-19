@@ -1552,7 +1552,7 @@ jobs:
           '
 
       - name: Remote - Save simulation test outputs
-        if: ${{ inputs.with_simulation_tests }}
+        if: ${{ always() && inputs.with_simulation_tests }}
         shell: bash
         run: |
           scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.simulator_tests_setup.outputs.target_dir }}/test-output.json .
