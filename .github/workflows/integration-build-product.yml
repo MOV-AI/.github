@@ -1424,6 +1424,7 @@ jobs:
 
             tests_dir=$(cat /tmp/target_dir.txt)
             tests_version=$(cat /tmp/version.txt)
+            echo "tests_version=$tests_version" >> $GITHUB_OUTPUT
             tests_repo_name=$(cat /tmp/repo_name.txt)
             test_set=$(cat /tmp/test_set.txt)
 
@@ -1510,6 +1511,7 @@ jobs:
 
       - name: Remote - Simulation Tests
         if: ${{ inputs.with_simulation_tests }}
+        id: simulation_tests
         timeout-minutes: ${{ fromJSON(needs.Compute-timeout.outputs.timeout) }}
         shell: bash
         run: |
@@ -1533,9 +1535,13 @@ jobs:
               marker="nightly"
             fi
 
-            duration_option=""
+            extra_options=""
             if [ "${{ inputs.duration }}" != "UNDEFINED" ] ; then
-              duration_option="--duration ${{ inputs.duration }}"
+              extra_options="--duration ${{ inputs.duration }}"
+            fi
+            if [[ "$(echo -e "${{ steps.simulator_tests_setup.outputs.tests_version }}\n2.0.0-24" | sort -V | head -n1)" == "2.0.0-24" ]]; then
+              echo "save_outputs=true" >> $GITHUB_OUTPUT
+              extra_options="--out-values test-output.json"
             fi
 
             pytest \
@@ -1543,20 +1549,19 @@ jobs:
               -m $marker \
               --movai-user ${{ steps.install.outputs.movai_user }} \
               --movai-pw ${{ steps.install.outputs.movai_pwd }} \
-              --out-values test-output.json \
-              $duration_option
+              $extra_options
 
             deactivate
           '
 
       - name: Remote - Save simulation test outputs
-        if: ${{ always() && inputs.with_simulation_tests }}
+        if: ${{ always() && inputs.with_simulation_tests && steps.simulation_tests.outputs.save_outputs == 'true' }}
         shell: bash
         run: |
           scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.simulator_tests_setup.outputs.target_dir }}/test-output.json .
 
       - name: Stash simulation test outputs 
-        if: ${{ always() && inputs.with_simulation_tests }}
+        if: ${{ always() && inputs.with_simulation_tests && steps.simulation_tests.outputs.save_outputs == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: sim-outputs
