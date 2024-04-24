@@ -24,7 +24,7 @@ on:
         required: false
         type: boolean
         default: false
-        description: When true documentation is published
+        description: When true documentation is published, the branch gh-pages must be created manually 'git checkout --orphan gh-pages && touch .nojekyll && git add .nojekyll && git commit -m "Initial commit" && git push --set-upstream origin gh-pages'
       prod_publish_repos:
         required: false
         type: string
