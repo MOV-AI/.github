@@ -1535,13 +1535,15 @@ jobs:
             fi
 
             extra_options=""
+            save_outputs=false
             if [ "${{ inputs.duration }}" != "UNDEFINED" ] ; then
               extra_options="--duration ${{ inputs.duration }}"
             fi
             if [[ "$(echo -e "${{ steps.simulator_tests_setup.outputs.version }}\n2.0.0-24" | sort -V | head -n1)" == "2.0.0-24" ]]; then
-              echo "save_outputs=true" >> $GITHUB_OUTPUT
+              save_outputs=true
               extra_options="$extra_options --out-values test-output.json"
             fi
+            echo "save_outputs=$save_outputs" >> $GITHUB_OUTPUT
 
             pytest \
               ${{ steps.simulator_tests_setup.outputs.test_exec_dir }} \
