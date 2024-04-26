@@ -1514,6 +1514,13 @@ jobs:
         timeout-minutes: ${{ fromJSON(needs.Compute-timeout.outputs.timeout) }}
         shell: bash
         run: |
+          # Avoid setting github outputs from within a block that is executed remotely
+          save_outputs=false
+          if [[ "$(echo -e "${{ steps.simulator_tests_setup.outputs.version }}\n2.0.0-24" | sort -V | head -n1)" == "2.0.0-24" ]]; then
+            save_outputs=true
+          fi
+          echo "save_outputs=$save_outputs" >> $GITHUB_OUTPUT
+
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
 
@@ -1535,15 +1542,14 @@ jobs:
             fi
 
             extra_options=""
-            save_outputs=false
+
             if [ "${{ inputs.duration }}" != "UNDEFINED" ] ; then
               extra_options="--duration ${{ inputs.duration }}"
             fi
             if [[ "$(echo -e "${{ steps.simulator_tests_setup.outputs.version }}\n2.0.0-24" | sort -V | head -n1)" == "2.0.0-24" ]]; then
-              save_outputs=true
               extra_options="$extra_options --out-values test-output.json"
             fi
-            echo "save_outputs=$save_outputs" >> $GITHUB_OUTPUT
+
 
             pytest \
               ${{ steps.simulator_tests_setup.outputs.test_exec_dir }} \
