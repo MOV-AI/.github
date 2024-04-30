@@ -327,7 +327,6 @@ jobs:
           cp ./platform_configs/product.version product.version
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
           . .ci-venv/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           cat product-manifest.yaml
           integration-pipeline generate_meta_artifacts --update_simulator --override_spawner ${{ inputs.product_name }} --manifest_platform_base_key "product_dependencies"
           deactivate
@@ -540,7 +539,6 @@ jobs:
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
-          export PATH="$HOME/.local/bin:$PATH"
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
           mkdir -p userspace/
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
@@ -793,7 +791,6 @@ jobs:
         shell: bash
         run: |
           . .ci-venv/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline fetch_simulator_models \
           --manifest_platform_base_key product_components \
           --gh_api_user $GITHUB_API_USR \
@@ -1021,7 +1018,6 @@ jobs:
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
 
           . .ci-venv/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
           deactivate
@@ -1247,7 +1243,6 @@ jobs:
           rm -rf $provision_infra_dir
 
           . .ci-venv/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
           deactivate
           ls -la $provision_infra_dir

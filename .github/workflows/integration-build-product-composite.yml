@@ -474,7 +474,7 @@ jobs:
           python3 -m venv ci_scripts --clear
           . ci_scripts/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          export PATH="$HOME/.local/bin:$PATH"
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
           deactivate
@@ -674,7 +674,6 @@ jobs:
         shell: bash
         run: |
           source ci_scripts/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline fetch_simulator_models \
             --manifest_platform_base_key product_dependencies.products \
             --gh_api_user $GITHUB_API_USR \
@@ -898,7 +897,6 @@ jobs:
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           . ci_scripts/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
           deactivate
@@ -1071,7 +1069,6 @@ jobs:
           provision_infra_repo_name=devops-tf-proxmox-fleet
 
           rm -rf $provision_infra_dir
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
           ls -la $provision_infra_dir
           echo "target_dir=${provision_infra_dir}/hosts/generic/" >> $GITHUB_OUTPUT
@@ -1203,7 +1200,6 @@ jobs:
           install_key=ansible_deploy
 
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.name --output_file /tmp/repo_name.txt
@@ -1224,7 +1220,6 @@ jobs:
           cp ../${{ steps.provision_infra_setup.outputs.target_dir }}/hosts hosts
           cp -r ../*.json ./templates/fleet/
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
-          export PATH="$HOME/.local/bin:$PATH"
 
           # It is assumed the nb of squads matches the number of members of the fleet
           nb_workers_per_squad=1
@@ -1423,7 +1418,6 @@ jobs:
           provision_infra_repo_name=devops-tf-proxmox-fleet
 
           rm -rf $provision_infra_dir
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
           ls -la $provision_infra_dir
           echo "target_dir=${provision_infra_dir}/hosts/generic/" >> $GITHUB_OUTPUT
@@ -1791,7 +1785,7 @@ jobs:
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
           mkdir -p deployment_artifacts
 
-          export PATH="$HOME/.local/bin:$PATH"
+          source ci_scripts/bin/activate
 
           ls -la
           mkdir -p pkgs_deployable
