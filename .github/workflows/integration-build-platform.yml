@@ -1636,7 +1636,6 @@ jobs:
         run: |
           . .ci-venv/bin/activate
           cd simulator_artifacts
-
           integration-pipeline publish_simulator_state_artifacts \
                 --product_name ${{ inputs.product_name }} \
                 --branch ${GITHUB_REF#refs/heads/}
@@ -1716,6 +1715,15 @@ jobs:
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
+      - name: Setup CI Scripts in .ci-venv
+        shell: bash
+        run: |
+          python3 -m venv .ci-venv --clear
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
+
       - name: unstash raised_meta
         uses: actions/download-artifact@v4
         with:
@@ -1748,10 +1756,7 @@ jobs:
           qa_key: flow_tests
         run: |
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt
-          python3 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
-          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
