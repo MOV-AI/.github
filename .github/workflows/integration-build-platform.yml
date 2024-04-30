@@ -222,7 +222,6 @@ jobs:
         run: |
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/jira_report.txt /tmp/test_set.txt
           . .ci-venv/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
@@ -294,7 +293,6 @@ jobs:
           cp *.json artifacts/
 
           . .ci-venv/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           CONFIG_FILE_NAME="basic-standalone-noetic.json"
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
@@ -501,7 +499,6 @@ jobs:
         run: |
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/jira_report.txt /tmp/test_set.txt
           . .ci-venv/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
@@ -720,8 +717,9 @@ jobs:
               echo "Skipping scan of $image"
             fi
           done
-          export PATH="$HOME/.local/bin:$PATH"
+          . .ci-venv/bin/activate
           package-deployer scan
+          deactivate
           cp /tmp/deployable.dploy artifacts/host-noetic-deployable.dploy
           cp /tmp/undeployable.dploy artifacts/host-noetic-3rdParty.dploy
 
@@ -799,7 +797,6 @@ jobs:
         run: |
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
           . .ci-venv/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
@@ -831,7 +828,6 @@ jobs:
           mkdir -p artifacts
           cp *.json artifacts/
           CONFIG_FILE_NAME="basic-standalone-noetic.json"
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
           deactivate
@@ -1005,7 +1001,6 @@ jobs:
         run: |
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt
           . .ci-venv/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
@@ -1041,7 +1036,6 @@ jobs:
           cp *.json artifacts/
           . .ci-venv/bin/activate
           CONFIG_FILE_NAME="basic-standalone-noetic.json"
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
           deactivate
@@ -1235,7 +1229,6 @@ jobs:
 
           rm -rf $env_configs_dir
           . .ci-venv/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline fetch_by_tag --repo $env_configs_repo_name --version $env_configs_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $env_configs_dir
           ls -la $env_configs_dir
           echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
@@ -1250,8 +1243,9 @@ jobs:
           provision_infra_repo_name=devops-tf-proxmox-bpg
 
           rm -rf $provision_infra_dir
-          export PATH="$HOME/.local/bin:$PATH"
+          . .ci-venv/bin/activate
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
+          deactivate
           ls -la $provision_infra_dir
           echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
 
@@ -1321,7 +1315,6 @@ jobs:
           . .ci-venv/bin/activate
           cp ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml staging/provisioned_inventory.yml
           cat staging/provisioned_inventory.yml
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file staging/provisioned_inventory.yml --key fleet.children.managers.hosts.manager.ansible_host --output_file ./staging/manager_private_ip.txt
           deactivate
 
@@ -1333,7 +1326,6 @@ jobs:
         run: |
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
           . .ci-venv/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installion.$install_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installion.$install_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installion.$install_key.name --output_file /tmp/repo_name.txt
@@ -1407,7 +1399,6 @@ jobs:
         run: |
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
           . .ci-venv/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
@@ -1602,7 +1593,6 @@ jobs:
         shell: bash
         run: |
           . .ci-venv/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline fetch_simulator_models \
                 --manifest_platform_base_key product_components \
                 --gh_api_user $GITHUB_API_USR \
@@ -1646,7 +1636,7 @@ jobs:
         run: |
           . .ci-venv/bin/activate
           cd simulator_artifacts
-          export PATH="$HOME/.local/bin:$PATH"
+
           integration-pipeline publish_simulator_state_artifacts \
                 --product_name ${{ inputs.product_name }} \
                 --branch ${GITHUB_REF#refs/heads/}
@@ -1761,7 +1751,6 @@ jobs:
           python3 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
@@ -1802,7 +1791,6 @@ jobs:
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           . .ci-venv/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
           deactivate
@@ -1967,8 +1955,9 @@ jobs:
               echo "Skipping scan of $image"
             fi
           done
-          export PATH="$HOME/.local/bin:$PATH"
+          . .ci-venv/bin/activate
           package-deployer scan
+          deactivate
           cp /tmp/deployable.dploy artifacts/simulator-noetic-deployable.dploy
           cp /tmp/undeployable.dploy artifacts/simulator-noetic-3rdParty.dploy
 
@@ -2055,7 +2044,6 @@ jobs:
           set -m
           set -e
           . .ci-venv/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           git config --global --add safe.directory $(pwd)
           git config --global user.name '${{ secrets.auto_commit_user }}'
           git config --global user.email '${{ secrets.auto_commit_mail }}'
