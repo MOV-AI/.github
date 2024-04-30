@@ -262,7 +262,6 @@ jobs:
           cp ./platform_configs/product.version product.version
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
           source ci_scripts/bin/activate
-          export PATH="$HOME/.local/bin:$PATH"
           cat product-manifest.yaml
           integration-pipeline generate_composite_meta_artifacts --manifest_platform_base_key "product_dependencies.products" --override_spawner ${{ inputs.product_name }}
           deactivate
@@ -1554,7 +1553,6 @@ jobs:
           install_key=ansible_deploy
 
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.name --output_file /tmp/repo_name.txt
