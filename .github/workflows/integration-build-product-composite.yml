@@ -117,7 +117,7 @@ jobs:
   Validate-boostrap-configs:
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.2
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -1022,7 +1022,7 @@ jobs:
         distro: ${{ fromJSON(inputs.ros_distro) }}
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.2
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -1371,7 +1371,7 @@ jobs:
         distro: ${{ fromJSON(inputs.ros_distro) }}
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.2
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -1686,7 +1686,7 @@ jobs:
     needs: [Install-Robot, Install-Heterogeneous-Fleet-Single-VM,Install-Heterogeneous-Fleet-Multi-VM, Install-Simulator-Robot]
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.2
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
