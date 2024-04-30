@@ -141,10 +141,13 @@ jobs:
         run: |
           yamllint product-manifest.yaml
 
-      - name: Install CI Scripts
+      - name: Install CI Scripts in container
         shell: bash
         run: |
+          python3 -m venv ci_scripts --clear
+          source ci_scripts/bin/activate
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          deactivate
 
       - name: Bootstraping simulator metadata
         shell: bash
@@ -154,6 +157,8 @@ jobs:
           git checkout origin/${GITHUB_REF#refs/heads/} -- product.version
           cat product.version
           rm -rf simulator_artifacts ci_artifacts
+
+          source ci_scripts/bin/activate
 
           merge_manifest_args=" --dependency_name products"
           merge_manifest_args="$merge_manifest_args --gh_api_user $GITHUB_API_USR"
@@ -375,7 +380,6 @@ jobs:
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
           slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
 
-
       - name: Stash robot_jsons_${{ matrix.distro }}
         uses: actions/upload-artifact@v4
         with:
@@ -398,7 +402,6 @@ jobs:
     runs-on: integration-pipeline
     outputs:
       slack_thread_id: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
-
     steps:
       - uses: rtCamp/action-cleanup@master
 
@@ -510,7 +513,6 @@ jobs:
             package-deployer scan
             package-deployer scanAll
             ls -la /tmp
-
             {
                 echo 'Annotation:*'
                 echo 'Callback:*'
@@ -523,17 +525,16 @@ jobs:
             } >> /tmp/manifest.txt
             mkdir /tmp/proj_metadata
             python3 -m tools.backup -p /tmp/proj_metadata/ -m /tmp/manifest.txt -a export -i
-
           ' || true
-            docker cp $container_id:/tmp/deployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-deployable.dploy
-            docker cp $container_id:/tmp/undeployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-3rdParty.dploy
-            docker cp $container_id:/tmp/apt_packages.json artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-apt_packages.json
+          docker cp $container_id:/tmp/deployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-deployable.dploy
+          docker cp $container_id:/tmp/undeployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-3rdParty.dploy
+          docker cp $container_id:/tmp/apt_packages.json artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-apt_packages.json
 
-            mkdir -p metadata_artifact tmp_meta
-            docker cp $container_id:/tmp/proj_metadata/ ./
-            tar cvzf ./metadata_artifact/metadata.tar.gz ./proj_metadata
+          mkdir -p metadata_artifact tmp_meta
+          docker cp $container_id:/tmp/proj_metadata/ ./
+          tar cvzf ./metadata_artifact/metadata.tar.gz ./proj_metadata
 
-            echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)">artifacts/product-${{ matrix.distro }}.image.artifact
+          echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)">artifacts/product-${{ matrix.distro }}.image.artifact
 
       - name: Get current job id
         if: always()
@@ -578,7 +579,6 @@ jobs:
           slack-optional-thread_ts: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
 
       - name: Stash project metadata
-
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -1881,7 +1881,6 @@ jobs:
       - name: Prepare raise variables
         id: pre_raise
         run: |
-          #echo ::set-output name=branch::${GITHUB_REF#refs/heads/}
           echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
       - name: Raise App version
@@ -1982,7 +1981,6 @@ jobs:
     needs: [publish, Validate-boostrap-configs]
     if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled' || needs.publish.result == 'skipped' ) }}
     steps:
-
       - name: unstash raised_meta
         uses: actions/download-artifact@v4
         with:
