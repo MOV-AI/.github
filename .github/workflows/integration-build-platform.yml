@@ -1381,7 +1381,7 @@ jobs:
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=1.0.0-2
+          provision_infra_version=1.0.0-3
           provision_infra_repo_name=devops-tf-proxmox-bpg
 
           rm -rf $provision_infra_dir
@@ -1679,10 +1679,15 @@ jobs:
         if: ${{ ( !inputs.debug_fleet_keep_alive && success() ) || cancelled() || ( !inputs.debug_fleet_keep_alive && failure() ) }}
         shell: bash
         run: |
-
-          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/hel_fleet_test.tfvars'
-          terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
-
+          attempts=3
+          count=0
+          while [ $count -lt $attempts ]; do
+            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/hel_fleet_test.tfvars'
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars && break
+            ((count++))
+            echo "Retrying Terraform destroy (attempt $count)..."
+            sleep 10  # Add a delay before retrying (optional)
+          done
 
   Build-Simulator:
     needs: [Validate-boostrap-configs]
