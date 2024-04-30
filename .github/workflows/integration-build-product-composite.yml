@@ -96,7 +96,6 @@ env:
   CI_INTEGRATION_SCRIPTS_VERSION: "3.0.0.1"
   MOBTEST_VERSION: "0.0.4.3"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.26"
-  ANSIBLE_VERSION: "6.3.0"
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
@@ -118,7 +117,7 @@ jobs:
   Validate-boostrap-configs:
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.1
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.2
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -322,6 +321,7 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
+
       - name: Docker build
         shell: bash
         run: |
@@ -342,7 +342,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -1026,7 +1025,7 @@ jobs:
         distro: ${{ fromJSON(inputs.ros_distro) }}
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.1
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.2
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -1063,19 +1062,6 @@ jobs:
         shell: bash
         run: |
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-
-      - name: Install Ansible in container
-        shell: bash
-        run: |
-          apt install -y python3.9 python3.9-venv
-          python3.9 -m pip install ansible==$ANSIBLE_VERSION
-
-      - name: Install terraform
-        shell: bash
-        run: |
-          wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
-          apt update && apt install terraform -y
 
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
@@ -1304,7 +1290,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -1392,7 +1377,7 @@ jobs:
         distro: ${{ fromJSON(inputs.ros_distro) }}
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.1
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.2
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -1429,14 +1414,6 @@ jobs:
         shell: bash
         run: |
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-          python3 -m pip install ansible==$ANSIBLE_VERSION
-
-      - name: Install terraform
-        shell: bash
-        run: |
-          wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
-          apt update && apt install terraform -y
 
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
@@ -1647,7 +1624,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -1718,7 +1694,7 @@ jobs:
     needs: [Install-Robot, Install-Heterogeneous-Fleet-Single-VM,Install-Heterogeneous-Fleet-Multi-VM, Install-Simulator-Robot]
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.1
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.2
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}

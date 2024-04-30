@@ -142,7 +142,7 @@ jobs:
   Validate-boostrap-configs:
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.1
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.2
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -655,7 +655,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
@@ -1185,6 +1184,7 @@ jobs:
     steps:
       - uses: rtCamp/action-cleanup@master
         if: ${{ inputs.with_simulation_tests }}
+
       - name: Checkout
         if: ${{ inputs.with_simulation_tests && inputs.is_nightly_run == false }}
         uses: actions/checkout@v4
@@ -1235,14 +1235,6 @@ jobs:
         with:
           name: robot_jsons_noetic
           path: .
-
-      - name: Install terraform
-        if: ${{ inputs.with_simulation_tests }}
-        shell: bash
-        run: |
-          wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-          sudo apt update && sudo apt install terraform=1.5.2-1 -y
 
       - name: Setup terraform proxmox provisioner
         if: ${{ inputs.with_simulation_tests }}
@@ -1757,7 +1749,7 @@ jobs:
     needs: [Install-Robot, Install-Simulator-Robot, Validation-Simulator-Tests]
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.1
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.2
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
