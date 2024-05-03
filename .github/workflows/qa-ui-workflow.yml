@@ -1,0 +1,225 @@
+name: UI Tests
+on:
+  workflow_call:
+    inputs:
+      install_tests_ref:
+        required: true
+        type: string
+        description: Install tests reference to use
+      test_set:
+        required: true
+        type: string
+        description: Test set to execute
+    secrets:
+      gh_token:
+        required: true
+      slack_token_id:
+        required: true
+      jira_username:
+        required: true
+      jira_password:
+        required: true
+      xray_clientid:
+        required: true
+      xray_secret:
+        required: true
+
+jobs:
+  Validate-features:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Feature file validation
+        shell: bash
+        env:
+          XRAY_CLIENTID: ${{ secrets.xray_clientid }}
+          XRAY_SECRET: ${{ secrets.xray_secret }}
+          JIRA_USERNAME: ${{ secrets.jira_username }}
+          JIRA_PASSWORD: ${{ secrets.jira_password }}
+        run: |
+          # create virtual environment
+          python3 -m venv venv --clear
+          . venv/bin/activate
+
+          # install tests requirements in venv
+          pip install \
+            -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple \
+            --extra-index-url https://pypi.org/simple \
+            -r requirements.txt
+
+          xray download ${{ inputs.test_set }}
+          xray compare ./tests/feature/
+
+          # deactivate venv
+          deactivate
+
+  Validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check if pre-commit config exists
+        id: check_files
+        uses: andstor/file-existence-action@v1
+        with:
+          files: ".pre-commit-config.yaml"
+
+      - name: Install dependencies
+        run: pip install pre-commit
+
+      - name: Run pre-commit
+        run: pre-commit run --show-diff-on-failure --color=always --all-files
+
+  Run-tests:
+    runs-on: qa-runner
+    needs: [Validate]
+    steps:
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Agent info
+        id: agent_info
+        run: |
+          ip_tmp=$(hostname -I | awk '{print $1}')
+          echo "ip=$ip_tmp" | tee >> $GITHUB_OUTPUT
+
+      - name: Update/upgrade host packages
+        run: |
+          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
+          sudo apt-get update
+          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
+          sudo apt-get upgrade -y
+          # ros_comm are needed for tests
+          # tcpdump pcap2har are needed for tests capturing network traffic
+          sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic tcpdump pcap2har
+          sudo setcap cap_net_raw,cap_net_admin=eip /usr/sbin/tcpdump
+
+      - name: Setup QA install tests
+        uses: actions/checkout@v4
+        with:
+          repository: MOV-AI/qa_install_tests
+          ref: refs/heads/${{ inputs.install_tests_ref }}
+          path: qa_install_tests
+          token: ${{ secrets.gh_token }}
+
+      - name: Install tests
+        id: install
+        working-directory: qa_install_tests
+        shell: bash
+        run: |
+          python3 -m venv test-venv --clear --system-site-packages
+          . test-venv/bin/activate
+          pip install -r requirements.txt
+
+          # tests execution
+          python3 -m pytest tests/ \
+            -k 'AMR_installation_validator' \
+            --installPath="." \
+            --jsonConfigFilePath="config/platform_example_script.json"
+
+          # remove virtual environment
+          deactivate
+          rm -rf test-venv
+
+          user=$(cat results/credentials.txt | awk -F: '{print $1}')
+          pwd=$(cat results/credentials.txt | awk -F: '{print $2}')
+          echo "movai_user=$user" >> $GITHUB_OUTPUT
+          echo "movai_pwd=$pwd" >> $GITHUB_OUTPUT
+
+      - name: UI tests
+        id: ui
+        shell: bash
+        run: |
+          python3 -m venv test-venv --clear --system-site-packages
+          . test-venv/bin/activate
+          pip install -r requirements.txt
+
+          # install test dependencies on spawner
+          if [ -f apt-requirements.txt ]; then
+            ## get spawner container name
+            CONTAINER_ID=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
+            ## get apt dependencies
+            APT_DEPS=$(cat apt-requirements.txt | tr "\n" " ")
+            ## install
+            docker exec -t "${CONTAINER_ID}" bash -c "
+              sudo apt update
+              sudo apt install -y ${APT_DEPS}
+            "
+          fi
+
+          # tests execution
+          python3 -m pytest \
+            --ignore qa_install_tests \
+            --hub_url http://selenoid-ui.hel.mov.ai \
+            --base_url https://${{ steps.agent_info.outputs.ip }}/ \
+            --movai-user ${{ steps.install.outputs.movai_user }} \
+            --movai-pw ${{ steps.install.outputs.movai_pwd }}
+
+          # remove virtual environment
+          deactivate
+          rm -rf test-venv
+
+      - name: Save docker container logs
+        if: always()
+        shell: bash
+        run: |
+          # for sanity
+          docker ps -a
+
+          for container in backend spawner messager-server; do
+             CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
+             docker logs "${CONTAINER_ID}" &> "${container}.log" || true
+          done || true
+
+          # movai-service
+          journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
+
+      - name: Stash QA artifacts
+        if: always()
+        shell: bash
+        run: |
+          # cleanup
+          rm -rf qa_artifacts
+
+          # tests artifacts
+          # *.log and *.zip might not exist if the test fails early
+          mkdir -p qa_artifacts
+          cp -r *.log ./qa_artifacts || true
+          cp -r *.tar ./qa_artifacts || true
+          cp -r *.json ./qa_artifacts || true
+          cp -r *.pcap ./qa_artifacts || true
+          cp -r *.har ./qa_artifacts || true
+          cp -r *.html ./qa_artifacts || true
+
+          # install
+          mkdir -p qa_artifacts/install
+          cp -r qa_install_tests/results/*.log ./qa_artifacts/install/ || true
+          cp -r qa_install_tests/results/*.zip ./qa_artifacts/install/ || true
+          cp -r qa_install_tests/results/test_report_*.html ./qa_artifacts/install/ || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa_artifacts_ui_tests
+          path: qa_artifacts/*
+          retention-days: 3
+
+      - name: Remove robots
+        if: always()
+        shell: bash
+        run: |
+          timeout 30 movai-cli remove --all || true
+
+      - name: Docker cleanups
+        if: always()
+        shell: bash
+        run: |
+          docker system prune -f
+          docker image prune --all -f

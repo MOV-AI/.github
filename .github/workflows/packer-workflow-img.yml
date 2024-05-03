@@ -313,4 +313,3 @@ jobs:
           summary_message=":rocket: new version ${{ needs.Release-Images.outputs.tag }}  of packer images available\n"
 
           echo -e "### Release Summary \n${summary_message}" >> $GITHUB_STEP_SUMMARY
-

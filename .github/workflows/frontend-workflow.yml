@@ -67,7 +67,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -75,7 +75,7 @@ jobs:
         token: ${{ secrets.npm_token }}
 
     - name: Setup Github as proxy Registry
-      uses: actions/setup-node@v2
+      uses: actions/setup-node@v4
       with:
         node-version: '${{ inputs.npm_version }}'
         registry-url: 'https://npm.pkg.github.com/mov-ai'
@@ -109,7 +109,7 @@ jobs:
 
     - name: Check package.json exists
       id: check_package_json
-      uses: andstor/file-existence-action@v2
+      uses: andstor/file-existence-action@v3
       with:
         files: 'package.json'
 
@@ -171,7 +171,7 @@ jobs:
 
     - name: Check manifest.json exists
       id: check_manifest_json
-      uses: andstor/file-existence-action@v2
+      uses: andstor/file-existence-action@v3
       with:
         files: 'manifest.json'
 
@@ -206,7 +206,7 @@ jobs:
         fi
 
     - name: Archive binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: packages
         path: artifacts/*
@@ -228,7 +228,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -236,7 +236,7 @@ jobs:
         token: ${{ secrets.npm_token }}
 
     - name: Setup Github as proxy Registry
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: '${{ inputs.npm_version }}'
         registry-url: 'https://npm.pkg.github.com/mov-ai'
@@ -250,7 +250,7 @@ jobs:
         npm_token: ${{ secrets.npm_token }}
 
     - name: Download a single artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: packages
         path: artifacts
@@ -367,7 +367,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Set tag output
       id: vars

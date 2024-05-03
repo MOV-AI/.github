@@ -1,4 +1,4 @@
-name: Build Packer images
+name: Build and Validate Platform
 on:
   workflow_call:
     inputs:
@@ -71,8 +71,7 @@ env:
   XRAY_SECRET: ${{ secrets.xray_secret}}
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
-  # slack channel rd-platform
-  SLACK_CHANNEL: "C02U028NMB7"
+  SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
   # development slack channel
   #SLACK_CHANNEL: "C05K2KF1UP8"
 
@@ -80,7 +79,7 @@ jobs:
   Validate-boostrap-configs:
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -88,19 +87,16 @@ jobs:
       slack_thread_id: ${{ fromJson(steps.send-message.outputs.slack-result).response.message.ts }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Validate Manifest
         shell: bash
         run: |
-          apt install -y yamllint
           yamllint product-manifest.yaml
 
-      - name: Install CI Scripts
+      - name: Install CI Scripts in container
         shell: bash
         run: |
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: Bootstraping simulator metadata
@@ -125,14 +121,14 @@ jobs:
                 --manifest_platform_base_key product_components
 
       - name: Stash robot_configs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: robot_configs
           path: "*.json*"
           retention-days: 5
 
       - name: Stash sim_configs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts/*
@@ -164,7 +160,7 @@ jobs:
           slack-text: ${{ steps.pre_slack.outputs.msg }}
 
       - name: Stash raised_meta
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: raised_meta
           path: platform_configs/*
@@ -187,29 +183,26 @@ jobs:
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
+
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Agent info
         id: agent_info
         run: |
-          ip=$(hostname -I | awk '{print $1}')
-          echo $ip
-          echo "ip=${ip}" >> $GITHUB_OUTPUT
+          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
 
-      - name: Install CI Scripts
+      - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
+          python3 -m venv .ci-venv --clear --system-site-packages # needed for apt dependencies
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-
-      - name: Install Package Deployer
-        shell: bash
-        run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
+          python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: unstash robot_configs
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_configs
           path: .
@@ -224,23 +217,24 @@ jobs:
       - name: Setup QA UI tests
         id: ui_tests_setup
         shell: bash
+        env:
+          qa_key: ui_tests
         run: |
-          qa_key=ui_tests
-
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/jira_report.txt /tmp/test_set.txt
-
-          export PATH="$HOME/.local/bin:$PATH"
+          . .ci-venv/bin/activate
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.jira_report --output_file /tmp/jira_report.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.test_set --output_file /tmp/test_set.txt
+          integration-pipeline get_yml_value --file product-manifest.yaml --key version --output_file /tmp/platform_version.txt
 
           tests_dir=$(cat /tmp/target_dir.txt)
           tests_version=$(cat /tmp/version.txt)
           tests_repo_name=$(cat /tmp/repo_name.txt)
           jira_report=$(cat /tmp/jira_report.txt)
           test_set=$(cat /tmp/test_set.txt)
+          platform_version=$(cat /tmp/platform_version.txt)
 
           rm -rf $tests_repo_name
 
@@ -250,32 +244,23 @@ jobs:
           echo "target_dir=${tests_dir}" >> $GITHUB_OUTPUT
           echo "jira_report=${jira_report}" >> $GITHUB_OUTPUT
           echo "test_set=${test_set}" >> $GITHUB_OUTPUT
-
-          # setup venv in a step that is always executed
-          pushd "${tests_dir}"
-          rm -rf venv
-          python3 -m venv venv
-          . venv/bin/activate
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
-          pip install -r requirements.txt
+          echo "platform_version=${platform_version}" >> $GITHUB_OUTPUT
           deactivate
 
-          # install test dependencies on host
-          sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
-
-          popd
+          # setup tests venv in a step that is always executed
+          python3 -m venv "${tests_dir}"/test-venv --clear --system-site-packages
+          . "${tests_dir}"/test-venv/bin/activate
+          pip install -r "${tests_dir}"/requirements.txt
+          deactivate
 
       - name: Feature File Validation
         id: feature_file_ui
         working-directory: ${{ steps.ui_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
-          . venv/bin/activate
-
+          . test-venv/bin/activate
           xray download ${{ steps.ui_tests_setup.outputs.test_set }}
           xray compare ./tests/feature/
-
           deactivate
 
       - name: Prepare QA Feature File Validation slack message
@@ -300,21 +285,18 @@ jobs:
         id: install
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
-          rm -rf artifacts
-          mkdir -p artifacts
+          rm -rf artifacts ; mkdir -p artifacts
           cp *.json artifacts/
 
+          . .ci-venv/bin/activate
           CONFIG_FILE_NAME="basic-standalone-noetic.json"
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
+          deactivate
 
+          export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
           ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
@@ -350,11 +332,9 @@ jobs:
         working-directory: ${{ steps.ui_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
-          export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
+          . test-venv/bin/activate
 
-          . venv/bin/activate
-
-          pytest \
+          python3 -m pytest \
             -ra \
             --hub_url http://selenoid-ui.hel.mov.ai \
             --base_url https://${{ steps.agent_info.outputs.ip }}/ \
@@ -368,17 +348,10 @@ jobs:
         if: always()
         working-directory: ${{ steps.ui_tests_setup.outputs.target_dir }}
         run: |
-          export PATH="$HOME/.local/bin:$PATH"
-
-          # get platform version
-          rm -f /tmp/version.txt
-          integration-pipeline get_yml_value --file ../product-manifest.yaml --key version --output_file /tmp/version.txt
-          plat_version=$(cat /tmp/version.txt)
-
           # create test execution
           if [ "${{ steps.ui_tests_setup.outputs.jira_report }}" == "True" ] ; then
-            . venv/bin/activate
-            xray create ./results.json --version "EE ${plat_version}" --label UI_Automation
+            . test-venv/bin/activate
+            xray create ./results.json --version "EE ${{ steps.ui_tests_setup.outputs.platform_version }}" --label UI_Automation
             deactivate
           fi
 
@@ -387,7 +360,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -432,17 +404,10 @@ jobs:
           # for sanity
           docker ps -a
 
-          # backend
-          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^backend-.*")
-          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
-
-          # spawner
-          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^spawner-.*")
-          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
-
-          # message-server
-          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^message-server-.*") || true
-          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log" || true
+          for container in backend spawner messager-server; do
+             CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
+             docker logs "${CONTAINER_ID}" &> "${container}.log" || true
+          done || true
 
           # movai-service
           journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
@@ -469,7 +434,7 @@ jobs:
 
       - name: Stash QA artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: qa_artifacts_ui_tests
           path: qa_artifacts/*
@@ -479,11 +444,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
       - name: Docker cleanups
         if: always()
@@ -498,29 +459,26 @@ jobs:
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
+
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Agent info
         id: agent_info
         run: |
-          ip=$(hostname -I | awk '{print $1}')
-          echo $ip
-          echo "ip=${ip}" >> $GITHUB_OUTPUT
+          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
 
-      - name: Install CI Scripts
+      - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
+          python3 -m venv .ci-venv --clear --system-site-packages # needed for apt dependencies
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-
-      - name: Install Package Deployer
-        shell: bash
-        run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
+          python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: unstash robot_configs
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_configs
           path: .
@@ -535,17 +493,18 @@ jobs:
       - name: Setup QA install tests
         id: install_tests_setup
         shell: bash
+        env:
+          qa_key: install_tests
         run: |
-          qa_key=install_tests
-
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/jira_report.txt /tmp/test_set.txt
-
-          export PATH="$HOME/.local/bin:$PATH"
+          . .ci-venv/bin/activate
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.jira_report --output_file /tmp/jira_report.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.test_set --output_file /tmp/test_set.txt
+          integration-pipeline get_yml_value --file product-manifest.yaml --key version --output_file /tmp/platform_version.txt
+          platform_version=$(cat /tmp/platform_version.txt)
 
           tests_dir=$(cat /tmp/target_dir.txt)
           tests_version=$(cat /tmp/version.txt)
@@ -560,28 +519,23 @@ jobs:
           echo "target_dir=${tests_dir}" >> $GITHUB_OUTPUT
           echo "jira_report=${jira_report}" >> $GITHUB_OUTPUT
           echo "test_set=${test_set}" >> $GITHUB_OUTPUT
-
-          # setup venv in a step that is always executed
-          pushd "${tests_dir}"
-          rm -rf venv
-          python3 -m venv venv
-          . venv/bin/activate
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
-          pip install -r requirements.txt
+          echo "platform_version=${platform_version}" >> $GITHUB_OUTPUT
           deactivate
-          popd
+
+          # setup tests venv in a step that is always executed
+          python3 -m venv "${tests_dir}"/test-venv --clear --system-site-packages
+          . "${tests_dir}"/test-venv/bin/activate
+          pip install -r "${tests_dir}"/requirements.txt
+          deactivate
 
       - name: Feature File Validation
         id: feature_file_install
         working-directory: ${{ steps.install_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
-          . venv/bin/activate
-
+          . test-venv/bin/activate
           python3 testcasemanagement/testcase_importer.py --target "${{ steps.install_tests_setup.outputs.test_set }}"
           python3 testcasemanagement/feature_file_processor.py --validate
-
           deactivate
 
       - name: Prepare QA Feature File Validation slack message
@@ -608,24 +562,22 @@ jobs:
         working-directory: ${{ steps.install_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
+          . test-venv/bin/activate
           export PATH="$HOME/.local/bin:$PATH"
-
-          . venv/bin/activate
           rm -rf results/*
 
           if [ "${{ steps.install_tests_setup.outputs.jira_report }}" == "True" ] ; then
-            pytest tests/ \
+          python3 -m pytest tests/ \
               -ra \
               -k '${{ steps.install_tests_setup.outputs.test_set }}' \
               --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci" \
               --jira_report
           else
-            pytest tests/ \
+          python3 -m pytest tests/ \
               -ra \
               -k '${{ steps.install_tests_setup.outputs.test_set }}' \
               --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci"
           fi
-
           deactivate
 
           user=$(cat results/credentials.txt | awk -F: '{print $1}')
@@ -650,7 +602,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -695,17 +646,10 @@ jobs:
           # for sanity
           docker ps -a
 
-          # backend
-          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^backend-.*")
-          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
-
-          # spawner
-          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^spawner-.*")
-          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
-
-          # message-server
-          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^message-server-.*") || true
-          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log" || true
+          for container in backend spawner messager-server; do
+             CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
+             docker logs "${CONTAINER_ID}" &> "${container}.log" || true
+          done || true
 
           # movai-service
           journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
@@ -733,7 +677,7 @@ jobs:
 
       - name: Stash QA artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: qa_artifacts_install_tests
           path: qa_artifacts/*
@@ -772,13 +716,14 @@ jobs:
               echo "Skipping scan of $image"
             fi
           done
-          export PATH="$HOME/.local/bin:$PATH"
+          . .ci-venv/bin/activate
           package-deployer scan
+          deactivate
           cp /tmp/deployable.dploy artifacts/host-noetic-deployable.dploy
           cp /tmp/undeployable.dploy artifacts/host-noetic-3rdParty.dploy
 
       - name: Stash deploy_artifacts_noetic
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deploy_artifacts_noetic
           path: artifacts/*.dploy
@@ -797,11 +742,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
       - name: Docker cleanups
         if: always()
@@ -816,29 +757,26 @@ jobs:
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
+
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Agent info
         id: agent_info
         run: |
-          ip=$(hostname -I | awk '{print $1}')
-          echo $ip
-          echo "ip=${ip}" >> $GITHUB_OUTPUT
+          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
 
-      - name: Install CI Scripts
+      - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
+          python3 -m venv .ci-venv --clear
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-
-      - name: Install Package Deployer
-        shell: bash
-        run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
+          python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: unstash robot_configs
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_configs
           path: .
@@ -853,12 +791,11 @@ jobs:
       - name: Setup QA API tests
         id: api_tests_setup
         shell: bash
+        env:
+          qa_key: api_tests
         run: |
-          qa_key=api_tests
-
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
-          export PATH="$HOME/.local/bin:$PATH"
-
+          . .ci-venv/bin/activate
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
@@ -872,35 +809,29 @@ jobs:
           ls -la $tests_dir
 
           echo "target_dir=${tests_dir}" >> $GITHUB_OUTPUT
-
-          # setup venv in a step that is always executed
-          pushd "${tests_dir}"
-          rm -rf venv
-          python3 -m venv venv
-          . venv/bin/activate
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
-          pip install -r requirements.txt
           deactivate
-          popd
+
+          # setup tests venv in a step that is always executed
+          python3 -m venv "${tests_dir}"/test-venv --clear --system-site-packages
+          . "${tests_dir}"/test-venv/bin/activate
+          pip install -r "${tests_dir}"/requirements.txt
+          deactivate
 
       - name: Install
         id: install
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
+          . .ci-venv/bin/activate
           mkdir -p artifacts
           cp *.json artifacts/
           CONFIG_FILE_NAME="basic-standalone-noetic.json"
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
+          deactivate
 
+          export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
           ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
@@ -918,13 +849,9 @@ jobs:
         working-directory: ${{ steps.api_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
-          # install test dependencies on host
-          sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
-          export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
+          . test-venv/bin/activate
 
-          . venv/bin/activate
-
-          pytest src \
+          python3 -m pytest src \
             --movai-ip ${{ steps.agent_info.outputs.ip }} \
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
@@ -937,7 +864,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -974,7 +900,6 @@ jobs:
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
           slack-optional-thread_ts: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
 
-
       - name: Save docker container logs
         if: always()
         working-directory: ${{ steps.api_tests_setup.outputs.target_dir }}
@@ -983,24 +908,16 @@ jobs:
           # for sanity
           docker ps -a
 
-          # backend
-          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^backend-.*")
-          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
-
-          # spawner
-          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^spawner-.*")
-          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
-
-          # message-server
-          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^message-server-.*") || true
-          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log" || true
+          for container in backend spawner messager-server; do
+             CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
+             docker logs "${CONTAINER_ID}" &> "${container}.log" || true
+          done || true
 
           # movai-service
           journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
 
           # spawner (mobros firmware)
           journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
-
 
       - name: Stash QA artifacts
         if: always()
@@ -1020,7 +937,7 @@ jobs:
 
       - name: Stash QA artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: qa_artifacts_api_tests
           path: qa_artifacts/*
@@ -1030,11 +947,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
       - name: Docker cleanups
         if: always()
@@ -1049,29 +962,26 @@ jobs:
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
+
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Agent info
         id: agent_info
         run: |
-          ip=$(hostname -I | awk '{print $1}')
-          echo $ip
-          echo "ip=${ip}" >> $GITHUB_OUTPUT
+          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
 
-      - name: Install CI Scripts
+      - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
+          python3 -m venv .ci-venv --clear
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-
-      - name: Install Package Deployer
-        shell: bash
-        run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
+          python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: unstash robot_configs
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_configs
           path: .
@@ -1086,12 +996,11 @@ jobs:
       - name: Setup QA Flow tests
         id: flow_tests_setup
         shell: bash
+        env:
+          qa_key: flow_tests
         run: |
-          qa_key=flow_tests
-
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt
-          export PATH="$HOME/.local/bin:$PATH"
-
+          . .ci-venv/bin/activate
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
@@ -1109,35 +1018,29 @@ jobs:
           echo "target_dir=${tests_dir}" >> $GITHUB_OUTPUT
           echo "version=${tests_version}" >> $GITHUB_OUTPUT
           echo "test_set=${test_set}" >> $GITHUB_OUTPUT
-
-          # setup venv in a step that is always executed
-          pushd "${tests_dir}"
-          rm -rf venv
-          python3 -m venv venv
-          . venv/bin/activate
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
-          pip install -r requirements.txt
           deactivate
-          popd
+
+          # setup tests venv in a step that is always executed
+          python3 -m venv "${tests_dir}"/test-venv --clear --system-site-packages
+          . "${tests_dir}"/test-venv/bin/activate
+          pip install -r "${tests_dir}"/requirements.txt
+          deactivate
 
       - name: Install
         id: install
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
           mkdir -p artifacts
           cp *.json artifacts/
+          . .ci-venv/bin/activate
           CONFIG_FILE_NAME="basic-standalone-noetic.json"
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
+          deactivate
 
+          export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
           ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
@@ -1158,10 +1061,6 @@ jobs:
         working-directory: ${{ steps.flow_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
-          # install test dependencies on host
-          sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
-          export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
-
           # install test dependencies on spawner
           if [ -f apt-requirements.txt ]; then
             ## get spawner container name
@@ -1176,9 +1075,9 @@ jobs:
           fi
 
           # run tests
-          . venv/bin/activate
+          . test-venv/bin/activate
 
-          pytest \
+          python3 -m pytest \
             -s \
             -ra \
             --movai-user ${{ steps.install.outputs.movai_user }} \
@@ -1193,7 +1092,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -1230,7 +1128,6 @@ jobs:
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
           slack-optional-thread_ts: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
 
-
       - name: Save docker container logs
         if: always()
         working-directory: ${{ steps.flow_tests_setup.outputs.target_dir }}
@@ -1239,17 +1136,10 @@ jobs:
           # for sanity
           docker ps -a
 
-          # backend
-          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^backend-.*")
-          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
-
-          # spawner
-          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^spawner-.*")
-          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
-
-          # message-server
-          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^message-server-.*") || true
-          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log" || true
+          for container in backend spawner messager-server; do
+             CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
+             docker logs "${CONTAINER_ID}" &> "${container}.log" || true
+          done || true
 
           # movai-service
           journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
@@ -1273,7 +1163,7 @@ jobs:
 
       - name: Stash QA artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: qa_artifacts_flow_tests
           path: qa_artifacts/*
@@ -1283,11 +1173,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
       - name: Docker cleanups
         if: always()
@@ -1311,56 +1197,28 @@ jobs:
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
+
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Agent info
         id: agent_info
         run: |
-          ip=$(hostname -I | awk '{print $1}')
-          echo $ip
-          echo "ip=${ip}" >> $GITHUB_OUTPUT
+          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
 
-      - name: Install CI Scripts
+      - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
+          python3 -m venv .ci-venv --clear
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash robot_configs
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_configs
           path: .
-
-      - name: Provision remote vms (AWS)
-        if: ${{ false }}
-        shell: bash
-        run: |
-          mkdir aws_artifacts
-          python3 -m pip install awscli
-          cd staging
-          export PATH="$HOME/.local/bin:$PATH"
-          export product="platform"
-          export version="$PRODUCT_RELEASE_VERSION"
-          ./ec2_provision.sh
-          cp -vf infra_ids.txt ../aws_artifacts/
-
-      - name: Stash ci_infra_artifacts (AWS)
-        if: ${{ false }}
-        uses: actions/upload-artifact@v3
-        with:
-          name: ci_infra_artifacts
-          path: aws_artifacts/*
-          retention-days: 5
-
-      - name: Install terraform
-        shell: bash
-        run: |
-          wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-          sudo apt update && sudo apt install terraform -y
 
       - name: Setup infra environment configs
         id: infra_env_configs_setup
@@ -1371,10 +1229,11 @@ jobs:
           env_configs_repo_name=devops-tf-env-conf
 
           rm -rf $env_configs_dir
-          export PATH="$HOME/.local/bin:$PATH"
+          . .ci-venv/bin/activate
           integration-pipeline fetch_by_tag --repo $env_configs_repo_name --version $env_configs_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $env_configs_dir
           ls -la $env_configs_dir
           echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
+          deactivate
 
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
@@ -1385,8 +1244,9 @@ jobs:
           provision_infra_repo_name=devops-tf-proxmox-bpg
 
           rm -rf $provision_infra_dir
-          export PATH="$HOME/.local/bin:$PATH"
+          . .ci-venv/bin/activate
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
+          deactivate
           ls -la $provision_infra_dir
           echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
 
@@ -1453,19 +1313,20 @@ jobs:
       - name: Apply ansible inventory
         shell: bash
         run: |
+          . .ci-venv/bin/activate
           cp ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml staging/provisioned_inventory.yml
           cat staging/provisioned_inventory.yml
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file staging/provisioned_inventory.yml --key fleet.children.managers.hosts.manager.ansible_host --output_file ./staging/manager_private_ip.txt
+          deactivate
 
       - name: Setup ansible installation
         id: ansible_install_setup
         shell: bash
+        env:
+          install_key: ansible_deploy
         run: |
-          install_key=ansible_deploy
-
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
-          export PATH="$HOME/.local/bin:$PATH"
+          . .ci-venv/bin/activate
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installion.$install_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installion.$install_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installion.$install_key.name --output_file /tmp/repo_name.txt
@@ -1477,17 +1338,16 @@ jobs:
           integration-pipeline fetch_by_tag --repo $install_infra_repo_name --version $install_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $install_infra_dir
           ls -la $install_infra_dir
           echo "target_dir=${install_infra_dir}" >> $GITHUB_OUTPUT
+          deactivate
 
       - name: Ansible install platform
         id: ansible_install_platform
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
         shell: bash
         run: |
-
           echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
           sudo chmod 600 ~/.ssh/aws_slave.pem
           while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
-          sudo apt install -y python3.9 python3.9-venv
           python3.9 -m venv ansible-venv
           source ansible-venv/bin/activate
           python3 -m pip install -r requirements.txt
@@ -1499,8 +1359,7 @@ jobs:
           IFS=',' read -r -a stripped_ips_arr <<< $stripped_ips
 
           manager_ip=${stripped_ips_arr[0]}
-          echo $manager_ip
-          echo "manager_ip=${manager_ip}" >> $GITHUB_OUTPUT
+          echo "manager_ip=${manager_ip}" | tee >> $GITHUB_OUTPUT
 
           for ip in "${stripped_ips_arr[@]}"
           do
@@ -1512,7 +1371,12 @@ jobs:
           done
 
           # Ensure cloud init is done on all the hosts
-          for fleet_host in "manager" "member0" "member1"; do
+          members=("manager")
+          for i in $(seq 0 $(( ${{ inputs.fleet_number_members}} - 1 ))); do
+            members+=("member$i")
+          done
+
+          for fleet_host in ${members[@]}; do
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'cloud-init status --wait'
           done
 
@@ -1531,12 +1395,11 @@ jobs:
       - name: Setup QA API tests
         id: api_tests_setup
         shell: bash
+        env:
+          qa_key: api_tests
         run: |
-          qa_key=api_tests
-
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
-          export PATH="$HOME/.local/bin:$PATH"
-
+          . .ci-venv/bin/activate
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
@@ -1550,31 +1413,21 @@ jobs:
           ls -la $tests_dir
 
           echo "target_dir=${tests_dir}" >> $GITHUB_OUTPUT
-
-          # setup venv in a step that is always executed
-          pushd "${tests_dir}"
-          rm -rf venv
-          python3 -m venv venv
-          . venv/bin/activate
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
-          pip install -r requirements.txt
           deactivate
-          popd
+
+          # setup tests venv in a step that is always executed
+          python3 -m venv "${tests_dir}"/test-venv --clear --system-site-packages
+          . "${tests_dir}"/test-venv/bin/activate
+          pip install -r "${tests_dir}"/requirements.txt
+          deactivate
 
       - name: API tests
         timeout-minutes: 30
         working-directory: ${{ steps.api_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
-          # install test dependencies on host
-          sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
-          export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
-
-          . venv/bin/activate
-
+          . test-venv/bin/activate
           echo "Skip tests since they were never planned to run in this manner"
-
           deactivate
 
       - name: Save docker container logs
@@ -1593,13 +1446,11 @@ jobs:
           # movai-service
           journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
 
-
       - name: Get current job id
         if: always()
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -1668,7 +1519,7 @@ jobs:
 
       - name: Stash Fleet QA artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: fleet_qa_artifacts
           path: ${{ steps.ansible_install_setup.outputs.target_dir }}/fleet_qa_artifacts/*
@@ -1682,18 +1533,18 @@ jobs:
           attempts=3
           count=0
           while [ $count -lt $attempts ]; do
-          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/hel_fleet_test.tfvars'
-          terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars 
-          exit_status=$?
-          if [ $exit_status -eq 0 ]; then
+            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/hel_fleet_test.tfvars'
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars 
+            exit_status=$?
+            if [ $exit_status -eq 0 ]; then
               break
-          elif [ $exit_status -eq 1 ]; then
+            elif [ $exit_status -eq 1 ]; then
               ((count++))
               echo "Retrying Terraform destroy (attempt $count)..."
-          else
+            else
                   echo "Terraform destroy failed with exit status ${exit_status:-unknown}. Exiting..."
                   exit ${exit_status:-1}
-          fi    
+            fi
           done
 
   Build-Simulator:
@@ -1707,25 +1558,25 @@ jobs:
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
+
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Agent info
         id: agent_info
         run: |
-          ip=$(hostname -I | awk '{print $1}')
-          echo $ip
-          echo "ip=${ip}" >> $GITHUB_OUTPUT
+          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
 
-      - name: Install CI Scripts
+      - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
+          python3 -m venv .ci-venv --clear
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash sim_configs
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts
@@ -1743,20 +1594,19 @@ jobs:
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
         shell: bash
         run: |
-          wget https://github.com/hadolint/hadolint/releases/download/v2.9.3/hadolint-Linux-x86_64
-          chmod +x hadolint-Linux-x86_64
-          ./hadolint-Linux-x86_64 docker/$DISTRO/Dockerfile-simulator -t error
+          hadolint docker/$DISTRO/Dockerfile-simulator -t error
 
       - name: Download models
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
         shell: bash
         run: |
-          export PATH="$HOME/.local/bin:$PATH"
+          . .ci-venv/bin/activate
           integration-pipeline fetch_simulator_models \
                 --manifest_platform_base_key product_components \
                 --gh_api_user $GITHUB_API_USR \
                 --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
                 --target_dir "./models"
+          deactivate
           if [ ! -d ./models ]; then mkdir -p ./models; fi
 
       - name: Login to Private Registry
@@ -1774,7 +1624,7 @@ jobs:
           echo "image_name=$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
           echo "base_name=$(cat simulator_artifacts/simulator_base.ci)" >> $GITHUB_OUTPUT
 
-      - name: Build with args and push:${{ inputs.deploy }}
+      - name: Build with args and push
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
         uses: docker/build-push-action@v3
         with:
@@ -1792,19 +1642,18 @@ jobs:
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
         shell: bash
         run: |
+          . .ci-venv/bin/activate
           cd simulator_artifacts
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline publish_simulator_state_artifacts \
                 --product_name ${{ inputs.product_name }} \
                 --branch ${GITHUB_REF#refs/heads/}
-
+          deactivate
 
       - name: Get current job id
         if: always()
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -1841,14 +1690,13 @@ jobs:
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
           slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
 
-
       - name: pre-stash
         shell: bash
         run: |
           echo "$REGISTRY/qa/$(cat simulator_artifacts/simulator_name.ci)" > simulator.image.artifact
 
       - name: Stash deploy_simulator_artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deploy_simulator_artifacts
           path: simulator.image.artifact
@@ -1868,27 +1716,36 @@ jobs:
       - uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Agent info
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
+      - name: Setup CI Scripts in .ci-venv
+        shell: bash
+        run: |
+          python3 -m venv .ci-venv --clear --system-site-packages
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
+
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: .
 
       - name: unstash sim_configs
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts
 
       - name: unstash robot_jsons_noetic
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_configs
           path: .
@@ -1903,12 +1760,11 @@ jobs:
       - name: Setup QA Flow tests
         id: sim_flow_tests_setup
         shell: bash
+        env:
+          qa_key: flow_tests
         run: |
-          qa_key=flow_tests
-
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt
-          export PATH="$HOME/.local/bin:$PATH"
-
+          . .ci-venv/bin/activate
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
@@ -1926,27 +1782,19 @@ jobs:
           echo "target_dir=${tests_dir}" >> $GITHUB_OUTPUT
           echo "version=${tests_version}" >> $GITHUB_OUTPUT
           echo "test_set=${test_set}" >> $GITHUB_OUTPUT
-
-          # setup venv in a step that is always executed
-          pushd "${tests_dir}"
-          rm -rf venv
-          python3 -m venv venv
-          . venv/bin/activate
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
-          pip install -r requirements.txt
           deactivate
-          popd
+
+          # setup tests venv in a step that is always executed
+          python3 -m venv "${tests_dir}"/test-venv --clear --system-site-packages
+          . "${tests_dir}"/test-venv/bin/activate
+          python3 -m pip install -r "${tests_dir}"/requirements.txt
+          deactivate
 
       - name: Installation
         id: install
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
           mkdir -p artifacts
           cp *.json artifacts/
@@ -1956,10 +1804,10 @@ jobs:
 
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
-
-          export PATH="$HOME/.local/bin:$PATH"
+          . .ci-venv/bin/activate
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
+          deactivate
 
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
@@ -1981,10 +1829,6 @@ jobs:
         working-directory: ${{ steps.sim_flow_tests_setup.outputs.target_dir }}
         shell: bash
         run: |
-          # install test dependencies on host
-          sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
-          export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
-
           # install test dependencies on spawner
           ## get spawner container name
           CONTAINER_ID=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
@@ -1997,9 +1841,9 @@ jobs:
           "
 
           # run tests
-          . venv/bin/activate
+          . test-venv/bin/activate
 
-          pytest \
+          python3 -m pytest \
             -s \
             -ra \
             --movai-user ${{ steps.install.outputs.movai_user }} \
@@ -2014,7 +1858,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -2051,7 +1894,6 @@ jobs:
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
           slack-optional-thread_ts: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
 
-
       - name: Save docker container logs
         if: always()
         working-directory: ${{ steps.sim_flow_tests_setup.outputs.target_dir }}
@@ -2060,17 +1902,10 @@ jobs:
           # for sanity
           docker ps -a
 
-          # backend
-          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^backend-.*")
-          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
-
-          # spawner
-          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^spawner-.*")
-          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
-
-          # message-server
-          CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^message-server-.*") || true
-          docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log" || true
+          for container in backend spawner messager-server; do
+             CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
+             docker logs "${CONTAINER_ID}" &> "${container}.log" || true
+          done || true
 
           # movai-service
           journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
@@ -2095,7 +1930,7 @@ jobs:
 
       - name: Stash QA artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: qa_artifacts_simulator_tests
           path: qa_artifacts/*
@@ -2134,13 +1969,14 @@ jobs:
               echo "Skipping scan of $image"
             fi
           done
-          export PATH="$HOME/.local/bin:$PATH"
+          . .ci-venv/bin/activate
           package-deployer scan
+          deactivate
           cp /tmp/deployable.dploy artifacts/simulator-noetic-deployable.dploy
           cp /tmp/undeployable.dploy artifacts/simulator-noetic-3rdParty.dploy
 
       - name: Stash deploy_artifacts_simulator_noetic
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deploy_artifacts_simulator_noetic
           path: artifacts/*.dploy
@@ -2150,11 +1986,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
       - name: Docker cleanups
         if: always()
@@ -2171,54 +2003,53 @@ jobs:
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
+
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
       - name: Agent info
         id: agent_info
         run: |
-          ip=$(hostname -I | awk '{print $1}')
-          echo $ip
-          echo "ip=${ip}" >> $GITHUB_OUTPUT
+          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
+
       - name: unstash robot_configs
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_configs
           path: .
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: platform_configs
 
       - name: unstash deploy_artifacts_noetic
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: deploy_artifacts_noetic
           path: artifacts
 
       - name: unstash deploy_artifacts_simulator_noetic
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: deploy_artifacts_simulator_noetic
           path: artifacts
 
       - name: unstash deploy_simulator_artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: deploy_simulator_artifacts
           path: .
 
-      - name: Install CI Scripts
+      - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
+          python3 -m venv .ci-venv --clear --system-site-packages
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-
-      - name: Install Package Deployer
-        shell: bash
-        run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
+          python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: Publish and create release
         id: prepare_publish
@@ -2226,8 +2057,7 @@ jobs:
         run: |
           set -m
           set -e
-
-          export PATH="$HOME/.local/bin:$PATH"
+          . .ci-venv/bin/activate
           git config --global --add safe.directory $(pwd)
           git config --global user.name '${{ secrets.auto_commit_user }}'
           git config --global user.email '${{ secrets.auto_commit_mail }}'
@@ -2242,6 +2072,7 @@ jobs:
           cp *.json deployment_artifacts
           cp artifacts/merged.dploy deployment_artifacts/deployable.dploy
           echo -e "$(cat ./artifacts/product.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
+          deactivate
 
           cp product.version deployment_artifacts
           cp product-manifest.yaml deployment_artifacts
@@ -2369,7 +2200,7 @@ jobs:
     if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled'  || needs.publish.result == 'skipped') }}
     steps:
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: platform_configs
@@ -2394,4 +2225,3 @@ jobs:
           slack-channel: ${{ env.SLACK_CHANNEL }}
           slack-update-message-text: ${{ steps.pre_slack.outputs.msg_error }}
           slack-update-message-ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
-

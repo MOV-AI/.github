@@ -1,0 +1,216 @@
+name: Install Tests
+on:
+  workflow_call:
+    inputs:
+      test_config_file:
+        required: true
+        type: string
+        description: Test JIRA ID of installation using config file
+      test_set:
+        required: true
+        type: string
+        description: Test set to execute
+      tests_to_validate:
+        required: true
+        type: string
+        description: Test JIRA ID of cucumber tests to be validated
+      nightly:
+        required: false
+        type: boolean
+        default: false
+        description: If it is a nightly execution
+      create_test_execution:
+        required: false
+        type: boolean
+        default: false
+        description: Create test execution in JIRA
+    secrets:
+      gh_token:
+        required: true
+      slack_token_id:
+        required: true
+      jira_username:
+        required: true
+      jira_password:
+        required: true
+      xray_clientid:
+        required: true
+      xray_secret:
+        required: true
+
+jobs:
+  Validate-features:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Feature file validation
+        shell: bash
+        env:
+          XRAY_CLIENTID: ${{ secrets.xray_clientid }}
+          XRAY_SECRET: ${{ secrets.xray_secret }}
+          JIRA_USERNAME: ${{ secrets.jira_username }}
+          JIRA_PASSWORD: ${{ secrets.jira_password }}
+        run: |
+          # create virtual environment
+          python3 -m venv venv --clear
+          . venv/bin/activate
+          pip install -r requirements.txt
+
+          python3 testcasemanagement/testcase_importer.py --target "${{ inputs.tests_to_validate }}"
+          python3 testcasemanagement/feature_file_processor.py --validate
+
+          # deactivate venv
+          deactivate
+
+  Run-Tests:
+    runs-on: qa-runner
+    steps:
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Agent info
+        id: agent_info
+        run: |
+          ip_tmp=$(hostname -I | awk '{print $1}')
+          echo "ip=$ip_tmp" | tee >> $GITHUB_OUTPUT
+
+      - name: Update/upgrade host packages
+        run: |
+          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
+          sudo apt-get update
+          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
+          sudo apt-get upgrade -y
+
+      - name: Setup venv
+        shell: bash
+        run: |
+          # create virtual environment
+          python3 -m venv venv --clear
+          . venv/bin/activate
+
+          # install tests requirements in venv
+          pip install -r requirements.txt
+
+          # deactivate venv
+          deactivate
+
+      - name: Install tests using config file with full clean
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          # activate venv
+          . venv/bin/activate
+
+          # delete results folder
+          rm -rf results/*
+
+          # tests execution
+          python3 -m pytest \
+            tests/ \
+            -k ${{ inputs.test_config_file }} \
+            --installPath="." \
+            --jsonConfigFilePath="config/platform_example_script.json" --full_clean
+
+          # exit virtual environment
+          deactivate
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install_config_file
+          path: ./results/*
+          retention-days: 3
+
+      - name: Clean results folder
+        if: always()
+        shell: bash
+        run: |
+          rm -rf ./results/*
+
+      - name: Install tests suite
+        timeout-minutes: 70
+        shell: bash
+        run: |
+          # activate venv
+          . venv/bin/activate
+
+          # arguments
+          pytest_args=" tests/"
+          pytest_args="${pytest_args} -k ${{ inputs.test_set }}"
+
+          # when nightly fail on xpassed to give visibility to issues
+          if [ "${{ inputs.nightly }}" = "true" ];
+          then
+            pytest_args="${pytest_args} --runxfail"
+          fi
+
+          # when requested, create test execution
+          if [ "${{ inputs.create_test_execution }}" = "true" ];
+          then
+            pytest_args="${pytest_args} --jira_report"
+          fi
+
+          # tests execution
+          python3 -m pytest ${pytest_args}
+
+          # exit virtual environment
+          deactivate
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install_suite
+          path: ./results/*
+          retention-days: 3
+
+      - name: Remove robots
+        if: always()
+        shell: bash
+        run: |
+          timeout 30 movai-cli remove --all || true
+
+      - name: Docker and venv cleanups
+        if: always()
+        shell: bash
+        run: |
+          docker system prune -f
+          docker image prune --all -f
+          rm -rf venv
+
+  Slack-Message-On-Failure:
+    runs-on: ubuntu-20.04
+    needs:  [Validate-features, Run-Tests]
+    if: always()
+    steps:
+      - name: Prepare slack variables
+        id: pre_slack
+        run: |
+          MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), unstable :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
+          echo "msg_error=$MESSAGE_ERR" >> $GITHUB_OUTPUT
+
+      - name: Slack message success
+        if: ${{ inputs.nightly && ( needs.Validate-features.result == 'success' && needs.Run-Tests.result == 'success' ) }}
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          channel-id: 'C02PB9A9F45'
+          slack-message: ${{ steps.pre_slack.outputs.msg }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+
+      - name: Slack message failure
+        if: ${{ inputs.nightly && ( needs.Validate-features.result == 'failure' || needs.Run-Tests.result == 'failure' ) }}
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          channel-id: 'C02PB9A9F45'
+          slack-message: ${{ steps.pre_slack.outputs.msg_error }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}

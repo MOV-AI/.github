@@ -1,4 +1,4 @@
-name: Build Packer images
+name: Build Product Composite
 on:
   workflow_call:
     inputs:
@@ -42,8 +42,15 @@ on:
       with_simulation:
         required: false
         type: string
-        default: true
-
+        default: 'true'
+      with_simulation_tests:
+        required: false
+        type: boolean
+        default: false
+      is_nightly_run:
+        required: false
+        type: boolean
+        default: false
 
     secrets:
       auto_commit_user:
@@ -89,7 +96,6 @@ env:
   CI_INTEGRATION_SCRIPTS_VERSION: "3.0.0.1"
   MOBTEST_VERSION: "0.0.4.3"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.26"
-  ANSIBLE_VERSION: "6.3.0"
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
@@ -111,7 +117,7 @@ jobs:
   Validate-boostrap-configs:
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v2.0.1
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -132,16 +138,13 @@ jobs:
       - name: Validate Manifest
         shell: bash
         run: |
-          apt install -y yamllint
           yamllint product-manifest.yaml
 
-      - name: Install CI Scripts
+      - name: Install CI Scripts in container
         shell: bash
         run: |
-          python3 -m venv ci_scripts
+          python3 -m venv ci_scripts --clear
           source ci_scripts/bin/activate
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
           deactivate
 
@@ -151,11 +154,10 @@ jobs:
           git config --global --add safe.directory $(pwd)
           git fetch
           git checkout origin/${GITHUB_REF#refs/heads/} -- product.version
-          
-          source ci_scripts/bin/activate
-
           cat product.version
           rm -rf simulator_artifacts ci_artifacts
+
+          source ci_scripts/bin/activate
 
           merge_manifest_args=" --dependency_name products"
           merge_manifest_args="$merge_manifest_args --gh_api_user $GITHUB_API_USR"
@@ -163,7 +165,7 @@ jobs:
           merge_manifest_args="$merge_manifest_args --merge_sub_prod_dep_keys platform_config,platform_components,installation"
           merge_manifest_args="$merge_manifest_args --merge_sub_prod_main_keys product_config,system_config,simulator_components"
 
-          integration-pipeline merge_manifest_multi_dependency $merge_manifest_args 
+          integration-pipeline merge_manifest_multi_dependency $merge_manifest_args
 
           generate_meta_sim_args="--manifest_platform_base_key product_dependencies.product_base"
           generate_meta_sim_args="$generate_meta_sim_args --product_name ${{ inputs.product_name }}"
@@ -175,15 +177,14 @@ jobs:
 
           mkdir simulator_artifacts
           cp ci_artifacts/* ./simulator_artifacts
-          deactivate
 
       - name: Stash sim_configs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts/*
           retention-days: 5
-  
+
       - name: raise
         shell: bash
         run: |
@@ -215,7 +216,7 @@ jobs:
           slack-text: ${{ steps.pre_slack.outputs.msg }}
 
       - name: Stash raised_meta
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: raised_meta
           path: platform_configs/*
@@ -232,26 +233,25 @@ jobs:
       slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
     steps:
       - uses: rtCamp/action-cleanup@master
+
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Agent info
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
-      - name: Install CI Scripts
+      - name: Setup CI Scripts in ci_scripts
         shell: bash
         run: |
-          python3 -m venv ci_scripts
+          python3 -m venv ci_scripts --clear
           source ci_scripts/bin/activate
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-          deactivate
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: platform_configs
@@ -261,14 +261,13 @@ jobs:
         run: |
           cp ./platform_configs/product.version product.version
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
-          export PATH="$HOME/.local/bin:$PATH"
           source ci_scripts/bin/activate
           cat product-manifest.yaml
           integration-pipeline generate_composite_meta_artifacts --manifest_platform_base_key "product_dependencies.products" --override_spawner ${{ inputs.product_name }}
           deactivate
 
       - name: Stash manifest
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: manifest
           path: product-manifest.yaml
@@ -277,9 +276,7 @@ jobs:
       - name: Lint docker image
         shell: bash
         run: |
-          wget https://github.com/hadolint/hadolint/releases/download/v2.9.3/hadolint-Linux-x86_64
-          chmod +x hadolint-Linux-x86_64
-          ./hadolint-Linux-x86_64 docker/${{ matrix.distro }}/Dockerfile -t error
+          hadolint docker/${{ matrix.distro }}/Dockerfile -t error
 
       - name: Login to ${{ env.REGISTRY }} Registry
         uses: docker/login-action@v2
@@ -310,12 +307,9 @@ jobs:
           source ci_scripts/bin/activate
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_dependencies.product_base.name --output_file /tmp/ci_artifacts/product_base_name.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_dependencies.product_base.version --output_file /tmp/ci_artifacts/product_base_version.txt
-
           integration-pipeline fetch_github_release_asset --asset_name product-manifest.yaml --repo $(cat /tmp/ci_artifacts/product_base_name.txt) --version $(cat /tmp/ci_artifacts/product_base_version.txt) --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir /tmp/ci_artifacts/dependency/
-
           integration-pipeline get_yml_value --file /tmp/ci_artifacts/dependency/product-manifest.yaml --key product_dependencies.platform_config.spawner_noetic.name --output_file /tmp/ci_artifacts/spawner_base_name.txt
           integration-pipeline get_yml_value --file /tmp/ci_artifacts/dependency/product-manifest.yaml --key product_dependencies.platform_config.spawner_noetic.version --output_file /tmp/ci_artifacts/spawner_base_version.txt
-
           cp /tmp/ci_artifacts ./ci_artifacts -r
           ls -la
           ls -la ci_artifacts
@@ -326,6 +320,7 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
+
       - name: Docker build
         shell: bash
         run: |
@@ -346,7 +341,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -384,9 +378,8 @@ jobs:
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
           slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
 
-
       - name: Stash robot_jsons_${{ matrix.distro }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: "*.json*"
@@ -407,12 +400,11 @@ jobs:
     runs-on: integration-pipeline
     outputs:
       slack_thread_id: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
-
     steps:
       - uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Agent info
         run: |
@@ -420,19 +412,19 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: .
 
       - name: unstash manifest
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: manifest
           path: .
 
       - name: unstash robot_jsons_${{ matrix.distro }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: .
@@ -465,28 +457,27 @@ jobs:
           docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
           docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
 
-
-
       - name: Installation
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
           mkdir -p artifacts
           cp *.json artifacts/
+
           CONFIG_FILE_NAME="standalone-manager-${{ matrix.distro }}-template.json"
           mkdir -p userspace/models_database/ userspace/tugbot_ignition/
 
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
 
-          export PATH="$HOME/.local/bin:$PATH"
+          python3 -m venv ci_scripts --clear
+          . ci_scripts/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
+          deactivate
 
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
@@ -506,6 +497,7 @@ jobs:
             python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
             mobtest proj /opt/ros/noetic/share/
             '
+
       - name: Collect Installed components
         if: always()
         shell: bash
@@ -519,7 +511,6 @@ jobs:
             package-deployer scan
             package-deployer scanAll
             ls -la /tmp
-
             {
                 echo 'Annotation:*'
                 echo 'Callback:*'
@@ -532,24 +523,22 @@ jobs:
             } >> /tmp/manifest.txt
             mkdir /tmp/proj_metadata
             python3 -m tools.backup -p /tmp/proj_metadata/ -m /tmp/manifest.txt -a export -i
-
           ' || true
-            docker cp $container_id:/tmp/deployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-deployable.dploy
-            docker cp $container_id:/tmp/undeployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-3rdParty.dploy
-            docker cp $container_id:/tmp/apt_packages.json artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-apt_packages.json
+          docker cp $container_id:/tmp/deployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-deployable.dploy
+          docker cp $container_id:/tmp/undeployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-3rdParty.dploy
+          docker cp $container_id:/tmp/apt_packages.json artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-apt_packages.json
 
-            mkdir -p metadata_artifact tmp_meta
-            docker cp $container_id:/tmp/proj_metadata/ ./
-            tar cvzf ./metadata_artifact/metadata.tar.gz ./proj_metadata
+          mkdir -p metadata_artifact tmp_meta
+          docker cp $container_id:/tmp/proj_metadata/ ./
+          tar cvzf ./metadata_artifact/metadata.tar.gz ./proj_metadata
 
-            echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)">artifacts/product-${{ matrix.distro }}.image.artifact
-  
+          echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)">artifacts/product-${{ matrix.distro }}.image.artifact
+
       - name: Get current job id
         if: always()
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -588,16 +577,15 @@ jobs:
           slack-optional-thread_ts: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
 
       - name: Stash project metadata
-
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: project_metadata
           path: metadata_artifact/*
           retention-days: 3
 
       - name: Stash deploy_artifacts_noetic
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deploy_artifacts_noetic
           path: artifacts/*
@@ -607,11 +595,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
       - name: Docker cleanups
         if: always()
@@ -636,7 +620,7 @@ jobs:
         if: ${{ inputs.with_simulation == 'true' }}
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         if: ${{ inputs.with_simulation == 'true' }}
 
       - name: Agent info
@@ -649,23 +633,21 @@ jobs:
         if: ${{ inputs.with_simulation == 'true' }}
         shell: bash
         run: |
-          python3 -m venv ci_scripts
-          source ci_scripts/bin/activate
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
+          python3 -m venv ci_scripts --clear
+          . ci_scripts/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-          deactivate
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts
 
       - name: unstash manifest
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: manifest
           path: .
@@ -675,22 +657,17 @@ jobs:
         if: ${{ inputs.with_simulation == 'true' }}
         run: |
           if [ ! -f "simulator_artifacts/version" ]; then
-            #echo ::set-output name=skip_simulator_build::"true"
             echo "skip_simulator_build=true" >> $GITHUB_OUTPUT
           else
-            #echo ::set-output name=skip_simulator_build::"false"
             echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
           fi
-          #echo ::set-output name=image_name::"${{ env.REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)"
           echo "image_name=${{ env.REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
 
       - name: Lint docker image
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
         shell: bash
         run: |
-          wget https://github.com/hadolint/hadolint/releases/download/v2.9.3/hadolint-Linux-x86_64
-          chmod +x hadolint-Linux-x86_64
-          ./hadolint-Linux-x86_64 docker/$DISTRO/Dockerfile-simulator -t error
+          hadolint docker/$DISTRO/Dockerfile-simulator -t error
 
       - name: Fetch artifacts
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
@@ -698,10 +675,10 @@ jobs:
         run: |
           source ci_scripts/bin/activate
           integration-pipeline fetch_simulator_models \
-          --manifest_platform_base_key product_dependencies.products \
-          --gh_api_user $GITHUB_API_USR \
-          --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
-          --target_dir "./models"
+            --manifest_platform_base_key product_dependencies.products \
+            --gh_api_user $GITHUB_API_USR \
+            --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
+            --target_dir "./models"
           if [ ! -d ./models ]; then mkdir -p ./models; fi
 
       - name: Login to ${{ env.REGISTRY }} Registry
@@ -752,18 +729,14 @@ jobs:
             --pull \
             --push .
 
-
       - name: Get current job id
         if: always()
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "$job_id"
-          echo "$job_html_url"
-          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -829,7 +802,7 @@ jobs:
 
       - name: Checkout
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Agent info
         if: ${{ inputs.with_simulation == 'true' }}
@@ -837,23 +810,31 @@ jobs:
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
+      - name: Setup CI Scripts in ci_scripts
+        shell: bash
+        run: |
+          python3 -m venv ci_scripts --clear
+          . ci_scripts/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+
       - name: unstash raised_meta
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: .
 
       - name: unstash manifest
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: manifest
           path: .
 
       - name: unstash robot_jsons_${{ matrix.distro }}
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: .
@@ -902,16 +883,11 @@ jobs:
             docker tag "${{ needs.Build-Simulator.outputs.image_name }}" $promoted_name
           fi
 
-
       - name: Installation
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
           mkdir -p artifacts
           cp *.json artifacts/
@@ -920,11 +896,10 @@ jobs:
 
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
-
-          export PATH="$HOME/.local/bin:$PATH"
+          . ci_scripts/bin/activate
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
-
+          deactivate
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
           ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
@@ -939,16 +914,14 @@ jobs:
         continue-on-error: true
         run: |
           # cleanup
-          rm -rf install_logs
-
-          mkdir -p install_logs
+          rm -rf install_logs; mkdir -p install_logs
           journalctl -u movai-service -t mobros --since "1hour ago" > install_logs/spawner-firmware.log
           journalctl -u movai-service --since "1hour ago" > install_logs/movai-service.log
 
       - name: Stash Install simulator logs artifacts
         continue-on-error: true
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: install_simulator_logs
           path: install_logs/*
@@ -973,7 +946,6 @@ jobs:
         run: |
           sim_img_name="$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g")"
           push_name=$(echo "$sim_img_name" | sed "s-${{ env.REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
-
           echo "image_name=$push_name" >> $GITHUB_OUTPUT
 
       - name: Get current job id
@@ -981,12 +953,9 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "$job_id"
-          echo "$job_html_url"
-          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -1027,7 +996,7 @@ jobs:
 
       - name: Stash deploy_simulator_artifacts
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deploy_simulator_artifacts
           path: simulator.image.artifact
@@ -1037,11 +1006,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
       - name: Docker cleanups
         if: always()
@@ -1050,14 +1015,14 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
-  Install-Heterogeneos-Fleet-Single-VM:
+  Install-Heterogeneous-Fleet-Single-VM:
     needs: [Build-Spawner, Build-Simulator]
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v2.0.2
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -1065,7 +1030,7 @@ jobs:
       - uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Agent info
         run: |
@@ -1073,38 +1038,28 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: .
 
       - name: unstash manifest
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: manifest
           path: .
 
       - name: unstash robot_jsons_${{ matrix.distro }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: .
 
-      - name: Install CI Scripts
+      - name: Install CI Scripts in container
         shell: bash
         run: |
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-          python3 -m pip install ansible==$ANSIBLE_VERSION
 
-      - name: Install terraform
-        shell: bash
-        run: |
-          wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
-          apt update && apt install terraform -y
-  
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
         shell: bash
@@ -1114,7 +1069,6 @@ jobs:
           provision_infra_repo_name=devops-tf-proxmox-fleet
 
           rm -rf $provision_infra_dir
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
           ls -la $provision_infra_dir
           echo "target_dir=${provision_infra_dir}/hosts/generic/" >> $GITHUB_OUTPUT
@@ -1246,7 +1200,6 @@ jobs:
           install_key=ansible_deploy
 
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.name --output_file /tmp/repo_name.txt
@@ -1258,17 +1211,15 @@ jobs:
           integration-pipeline fetch_by_tag --repo $install_infra_repo_name --version $install_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $install_infra_dir
           ls -la $install_infra_dir
           echo "target_dir=${install_infra_dir}" >> $GITHUB_OUTPUT
-  
+
       - name: Ansible install platform
         id: ansible_install_platform
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
         shell: bash
         run: |
-          
           cp ../${{ steps.provision_infra_setup.outputs.target_dir }}/hosts hosts
           cp -r ../*.json ./templates/fleet/
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
-          export PATH="$HOME/.local/bin:$PATH"
 
           # It is assumed the nb of squads matches the number of members of the fleet
           nb_workers_per_squad=1
@@ -1279,9 +1230,6 @@ jobs:
           cat hosts
 
           while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
-          
-          apt install -y python3.9 python3.9-venv
-
           echo "./fleet_install.sh setup --python-path python3.9 --product-artifacts ./templates/fleet/ -i hosts -m install" >> INSTALL.TXT
           ./fleet_install.sh setup --python-path python3.9 --product-artifacts ./templates/fleet/ -i hosts -m install
         env:
@@ -1308,10 +1256,10 @@ jobs:
           done
 
           deactivate
-    
+
       - name: Stash Fleet QA artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: fleet_qa_artifacts_single_vm
           path: ${{ steps.ansible_install_setup.outputs.target_dir }}/fleet_qa_artifacts/*
@@ -1325,18 +1273,17 @@ jobs:
           tar -czf fleet_install.tar.gz -C ${{ steps.ansible_install_setup.outputs.target_dir }} .
 
       - name: Stash Install scripts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: install_archive
           path: fleet_install.tar.gz
           retention-days: 3
-  
+
       - name: Get current job id
         if: always()
         shell: bash
         id: job_info
         run: |
-          apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -1386,17 +1333,17 @@ jobs:
           TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
           TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
           TF_VAR_ip_list: ${{ inputs.single_vm_fleet_ips }}
-  
+
       - name: Stash project metadata
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: project_metadata
           path: metadata_artifact/*
           retention-days: 3
 
       - name: Stash deploy_artifacts_noetic
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deploy_artifacts_noetic
           path: artifacts/*
@@ -1407,11 +1354,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
       - name: Docker cleanups
         if: always()
@@ -1421,14 +1364,14 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
-  Install-Heterogeneos-Fleet-Multi-VM:
+  Install-Heterogeneous-Fleet-Multi-VM:
     needs: [Build-Spawner, Build-Simulator]
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v2.0.2
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -1436,7 +1379,7 @@ jobs:
       - uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Agent info
         run: |
@@ -1444,38 +1387,28 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: .
 
       - name: unstash manifest
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: manifest
           path: .
 
       - name: unstash robot_jsons_${{ matrix.distro }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: .
 
-      - name: Install CI Scripts
+      - name: Install CI Scripts in container
         shell: bash
         run: |
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-          python3 -m pip install ansible==$ANSIBLE_VERSION
 
-      - name: Install terraform
-        shell: bash
-        run: |
-          wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
-          apt update && apt install terraform -y
-  
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
         shell: bash
@@ -1485,7 +1418,6 @@ jobs:
           provision_infra_repo_name=devops-tf-proxmox-fleet
 
           rm -rf $provision_infra_dir
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
           ls -la $provision_infra_dir
           echo "target_dir=${provision_infra_dir}/hosts/generic/" >> $GITHUB_OUTPUT
@@ -1615,7 +1547,6 @@ jobs:
           install_key=ansible_deploy
 
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
-          export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.name --output_file /tmp/repo_name.txt
@@ -1627,17 +1558,16 @@ jobs:
           integration-pipeline fetch_by_tag --repo $install_infra_repo_name --version $install_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $install_infra_dir
           ls -la $install_infra_dir
           echo "target_dir=${install_infra_dir}" >> $GITHUB_OUTPUT
-  
+
       - name: Ansible install platform
         id: ansible_install_platform
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
         shell: bash
         run: |
-          
           cp ../${{ steps.provision_infra_setup.outputs.target_dir }}/hosts hosts
           cp -r ../*.json ./templates/fleet/
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
-          
+
           # It is assumed the nb of squads matches the number of members of the fleet
           nb_workers_per_squad=1
           # generate inputs variable file from terraform generated hosts file
@@ -1645,10 +1575,6 @@ jobs:
           # generate new format hosts file from inputs file
           ansible localhost -m template -a "src=./examples/inventories/fleet.yml.j2 dest=hosts"  --extra-vars "@inputs"
           cat hosts
-
-          while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
-          
-          apt install -y python3.9 python3.9-venv
 
           echo "./fleet_install.sh setup --python-path python3.9 --product-artifacts ./templates/fleet/ -i hosts -m install" >> INSTALL.TXT
           ./fleet_install.sh setup --python-path python3.9 --product-artifacts ./templates/fleet/ -i hosts -m install
@@ -1679,18 +1605,17 @@ jobs:
 
       - name: Stash Fleet QA artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: fleet_qa_artifacts_multi_vm
           path: ${{ steps.ansible_install_setup.outputs.target_dir }}/fleet_qa_artifacts/*
           retention-days: 5
-  
+
       - name: Get current job id
         if: always()
         shell: bash
         id: job_info
         run: |
-          apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -1746,11 +1671,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
       - name: Docker cleanups
         if: always()
@@ -1759,13 +1680,13 @@ jobs:
         run: |
           docker system prune -f
           docker image prune --all -f
-        
+
 
   publish:
-    needs: [Install-Robot, Install-Heterogeneos-Fleet-Single-VM,Install-Heterogeneos-Fleet-Multi-VM, Install-Simulator-Robot]
+    needs: [Install-Robot, Install-Heterogeneous-Fleet-Single-VM,Install-Heterogeneous-Fleet-Multi-VM, Install-Simulator-Robot]
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v2.0.1
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -1773,7 +1694,7 @@ jobs:
       - uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Agent info
         run: |
@@ -1781,53 +1702,50 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: platform_configs
 
       - name: unstash deploy_artifacts_noetic
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: deploy_artifacts_noetic
           path: artifacts
 
       - name: unstash manifest
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: manifest
           path: .
+
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts
+
       - name: unstash deploy_simulator_artifacts
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: deploy_simulator_artifacts
           path: .
+
       - name: unstash install_archive
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: install_archive
           path: .
-          
+
       - name: Install CI Scripts
         shell: bash
         run: |
-          python3 -m venv ci_scripts
+          python3 -m venv ci_scripts --clear --system-site-packages # needed for apt dependencies
           source ci_scripts/bin/activate
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-          deactivate
-
-      - name: Install Package Deployer
-        shell: bash
-        run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
+          python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: Login to ${{ env.MID_REGISTRY }} Registry
         uses: docker/login-action@v2
@@ -1853,7 +1771,7 @@ jobs:
                 --product_name ${{ inputs.product_name }} \
                 --branch ${GITHUB_REF#refs/heads/}
           deactivate
-  
+
       - name: Publish and create release
         id: bump
         shell: bash
@@ -1867,7 +1785,7 @@ jobs:
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
           mkdir -p deployment_artifacts
 
-          export PATH="$HOME/.local/bin:$PATH"
+          source ci_scripts/bin/activate
 
           ls -la
           mkdir -p pkgs_deployable
@@ -1931,7 +1849,6 @@ jobs:
       - name: Prepare raise variables
         id: pre_raise
         run: |
-          #echo ::set-output name=branch::${GITHUB_REF#refs/heads/}
           echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
       - name: Raise App version
@@ -2032,9 +1949,8 @@ jobs:
     needs: [publish, Validate-boostrap-configs]
     if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled' || needs.publish.result == 'skipped' ) }}
     steps:
-
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: platform_configs

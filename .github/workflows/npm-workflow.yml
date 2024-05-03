@@ -57,7 +57,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -65,7 +65,7 @@ jobs:
         token: ${{ secrets.npm_token }}
 
     - name: Setup Github as proxy Registry
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: '${{ inputs.npm_version }}'
         registry-url: 'https://npm.pkg.github.com/mov-ai'
@@ -162,7 +162,7 @@ jobs:
     steps:
     - name: Checkout
       if: ${{ inputs.deploy == 'true' }}
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -170,7 +170,7 @@ jobs:
         token: ${{ secrets.npm_token }}
 
     - name: Setup Github as proxy Registry
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: '${{ inputs.npm_version }}'
         registry-url: 'https://npm.pkg.github.com/mov-ai'

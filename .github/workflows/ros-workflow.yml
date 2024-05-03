@@ -177,7 +177,7 @@ jobs:
         catkin test
 
     - name: Archive binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: packages
         path: artifacts/*
@@ -270,13 +270,13 @@ jobs:
     steps:
       - name: Checkout
         if: ${{ inputs.install_test }}
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Download artifacts
         if: ${{ inputs.install_test }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: packages
           path: artifacts
@@ -323,7 +323,7 @@ jobs:
         submodules: recursive
 
     - name: Download a single artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: packages
         path: artifacts

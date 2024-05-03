@@ -1,4 +1,4 @@
-name: Build Packer images
+name: Build Product
 on:
   workflow_call:
     inputs:
@@ -11,7 +11,7 @@ on:
       with_simulation:
         required: false
         type: string
-        default: true
+        default: 'true'
       with_simulation_tests:
         required: false
         type: boolean
@@ -142,7 +142,7 @@ jobs:
   Validate-boostrap-configs:
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v2.0.1
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -182,16 +182,13 @@ jobs:
       - name: Validate Manifest
         shell: bash
         run: |
-          apt install -y yamllint
           yamllint product-manifest.yaml
 
-      - name: Install CI Scripts
+      - name: Install CI Scripts in container
         shell: bash
         run: |
-          python3 -m venv ci_scripts
+          python3 -m venv ci_scripts --clear
           source ci_scripts/bin/activate
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
           deactivate
 
@@ -310,11 +307,12 @@ jobs:
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
-      - name: Install CI Scripts
+      - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
+          python3 -m venv .ci-venv --clear
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash raised_meta
@@ -328,9 +326,10 @@ jobs:
         run: |
           cp ./platform_configs/product.version product.version
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
-          export PATH="$HOME/.local/bin:$PATH"
+          . .ci-venv/bin/activate
           cat product-manifest.yaml
           integration-pipeline generate_meta_artifacts --update_simulator --override_spawner ${{ inputs.product_name }} --manifest_platform_base_key "product_dependencies"
+          deactivate
 
       - name: Stash manifest
         uses: actions/upload-artifact@v4
@@ -342,9 +341,7 @@ jobs:
       - name: Lint docker image
         shell: bash
         run: |
-          wget https://github.com/hadolint/hadolint/releases/download/v2.9.3/hadolint-Linux-x86_64
-          chmod +x hadolint-Linux-x86_64
-          ./hadolint-Linux-x86_64 docker/${{ matrix.distro }}/Dockerfile -t error
+          hadolint docker/${{ matrix.distro }}/Dockerfile -t error
 
       - name: Login to ${{ env.REGISTRY }} Registry
         uses: docker/login-action@v3
@@ -371,7 +368,6 @@ jobs:
         id: pre_build
         shell: bash
         run: |
-
           echo "base_name=$(cat ci_artifacts/spawner_base_name_${{ matrix.distro }}.ci)" >> $GITHUB_OUTPUT
           echo "base_version=$(cat ci_artifacts/spawner_base_version_${{ matrix.distro }}.ci)" >> $GITHUB_OUTPUT
           echo "raised_version=$(cat product.version)" >> $GITHUB_OUTPUT
@@ -411,12 +407,9 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "$job_id"
-          echo "$job_html_url"
-          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -468,7 +461,6 @@ jobs:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
     runs-on: integration-pipeline
-
     steps:
       - uses: rtCamp/action-cleanup@master
 
@@ -536,20 +528,23 @@ jobs:
       - name: Installation
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
           mkdir -p artifacts
           cp *.json artifacts/
           CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.distro }}.json
-          export PATH="$HOME/.local/bin:$PATH"
-          mkdir -p userspace/
+
+          python3 -m venv .ci-venv --clear
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
+          mkdir -p userspace/
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
+          deactivate
+
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
           ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
@@ -561,9 +556,7 @@ jobs:
         continue-on-error: true
         run: |
           # cleanup
-          rm -rf install_logs
-
-          mkdir -p install_logs
+          rm -rf install_logs ; mkdir -p install_logs
           journalctl -u movai-service -t mobros --since "1hour ago" > install_logs/spawner-firmware.log
           journalctl -u movai-service --since "1hour ago" > install_logs/movai-service.log
 
@@ -660,12 +653,9 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "$job_id"
-          echo "$job_html_url"
-          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -716,11 +706,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
       - name: Docker cleanups
         if: always()
@@ -761,12 +747,12 @@ jobs:
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
-      - name: Install CI Scripts
-        if: ${{ inputs.with_simulation == 'true' }}
+      - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
+          python3 -m venv .ci-venv --clear
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash sim_configs
@@ -788,33 +774,29 @@ jobs:
         if: ${{ inputs.with_simulation == 'true' }}
         run: |
           if [ ! -f "simulator_artifacts/version" ]; then
-            #echo ::set-output name=skip_simulator_build::"true"
             echo "skip_simulator_build=true" >> $GITHUB_OUTPUT
           else
-            #echo ::set-output name=skip_simulator_build::"false"
             echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
           fi
-          #echo ::set-output name=image_name::"${{ env.REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)"
           echo "image_name=${{ env.REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
 
       - name: Lint docker image
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
         shell: bash
         run: |
-          wget https://github.com/hadolint/hadolint/releases/download/v2.9.3/hadolint-Linux-x86_64
-          chmod +x hadolint-Linux-x86_64
-          ./hadolint-Linux-x86_64 docker/$DISTRO/Dockerfile-simulator -t error
+          hadolint docker/$DISTRO/Dockerfile-simulator -t error
 
       - name: Fetch artifacts
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
         shell: bash
         run: |
-          export PATH="$HOME/.local/bin:$PATH"
+          . .ci-venv/bin/activate
           integration-pipeline fetch_simulator_models \
           --manifest_platform_base_key product_components \
           --gh_api_user $GITHUB_API_USR \
           --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
           --target_dir "./models"
+          deactivate
           if [ ! -d ./models ]; then mkdir -p ./models; fi
 
       - name: Login to ${{ env.REGISTRY }} Registry
@@ -870,12 +852,9 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "$job_id"
-          echo "$job_html_url"
-          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -955,6 +934,14 @@ jobs:
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
+      - name: Setup CI Scripts in .ci-venv
+        shell: bash
+        run: |
+          python3 -m venv .ci-venv --clear
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+
       - name: unstash raised_meta
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         uses: actions/download-artifact@v4
@@ -1020,11 +1007,7 @@ jobs:
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
           mkdir -p artifacts
           cp *.json artifacts/
@@ -1034,9 +1017,10 @@ jobs:
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
 
-          export PATH="$HOME/.local/bin:$PATH"
+          . .ci-venv/bin/activate
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
+          deactivate
 
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
@@ -1114,24 +1098,23 @@ jobs:
             mkdir -p metadata_artifact tmp_meta
             docker cp $container_id:/tmp/proj_metadata/ ./
             tar cvzf ./metadata_artifact/sim_metadata.tar.gz ./proj_metadata
+
       - name: stash Sim project metadata
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: project_sim_metadata
           path: metadata_artifact/*
           retention-days: 3
+
       - name: Get current job id
         if: always()
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "$job_id"
-          echo "$job_html_url"
-          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -1181,11 +1164,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
       - name: Docker cleanups
         if: always()
@@ -1201,6 +1180,7 @@ jobs:
     steps:
       - uses: rtCamp/action-cleanup@master
         if: ${{ inputs.with_simulation_tests }}
+
       - name: Checkout
         if: ${{ inputs.with_simulation_tests && inputs.is_nightly_run == false }}
         uses: actions/checkout@v4
@@ -1211,18 +1191,17 @@ jobs:
         with:
           ref: ${{ needs.Build-Spawner.outputs.commit_hash }}
 
-
       - name: Agent info
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
-      - name: Install CI Scripts
-        if: ${{ inputs.with_simulation_tests }}
+      - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
+          python3 -m venv .ci-venv --clear
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash raised_meta
@@ -1253,14 +1232,6 @@ jobs:
           name: robot_jsons_noetic
           path: .
 
-      - name: Install terraform
-        if: ${{ inputs.with_simulation_tests }}
-        shell: bash
-        run: |
-          wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-          sudo apt update && sudo apt install terraform=1.5.2-1 -y
-
       - name: Setup terraform proxmox provisioner
         if: ${{ inputs.with_simulation_tests }}
         id: provision_infra_setup
@@ -1269,10 +1240,11 @@ jobs:
           provision_infra_dir=provision_scripts
           provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
           provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
-
           rm -rf $provision_infra_dir
-          export PATH="$HOME/.local/bin:$PATH"
+
+          . .ci-venv/bin/activate
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
+          deactivate
           ls -la $provision_infra_dir
           echo "target_dir=${provision_infra_dir}/hosts/generic/" >> $GITHUB_OUTPUT
 
@@ -1289,13 +1261,10 @@ jobs:
           fi
 
           local_manager_prefix="ip-$run_type-${{ inputs.product_name }}-$branch"
-          
-          tf_state="${{ inputs.cluster }}-sim-$local_manager_prefix"
-          echo "$tf_state"
-          echo "$local_manager_prefix"
 
-          echo "simul_prefix=${local_manager_prefix}" >> $GITHUB_OUTPUT
-          echo "tfstate_name=${tf_state}" >> $GITHUB_OUTPUT
+          tf_state="${{ inputs.cluster }}-sim-$local_manager_prefix"
+          echo "simul_prefix=${local_manager_prefix}" | tee >> $GITHUB_OUTPUT
+          echo "tfstate_name=${tf_state}" | tee >> $GITHUB_OUTPUT
 
       - name: Provision remote vms (Proxmox)
         if: ${{ inputs.with_simulation_tests }}
@@ -1491,11 +1460,8 @@ jobs:
 
             # setup venv in a step that is always executed
             pushd "${tests_dir}"
-            rm -rf venv
-            python3 -m venv venv
+            python3 -m venv venv --clear
             . venv/bin/activate
-            python3 -m pip install pip --upgrade
-            python3 -m pip install pyopenssl --upgrade
             pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r requirements.txt
             deactivate
 
@@ -1527,11 +1493,7 @@ jobs:
 
           cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-          for robot in $(movai-cli robots list); do
-            movai-cli robots stop $robot
-            sleep 5
-            movai-cli robots remove $robot
-          done || true
+          timeout 30 movai-cli remove --all || true
 
           mkdir -p artifacts
           cp *.json artifacts/
@@ -1619,7 +1581,7 @@ jobs:
         run: |
           scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.simulator_tests_setup.outputs.target_dir }}/test-output.json .
 
-      - name: Stash simulation test outputs 
+      - name: Stash simulation test outputs
         if: ${{ always() && inputs.with_simulation_tests && steps.simulation_tests.outputs.save_outputs == 'true' }}
         uses: actions/upload-artifact@v4
         with:
@@ -1638,13 +1600,10 @@ jobs:
             # for sanity
             docker ps -a
 
-            # backend
-            CONTAINER_ID=$(docker ps -a --format "{{.Names}}" --filter "name=^backend-.*")
-            docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
-
-            # spawner
-            CONTAINER_ID=$(docker ps -a --format "{{.Names}}" --filter "name=^spawner-.*")
-            docker logs "${CONTAINER_ID}" &> "${CONTAINER_ID}.log"
+            for container in backend spawner messager-server; do
+             CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
+             docker logs "${CONTAINER_ID}" &> "${container}.log" || true
+            done || true
 
             # movai-service
             journalctl -u movai-service --since "1hour ago" &> "movai-service.log"
@@ -1670,19 +1629,14 @@ jobs:
           '
           scp -r -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/qa_artifacts .
 
-
       - name: Get current job id
         if: always()
         shell: bash
         id: job_info
         run: |
-          sudo apt install jq -y
-
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "$job_id"
-          echo "$job_html_url"
-          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -1790,7 +1744,7 @@ jobs:
     needs: [Install-Robot, Install-Simulator-Robot, Validation-Simulator-Tests]
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v2.0.1
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -1828,12 +1782,14 @@ jobs:
         with:
           name: manifest
           path: .
+
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run == false }}
         uses: actions/download-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts
+
       - name: unstash project metadata
         if: ${{ inputs.is_nightly_run == false }}
         uses: actions/download-artifact@v4
@@ -1848,21 +1804,15 @@ jobs:
           name: deploy_simulator_artifacts
           path: .
 
-      - name: Install CI Scripts
+      - name: Setup CI Scripts in .ci-venv
         if: ${{ inputs.is_nightly_run == false }}
         shell: bash
         run: |
-          python3 -m venv ci_scripts
-          source ci_scripts/bin/activate
-          python3 -m pip install pip --upgrade
-          python3 -m pip install pyopenssl --upgrade
+          python3 -m venv .ci-venv --clear --system-site-packages # needed for apt dependencies
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-          deactivate
-
-      - name: Install Package Deployer
-        if: ${{ inputs.is_nightly_run == false }}
-        shell: bash
-        run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
+          python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: Login to ${{ env.MID_REGISTRY }} Registry
         if: ${{ inputs.is_nightly_run == false }}
@@ -1884,12 +1834,13 @@ jobs:
         if: ${{ needs.Install-Simulator-Robot.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' && inputs.is_nightly_run == false }}
         shell: bash
         run: |
-          source ci_scripts/bin/activate
+          . .ci-venv/bin/activate
           cd simulator_artifacts
           integration-pipeline publish_simulator_state_artifacts \
                 --product_name ${{ inputs.product_name }} \
                 --branch ${GITHUB_REF#refs/heads/}
           deactivate
+
       - name: Publish and create release
         if: ${{ inputs.is_nightly_run == false }}
         id: bump
@@ -1904,7 +1855,7 @@ jobs:
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
           mkdir -p deployment_artifacts
 
-          source ci_scripts/bin/activate
+          . .ci-venv/bin/activate
           ls -la
           mkdir -p pkgs_deployable
           cp artifacts/*deployable.dploy pkgs_deployable
@@ -1925,7 +1876,7 @@ jobs:
           else
             cp ./artifacts/product-noetic.image.artifact deployment_artifacts/product.image.artifact
           fi
-          #cp ./artifacts/product-noetic.image.artifact deployment_artifacts/product.image.artifact
+
           cp deployment_artifacts/product.image.artifact ./
 
           SAVEIFS=$IFS
@@ -1946,10 +1897,11 @@ jobs:
           integration-pipeline patch_manifest_with_spawner
           cat product-manifest.yaml
           cp product-manifest.yaml deployment_artifacts
-
           cp metadata.tar.gz deployment_artifacts
 
           product_version=$(cat product.version)
+          deactivate
+
           # danger zone. Everything will be deleted.
           git restore product.version
           git restore product-manifest.yaml
@@ -1969,7 +1921,6 @@ jobs:
         if: ${{ inputs.is_nightly_run == false }}
         id: pre_raise
         run: |
-          #echo ::set-output name=branch::${GITHUB_REF#refs/heads/}
           echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
       - name: Raise App version
