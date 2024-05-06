@@ -259,6 +259,7 @@ jobs:
         shell: bash
         run: |
           . test-venv/bin/activate
+          export PATH="$HOME/.local/bin:$PATH" # needed for reformat-gherkin
           xray download ${{ steps.ui_tests_setup.outputs.test_set }}
           xray compare ./tests/feature/
           deactivate
@@ -534,6 +535,7 @@ jobs:
         shell: bash
         run: |
           . test-venv/bin/activate
+          export PATH="$HOME/.local/bin:$PATH" # needed for reformat-gherkin
           python3 testcasemanagement/testcase_importer.py --target "${{ steps.install_tests_setup.outputs.test_set }}"
           python3 testcasemanagement/feature_file_processor.py --validate
           deactivate
@@ -1534,7 +1536,7 @@ jobs:
           count=0
           while [ $count -lt $attempts ]; do
             var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/hel_fleet_test.tfvars'
-            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars 
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
               break
