@@ -561,7 +561,7 @@ jobs:
         if: ${{ inputs.install_test_zmq == 'true'  && inputs.release == 'false' && inputs.install_test == 'true' &&  inputs.rpm_build == 'true' }}
         run: |
           # add zeromq repo
-          yum-config-manager --add-repo "https://download.opensuse.org/repositories/network:/messaging:/zeromq:/release-stable/RHEL_7/"
+          dnf config-manager --add-repo "https://download.opensuse.org/repositories/network:/messaging:/zeromq:/release-stable/RHEL_7/"
           yum install --nogpgcheck -y zeromq-devel
 
       - name: Download artifacts
