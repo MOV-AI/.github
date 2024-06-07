@@ -305,7 +305,7 @@ jobs:
       - name: Agent info
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | cut -d ' ' -f1)"
+          echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: Setup CI Scripts in .ci-venv
         shell: bash
@@ -477,7 +477,7 @@ jobs:
       - name: Agent info
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | cut -d ' ' -f1)"
+          echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
         uses: actions/download-artifact@v4
@@ -545,7 +545,7 @@ jobs:
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
           deactivate
 
-          export PUBLIC_IP=$(hostname -I | cut -d ' ' -f1)
+          export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
           ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
@@ -746,7 +746,7 @@ jobs:
         if: ${{ inputs.with_simulation == 'true' }}
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | cut -d ' ' -f1)"
+          echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: Setup CI Scripts in .ci-venv
         shell: bash
@@ -933,7 +933,7 @@ jobs:
         if: ${{ inputs.with_simulation == 'true' }}
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | cut -d ' ' -f1)"
+          echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: Setup CI Scripts in .ci-venv
         shell: bash
@@ -1016,7 +1016,7 @@ jobs:
           mkdir -p userspace/models_database/ userspace/tugbot_ignition/
 
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
-          export PUBLIC_IP=$(hostname -I | cut -d ' ' -f1)
+          export PUBLIC_IP=$(hostname -I | awk '{print $1}')
 
           . .ci-venv/bin/activate
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
@@ -1195,7 +1195,7 @@ jobs:
       - name: Agent info
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | cut -d ' ' -f1)"
+          echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: Setup CI Scripts in .ci-venv
         shell: bash
@@ -1350,7 +1350,7 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
-            ip=$(hostname -I | cut -d ' ' -f1)
+            ip=$(hostname -I | awk '{print $1}')
             echo $ip
           '
 
@@ -1504,7 +1504,7 @@ jobs:
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
 
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
-          export PUBLIC_IP=$(hostname -I | cut -d ' ' -f1)
+          export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           export SIMULATION_ID="CI"
           rm -rf userspace
 
@@ -1761,7 +1761,7 @@ jobs:
         if: ${{ inputs.is_nightly_run == false }}
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | cut -d ' ' -f1)"
+          echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
         if: ${{ inputs.is_nightly_run == false }}
