@@ -190,7 +190,7 @@ jobs:
       - name: Agent info
         id: agent_info
         run: |
-          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
+          echo "ip=$(hostname -I | cut -d ' ' -f1)" | tee $GITHUB_OUTPUT
 
       - name: Setup CI Scripts in .ci-venv
         shell: bash
@@ -297,7 +297,7 @@ jobs:
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
           deactivate
 
-          export PUBLIC_IP=$(hostname -I | awk '{print $1}')
+          export PUBLIC_IP=$(hostname -I | cut -d ' ' -f1)
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
           ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
@@ -467,7 +467,7 @@ jobs:
       - name: Agent info
         id: agent_info
         run: |
-          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
+          echo "ip=$(hostname -I | cut -d ' ' -f1)" | tee $GITHUB_OUTPUT
 
       - name: Setup CI Scripts in .ci-venv
         shell: bash
@@ -766,7 +766,7 @@ jobs:
       - name: Agent info
         id: agent_info
         run: |
-          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
+          echo "ip=$(hostname -I | cut -d ' ' -f1)" | tee $GITHUB_OUTPUT
 
       - name: Setup CI Scripts in .ci-venv
         shell: bash
@@ -833,7 +833,7 @@ jobs:
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
           deactivate
 
-          export PUBLIC_IP=$(hostname -I | awk '{print $1}')
+          export PUBLIC_IP=$(hostname -I | cut -d ' ' -f1)
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
           ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
@@ -971,7 +971,7 @@ jobs:
       - name: Agent info
         id: agent_info
         run: |
-          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
+          echo "ip=$(hostname -I | cut -d ' ' -f1)" | tee $GITHUB_OUTPUT
 
       - name: Setup CI Scripts in .ci-venv
         shell: bash
@@ -1042,7 +1042,7 @@ jobs:
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
           deactivate
 
-          export PUBLIC_IP=$(hostname -I | awk '{print $1}')
+          export PUBLIC_IP=$(hostname -I | cut -d ' ' -f1)
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
           ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
@@ -1206,7 +1206,7 @@ jobs:
       - name: Agent info
         id: agent_info
         run: |
-          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
+          echo "ip=$(hostname -I | cut -d ' ' -f1)" | tee $GITHUB_OUTPUT
 
       - name: Setup CI Scripts in .ci-venv
         shell: bash
@@ -1567,7 +1567,7 @@ jobs:
       - name: Agent info
         id: agent_info
         run: |
-          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
+          echo "ip=$(hostname -I | cut -d ' ' -f1)" | tee $GITHUB_OUTPUT
 
       - name: Setup CI Scripts in .ci-venv
         shell: bash
@@ -1723,7 +1723,7 @@ jobs:
       - name: Agent info
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | awk '{print $1}')"
+          echo "private ip: $(hostname -I | cut -d ' ' -f1)"
 
       - name: Setup CI Scripts in .ci-venv
         shell: bash
@@ -1805,7 +1805,7 @@ jobs:
           mkdir -p userspace/
 
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
-          export PUBLIC_IP=$(hostname -I | awk '{print $1}')
+          export PUBLIC_IP=$(hostname -I | cut -d ' ' -f1)
           . .ci-venv/bin/activate
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
@@ -2012,7 +2012,7 @@ jobs:
       - name: Agent info
         id: agent_info
         run: |
-          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
+          echo "ip=$(hostname -I | cut -d ' ' -f1)" | tee $GITHUB_OUTPUT
 
       - name: unstash robot_configs
         uses: actions/download-artifact@v4

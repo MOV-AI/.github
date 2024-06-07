@@ -240,7 +240,7 @@ jobs:
       - name: Agent info
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | awk '{print $1}')"
+          echo "private ip: $(hostname -I | cut -d ' ' -f1)"
 
       - name: Setup CI Scripts in ci_scripts
         shell: bash
@@ -409,7 +409,7 @@ jobs:
       - name: Agent info
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | awk '{print $1}')"
+          echo "private ip: $(hostname -I | cut -d ' ' -f1)"
 
       - name: unstash raised_meta
         uses: actions/download-artifact@v4
@@ -469,7 +469,7 @@ jobs:
           mkdir -p userspace/models_database/ userspace/tugbot_ignition/
 
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
-          export PUBLIC_IP=$(hostname -I | awk '{print $1}')
+          export PUBLIC_IP=$(hostname -I | cut -d ' ' -f1)
 
           python3 -m venv ci_scripts --clear
           . ci_scripts/bin/activate
@@ -627,7 +627,7 @@ jobs:
         if: ${{ inputs.with_simulation == 'true' }}
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | awk '{print $1}')"
+          echo "private ip: $(hostname -I | cut -d ' ' -f1)"
 
       - name: Install CI Scripts
         if: ${{ inputs.with_simulation == 'true' }}
@@ -808,7 +808,7 @@ jobs:
         if: ${{ inputs.with_simulation == 'true' }}
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | awk '{print $1}')"
+          echo "private ip: $(hostname -I | cut -d ' ' -f1)"
 
       - name: Setup CI Scripts in ci_scripts
         shell: bash
@@ -895,7 +895,7 @@ jobs:
           mkdir -p userspace/models_database/ userspace/tugbot_ignition/
 
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
-          export PUBLIC_IP=$(hostname -I | awk '{print $1}')
+          export PUBLIC_IP=$(hostname -I | cut -d ' ' -f1)
           . ci_scripts/bin/activate
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
@@ -1035,7 +1035,7 @@ jobs:
       - name: Agent info
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | awk '{print $1}')"
+          echo "private ip: $(hostname -I | cut -d ' ' -f1)"
 
       - name: unstash raised_meta
         uses: actions/download-artifact@v4
@@ -1384,7 +1384,7 @@ jobs:
       - name: Agent info
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | awk '{print $1}')"
+          echo "private ip: $(hostname -I | cut -d ' ' -f1)"
 
       - name: unstash raised_meta
         uses: actions/download-artifact@v4
@@ -1699,7 +1699,7 @@ jobs:
       - name: Agent info
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | awk '{print $1}')"
+          echo "private ip: $(hostname -I | cut -d ' ' -f1)"
 
       - name: unstash raised_meta
         uses: actions/download-artifact@v4
