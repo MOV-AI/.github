@@ -226,36 +226,7 @@ jobs:
             fi
           done
           echo "Images copied to NFS server to $PROXMOX_NFS_SERVER_URL"
-
-      - name: Prepare slack variables
-        if: always()
-        id: pre_slack
-        run: |
-          MESSAGE=":arrow_forward: New pre-version ${{ needs.Build.outputs.raised_version }}  of packer images available :sunny:\"
-
-          MESSAGE_ERR=":x: Build of pre-version ${{ needs.Build.outputs.raised_version }} is unstable :rain_cloud:\
-            Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
-
-      - name: Slack message success
-        uses: slackapi/slack-github-action@v1.25.0
-        with:
-          channel-id: ${{ inputs.slack_channel }}
-          slack-message: ${{ steps.pre_slack.outputs.msg }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN_ID }}
-
-      - name: Slack message failure
-        if: failure()
-        uses: slackapi/slack-github-action@v1.25.0
-        with:
-          channel-id: ${{ inputs.slack_channel }}
-          slack-message: ${{ steps.pre_slack.outputs.msg_error }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN_ID }}
-
+          
       - name: Cleanup
         if: always()
         shell: bash
