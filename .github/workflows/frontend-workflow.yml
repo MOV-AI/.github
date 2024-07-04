@@ -133,6 +133,36 @@ jobs:
           npm ci --loglevel verbose
         fi
 
+    - name: Validate specified deps not duplicated
+	if: ${{ inputs.custom_deps_not_dup == 'true' }}
+	run: |
+            NPM=${{ inputs.pm }}
+
+	    if test "$NPM" = "npm"; then
+		    alias may_tail="cat -"
+	    else
+		    alias may_tail="tail -n +2"
+	    fi
+
+	    no_dupes_each() {
+		    local dep
+		    local count
+		    while read dep; do
+			    count="`$NPM list -lp $dep | may_tail | awk -F: '{print $2}' | sort -u | wc -l`"
+			    test $count -eq 1 || return 1
+		    done
+		    return 0
+	    }
+
+	    dupe_check() {
+		    local prop=$1
+		    jq -r "if .$prop then .$prop|keys[] else empty end" package.json \
+			    | grep "^@mov-ai" | no_dupes_each || exit 1
+	    }
+
+	    dupe_check dependencies
+	    dupe_check peerDependencies
+
     - name: Build
       run: ${{ inputs.pm }} run build
 
