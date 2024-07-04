@@ -59,7 +59,7 @@ on:
       auto_commit_mail:
         required: true
       auto_commit_pwd:
-        required: true 
+        required: true
       registry_user:
         required: true
       registry_password:
