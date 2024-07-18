@@ -52,7 +52,10 @@ on:
         required: false
         type: string
         default: 'pypi-edge'
-
+      skip_sonar:
+        required: false
+        type: boolean
+        default: false
     secrets:
       auto_commit_user:
         required: true
@@ -505,12 +508,14 @@ jobs:
 
       - name: Create SonarCloud project and disable autoscan
         uses: MOV-AI/action-sonarcloud-proj-config@v1
+        if: ${{ inputs.skip_sonar != false }}
         with:
           sonar_org: 'mov-ai'
           sonar_token: ${{ secrets.sonar_token }}
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2.0.2
+        if: ${{ inputs.skip_sonar != false }}
         env:
           GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.sonar_token }}
@@ -531,6 +536,7 @@ jobs:
             -Dsonar.python.coverage.reportPaths=coverage.xml
 
       - name: Link to SonarCloud dashboard
+        if: ${{ inputs.skip_sonar != false }}
         shell: bash
         run: |
           echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"

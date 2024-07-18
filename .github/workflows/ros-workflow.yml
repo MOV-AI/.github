@@ -49,6 +49,10 @@ on:
         required: false
         type: string
         default: ""
+      skip_sonar:
+        required: false
+        type: boolean
+        default: false
 
     secrets:
       auto_commit_user:
@@ -224,14 +228,14 @@ jobs:
           mobtest repo --issues ./mobtest-issues.json .
 
       - name: Create SonarCloud project and disable autoscan
-        if: ${{ false }}
+        if: ${{ inputs.skip_sonar != false }}
         uses: MOV-AI/action-sonarcloud-proj-config@v1
         with:
           sonar_org: 'mov-ai'
           sonar_token: ${{ secrets.sonar_token }}
 
       - name: SonarCloud Scan
-        if: ${{ false }}
+        if: ${{ inputs.skip_sonar != false }}
         uses: SonarSource/sonarcloud-github-action@v1.8
         env:
           GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
@@ -248,6 +252,7 @@ jobs:
             -Dsonar.externalIssuesReportPaths=./mobtest-issues.json
 
       - name: Link to SonarCloud dashboard
+        if: ${{ inputs.skip_sonar != false }}
         shell: bash
         run: |
           echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
