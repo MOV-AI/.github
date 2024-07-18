@@ -55,7 +55,7 @@ on:
       skip_sonar:
         required: false
         type: boolean
-        default: false
+        default: true
     secrets:
       auto_commit_user:
         required: true
