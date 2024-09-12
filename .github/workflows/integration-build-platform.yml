@@ -1227,7 +1227,7 @@ jobs:
         shell: bash
         run: |
           env_configs_dir=infra_env_configs
-          env_configs_version=0.1.0-3
+          env_configs_version=0.1.0-6
           env_configs_repo_name=devops-tf-env-conf
 
           rm -rf $env_configs_dir
