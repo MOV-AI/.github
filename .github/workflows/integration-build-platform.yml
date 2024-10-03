@@ -345,16 +345,35 @@ jobs:
           deactivate
 
       - name: Create Xray test execution
+        id: ui_tests_xray
         if: always()
         working-directory: ${{ steps.ui_tests_setup.outputs.target_dir }}
         run: |
+          status="success"
+
           # create test execution
           if [ "${{ steps.ui_tests_setup.outputs.jira_report }}" == "True" ] ; then
             . test-venv/bin/activate
             export PATH="$HOME/.local/bin:$PATH"
-            xray create ./results.json --version "EE ${{ steps.ui_tests_setup.outputs.platform_version }}" --label UI_Automation
+
+            if ! xray create ./results.json --version "EE ${{ steps.ui_tests_setup.outputs.platform_version }}" --label UI_Automation ; then
+                status="failure"
+            fi
+
             deactivate
           fi
+
+          echo "status=${status}" >> $GITHUB_OUTPUT
+
+      - name: Slack message Xray failure
+        uses: archive/github-actions-slack@master
+        if: ${{ steps.ui_tests_xray.outputs.status == 'failure' }}
+        with:
+          slack-function: send-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-text: ":warning: @qa ${{ github.job }} (Attempt: #${{ github.run_attempt }}) failed to create Xray test execution ticket"
+          slack-optional-thread_ts: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
 
       - name: Get current job id
         if: always()
