@@ -226,7 +226,7 @@ jobs:
             fi
           done
           echo "Images copied to NFS server to $PROXMOX_NFS_SERVER_URL"
-          
+
       - name: Cleanup
         if: always()
         shell: bash
@@ -269,7 +269,7 @@ jobs:
       - name: Write Summary
         id: summary
         run: |
-          summary_message=":construction_worker: new pre-version ${{ needs.Build.outputs.raised_version }} of packer images available here: $PROXMOX_NFS_SERVER_URL"\n"
+          summary_message=":construction_worker: new pre-version ${{ needs.Build.outputs.raised_version }} of packer images available here: $PROXMOX_NFS_SERVER_URL\n"
 
           echo -e "### Build Summary\n${summary_message}" >> $GITHUB_STEP_SUMMARY
 

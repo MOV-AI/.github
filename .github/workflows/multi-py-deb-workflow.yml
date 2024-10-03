@@ -59,7 +59,7 @@ on:
       auto_commit_mail:
         required: true
       auto_commit_pwd:
-        required: true 
+        required: true
       registry_user:
         required: true
       registry_password:
@@ -147,7 +147,7 @@ jobs:
         .
 
     - name: Store python Linters files
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: linting_reports
         path: "./*-report.txt"
@@ -213,7 +213,7 @@ jobs:
       run: python3 -m build
 
     - name: Archive binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: packages
         path: dist/*
@@ -328,7 +328,7 @@ jobs:
         submodules: recursive
 
     - name: Download a single artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: packages
         path: dist
@@ -356,7 +356,7 @@ jobs:
         mv ../*.deb artifacts
 
     - name: Archive binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: artifacts
         path: artifacts/*.deb
@@ -391,7 +391,7 @@ jobs:
 
     - name: Download a single artifact
       if: ${{ inputs.release == 'false' && inputs.rpm_build == 'true' }}
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: packages
         path: dist
@@ -440,7 +440,7 @@ jobs:
 
     - name: Archive binary
       if: ${{ inputs.release == 'false' && inputs.rpm_build == 'true' }}
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: artifacts
         path: artifacts/*.rpm
@@ -472,7 +472,7 @@ jobs:
           sh get-docker.sh
 
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: artifacts
           path: artifacts
@@ -484,7 +484,7 @@ jobs:
           find ./ -name "*.deb" -not -name "*src*" -exec sudo apt install -y {} \;
 
       - name: Download a single artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: linting_reports
           path: ./
@@ -544,7 +544,7 @@ jobs:
 
       - name: Stash logs of journalctl
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: debian_test_journal
           path: ./logs/*
@@ -576,7 +576,7 @@ jobs:
 
       - name: Download artifacts
         if: ${{ inputs.release == 'false' && inputs.install_test == 'true' &&  inputs.rpm_build == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: artifacts
           path: artifacts
@@ -595,7 +595,7 @@ jobs:
 
       - name: Stash logs of journalctl
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: rpm_test_journal
           path: ./logs/*
@@ -617,13 +617,13 @@ jobs:
           submodules: recursive
 
       - name: Download a single artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: packages
           path: dist
 
       - name: Download a single artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: artifacts
           path: artifacts
@@ -794,21 +794,21 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
 
     - name: Archive binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: packages
         path: dist/*
         retention-days: 5
 
     - name: Archive binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: artifacts
         path: artifacts/*.deb
         retention-days: 5
 
     - name: Archive binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: artifacts
         path: artifacts/*.rpm

@@ -40,7 +40,7 @@ on:
       ROS_BUILDTOOLS_TAG:
         required: false
         type: string
-        default: "v2.0.7"
+        default: "v2.0.10"
       MOBROS_VERSION:
         required: false
         type: string
@@ -438,7 +438,7 @@ jobs:
       continue-on-error: true
       shell: bash
       run: |
-        gh workflow run "Propagate ROS repository packages to projects - On Dispatch" \
+        gh workflow run .github/workflows/PropagateRosToProjectsOnDispatch.yml \
           --repo MOV-AI/qa-automations \
           -f repo_name=${GITHUB_REPOSITORY#*/} \
           -f repo_version=${{ steps.vars-after-raise.outputs.ros_pkg_version }}

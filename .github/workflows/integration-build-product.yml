@@ -118,12 +118,14 @@ env:
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   TIMEOUT: 720
+  DESIRED_DOCKER_VERSION: "27.2.1"
 
 jobs:
   Compute-timeout:
     runs-on: ubuntu-latest
     outputs:
       timeout: ${{ steps.Compute-timeout.outputs.timeout }}
+      jobtimeout: ${{ steps.Compute-timeout.outputs.jobtimeout }}
     steps:
       - name: "Compute Timeout"
         id: Compute-timeout
@@ -134,10 +136,19 @@ jobs:
             duration_minutes=0
           fi
           if [[ $duration_minutes -gt $((${{ env.TIMEOUT }})) ]]; then
-            echo "timeout=$((duration_minutes * 110 / 100))" >> $GITHUB_OUTPUT
+            calc_timeout=$((duration_minutes * 110 / 100))
           else
-            echo "timeout=${{ env.TIMEOUT }}" >> $GITHUB_OUTPUT
+            calc_timeout=${{ env.TIMEOUT }}
           fi
+          if [[ $calc_timeout -ne 0 ]]; then
+            calc_jobtimeout=$((calc_timeout +2))
+          else
+            calc_jobtimeout=0
+          fi
+          echo "simulation tests step timeout $calc_timeout"
+          echo "Simulation tests job timeout $calc_jobtimeout"
+          echo "timeout=$calc_timeout" >> $GITHUB_OUTPUT
+          echo "jobtimeout=$calc_jobtimeout" >> $GITHUB_OUTPUT
 
   Validate-boostrap-configs:
     runs-on: integration-pipeline
@@ -197,7 +208,12 @@ jobs:
         run: |
           git config --global --add safe.directory $(pwd)
           git fetch
-          git checkout origin/${GITHUB_REF#refs/heads/} -- product.version
+          if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
+            BRANCH_NAME=${{inputs.nightly_run_branch}}
+          else
+            BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          fi
+          git checkout origin/${BRANCH_NAME} -- product.version
           cat product.version
           rm -rf simulator_artifacts ci_artifacts
 
@@ -225,7 +241,7 @@ jobs:
           integration-pipeline generate_meta_simulator_artifacts \
                 --manifest_platform_base_key product_dependencies \
                 --product_name ${{ inputs.product_name }} \
-                --branch ${GITHUB_REF#refs/heads/} \
+                --branch ${BRANCH_NAME} \
                 --update_simulator \
                 --docker_registry $REGISTRY
 
@@ -554,6 +570,7 @@ jobs:
           rm quickstart_version
 
       - name: Collect Install logs
+        if: always()
         continue-on-error: true
         run: |
           # cleanup
@@ -1179,7 +1196,7 @@ jobs:
   Validation-Simulator-Tests:
     needs: [Compute-timeout, Build-Spawner, Build-Simulator]
     runs-on: ${{ needs.Build-Simulator.outputs.simulator_tests_agent_name }}
-    timeout-minutes: ${{ fromJSON(needs.Compute-timeout.outputs.timeout) }}
+    timeout-minutes: ${{ fromJSON(needs.Compute-timeout.outputs.jobtimeout) }}
     steps:
       - uses: rtCamp/action-cleanup@master
         if: ${{ inputs.with_simulation_tests }}
@@ -1240,7 +1257,7 @@ jobs:
         shell: bash
         run: |
           env_configs_dir=infra_env_configs
-          env_configs_version=0.1.0-1
+          env_configs_version=0.1.0-3
           env_configs_repo_name=devops-tf-env-conf
 
           rm -rf $env_configs_dir
@@ -1271,7 +1288,12 @@ jobs:
         id: infra_names
         shell: bash
         run: |
-          branch=$(echo ${GITHUB_REF#refs/heads/} | sed "s;\.;-;g" )
+          if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
+            BRANCH_NAME=${{inputs.nightly_run_branch}}
+          else
+            BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          fi
+          branch=$(echo ${BRANCH_NAME} | sed "s;\.;-;g" )
 
           run_type="ci"
           if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
@@ -1338,6 +1360,8 @@ jobs:
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
             cloud-init status --wait; rm -rf ./${{ env.REMOTE_WORKSPACE_PATH }}; mkdir -p ./${{ env.REMOTE_WORKSPACE_PATH }}
+            export DESIRED_DOCKER_VERSION="${{ env.DESIRED_DOCKER_VERSION }}"
+            wget -qO - https://movai-scripts.s3.amazonaws.com/docker_hold.sh | bash 
           '
 
       - name: Prepare Devops provisioning slack message
@@ -1542,7 +1566,7 @@ jobs:
       - name: Remote - Simulation Tests
         if: ${{ inputs.with_simulation_tests }}
         id: simulation_tests
-        timeout-minutes: ${{ fromJSON(needs.Compute-timeout.outputs.timeout) }}
+        timeout-minutes: ${{ fromJSON( needs.Compute-timeout.outputs.timeout) }}
         shell: bash
         run: |
           # Avoid setting github outputs from within a block that is executed remotely
@@ -2038,7 +2062,7 @@ jobs:
           MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
           if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
-            MESSAGE=":white_check_mark: LONG RUN: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            MESSAGE=":white_check_mark: LONG RUN: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is stable (Cluster: ${{ inputs.cluster }}) :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           fi
           echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
 
@@ -2076,7 +2100,7 @@ jobs:
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is unstable (or canceled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
           if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
-            MESSAGE_ERR=":x: LONG RUN: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is unstable (or canceled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            MESSAGE_ERR=":x: LONG RUN: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is unstable (or canceled) (Cluster: ${{ inputs.cluster }}) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           fi
           echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
 

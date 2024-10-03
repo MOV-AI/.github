@@ -14,10 +14,16 @@ on:
         required: false
         type: string
         default: 'true'
+      use_nvmrc:
+        required: false
+        type: string
+        default: 'false'
+        description: 'Use .nvmrc file to determine node version'
       npm_version:
         required: false
         type: string
         default: '>=16.18.0'
+        description: 'Node version to use'
       prod_publish_repos:
         required: false
         type: string
@@ -30,6 +36,11 @@ on:
         required: false
         type: string
         default: "npm"
+      pnpm_version:
+        required: false
+        type: string
+        default: "9.4.0"
+        description: 'pnpm version to use'
 
     secrets:
       auto_commit_user:
@@ -74,16 +85,24 @@ jobs:
         submodules: recursive
         token: ${{ secrets.npm_token }}
 
-    - name: Setup Github as proxy Registry
+    - name: Install node and setup Github as proxy Registry (use npm_version)
       uses: actions/setup-node@v4
+      if: ${{ inputs.use_nvmrc == 'false' }}
       with:
         node-version: '${{ inputs.npm_version }}'
         registry-url: 'https://npm.pkg.github.com/mov-ai'
 
-    - name: Setup .npmrc and install pnpm
+    - name: Install node and setup Github as proxy Registry (use .nvmrc)
+      uses: actions/setup-node@v4
+      if: ${{ inputs.use_nvmrc == 'true' }}
+      with:
+        node-version-file: '.nvmrc'
+        registry-url: 'https://npm.pkg.github.com/mov-ai'
+
+    - name: Install pnpm and setup .npmrc
       if: ${{ inputs.pm == 'pnpm' }}
       run: |
-        npm install -g pnpm
+        npm install -g pnpm@${{ inputs.pnpm_version }}
         echo "//npm.pkg.github.com/:_authToken=${{ secrets.npm_token }}" > .npmrc
       env:
         npm_token: ${{ secrets.npm_token }}
@@ -102,8 +121,6 @@ jobs:
         PACKAGE_VERSION=$(cat package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
         PACKAGE_NAME=$(cat package.json | grep name |head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
 
-        #echo ::set-output name=npm_pkg_name::$PACKAGE_NAME
-        #echo ::set-output name=npm_pkg_version::$PACKAGE_VERSION
         echo "npm_pkg_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
         echo "npm_pkg_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
 
@@ -144,30 +161,34 @@ jobs:
       if: ${{ inputs.run_tests == 'true' }}
       run: ${{ inputs.pm }} run test
 
-    - name: Run test coverage
-      run: echo TODO
+    - name: Create SonarCloud project and disable autoscan
+      uses: MOV-AI/action-sonarcloud-proj-config@v1
+      with:
+        sonar_org: 'mov-ai'
+        sonar_token: ${{ secrets.sonar_token }}
 
-    - name: SonarQube Scan
-      if: ${{ false }}
-      uses: SonarSource/sonarqube-scan-action@v1.0.0
+    - name: SonarCloud Scan
+      uses: SonarSource/sonarcloud-github-action@v2.0.2
       env:
+        GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
         SONAR_TOKEN: ${{ secrets.sonar_token }}
-        SONAR_HOST_URL: https://sonarqube.aws.cloud.mov.ai
       with:
         projectBaseDir: ./
         args: >
-          -Dsonar.organization=MOV-AI
-          -Dsonar.projectKey=${{ github.event.repository.name }}
-          -Dsonar.verbose=true
+          -Dsonar.organization=mov-ai
+          -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
+          -Dsonar.sources=.
           -Dsonar.scm.provider=git
           -Dsonar.qualitygate.wait=true
           -Dsonar.qualitygate.timeout=300
+          -Dsonar.coverage.exclusions=**/*.test.js
+          -Dsonar.cpd.exclusions=**/*.test.js
+          -Dsonar.javascript.lcov.reportPaths=./coverage/lcov.info
 
-    - name: Link to SonarQube Dashboard
+    - name: Link to SonarCloud dashboard
       shell: bash
       run: |
-        echo "Please check report here: https://sonarqube.aws.cloud.mov.ai/dashboard?id=${{ github.event.repository.name }}"
-      id: sonar_links
+        echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
     - name: Check manifest.json exists
       id: check_manifest_json
@@ -235,16 +256,24 @@ jobs:
         submodules: recursive
         token: ${{ secrets.npm_token }}
 
-    - name: Setup Github as proxy Registry
+    - name: Install node and setup Github as proxy Registry (use npm_version)
       uses: actions/setup-node@v4
+      if: ${{ inputs.use_nvmrc == 'false' }}
       with:
         node-version: '${{ inputs.npm_version }}'
         registry-url: 'https://npm.pkg.github.com/mov-ai'
 
-    - name: Setup .npmrc and install pnpm
+    - name: Install node and setup Github as proxy Registry (use .nvmrc)
+      uses: actions/setup-node@v4
+      if: ${{ inputs.use_nvmrc == 'true' }}
+      with:
+        node-version-file: '.nvmrc'
+        registry-url: 'https://npm.pkg.github.com/mov-ai'
+
+    - name: Install pnpm and setup .npmrc
       if: ${{ inputs.pm == 'pnpm' }}
       run: |
-        npm install -g pnpm
+        npm install -g pnpm@${{ inputs.pnpm_version }}
         echo "//npm.pkg.github.com/:_authToken=${{ secrets.npm_token }}" > .npmrc
       env:
         npm_token: ${{ secrets.npm_token }}

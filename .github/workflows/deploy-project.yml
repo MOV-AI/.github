@@ -1,0 +1,235 @@
+name: Deploy to Robot
+on:
+  workflow_call:
+    inputs:
+      host_user:
+        required: true
+        type: string
+      host_ip:
+        required: true
+        type: string
+      deploy_version:
+        required: true
+        type: string
+      robot_name:
+        required: true
+        type: string
+      userspace_folder_path:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: string
+
+    secrets:
+      auto_commit_pwd:
+        required: true
+      slack_token_id:
+        required: true
+      ssh_priv_key:
+        required: true
+      host_pwd:
+        required: true
+
+env:
+  CI_INTEGRATION_SCRIPTS_VERSION: "3.0.0.2"
+  MOBTEST_VERSION: "0.0.4.3"
+  PACKAGE_DEPLOYER_VERSION: "1.0.0.26"
+  GITHUB_API_USR: "OttoMation-Movai"
+  AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
+  REGISTRY: registry.hel.mov.ai
+  PUSH_REGISTRY: registry.cloud.mov.ai
+  MID_REGISTRY: registry.cloud.mov.ai
+  USERSPACE_FOLDER_PATH: userspace
+  REMOTE_WORKSPACE_PATH: deploy_workspace
+  PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
+  PROVISION_INFRA_VERSION: "2.0.0-3"
+  # slack channel movai-projects
+  SLACK_CHANNEL: ${{ inputs.overwrite_slack_channel }}
+  # development slack channel
+  #SLACK_CHANNEL: "C05K2KF1UP8"
+  PROJECT_DATA_VIEWER_API: "https://personal-7vf0v2cu.outsystemscloud.com/ProjectDataViewer5/rest/V1//CreateProject"
+  MINIO_S3_URL: "https://s3.mov.ai"
+  MINIO_PUBLIC_URL: "https://minio.mov.ai"
+  TIMEOUT: 720
+
+
+jobs:
+  Deploy-to-Robot:
+    environment: ${{ inputs.environment }}
+    runs-on: pt-agent
+    steps:
+      - uses: rtCamp/action-cleanup@master
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.deploy_version }}
+
+      - name: Agent info
+        run: |
+          echo "public ip: $(curl ipinfo.io/ip)"
+          echo "private ip: $(hostname -I | awk '{print $1}')"
+
+      - name: Setup CI Scripts in .ci-venv
+        shell: bash
+        run: |
+          python3 -m venv .ci-venv --clear
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+
+      - name: Discover product name
+        id: product_data
+        shell: bash
+        run: |
+          pipeline_files=$(find -L .github/workflows/ -name "RunOnD*.yml")
+          key=$(cat ${pipeline_files[0]} | grep "product_name" | sed s/product_name://g | sed s/' '//g | sed s/'"'//g)
+          echo "name=$key" >> $GITHUB_OUTPUT
+          
+      - name: Download product artifacts from release
+        shell: bash
+        run: |
+          . .ci-venv/bin/activate
+          
+          REPO_NAME=${GITHUB_REPOSITORY#*/}
+          rm product-manifest.yaml
+          integration-pipeline fetch_github_release_asset --repo $REPO_NAME --version ${{ inputs.deploy_version }} --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --all_assets --target_dir ./
+          ls -la
+          deactivate
+
+
+      - name: Prepare connection string
+        id: conn
+        shell: bash
+        run: |
+          echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
+          sudo chmod 600 ~/.ssh/ci_priv_key.pem
+          echo "ssh_connect_string=$(echo ${{ inputs.host_user }} | sed "s;\";;g")@$(echo ${{ inputs.host_ip }} | sed "s;\";;g")" >> $GITHUB_OUTPUT
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          ssh-keygen -f ~/.ssh/known_hosts -R ${{ inputs.host_ip }} || true
+          ssh-keyscan -H ${{ inputs.host_ip }} >> ~/.ssh/known_hosts || true
+
+      - name: Remote - Forced Cleanup workspace
+        continue-on-error: true
+        shell: bash
+        run: |
+          ssh ${{ steps.conn.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            echo -e "${{ secrets.host_pwd }}" | sudo -S rm -rf ${{ env.REMOTE_WORKSPACE_PATH }}
+          '
+      - name: Remote - Agent info
+        run: |
+          ssh ${{ steps.conn.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            ip=$(hostname -I | cut -d " " -f1)
+            echo $ip
+            mkdir -p ./${{ env.REMOTE_WORKSPACE_PATH }} ~/.pip/
+            echo "[global]" > ~/.pip/pip.conf
+            echo "index-url = https://artifacts.cloud.mov.ai/repository/pypi-experimental/simple" >> ~/.pip/pip.conf
+            echo "extra-index-url = https://pypi.org/simple" >> ~/.pip/pip.conf
+            echo "trusted-host = artifacts.cloud.mov.ai" >> ~/.pip/pip.conf
+            echo "               pypi.org" >> ~/.pip/pip.conf
+          '
+
+      - name: Remote - Install CI Scripts
+        shell: bash
+        run: ssh ${{ steps.conn.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no "set -e ; python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION"
+
+      - name: Remote - unstash manifest
+        shell: bash
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no product-manifest.yaml ${{ steps.conn.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/product-manifest.yaml
+
+      - name: Remote - unstash robot_jsons_noetic
+        shell: bash
+        run: scp -r -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no *.json* ${{ steps.conn.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
+
+      - name: Remote - Install
+        id: install
+        shell: bash
+        run: |
+          ssh ${{ steps.conn.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no << 'EOF'
+          set -e
+
+          cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
+          for robot in $(movai-cli list); do
+            movai-cli stop $robot
+          done
+          echo "Waiting for robots to stop so that we can set auto_start to false"
+          sleep 15
+          echo "Setting auto_start to false for all robots. Only the deployed robot will have auto_start set to true!"
+          for robot in $(movai-cli list); do
+            movai-cli set $robot robot.auto_start false
+          done
+
+          mkdir -p artifacts
+          cp *.json artifacts/
+          CONFIG_FILE_NAME="${{ steps.product_data.outputs.name }}-noetic.json" 
+          export PATH="$HOME/.local/bin:$PATH"
+          integration-pipeline get_yml_value --file product-manifest.yaml --key product_dependencies.platform_components --output_file /tmp/components.json
+          integration-pipeline get_yml_value --file product-manifest.yaml --key product_dependencies.installion.quickstart.version --output_file /tmp/quickstart_version.txt
+          service_version=$(cat "/tmp/components.json" | sed "s/'/\"/g" | jq .[0].version | sed "s/\"//g")
+          integration-pipeline set_robot_name --file $CONFIG_FILE_NAME --robot_name ${{ inputs.robot_name }}
+          jq '.robot."auto-start" = "true"' $CONFIG_FILE_NAME
+
+          export USERSPACE_FOLDER_PATH=${{ inputs.userspace_folder_path }}
+          mkdir -p ${{ inputs.userspace_folder_path }}/.git
+          export PUBLIC_IP=$(hostname -I | awk '{print $1}')
+
+          wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat /tmp/quickstart_version.txt).bash
+          chmod +x ./QuickStart_$(cat /tmp/quickstart_version.txt).bash
+          echo "./QuickStart_$(cat /tmp/quickstart_version.txt).bash --apps $service_version $CONFIG_FILE_NAME"
+          echo -e "${{ secrets.host_pwd }}" | sudo -S -E ./QuickStart_$(cat /tmp/quickstart_version.txt).bash --apps $service_version $CONFIG_FILE_NAME
+          MOVAI_USER="movai"
+          MOVAI_PWD="movai123"
+          movai-cli user ${{ inputs.robot_name }} "$MOVAI_USER" "$MOVAI_PWD"
+          EOF
+
+      - name: Remote - Forced Cleanup workspace
+        if: always()
+        shell: bash
+        run: |
+          ssh ${{ steps.conn.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            echo -e "${{ secrets.host_pwd }}" | sudo -S rm -rf ${{ env.REMOTE_WORKSPACE_PATH }}
+          '
+      - name: Remote - Save docker container logs
+        if: false
+        shell: bash
+        run: |
+          ssh ${{ steps.conn.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
+            # for sanity
+            docker ps -a
+
+            for container in backend spawner messager-server; do
+              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
+              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
+            done || true
+
+            # movai-service
+            journalctl -u movai-service --since "1hour ago" &> "movai-service.log"
+
+            # spawner (mobros firmware)
+            journalctl -u movai-service -t mobros --since "1hour ago" &> spawner-firmware.log || true
+          '
+
+      - name: Remote - Stash Install artifacts
+        if: false
+        shell: bash
+        run: |
+          ssh ${{ steps.conn.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
+            # cleanup
+            rm -rf artifacts
+
+            mkdir -p artifacts
+            cp -r ./*.log ./artifacts || true
+          '
+          scp -r -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no ${{ steps.conn.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/artifacts .
