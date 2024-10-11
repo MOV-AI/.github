@@ -1548,6 +1548,7 @@ jobs:
           rm -rf userspace
 
           # Enable debug logs of movai-service
+          mkdir -p /etc/movai/config.env
           sudo sh -c "echo MOVAI_SERVICE_LOGGER_LEVEL=DEBUG >> /etc/movai/config.env"
 
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
