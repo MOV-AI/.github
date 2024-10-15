@@ -1489,7 +1489,8 @@ jobs:
               exit 1
             fi
           '
-          echo "msg_error=Nvidia container error detected" >> $GITHUB_OUTPUT
+          echo "msg_error=Nvidia container error detected.\
+          Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
 
       - name: Slack message failure
         if: ${{ inputs.with_simulation_tests  && failure() && github.event_name != 'pull_request' }}
