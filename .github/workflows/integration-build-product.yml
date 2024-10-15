@@ -186,7 +186,7 @@ jobs:
           git config --global --add safe.directory $(pwd)
           git rev-parse HEAD > commit_hash
           echo "commit_hash=$(cat commit_hash)" >> $GITHUB_OUTPUT
-      
+
       - name: Set PR prefix
         id: artifacts_prefix
         run: |
@@ -299,7 +299,7 @@ jobs:
           else
             bump2version build --no-tag --no-commit --allow-dirty
           fi
-          
+
           cp product.version ./platform_configs/product.version
           cp .bumpversion.cfg ./platform_configs/.bumpversion.cfg
           cp product-manifest.yaml ./platform_configs/product-manifest.yaml
@@ -610,7 +610,7 @@ jobs:
             docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
             docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
           fi
-      
+
       - name: Installation
         shell: bash
         run: |
@@ -1446,7 +1446,7 @@ jobs:
             set -e
             cloud-init status --wait; rm -rf ./${{ env.REMOTE_WORKSPACE_PATH }}; mkdir -p ./${{ env.REMOTE_WORKSPACE_PATH }}
             export DESIRED_DOCKER_VERSION="${{ env.DESIRED_DOCKER_VERSION }}"
-            wget -qO - https://movai-scripts.s3.amazonaws.com/docker_hold.sh | bash 
+            wget -qO - https://movai-scripts.s3.amazonaws.com/docker_hold.sh | bash
           '
 
       - name: Prepare Devops provisioning slack message
@@ -1476,6 +1476,29 @@ jobs:
             ip=$(hostname -I | cut -d " " -f1)
             echo $ip
           '
+
+      - name: Remote - Detect Nvidia mismatch
+        if: ${{ inputs.with_simulation_tests }}
+        shell: bash
+        id: nvidia_check
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            container_id=$(docker run --gpus=all --rm nvcr.io/nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi 2>&1)
+            if [[ $? -ne 0 ]]; then
+              exit 1
+            fi
+          '
+          echo "msg_error=Nvidia container error detected" >> $GITHUB_OUTPUT
+
+      - name: Slack message failure
+        if: ${{ inputs.with_simulation_tests  && failure() && github.event_name != 'pull_request' }}
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          channel-id: "G0102LEV1CL"
+          slack-message: ${{ steps.nvidia_check.outputs.msg_error }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Remote - Login to ${{ env.MID_REGISTRY }} Registry
         if: ${{ inputs.with_simulation_tests }}
@@ -1636,7 +1659,7 @@ jobs:
           sudo mkdir -p /etc/movai/
           sudo sh -c "echo MOVAI_SERVICE_LOGGER_LEVEL=DEBUG >> /etc/movai/config.env"
           sudo chmod -R +r /etc/movai
-          
+
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
           ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
@@ -1741,7 +1764,7 @@ jobs:
             # spawner (mobros firmware)
             journalctl -u movai-service -t mobros --since "1hour ago" &> spawner-firmware.log || true
 
-            # docker logs 
+            # docker logs
             journalctl -u docker --since "1hour ago" &> "docker-service.log"
           '
 
