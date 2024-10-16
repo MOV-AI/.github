@@ -1477,6 +1477,13 @@ jobs:
             echo $ip
           '
 
+      - name: Nvidia slack message
+        if: ${{ inputs.with_simulation_tests }}
+        id: nvidia_err_msg
+        run: |
+          echo "msg_error=Nvidia container error detected.\
+          Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
+
       - name: Remote - Detect Nvidia mismatch
         if: ${{ inputs.with_simulation_tests }}
         shell: bash
@@ -1484,20 +1491,18 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
-            container_id=$(docker run --gpus=all --rm nvcr.io/nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi 2>&1)
+            docker run --gpus=all --rm nvcr.io/nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi 2>&1
             if [[ $? -ne 0 ]]; then
               exit 1
             fi
           '
-          echo "msg_error=Nvidia container error detected.\
-          Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
 
       - name: Slack message failure
         if: ${{ inputs.with_simulation_tests  && failure() && github.event_name != 'pull_request' }}
         uses: slackapi/slack-github-action@v1.23.0
         with:
           channel-id: "G0102LEV1CL"
-          slack-message: ${{ steps.nvidia_check.outputs.msg_error }}
+          slack-message: ${{ steps.nvidia_err_msg.outputs.msg_error }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
