@@ -119,7 +119,7 @@ env:
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   TIMEOUT: 720
   DESIRED_DOCKER_VERSION: "27.2.1"
-  PROVISIONING_ENV_CONF: "0.1.0-5"
+  PROVISIONING_ENV_CONF: "0.1.0-6"
 
 jobs:
   Compute-timeout:
