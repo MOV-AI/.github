@@ -40,6 +40,10 @@ on:
         required: false
         type: string
         default: 'false'
+      install_test_distros:
+        required: false
+        type: string
+        default: '["20.04", "22.04", "24.04"]'
       install_test_zmq:
         required: false
         type: string
@@ -95,15 +99,11 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
         submodules: recursive
-
-    - name: Create hard link to pip 3.8
-      run: |
-        ln /usr/bin/pip3 /usr/bin/pip3.8
 
     - name: Install build-requirements
       run: |
@@ -147,7 +147,7 @@ jobs:
         .
 
     - name: Store python Linters files
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: linting_reports
         path: "./*-report.txt"
@@ -171,13 +171,13 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
         submodules: recursive
 
-    - name: install build-requirements
+    - name: Install build-requirements
       run: python3 -m pip install -r build-requirements.txt
 
     - name: Create links for package ${{ matrix.pack_path }}
@@ -210,29 +210,14 @@ jobs:
         echo "py_pkg_version=$PACKAGE_RELEASE_VERSION" >> $GITHUB_OUTPUT
 
     - name: Build
-      run: python3 -m build
+      run: python3 -m build -o dist/${{ matrix.pack_path }}
 
     - name: Archive binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: packages
-        path: dist/*
+        name: packages_${{ matrix.pack_path }}
+        path: dist/${{ matrix.pack_path }}/*
         retention-days: 5
-
-    - name: Publish package to TestPyPI Experimental
-      uses: pypa/gh-action-pypi-publish@v1.11.0
-      with:
-        user: ${{ secrets.nexus_publisher_user }}
-        password: ${{ secrets.nexus_publisher_password }}
-        repository-url: https://artifacts.cloud.mov.ai/repository/pypi-experimental/
-
-    - name: Publish package to TestPyPI Testing
-      if: ${{ inputs.deploy == 'true' }}
-      uses: pypa/gh-action-pypi-publish@v1.11.0
-      with:
-        user: ${{ secrets.nexus_publisher_user }}
-        password: ${{ secrets.nexus_publisher_password }}
-        repository-url: https://artifacts.cloud.mov.ai/repository/pypi-integration/
 
     - name: Remove hardlinks for package ${{ matrix.pack_path }}
       run: |
@@ -253,7 +238,7 @@ jobs:
       commit_id: ${{ steps.commit_id.outputs.commit_id }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -292,7 +277,7 @@ jobs:
 
       - name: Raise App version
         if: ${{ inputs.deploy == 'true' }}
-        uses: CasperWA/push-protected@v2.14.0
+        uses: CasperWA/push-protected@v2.16.0
         with:
           token: ${{ secrets.auto_commit_password }}
           branch: ${{ steps.var_branch.outputs.branch }}
@@ -304,6 +289,42 @@ jobs:
           commit_hash=$(git log --format="%H" -n 1)
           #echo ::set-output name=commit_id::$commit_hash
           echo "commit_id=$commit_hash" >> $GITHUB_OUTPUT
+
+  PublishPypi:
+    needs: [Raise]
+    if: ${{ inputs.release == 'false' }}
+    runs-on: ubuntu-20.04
+    container:
+      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    strategy:
+        matrix:
+          pack_path: ${{ fromJSON(inputs.package_paths) }}
+    steps:
+      - name: Download a single artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: packages_${{ matrix.pack_path }}
+          path: dist_${{ matrix.pack_path }}/
+
+      - name: Publish package to TestPyPI Experimental
+        uses: pypa/gh-action-pypi-publish@v1.11.0
+        with:
+          user: ${{ secrets.nexus_publisher_user }}
+          password: ${{ secrets.nexus_publisher_password }}
+          repository-url: https://artifacts.cloud.mov.ai/repository/pypi-experimental/
+          packages-dir: dist_${{ matrix.pack_path }}/
+
+      - name: Publish package to TestPyPI Testing
+        if: ${{ inputs.deploy == 'true' }}
+        uses: pypa/gh-action-pypi-publish@v1.11.0
+        with:
+          user: ${{ secrets.nexus_publisher_user }}
+          password: ${{ secrets.nexus_publisher_password }}
+          repository-url: https://artifacts.cloud.mov.ai/repository/pypi-integration/
+          packages-dir: dist_${{ matrix.pack_path }}/
 
   Debian-Pack:
     if: ${{ inputs.release == 'false' }}
@@ -323,14 +344,14 @@ jobs:
       commit_id: ${{ needs.Raise.outputs.commit_id }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         submodules: recursive
 
     - name: Download a single artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
-        name: packages
+        name: packages_${{ matrix.pack_path }}
         path: dist
 
     - name: Create links for package ${{ matrix.pack_path }}
@@ -356,9 +377,9 @@ jobs:
         mv ../*.deb artifacts
 
     - name: Archive binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: artifacts
+        name: deb_artifacts_${{ matrix.pack_path }}
         path: artifacts/*.deb
         retention-days: 5
 
@@ -385,15 +406,15 @@ jobs:
 
     - name: Checkout
       if: ${{ inputs.release == 'false' && inputs.rpm_build == 'true' }}
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         submodules: recursive
 
     - name: Download a single artifact
       if: ${{ inputs.release == 'false' && inputs.rpm_build == 'true' }}
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
-        name: packages
+        name: packages_${{ matrix.pack_path }}
         path: dist
 
     - name: Sync setup.py
@@ -440,16 +461,17 @@ jobs:
 
     - name: Archive binary
       if: ${{ inputs.release == 'false' && inputs.rpm_build == 'true' }}
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: artifacts
+        name: rpm_artifacts_${{ matrix.pack_path }}
         path: artifacts/*.rpm
         retention-days: 5
 
   Debian-Test:
     strategy:
       matrix:
-        distro: [ "20.04", "22.04" ]
+        distro: ${{ fromJSON(inputs.install_test_distros) }}
+      fail-fast: false
     needs: [Raise, Debian-Pack]
     if: ${{ inputs.release == 'false' && inputs.install_test == 'true' }}
     runs-on: ubuntu-${{ matrix.distro }}
@@ -464,15 +486,18 @@ jobs:
           remove-docker-images: 'true'
           remove-large-packages: 'true'
           verbose: 'true'
-          
+
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Install test requirements
         run: |
+          python3 -m venv test_venv
+          source test_venv/bin/activate
           python3 -m pip install -r build-requirements.txt
+          deactivate
 
       - name: Prereq Docker
         if: ${{ inputs.install_test_docker == 'true' }}
@@ -481,11 +506,12 @@ jobs:
           curl -fsSL https://get.docker.com -o get-docker.sh
           sh get-docker.sh
 
-      - name: Download artifacts
-        uses: actions/download-artifact@v3
+      - name: Download deb artifacts
+        uses: actions/download-artifact@v4
         with:
-          name: artifacts
+          pattern: deb_artifacts_*
           path: artifacts
+          merge-multiple: true
 
       - name: Install debian artifacts
         run: |
@@ -493,18 +519,10 @@ jobs:
           cd artifacts/
           find ./ -name "*.deb" -not -name "*src*" -exec sudo apt install -y {} \;
 
-      - name: Download a single artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: linting_reports
-          path: ./
-
       - name: Run tests
         if: ${{ inputs.skip_testing != 'true' }}
         run: |
-          # add current user to movai-system group and apply changes
-          sudo usermod -aG movai-system $USER
-          newgrp movai-system
+          source test_venv/bin/activate
           if [ -f tox.ini ]; then
               # run tests and generates coverage.xml
               tox
@@ -512,38 +530,14 @@ jobs:
               # run tests
               python3 -m pytest tests/
           fi
+          deactivate
 
-      - name: Create SonarCloud project and disable autoscan
-        uses: MOV-AI/action-sonarcloud-proj-config@v1
+      - name: Store tests reports for SonarCloud
+        uses: actions/upload-artifact@v4
         with:
-          sonar_org: 'mov-ai'
-          sonar_token: ${{ secrets.sonar_token }}
-
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@v2.0.2
-        env:
-          GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.sonar_token }}
-        with:
-          projectBaseDir: ./
-          args: >
-            -Dsonar.organization=mov-ai
-            -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
-            -Dsonar.sources=.
-            -Dsonar.scm.provider=git
-            -Dsonar.qualitygate.wait=true
-            -Dsonar.qualitygate.timeout=300
-            -Dsonar.coverage.exclusions=tests/**
-            -Dsonar.cpd.exclusions=tests/**
-            -Dsonar.python.version=3
-            -Dsonar.python.flake8.reportPaths=flake8-report.txt
-            -Dsonar.python.pylint.reportPaths=pylint-report.txt
-            -Dsonar.python.coverage.reportPaths=coverage.xml
-
-      - name: Link to SonarCloud dashboard
-        shell: bash
-        run: |
-          echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
+          name: coverage_report
+          path: ./coverage.xml
+        if: ${{ matrix.distro == '20.04' }}
 
       - name: Store logs of journalctl
         shell: bash
@@ -554,12 +548,11 @@ jobs:
 
       - name: Stash logs of journalctl
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: debian_test_journal
+          name: debian_test_journal_${{ matrix.distro }}
           path: ./logs/*
           retention-days: 5
-
 
   Rpm-Test:
     needs: [Raise, Rpm-Pack]
@@ -586,10 +579,11 @@ jobs:
 
       - name: Download artifacts
         if: ${{ inputs.release == 'false' && inputs.install_test == 'true' &&  inputs.rpm_build == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: artifacts
+          pattern: rpm_artifacts_*
           path: artifacts
+          merge-multiple: true
 
       - name: Install rpm artifacts
         if: ${{ inputs.release == 'false' && inputs.install_test == 'true' &&  inputs.rpm_build == 'true' }}
@@ -605,14 +599,79 @@ jobs:
 
       - name: Stash logs of journalctl
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: rpm_test_journal
           path: ./logs/*
           retention-days: 5
 
+  SonarCloud:
+    if: ${{ inputs.release == 'false' }}
+    needs: [Debian-Test]
+    runs-on: ubuntu-20.04
+    container:
+      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        # Disabling shallow clone is recommended for improving relevancy of reporting
+        fetch-depth: 0
+        submodules: recursive
+
+    - name: Install build-requirements
+      run: |
+        python3 -m pip install -r build-requirements.txt
+
+    - name: Download coverage reports
+      uses: actions/download-artifact@v4
+      with:
+        name: coverage_report
+        path: ./
+
+    - name: Download linting reports
+      uses: actions/download-artifact@v4
+      with:
+        name: linting_reports
+        path: ./
+
+    - name: Create SonarCloud project and disable autoscan
+      uses: MOV-AI/action-sonarcloud-proj-config@v1
+      with:
+        sonar_org: 'mov-ai'
+        sonar_token: ${{ secrets.sonar_token }}
+
+    - name: SonarCloud Scan
+      uses: SonarSource/sonarcloud-github-action@v2.0.2
+      env:
+        GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
+        SONAR_TOKEN: ${{ secrets.sonar_token }}
+      with:
+        projectBaseDir: ./
+        args: >
+          -Dsonar.organization=mov-ai
+          -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
+          -Dsonar.sources=.
+          -Dsonar.scm.provider=git
+          -Dsonar.qualitygate.wait=true
+          -Dsonar.qualitygate.timeout=300
+          -Dsonar.coverage.exclusions=tests/**
+          -Dsonar.cpd.exclusions=tests/**
+          -Dsonar.python.version=3
+          -Dsonar.python.flake8.reportPaths=flake8-report.txt
+          -Dsonar.python.pylint.reportPaths=pylint-report.txt
+          -Dsonar.python.coverage.reportPaths=coverage.xml
+
+    - name: Link to SonarCloud dashboard
+      shell: bash
+      run: |
+        echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
+
   Publish:
-    needs: [Raise, Debian-Pack, Rpm-Pack, Debian-Test]
+    needs: [Raise, Debian-Pack, Rpm-Pack, Debian-Test, SonarCloud]
     if: ${{ inputs.deploy == 'true' }}
     runs-on: ubuntu-20.04
     container:
@@ -622,21 +681,30 @@ jobs:
         password: ${{secrets.registry_password}}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Download a single artifact
-        uses: actions/download-artifact@v3
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
         with:
-          name: packages
+          pattern: packages_*
           path: dist
+          merge-multiple: true
 
-      - name: Download a single artifact
-        uses: actions/download-artifact@v3
+      - name: Download deb artifacts
+        uses: actions/download-artifact@v4
         with:
-          name: artifacts
+          pattern: deb_artifacts_*
           path: artifacts
+          merge-multiple: true
+
+      - name: Download rpm artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: rpm_artifacts_*
+          path: artifacts
+          merge-multiple: true
 
       - name: Publish to Nexus ppa-dev
         shell: bash
@@ -781,10 +849,13 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
+    strategy:
+      matrix:
+        publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set tag output
       id: vars
@@ -804,23 +875,23 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
 
     - name: Archive binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: packages
+        name: released_packages
         path: dist/*
         retention-days: 5
 
     - name: Archive binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: artifacts
+        name: released_deb_artifacts
         path: artifacts/*.deb
         retention-days: 5
 
     - name: Archive binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: artifacts
+        name: released_rpm_artifacts
         path: artifacts/*.rpm
         retention-days: 5
 
