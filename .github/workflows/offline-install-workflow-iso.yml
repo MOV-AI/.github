@@ -56,10 +56,12 @@ env:
   RUN_STAGING_DIR: "/home/devops/iso-ci/staging/${{ github.repository }}/${{ github.run_id}}/"
   PROXMOX_NFS_SERVER_PATH: "/media/nas-mary/template/iso/baremetal"
   PROXMOX_NFS_SERVER_URL: "https://hel.mov.ai:8006/#v1:0:=storage%2Fhel%2Fnas-mary:4:5:=contentIso:::::"
+  NAS_URL: "http://10.10.1.46:8080/"
 
 jobs:
   Build:
     outputs:
+      current_version: ${{ steps.raise.outputs.current_version }}
       raised_version: ${{ steps.raise.outputs.raised_version }}
       file_name: ${{ steps.prepare_deploy.outputs.file_name }}
     runs-on: packer-runner
@@ -91,6 +93,7 @@ jobs:
           echo $RAISED_COMP_VERSION>version
           echo $RAISED_COMP_VERSION
           echo "raised_version=$RAISED_COMP_VERSION" >> $GITHUB_OUTPUT
+          echo "current_version=$COMP_VERSION" >> $GITHUB_OUTPUT
 
       - name: Create config file
         run: |
@@ -216,7 +219,7 @@ jobs:
         run: |
           # test if inputs.manual_request is set
           if [ "${{ inputs.manual_request }}" == "true" || "${{ inputs.manual_request }}" == "True" ]; then
-            PROXMOX_NFS_SERVER_DEPLOY_PATH=$PROXMOX_NFS_SERVER_PATH/${{ inputs.PRODUCT_NAME }}_${{ inputs.PRODUCT_VERSION }}_offline_install.iso
+            PROXMOX_NFS_SERVER_DEPLOY_PATH=$PROXMOX_NFS_SERVER_PATH/${{ inputs.PRODUCT_NAME }}_${{ inputs.PRODUCT_VERSION }}_${{ needs.Build.outputs.current_version }}
           else
             PROXMOX_NFS_SERVER_DEPLOY_PATH=$PROXMOX_NFS_SERVER_PATH
           fi
@@ -229,7 +232,7 @@ jobs:
         run: |
           sudo mkdir -p "$PROXMOX_NFS_SERVER_DEPLOY_PATH"
           sudo rsync --progress -z $RUN_STAGING_DIR/${{ needs.Build.outputs.file_name }} "$PROXMOX_NFS_SERVER_DEPLOY_PATH"
-          echo "Image copied to NFS server to $PROXMOX_NFS_SERVER_URL with path $PROXMOX_NFS_SERVER_DEPLOY_PATH"
+          echo "Image copied to NFS server to $NAS_URL with path $PROXMOX_NFS_SERVER_DEPLOY_PATH"
 
       - name: Prepare slack variables
         if: always()
@@ -237,10 +240,14 @@ jobs:
         env:
           PROXMOX_NFS_SERVER_DEPLOY_PATH: ${{ steps.compute_nfs_folder.outputs.PROXMOX_NFS_SERVER_DEPLOY_PATH }}
         run: |
-          deploy_msg="Image copied to NFS server to $PROXMOX_NFS_SERVER_URL with path $PROXMOX_NFS_SERVER_DEPLOY_PATH"
-          MESSAGE=":arrow_forward: New pre-version ${{ needs.Build.outputs.raised_version }} of baremetal image available :sunny:\n\n${deploy_msg}"
-          MESSAGE_ERR=":x: Build of pre-version ${{ needs.Build.outputs.raised_version }} is unstable :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-
+          deploy_msg="Image copied to NFS server to $NAS_URL:\n\t with path $PROXMOX_NFS_SERVER_DEPLOY_PATH"
+          if [ "${{ inputs.manual_request }}" == "true" ] || [ "${{ inputs.manual_request }}" == "True" ]; then
+            MESSAGE=":arrow_forward: New version ${{ needs.Build.outputs.raised_version }} of ${{ inputs.PRODUCT_NAME }}:${{ inputs.PRODUCT_VERSION}} image available :sunny:\n\n${deploy_msg}"
+            MESSAGE_ERR=":x: Build of version ${{ needs.Build.outputs.raised_version }} of ${{ inputs.PRODUCT_NAME }}:${{ inputs.PRODUCT_VERSION}} is unstable :rain_cloud: Details:
+          else:
+            MESSAGE=":arrow_forward: New pre-version ${{ needs.Build.outputs.raised_version }} of baremetal image available :sunny:\n\n${deploy_msg}"
+            MESSAGE_ERR=":x: Build of pre-version ${{ needs.Build.outputs.raised_version }} is unstable :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          fi
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
           echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
 
