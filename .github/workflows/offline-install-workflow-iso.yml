@@ -33,6 +33,10 @@ on:
         required: false
         type: string
         default: "C05UYMX2U0K"
+      manual_request:
+        type: boolean
+        required: false
+        default: false
     secrets:
       auto_commit_user:
         required: true
@@ -61,6 +65,7 @@ jobs:
     runs-on: packer-runner
     steps:
       - uses: rtCamp/action-cleanup@master
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -72,7 +77,7 @@ jobs:
       - name: Lint with shellcheck
         uses: azohra/shell-linter@latest
         with:
-          path: ./*.bash
+          path: ./*.bash,./scripts/*.bash,./scripts/*.sh
 
       - name: Raise Version
         id: raise
@@ -118,7 +123,6 @@ jobs:
           PRODUCT_NAME: ${{ inputs.PRODUCT_NAME }}
           PRODUCT_VERSION: ${{ inputs.PRODUCT_VERSION }}
 
-
       - name: Run the script
         run: |
           mv offline_install_artifacts/* .
@@ -149,7 +153,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Commit raise
-        if: ${{ inputs.deploy == 'true' }}
+        if: ${{ inputs.deploy == 'true' && inputs.manual_request == false }}
         run: |
           git config --global --add safe.directory $(pwd)
           git config --global user.name '${{ secrets.auto_commit_user }}'
@@ -162,11 +166,13 @@ jobs:
           git commit -m "[skip actions] Automatic Bump of image version to ${{ needs.Build.outputs.raised_version }}"
 
       - name: Prepare raise variables
+        if: ${{ inputs.deploy == 'true' && inputs.manual_request == false }}
         id: pre_raise_push
         run: |
           echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
       - name: Raise App version
+        if: ${{ inputs.deploy == 'true' && inputs.manual_request == false }}
         uses: CasperWA/push-protected@v2.14.0
         with:
           token: ${{ secrets.auto_commit_pwd }}
@@ -174,6 +180,7 @@ jobs:
           unprotect_reviews: true
 
       - name: Commit info
+        if: ${{ inputs.deploy == 'true' && inputs.manual_request == false }}
         id: commit
         shell: bash
         run: |
@@ -181,6 +188,7 @@ jobs:
           echo "commit_id=$commit_hash" >> $GITHUB_OUTPUT
 
       - name: Create Github Release
+        if: ${{ inputs.deploy == 'true' && inputs.manual_request == false }}
         uses: softprops/action-gh-release@v1
         with:
           name: "Release of ${{ needs.Build.outputs.raised_version }}"
@@ -203,22 +211,44 @@ jobs:
             exit 1
           fi
 
-      - name: Deploy images to NFS server
+      - name: Compute NFS folder name
+        id: compute_nfs_folder
         run: |
-          sudo mkdir -p $PROXMOX_NFS_SERVER_PATH/
+          # test if inputs.manual_request is set
+          if [ "${{ inputs.manual_request }}" == "true" || "${{ inputs.manual_request }}" == "True" ]; then
+            PROXMOX_NFS_SERVER_DEPLOY_PATH=$PROXMOX_NFS_SERVER_PATH/${{ inputs.PRODUCT_NAME }}_${{ inputs.PRODUCT_VERSION }}_offline_install.iso
+          else
+            PROXMOX_NFS_SERVER_DEPLOY_PATH=$PROXMOX_NFS_SERVER_PATH
+          fi
+          echo "PROXMOX_NFS_SERVER_DEPLOY_PATH=$PROXMOX_NFS_SERVER_DEPLOY_PATH" >> $GITHUB_OUTPUT
 
-          sudo rsync --progress -z $RUN_STAGING_DIR/${{ needs.Build.outputs.file_name }} $PROXMOX_NFS_SERVER_PATH/
-          echo "Image copied to NFS server to $PROXMOX_NFS_SERVER_URL"
+
+      - name: Deploy images to NFS server
+        env:
+          PROXMOX_NFS_SERVER_DEPLOY_PATH: ${{ steps.compute_nfs_folder.outputs.PROXMOX_NFS_SERVER_DEPLOY_PATH }}
+        run: |
+          sudo mkdir -p "$PROXMOX_NFS_SERVER_DEPLOY_PATH"
+          sudo rsync --progress -z $RUN_STAGING_DIR/${{ needs.Build.outputs.file_name }} "$PROXMOX_NFS_SERVER_DEPLOY_PATH"
+          echo "Image copied to NFS server to $PROXMOX_NFS_SERVER_URL with path $PROXMOX_NFS_SERVER_DEPLOY_PATH"
 
       - name: Prepare slack variables
         if: always()
         id: pre_slack
+        env:
+          PROXMOX_NFS_SERVER_DEPLOY_PATH: ${{ steps.compute_nfs_folder.outputs.PROXMOX_NFS_SERVER_DEPLOY_PATH }}
         run: |
-          MESSAGE=":arrow_forward: New pre-version ${{ needs.Build.outputs.raised_version }} of baremetal image available :sunny:"
+          deploy_msg="Image copied to NFS server to $PROXMOX_NFS_SERVER_URL with path $PROXMOX_NFS_SERVER_DEPLOY_PATH"
+          MESSAGE=":arrow_forward: New pre-version ${{ needs.Build.outputs.raised_version }} of baremetal image available :sunny:\n\n${deploy_msg}"
           MESSAGE_ERR=":x: Build of pre-version ${{ needs.Build.outputs.raised_version }} is unstable :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
           echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+
+      - name: Write summary message in Github Actions
+        if: always()
+        run: |
+          summary_message="${{ steps.pre_slack.outputs.msg }}"
+          echo -e "${summary_message}" >> $GITHUB_STEP_SUMMARY
 
       # - name: Slack message success
       #   uses: slackapi/slack-github-action@v1.25.0
