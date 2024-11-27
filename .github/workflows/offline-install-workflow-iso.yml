@@ -52,6 +52,8 @@ on:
         required: true
       nexus_publisher_password:
         required: true
+      slack_token_id:
+        required: False
 env:
   RUN_STAGING_DIR: "/home/devops/iso-ci/staging/${{ github.repository }}/${{ github.run_id}}/"
   NFS_SERVER_PATH: "/media/nas-mary/template/iso/baremetal"
@@ -258,6 +260,7 @@ jobs:
 
       - name: Slack message success
         uses: slackapi/slack-github-action@v1.25.0
+        if: ${{ inputs.slack_channel }}
         with:
           channel-id: ${{ inputs.slack_channel }}
           slack-message: ${{ steps.pre_slack.outputs.msg }}
@@ -265,7 +268,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN_ID }}
 
       - name: Slack message failure
-        if: failure()
+        if: failure() && ${{ inputs.slack_channel }}
         uses: slackapi/slack-github-action@v1.25.0
         with:
           channel-id: ${{ inputs.slack_channel }}
