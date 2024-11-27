@@ -54,9 +54,8 @@ on:
         required: true
 env:
   RUN_STAGING_DIR: "/home/devops/iso-ci/staging/${{ github.repository }}/${{ github.run_id}}/"
-  PROXMOX_NFS_SERVER_PATH: "/media/nas-mary/template/iso/baremetal"
-  PROXMOX_NFS_SERVER_URL: "https://hel.mov.ai:8006/#v1:0:=storage%2Fhel%2Fnas-mary:4:5:=contentIso:::::"
-  NAS_URL: "http://10.10.1.46:8080/"
+  NFS_SERVER_PATH: "/media/nas-mary/template/iso/baremetal"
+  NAS_URL: "https://s3.lis.mov.ai:8443/"
 
 jobs:
   Build:
@@ -209,8 +208,8 @@ jobs:
     steps:
       - name: Test NFS server
         run: |
-          if [ ! -d "$PROXMOX_NFS_SERVER_PATH" ]; then
-            echo "ERROR: NFS server path $PROXMOX_NFS_SERVER_PATH does not exist."
+          if [ ! -d "$NFS_SERVER_PATH" ]; then
+            echo "ERROR: NFS server path $NFS_SERVER_PATH does not exist."
             exit 1
           fi
 
@@ -219,28 +218,28 @@ jobs:
         run: |
           # test if inputs.manual_request is set
           if [ "${{ inputs.manual_request }}" == "true" || "${{ inputs.manual_request }}" == "True" ]; then
-            PROXMOX_NFS_SERVER_DEPLOY_PATH=$PROXMOX_NFS_SERVER_PATH/${{ inputs.PRODUCT_NAME }}_${{ inputs.PRODUCT_VERSION }}_${{ needs.Build.outputs.current_version }}
+            NFS_SERVER_DEPLOY_PATH=$NFS_SERVER_PATH/${{ inputs.PRODUCT_NAME }}_${{ inputs.PRODUCT_VERSION }}_${{ needs.Build.outputs.current_version }}
           else
-            PROXMOX_NFS_SERVER_DEPLOY_PATH=$PROXMOX_NFS_SERVER_PATH
+            NFS_SERVER_DEPLOY_PATH=$NFS_SERVER_PATH
           fi
-          echo "PROXMOX_NFS_SERVER_DEPLOY_PATH=$PROXMOX_NFS_SERVER_DEPLOY_PATH" >> $GITHUB_OUTPUT
+          echo "NFS_SERVER_DEPLOY_PATH=$NFS_SERVER_DEPLOY_PATH" >> $GITHUB_OUTPUT
 
 
       - name: Deploy images to NFS server
         env:
-          PROXMOX_NFS_SERVER_DEPLOY_PATH: ${{ steps.compute_nfs_folder.outputs.PROXMOX_NFS_SERVER_DEPLOY_PATH }}
+          NFS_SERVER_DEPLOY_PATH: ${{ steps.compute_nfs_folder.outputs.NFS_SERVER_DEPLOY_PATH }}
         run: |
-          sudo mkdir -p "$PROXMOX_NFS_SERVER_DEPLOY_PATH"
-          sudo rsync --progress -z $RUN_STAGING_DIR/${{ needs.Build.outputs.file_name }} "$PROXMOX_NFS_SERVER_DEPLOY_PATH"
-          echo "Image copied to NFS server to $NAS_URL with path $PROXMOX_NFS_SERVER_DEPLOY_PATH"
+          sudo mkdir -p "$NFS_SERVER_DEPLOY_PATH"
+          sudo rsync --progress -z $RUN_STAGING_DIR/${{ needs.Build.outputs.file_name }} "$NFS_SERVER_DEPLOY_PATH"
+          echo "Image copied to NFS server to $NAS_URL with path $NFS_SERVER_DEPLOY_PATH"
 
       - name: Prepare slack variables
         if: always()
         id: pre_slack
         env:
-          PROXMOX_NFS_SERVER_DEPLOY_PATH: ${{ steps.compute_nfs_folder.outputs.PROXMOX_NFS_SERVER_DEPLOY_PATH }}
+          NFS_SERVER_DEPLOY_PATH: ${{ steps.compute_nfs_folder.outputs.NFS_SERVER_DEPLOY_PATH }}
         run: |
-          deploy_msg="Image copied to NFS server to $NAS_URL:\n\t with path $PROXMOX_NFS_SERVER_DEPLOY_PATH"
+          deploy_msg="Image copied to NFS server to $NAS_URL:\n\t with path $NFS_SERVER_DEPLOY_PATH"
           if [ "${{ inputs.manual_request }}" == "true" ] || [ "${{ inputs.manual_request }}" == "True" ]; then
             MESSAGE=":arrow_forward: New version ${{ needs.Build.outputs.raised_version }} of ${{ inputs.PRODUCT_NAME }}:${{ inputs.PRODUCT_VERSION}} image available :sunny:\n\n${deploy_msg}"
             MESSAGE_ERR=":x: Build of version ${{ needs.Build.outputs.raised_version }} of ${{ inputs.PRODUCT_NAME }}:${{ inputs.PRODUCT_VERSION}} is unstable :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
@@ -257,22 +256,22 @@ jobs:
           summary_message="${{ steps.pre_slack.outputs.msg }}"
           echo -e "${summary_message}" >> $GITHUB_STEP_SUMMARY
 
-      # - name: Slack message success
-      #   uses: slackapi/slack-github-action@v1.25.0
-      #   with:
-      #     channel-id: ${{ inputs.slack_channel }}
-      #     slack-message: ${{ steps.pre_slack.outputs.msg }}
-      #   env:
-      #     SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN_ID }}
+      - name: Slack message success
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          channel-id: ${{ inputs.slack_channel }}
+          slack-message: ${{ steps.pre_slack.outputs.msg }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN_ID }}
 
-      # - name: Slack message failure
-      #   if: failure()
-      #   uses: slackapi/slack-github-action@v1.25.0
-      #   with:
-      #     channel-id: ${{ inputs.slack_channel }}
-      #     slack-message: ${{ steps.pre_slack.outputs.msg_error }}
-      #   env:
-      #     SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN_ID }}
+      - name: Slack message failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          channel-id: ${{ inputs.slack_channel }}
+          slack-message: ${{ steps.pre_slack.outputs.msg_error }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN_ID }}
 
       - name: Cleanup
         if: always()
