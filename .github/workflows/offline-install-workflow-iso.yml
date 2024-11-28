@@ -109,12 +109,22 @@ jobs:
           sed -i 's/PRODUCT_TYPE=.*/PRODUCT_TYPE=${{ inputs.PRODUCT_TYPE }}/' config.cfg
           sed -i 's/PRODUCT_NAME=.*/PRODUCT_NAME=${{ inputs.PRODUCT_NAME }}/' config.cfg
           sed -i 's/PRODUCT_VERSION=.*/PRODUCT_VERSION=${{ inputs.PRODUCT_VERSION }}/' config.cfg
+          sed -i 's/PRODUCT_JSON_NAME=.*/PRODUCT_JSON_NAME=${{ inputs.PRODUCT_JSON_NAME }}/' config.cfg
           # test if PRODUCT_PACKAGES is set
           if [ -z "${{ inputs.PRODUCT_PACKAGES }}" ]; then
             sed -i 's/PRODUCT_PACKAGES=.*/PRODUCT_PACKAGES=none/' config.cfg
           else
             sed -i 's/PRODUCT_PACKAGES=.*/PRODUCT_PACKAGES=${{ inputs.PRODUCT_PACKAGES }}/' config.cfg
           fi
+
+      - name: Fetch release configuration files
+        run: |
+          mkdir -p offline_install_artifacts/json
+          gh release download -R "https://github.com/MOV-AI/$PRODUCT_NAME" "$PRODUCT_VERSION" -p "*.json" -D offline_install_artifacts/json
+        env:
+          PRODUCT_NAME: "${{ inputs.PRODUCT_NAME }}"
+          PRODUCT_VERSION: "${{ inputs.PRODUCT_VERSION }}"
+          GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
 
       - name: Fetch platform artifacts
         run: |
@@ -130,16 +140,6 @@ jobs:
           GITHUB_API_PWD: ${{ secrets.auto_commit_pwd }}
           PRODUCT_NAME: ${{ inputs.PRODUCT_NAME }}
           PRODUCT_VERSION: ${{ inputs.PRODUCT_VERSION }}
-
-      - name: Fetch release json configuration file
-        run: |
-          mkdir -p offline_install_artifacts/json
-          gh release download -R "https://github.com/MOV-AI/$PRODUCT_NAME" "$PRODUCT_VERSION" -p "$PRODUCT_JSON_NAME" -D offline_install_artifacts/json
-        env:
-          PRODUCT_NAME: "${{ inputs.PRODUCT_NAME }}"
-          PRODUCT_VERSION: "${{ inputs.PRODUCT_VERSION }}"
-          PRODUCT_JSON_NAME: "${{ inputs.PRODUCT_JSON_NAME }}"
-          GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
 
       - name: Run the script
         run: |
