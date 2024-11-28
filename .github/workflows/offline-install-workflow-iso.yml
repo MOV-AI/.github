@@ -136,7 +136,7 @@ jobs:
           mkdir -p offline_install_artifacts/json
           gh release download -R "https://github.com/MOV-AI/$PRODUCT_NAME" "$PRODUCT_VERSION" -p "$PRODUCT_JSON_NAME" -D offline_install_artifacts/json
         env:
-          PRODUCT_NAME: "project-${{ inputs.PRODUCT_NAME }}"
+          PRODUCT_NAME: "${{ inputs.PRODUCT_NAME }}"
           PRODUCT_VERSION: "${{ inputs.PRODUCT_VERSION }}"
           PRODUCT_JSON_NAME: "${{ inputs.PRODUCT_JSON_NAME }}"
           GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
