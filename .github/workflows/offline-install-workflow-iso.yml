@@ -274,7 +274,7 @@ jobs:
 
       - name: Slack message success
         uses: slackapi/slack-github-action@v1.25.0
-        if: "success() && ${{ inputs.slack_channel }}"
+        if: ${{ success() && inputs.slack_channel }}
         with:
           channel-id: ${{ inputs.slack_channel }}
           slack-message: ${{ steps.pre_slack.outputs.msg }}
@@ -282,7 +282,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN_ID }}
 
       - name: Slack message failure
-        if: "failure() && ${{ inputs.slack_channel }}"
+        if: ${{ failure() &&  inputs.slack_channel }}
         uses: slackapi/slack-github-action@v1.25.0
         with:
           channel-id: ${{ inputs.slack_channel }}
