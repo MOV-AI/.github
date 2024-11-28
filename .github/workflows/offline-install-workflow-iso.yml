@@ -255,12 +255,12 @@ jobs:
         env:
           NFS_SERVER_DEPLOY_PATH: ${{ steps.compute_nfs_folder.outputs.NFS_SERVER_DEPLOY_PATH }}
         run: |
-          deploy_msg="Image copied to NFS server to $NAS_URL:\n\t with path $NFS_SERVER_DEPLOY_PATH"
+          deploy_msg="Image copied to NFS server to $NAS_URL with path $NFS_SERVER_DEPLOY_PATH"
           if [ "${{ inputs.manual_request }}" == "true" ] || [ "${{ inputs.manual_request }}" == "True" ]; then
-            MESSAGE=":arrow_forward: New version ${{ needs.Build.outputs.raised_version }} of ${{ inputs.PRODUCT_NAME }}:${{ inputs.PRODUCT_VERSION}} image available :sunny:\n\n${deploy_msg}"
+            MESSAGE=":arrow_forward: New version ${{ needs.Build.outputs.raised_version }} of ${{ inputs.PRODUCT_NAME }}:${{ inputs.PRODUCT_VERSION}} image available :sunny:. Details: ${deploy_msg}"
             MESSAGE_ERR=":x: Build of version ${{ needs.Build.outputs.raised_version }} of ${{ inputs.PRODUCT_NAME }}:${{ inputs.PRODUCT_VERSION}} is unstable :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           else
-            MESSAGE=":arrow_forward: New pre-version ${{ needs.Build.outputs.raised_version }} of baremetal image available :sunny:\n\n${deploy_msg}"
+            MESSAGE=":arrow_forward: New pre-version ${{ needs.Build.outputs.raised_version }} of baremetal image available :sunny:. Details: ${deploy_msg}"
             MESSAGE_ERR=":x: Build of pre-version ${{ needs.Build.outputs.raised_version }} is unstable :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           fi
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
