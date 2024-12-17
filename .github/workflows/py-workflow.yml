@@ -159,7 +159,6 @@ jobs:
         echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
     - name: Raise version
-      if: ${{ inputs.deploy == 'true' }}
       run: bump2version build setup.py --no-tag --no-commit
 
     - name: Find Package details
@@ -176,7 +175,6 @@ jobs:
 
     - name: Commit auto raise version
       id: raise
-      if: ${{ inputs.deploy == 'true' }}
       run: |
         git config --global --add safe.directory $(pwd)
         git config --global user.name ${{ secrets.auto_commit_user }}
