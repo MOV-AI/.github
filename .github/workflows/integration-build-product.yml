@@ -118,7 +118,8 @@ env:
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   TIMEOUT: 720
-  PROVISIONING_ENV_CONF: "0.1.0-7"
+  PROVISIONING_ENV_VERSION: 0.1.0-8
+  PROVISIONING_ENV_REPO: devops-tf-env-conf
 
 jobs:
   Compute-timeout:
@@ -1275,9 +1276,8 @@ jobs:
         shell: bash
         run: |
           env_configs_dir=infra_env_configs
-          env_configs_version=${{ env.PROVISIONING_ENV_CONF }}
-          env_configs_repo_name=devops-tf-env-conf
-
+          env_configs_version=${{ env.PROVISIONING_ENV_VERSION }}
+          env_configs_repo_name=${{ env.PROVISIONING_ENV_REPO }}
           rm -rf $env_configs_dir
           . .ci-venv/bin/activate
           integration-pipeline fetch_by_tag --repo $env_configs_repo_name --version $env_configs_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $env_configs_dir

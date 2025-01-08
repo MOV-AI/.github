@@ -74,6 +74,8 @@ env:
   SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
   # development slack channel
   #SLACK_CHANNEL: "C05K2KF1UP8"
+  PROVISIONING_ENV_VERSION: 0.1.0-8
+  PROVISIONING_ENV_REPO: devops-tf-env-conf
 
 jobs:
   Validate-boostrap-configs:
@@ -1246,8 +1248,8 @@ jobs:
         shell: bash
         run: |
           env_configs_dir=infra_env_configs
-          env_configs_version=0.1.0-6
-          env_configs_repo_name=devops-tf-env-conf
+          env_configs_version=${{ env.PROVISIONING_ENV_VERSION }}
+          env_configs_repo_name=${{ env.PROVISIONING_ENV_REPO }}
 
           rm -rf $env_configs_dir
           . .ci-venv/bin/activate
