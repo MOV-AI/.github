@@ -51,7 +51,7 @@ jobs:
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-20.04
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.12
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.13
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -162,7 +162,7 @@ jobs:
     runs-on: ubuntu-20.04
     needs:  [Build]
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.12
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.13
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -238,7 +238,7 @@ jobs:
         commit_hash=$(git log --format="%H" -n 1)
         #echo ::set-output name=commit_id::$commit_hash
         echo "commit_id=$commit_hash" >> $GITHUB_OUTPUT
-  
+
     - name: Create Github Release
       uses: softprops/action-gh-release@v1
       with:
@@ -259,7 +259,7 @@ jobs:
     if: ${{ inputs.deploy == 'true' }}
     runs-on: ubuntu-20.04
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.12
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.13
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -284,7 +284,7 @@ jobs:
         run: |
             NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
             NEXUS_REPO="ppa-dev"
-  
+
             for file in artifacts/*.deb
             do
               RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
@@ -292,31 +292,31 @@ jobs:
               --data-binary "@$file" \
               -w '%{http_code}' \
               "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
-  
+
               #retry
               if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
                 echo "Failed upload with $RETURN_CODE. Retrying"
-  
+
                 RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
                   -H "Content-Type: multipart/form-data" \
                   --data-binary "@$file" \
                   -w '%{http_code}' \
                   "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
               fi
-  
+
               if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
                 echo "Failed upload with $RETURN_CODE. Exiting"
                 exit 1
               fi
-  
+
             done
-  
+
       - name: Publish to Nexus ppa-testing
         shell: bash
         run: |
             NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
             NEXUS_REPO="ppa-testing"
-  
+
             for file in artifacts/*.deb
             do
               RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
@@ -324,23 +324,23 @@ jobs:
               --data-binary "@$file" \
               -w '%{http_code}' \
               "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
-  
+
               #retry
               if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
                 echo "Failed upload with $RETURN_CODE. Retrying"
-  
+
                 RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
                   -H "Content-Type: multipart/form-data" \
                   --data-binary "@$file" \
                   -w '%{http_code}' \
                   "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
               fi
-  
+
               if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
                 echo "Failed upload with $RETURN_CODE. Exiting"
                 exit 1
               fi
-  
+
             done
 
       - name: Update Github Release
@@ -365,7 +365,7 @@ jobs:
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-20.04
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.12
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.13
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
