@@ -223,6 +223,8 @@ jobs:
     - name: test setup
       shell: bash
       run: |
+        export GITHUB_USERNAME="${{ secrets.auto_commit_user }}"
+        export GITHUB_TOKEN="${{ secrets.gh_token }}"
         if test -f ${{ env.TEST_DIR }}/test_setup.bash; then
           echo "Running tests setup"
           . ${{ env.TEST_DIR }}/test_setup.bash
