@@ -27,6 +27,10 @@ on:
         required: false  
         type: string  
         default: '["ppa-testing", "ppa-testing-focal", "ppa-testing-jammy", "ppa-testing-noble"]'
+      test_runner:
+        required: false
+        type: string
+        default: 'ubuntu-20.04'
       prod_publish_repos:  
         required: false  
         type: string  
@@ -204,7 +208,7 @@ jobs:
     strategy:
       matrix:
         test_setup: ${{fromJson(needs.Search-Tests.outputs.test_folders)}}
-    runs-on: ubuntu-20.04
+    runs-on: ${{ inputs.test_runner }}
     needs: [Search-Tests]
     if: ${{ inputs.release == 'false' && needs.Search-Tests.outputs.test_folders != '' }}
     env:
