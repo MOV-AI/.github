@@ -68,7 +68,7 @@ jobs:
           MERGE_MSG: "Branch was auto-updated."
 
   Pre-commit:
-    if: ${{ inputs.deploy == 'false' }}
+    if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v4
