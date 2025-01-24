@@ -14,7 +14,7 @@ on:
         required: false
         type: string
         default: "v2.0.13"
-      # tag to fetch release artifacts from
+      # tag to fetch release artifacts from used when release set to true
       ref_name:
         required: false
         type: string
