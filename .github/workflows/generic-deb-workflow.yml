@@ -14,6 +14,27 @@ on:
         required: false
         type: string
         default: "v2.0.13"
+      # tag to fetch release artifacts from used when release set to true
+      ref_name:
+        required: false
+        type: string
+        default: "latest"
+      with_docs:
+        required: false
+        type: string
+        default: 'false'
+      testing_publish_repos:  
+        required: false  
+        type: string  
+        default: '["ppa-testing", "ppa-testing-focal", "ppa-testing-jammy", "ppa-testing-noble"]'
+      test_runner:
+        required: false
+        type: string
+        default: 'ubuntu-20.04'
+      prod_publish_repos:  
+        required: false  
+        type: string  
+        default: '[ "ppa-main", "ppa-stable-focal", "ppa-stable-jammy", "ppa-stable-noble"]'
 
     secrets:
       auto_commit_user:
@@ -46,8 +67,20 @@ jobs:
           GITHUB_TOKEN: '${{ secrets.auto_commit_pwd }}'
           MERGE_MSG: "Branch was auto-updated."
 
+  Pre-commit:
+    if: ${{ inputs.deploy == 'false' }}
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.10'
+    - uses: pre-commit/action@v2.0.3
+
   Pack:
     runs-on: ubuntu-20.04
+    needs: [Pre-commit]
+    if: ${{ inputs.release == 'false' }}
     container:
       image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:${{ inputs.ROS_BUILDTOOLS_TAG }}
       options: --user root
@@ -66,6 +99,7 @@ jobs:
 
         echo "pkg_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
         echo "pkg_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+
     - name: Raise Version
       id: vars-after-raise
       run: |
@@ -75,6 +109,7 @@ jobs:
         raised_buildid=$(($build_id+1))
         RAISED_PACKAGE_VERSION="$main_version-$raised_buildid"
         echo "pkg_version=$RAISED_PACKAGE_VERSION" >> $GITHUB_OUTPUT
+
     - name: Pack debian
       run: |
         git config --global --add safe.directory $(pwd)
@@ -88,47 +123,39 @@ jobs:
         # Install build dependencies automatically
         mk-build-deps --install --tool="${install_tool}" debian/control
         # Add version into changelog and commit it
-        gbp dch --ignore-branch -N ${{ steps.vars-after-raise.outputs.pkg_version }} -c --commit --commit-msg='[skip actions] Automatic Bump of build version'
+        commit_options=""
+        if [ "${{ inputs.deploy }}" == "true" ]; then
+          commit_options="--commit --commit-msg='[skip actions] Automatic Bump of build version'"
+        fi
+        gbp dch --ignore-branch -N ${{ steps.vars-after-raise.outputs.pkg_version }} -c $commit_options
         # Build .deb with binaries only
         dpkg-buildpackage -b --unsigned-source --unsigned-changes
         # Store generated .deb
         mkdir artifacts && \
         cp ../*.deb artifacts
-    - name: Raise App version
-      run: |
-        # commit of debian/changelog previously done
         
     - name: Prepare raise variables
+      if: ${{ inputs.deploy == 'true' }}
       id: pre_raise
       run: |
         echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
     - name: Raise App version
+      if: ${{ inputs.deploy == 'true' }}
       uses: CasperWA/push-protected@v2.14.0
       with:
         token: ${{ secrets.auto_commit_pwd }}
         branch: ${{ steps.pre_raise.outputs.branch }}
         unprotect_reviews: true
 
-    - name: Publish to Nexus ppa-testing
-      run: |
-          NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-          NEXUS_REPO="ppa-testing"
-          FILE_LOCATION=$(find artifacts/*.deb)
-          curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-          -H "Content-Type: multipart/form-data" \
-          --data-binary "@$FILE_LOCATION" \
-          "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/"
-    - name: Publish to Nexus ppa-main
-      run: |
-          NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-          NEXUS_REPO="ppa-main"
-          FILE_LOCATION=$(find artifacts/*.deb)
-          curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-          -H "Content-Type: multipart/form-data" \
-          --data-binary "@$FILE_LOCATION" \
-          "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/"
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: packages
+        path: artifacts/*
+
     - name: Commit info
+      if: ${{ inputs.deploy == 'true' }}
       id: commit
       shell: bash
       run: |
@@ -136,16 +163,116 @@ jobs:
         echo "commit_id=$commit_hash" >> $GITHUB_OUTPUT
 
     - name: Create Github Release
-      shell: bash
-      run: |
-        product_version=${{ steps.vars-after-raise.outputs.pkg_version }}
-        previous_version_option=""
-        if gh release view ${{ steps.vars.outputs.pkg_version }} &>/dev/null; then
-          previous_version_option="--notes-start-tag ${{ steps.vars.outputs.pkg_version }}"
-        fi
-        gh release create -p --generate-notes $previous_version_option --target ${{ steps.commit.outputs.commit_id }} -t "Release of $product_version" $product_version
-        # add all files in the artifacts folder
-        find artifacts -type f -exec gh release upload $product_version {} \;
+      if: ${{ inputs.deploy == 'true' }}
+      uses: softprops/action-gh-release@v1
+      with:
+        prerelease: true
+        name: "Release of ${{ steps.vars-after-raise.outputs.pkg_version  }}"
+        generate_release_notes: true
+        files: artifacts/*.deb
+        tag_name: ${{ steps.vars-after-raise.outputs.pkg_version  }}
+        target_commitish: ${{ steps.commit.outputs.commit_id }}
       env:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
+    
+    - uses: DenverCoder1/doxygen-github-pages-action@v2.0.0
+      if: ${{ inputs.with_docs == 'true' }}
+      with:
+        github_token: ${{ secrets.gh_token }}
 
+
+  Run-Tests:
+    runs-on: ${{ inputs.test_runner }}
+    needs: [Pack]
+    if: ${{ inputs.release == 'false' }}
+    env:
+      TEST_DIR: .github/workflows/
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: packages
+        path: artifacts
+
+    - name: test setup
+      shell: bash
+      run: |
+        export GITHUB_USR="${{ secrets.auto_commit_user }}"
+        export GITHUB_PWD="${{ secrets.gh_token }}"
+        echo "${{ secrets.gh_token }}" | gh auth login --with-token
+        if test -f ${{ env.TEST_DIR }}/test_setup.bash; then
+          echo "Running tests setup"
+          . ${{ env.TEST_DIR }}/test_setup.bash
+        fi
+
+    - name: Run tests
+      shell: bash
+      run: |
+        if test -f ${{ env.TEST_DIR }}/run_tests.bash; then
+          echo "Running tests"
+          . ${{ env.TEST_DIR }}/run_tests.bash
+        fi
+
+    - name: Test Cleanup
+      if: always()
+      shell: bash
+      run: |
+        if test -f ${{ env.TEST_DIR }}/clean_tests.bash; then
+          echo "Running test cleanup"
+          . ${{ env.TEST_DIR }}/clean_tests.bash
+        fi
+
+  Publish-To-Testing:
+    needs: [Pack]
+    if: ${{ inputs.release == 'false' && inputs.deploy == 'true' }}
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        artifact_repo_ppas: ${{fromJson(inputs.testing_publish_repos)}}
+    steps:
+
+    - name: Download a single artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: packages
+        path: artifacts
+
+    - name: Publish to Nexus
+      run: |
+          NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+          FILE_LOCATION=$(find artifacts/*.deb)
+          curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+          -H "Content-Type: multipart/form-data" \
+          --data-binary "@$FILE_LOCATION" \
+          "https://$NEXUS_ENDPOINT/repository/${{ matrix.artifact_repo_ppas }}/"
+
+  Publish-To-Stable:
+    if: ${{ inputs.release == 'true' }}
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        artifact_repo_ppas: ${{fromJson(inputs.prod_publish_repos)}}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch artifact from github release
+        run: |
+          git config --global --add safe.directory $(pwd)
+          mkdir artifacts
+          gh release download ${{ inputs.ref_name }} -p *.deb -d artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+      - name: Publish to PPAs
+        run: |
+          NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+          FILE_LOCATION=$(find artifacts/*.deb)
+          curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+          -H "Content-Type: multipart/form-data" \
+          --data-binary "@$FILE_LOCATION" \
+          "https://$NEXUS_ENDPOINT/repository/${{ matrix.artifact_repo_ppas }}/"
