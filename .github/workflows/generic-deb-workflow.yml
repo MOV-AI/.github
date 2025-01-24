@@ -184,7 +184,7 @@ jobs:
   Run-Tests:
     runs-on: ${{ inputs.test_runner }}
     needs: [Pack]
-    if: ${{ inputs.release == 'false' }}
+    if: ${{ inputs.release == 'false' && inputs.deploy == 'false' }}
     env:
       TEST_DIR: .github/workflows/
 
