@@ -188,17 +188,21 @@ jobs:
         echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
     - name: Raise version
-      id: bump
+      run: bump2version build setup.py --no-tag --no-commit
+  
+    - name: Find Package details
+      id: vars
       run: |
-        python -m venv venv --clear
-        . venv/bin/activate
-        pip install bump-my-version==0.29.0
-        bump-my-version bump build --no-tag --no-commit
+        PACKAGE_VERSION=$(cat .bumpversion.cfg | sed s/' '/''/g | grep 'current_version=' | sed s/'current_version='/''/g)
+        PACKAGE_NAME=$(cat setup.py | grep name | cut -d '"' -f2)
 
-        current_version=$(bump-my-version show current_version)
-        echo "Bumped to version ${current_version}"
+        #echo ::set-output name=py_pkg_name::$PACKAGE_NAME
+        echo "py_pkg_name"=$PACKAGE_NAME >> $GITHUB_OUTPUT
+        echo ::set-output name=py_pkg_version::$PACKAGE_VERSION
+        echo "py_pkg_version"=$PACKAGE_VERSION >> $GITHUB_OUTPUT
 
-        echo "current_version=${current_version}" >> $GITHUB_OUTPUT
+    - name: Sync setup.py
+      run: sed -i s/"$(cat setup.py | grep version=)"/"    version=\"${{ steps.vars.outputs.py_pkg_version }}\","/g setup.py
 
     - name: Commit auto raise version
       id: raise
@@ -220,7 +224,7 @@ jobs:
       uses: CasperWA/push-protected@v2.14.0
       with:
         token: ${{ secrets.auto_commit_password }}
-        branch: ${{ steps.var_branch.outputs.branch }}
+        branch: ${{ steps.var_branch.outputs.branch }}192.168.2.183
         unprotect_reviews: true
 
     - name: Commit of version
@@ -343,7 +347,7 @@ jobs:
       run: |
         git config --global --add safe.directory $(pwd)
         mkdir dist
-        cd dist
+        cd dist192.168.2.183
         gh release download ${{ steps.vars.outputs.tag}} -p *.whl
         gh release download ${{ steps.vars.outputs.tag}} -p *.tar.gz
       env:
