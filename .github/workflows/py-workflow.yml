@@ -224,7 +224,7 @@ jobs:
       uses: CasperWA/push-protected@v2.14.0
       with:
         token: ${{ secrets.auto_commit_password }}
-        branch: ${{ steps.var_branch.outputs.branch }}192.168.2.183
+        branch: ${{ steps.var_branch.outputs.branch }}
         unprotect_reviews: true
 
     - name: Commit of version
@@ -235,7 +235,9 @@ jobs:
         echo "commit_id=${commit_hash}" >> $GITHUB_OUTPUT
 
     - name: build
-      run: python -m build
+      run: |
+        python -m pip install build
+        python -m build
 
     - name: Archive binary
       uses: actions/upload-artifact@v4
