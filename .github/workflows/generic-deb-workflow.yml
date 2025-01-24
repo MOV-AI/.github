@@ -180,39 +180,13 @@ jobs:
       with:
         github_token: ${{ secrets.gh_token }}
 
-  Search-Tests:
-    runs-on: ubuntu-20.04
-    needs: [Pack]
-    if: ${{ inputs.release == 'false' }}
-    outputs:
-      test_folders: ${{ steps.get-tests.outputs.test_folders }}
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    
-    - name: Get list of tests
-      id: get-tests
-      run: |
-        # Get list of folder inside .github/workflows/tests folder if the tests folder exists
-        if [ -d .github/workflows/tests ]; then
-          test_folders=$(ls .github/workflows/tests | sed 's/^/"/;s/$/"/' | tr '\n' ',' )
-          # Remove the trailing comma if it exists
-          test_folders=[${test_folders%,}]
-          echo $test_folders
-        fi
-
-        echo "test_folders=$test_folders" >> $GITHUB_OUTPUT
-
 
   Run-Tests:
-    strategy:
-      matrix:
-        test_setup: ${{fromJson(needs.Search-Tests.outputs.test_folders)}}
     runs-on: ${{ inputs.test_runner }}
-    needs: [Search-Tests]
-    if: ${{ inputs.release == 'false' && needs.Search-Tests.outputs.test_folders != '' }}
+    needs: [Pack]
+    if: ${{ inputs.release == 'false' }}
     env:
-      TEST_DIR: .github/workflows/tests/${{ matrix.test_setup }}
+      TEST_DIR: .github/workflows/
 
     steps:
     - name: Checkout
