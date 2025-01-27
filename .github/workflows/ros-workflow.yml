@@ -36,7 +36,7 @@ on:
       MOBTEST_VERSION:
         required: false
         type: string
-        default: "0.0.5.1"
+        default: "0.0.6.1"
       ROS_BUILDTOOLS_TAG:
         required: false
         type: string
