@@ -1874,6 +1874,7 @@ jobs:
           unzip awscliv2.zip
           sudo ./aws/install --update
           URI_OBJ_PATH=ci-artifacts/${{ github.repository }}/$(date '+%Y_%m_%d')/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}
+          
           MAX_RETRIES=5
           RETRY_DELAY=10
           SUCCESS=false
@@ -1897,6 +1898,7 @@ jobs:
               echo "Failed to upload after $MAX_RETRIES attempts. Exiting..."
               exit 1
           fi
+          
           PUBLISH_URL="${{ env.MINIO_PUBLIC_URL }}/browser/$URI_OBJ_PATH"
           echo "publish_url=$PUBLISH_URL" >> $GITHUB_OUTPUT
 
