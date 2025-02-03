@@ -91,7 +91,7 @@ jobs:
         password: ${{secrets.registry_password}}
     outputs:
       package_name: ${{ steps.vars.outputs.py_pkg_name }}
-      package_version: ${{ steps.releasevars.outputs.py_pkg_version }}
+      package_version: ${{ steps.bump.outputs.current_version }}
       raise_commit : ${{steps.commit_id.outputs.commit_id}}
 
     steps:
@@ -186,12 +186,17 @@ jobs:
         echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
     - name: Raise version
-      if: ${{ inputs.deploy }}
+      id: bump
       run: |
         python3 -m venv venv --clear
         . venv/bin/activate
         pip install bump-my-version==0.29.0
         bump-my-version bump build --no-tag --no-commit
+
+        current_version=$(bump-my-version show current_version)
+        echo "Bumped to version ${current_version}"
+
+        echo "current_version=${current_version}" >> $GITHUB_OUTPUT
 
     - name: Commit auto raise version
       id: raise
