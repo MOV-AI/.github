@@ -10,6 +10,10 @@ on:
         required: false
         type: boolean
         default: false
+      pre_commit:
+        required: false
+        type: boolean
+        default: false
       run_black:
         required: false
         type: boolean
@@ -59,6 +63,23 @@ jobs:
         env:
           GITHUB_TOKEN: '${{ secrets.auto_commit_password }}'
           MERGE_MSG: "Branch was auto-updated."
+
+  Pre-commit:
+    if: ${{ inputs.pre_commit }}
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies and package
+        run: |
+          python3 -m pip install pip --upgrade
+          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r build-requirements.txt
+          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple .
+          python3 -m pip install pre-commit
+      - name: Run pre-commit
+        run: |
+          python3 -m pre_commit run --show-diff-on-failure --color=always --all-files
 
   Build:
     if: ${{ ! inputs.release }}
