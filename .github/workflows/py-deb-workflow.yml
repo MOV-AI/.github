@@ -32,7 +32,10 @@ on:
         required: false
         type: string
         default: 'pypi-edge'
-
+      PYTHON_VERSION:
+        required: false
+        type: string
+        default: "3.8.10"
     secrets:
       auto_commit_user:
         required: false # only when deploy true
@@ -71,15 +74,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.PYTHON_VERSION }}
+
       - name: Install dependencies and package
         run: |
-          python3 -m pip install pip --upgrade
-          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r build-requirements.txt
-          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple .
-          python3 -m pip install pre-commit
+          python -m pip install pip --upgrade
+          python -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r build-requirements.txt
+          python -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple .
+          python -m pip install pre-commit
       - name: Run pre-commit
         run: |
-          python3 -m pre_commit run --show-diff-on-failure --color=always --all-files
+          python -m pre_commit run --show-diff-on-failure --color=always --all-files
 
   Build:
     if: ${{ ! inputs.release }}
@@ -102,19 +109,23 @@ jobs:
         fetch-depth: 0
         submodules: recursive
 
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.PYTHON_VERSION }}
+
     - name: Upgrade pip
-      run: python3 -m pip install pip --upgrade
+      run: python -m pip install pip --upgrade
 
     - name: Install build-requirements
-      run: python3 -m pip install -r build-requirements.txt
+      run: python -m pip install -r build-requirements.txt
 
     - name: Install python package
-      run: python3 -m pip install .
+      run: python -m pip install .
 
     - name: Run Black
       if: ${{ inputs.run_black }}
       run: |
-        python3 -m black \
+        python -m black \
           --line-length 100 \
           --diff \
           --check \
@@ -123,7 +134,7 @@ jobs:
     - name: Python Linters
       # run linters isolated so no issues are masked from SonarCloud
       run: |
-        python3 -m flake8 \
+        python -m flake8 \
           --isolated \
           --exclude dist,.*\.egg-info,.git,__pycache__,.tox,venv \
           --max-complexity 10 \
@@ -134,7 +145,8 @@ jobs:
         # pylint seems to not have a way to ignore configuration files
         # so we need to provide it a dummy one
         touch dummy-pylint-config
-        python3 -m pylint \
+
+        python -m pylint \
           --rcfile dummy-pylint-config \
           --ignore-patterns dist,.*\.egg-info,.git,__pycache__,.tox,venv \
           --max-line-length 100 \
@@ -150,7 +162,7 @@ jobs:
             tox
         else
             # run tests
-            python3 -m pytest tests/
+            python -m pytest tests/
         fi
 
     - name: Create SonarCloud project and disable autoscan
@@ -188,7 +200,7 @@ jobs:
     - name: Raise version
       id: bump
       run: |
-        python3 -m venv venv --clear
+        python -m venv venv --clear
         . venv/bin/activate
         pip install bump-my-version==0.29.0
         bump-my-version bump build --no-tag --no-commit
@@ -229,7 +241,7 @@ jobs:
         echo "commit_id=${commit_hash}" >> $GITHUB_OUTPUT
 
     - name: build
-      run: python3 -m build
+      run: python -m build
 
     - name: Archive binary
       uses: actions/upload-artifact@v4
