@@ -4,20 +4,16 @@ on:
     inputs:
       deploy:
         required: false
-        type: string
-        default: 'false'
+        type: boolean
+        default: false
       release:
         required: false
-        type: string
-        default: 'false'
-      skip_linting:
-        required: false
-        type: string
-        default: 'false'
+        type: boolean
+        default: false
       run_black:
         required: false
-        type: string
-        default: 'false'
+        type: boolean
+        default: false
         description: When 'true' black is run stopping the pipeline if any files are not properly formatted
       with_docs:
         required: false
@@ -55,7 +51,7 @@ on:
 
 jobs:
   RefreshSource:
-    if: ${{ inputs.deploy == 'false' }}
+    if: ${{ ! inputs.deploy }}
     runs-on: ubuntu-20.04
     steps:
       - uses: docker://chinthakagodawita/autoupdate-action:v1
@@ -65,7 +61,7 @@ jobs:
           MERGE_MSG: "Branch was auto-updated."
 
   Build:
-    if: ${{ inputs.release == 'false' }}
+    if: ${{ ! inputs.release }}
     runs-on: ubuntu-20.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
@@ -95,7 +91,7 @@ jobs:
       run: python3 -m pip install .
 
     - name: Run Black
-      if: ${{ inputs.run_black == 'true' }}
+      if: ${{ inputs.run_black }}
       run: |
         python3 -m black \
           --line-length 100 \
@@ -169,7 +165,7 @@ jobs:
         echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
     - name: Raise version
-      if: ${{ inputs.deploy == 'true' }}
+      if: ${{ inputs.deploy }}
       run: bump2version build setup.py --no-tag --no-commit
 
     - name: Find Package details
@@ -188,7 +184,7 @@ jobs:
 
     - name: Commit auto raise version
       id: raise
-      if: ${{ inputs.deploy == 'true' }}
+      if: ${{ inputs.deploy }}
       run: |
         git config --global --add safe.directory $(pwd)
         git config --global user.name ${{ secrets.auto_commit_user }}
@@ -199,7 +195,7 @@ jobs:
         git commit -m "[skip actions] Automatic Bump of build version"
 
     - name: Set branch output
-      if: ${{ inputs.deploy == 'true' }}
+      if: ${{ inputs.deploy }}
       id: var_branch
       run: |
         echo "Branch name is: ${GITHUB_REF#refs/heads/}"
@@ -207,7 +203,7 @@ jobs:
         echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
     - name: Raise App version
-      if: ${{ inputs.deploy == 'true' }}
+      if: ${{ inputs.deploy }}
       uses: CasperWA/push-protected@v2.14.0
       with:
         token: ${{ secrets.auto_commit_password }}
@@ -215,7 +211,7 @@ jobs:
         unprotect_reviews: true
 
     - name: Commit of version
-      if: ${{ inputs.deploy == 'true' }}
+      if: ${{ inputs.deploy }}
       id: commit_id
       run: |
         commit_hash=$(git log --format="%H" -n 1)
@@ -253,14 +249,14 @@ jobs:
       run: |
         VERSION=${GITHUB_REF##*/} tox -e docs
     - name: Checkout gh-pages
-      if: ${{ inputs.deploy == 'true' && inputs.with_docs }}
+      if: ${{ inputs.deploy && inputs.with_docs }}
       uses: actions/checkout@v3
       with:
         ref: gh-pages
         path: gh-pages
 
     - name: Push docs
-      if: ${{ inputs.deploy == 'true' && inputs.with_docs }}
+      if: ${{ inputs.deploy && inputs.with_docs }}
       run: |
         cd gh-pages
         # create .nojekyll
@@ -281,7 +277,7 @@ jobs:
         git push --force --set-upstream origin gh-pages
 
     - name: Publish package to TestPyPI Testing
-      if: ${{ inputs.deploy == 'true' }}
+      if: ${{ inputs.deploy }}
       uses: pypa/gh-action-pypi-publish@v1.11.0
       with:
         user: ${{ secrets.nexus_publisher_user }}
@@ -290,7 +286,7 @@ jobs:
 
 
   Debian-Pack:
-    if: ${{ inputs.release == 'false' }}
+    if: ${{ ! inputs.release }}
     needs: [Build]
     runs-on: ubuntu-20.04
     container:
@@ -340,7 +336,7 @@ jobs:
 
   Publish:
     needs: [Debian-Pack]
-    if: ${{ inputs.deploy == 'true' }}
+    if: ${{ inputs.deploy }}
     runs-on: ubuntu-20.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
@@ -430,7 +426,7 @@ jobs:
             done
 
       - name: Create Github Release
-        if: ${{ inputs.deploy == 'true' }}
+        if: ${{ inputs.deploy }}
         shell: bash
         run: |
           title="Release of ${{ needs.Debian-Pack.outputs.package_version }}"
@@ -458,7 +454,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
   Release-Pypi:
-    if: ${{ inputs.release == 'true' }}
+    if: ${{ inputs.release }}
     runs-on: ubuntu-20.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
@@ -497,7 +493,7 @@ jobs:
     strategy:
       matrix:
         publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
-    if: ${{ inputs.release == 'true' }}
+    if: ${{ inputs.release }}
     runs-on: ubuntu-20.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
