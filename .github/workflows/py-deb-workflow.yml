@@ -42,7 +42,7 @@ on:
       auto_commit_mail:
         required: false # only when deploy true
       auto_commit_password:
-        required: false # only when deploy true
+        required: false
       registry_user:
         required: true
       registry_password:
@@ -83,7 +83,9 @@ jobs:
           python -m pip install pip --upgrade
           python -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r build-requirements.txt
           python -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple .
+
           python -m pip install pre-commit
+
       - name: Run pre-commit
         run: |
           python -m pre_commit run --show-diff-on-failure --color=always --all-files
@@ -151,7 +153,6 @@ jobs:
           --ignore-patterns dist,.*\.egg-info,.git,__pycache__,.tox,venv \
           --max-line-length 100 \
           --exit-zero \
-          --recursive y \
           --output pylint-report.txt \
           .
 
@@ -218,7 +219,7 @@ jobs:
         git config --global --add safe.directory $(pwd)
         git config --global user.name ${{ secrets.auto_commit_user }}
         git config --global user.email ${{ secrets.auto_commit_mail }}
-        git commit -am "[skip actions] Automatic Bump of build version to ${{ steps.bump.outputs.current-version }}"
+        git commit -am "[skip actions] Automatic Bump of build version to ${{ steps.bump.outputs.py_pkg_version }}"
 
     - name: Set branch output
       if: ${{ inputs.deploy }}
@@ -243,7 +244,9 @@ jobs:
         echo "commit_id=${commit_hash}" >> $GITHUB_OUTPUT
 
     - name: build
-      run: python -m build
+      run: |
+        python -m pip install build
+        python -m build
 
     - name: Archive binary
       uses: actions/upload-artifact@v4
@@ -291,7 +294,7 @@ jobs:
         # overwrite the contents of the gh-pages branch on our github.com repo
         git push --force --set-upstream origin gh-pages
 
-    - name: Publish package to TestPyPI Testing
+    - name: Publish package to TestPyPI Integration
       if: ${{ inputs.deploy }}
       uses: pypa/gh-action-pypi-publish@v1.11.0
       with:

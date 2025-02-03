@@ -259,7 +259,7 @@ jobs:
 
     - name: Checkout gh-pages
       if: ${{ inputs.deploy && inputs.with_docs }}
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         ref: gh-pages
         path: gh-pages
