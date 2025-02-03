@@ -166,7 +166,11 @@ jobs:
 
     - name: Raise version
       if: ${{ inputs.deploy }}
-      run: bump-my-version bump build --no-tag --no-commit
+      run: |
+        python3 -m venv venv --clear
+        . venv/bin/activate
+        pip install bump-my-version==0.29.0
+        bump-my-version bump build --no-tag --no-commit
 
     - name: Commit auto raise version
       id: raise
