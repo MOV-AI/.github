@@ -17,6 +17,14 @@ on:
       fleet_number_members:
         required: true
         type: number
+      vs_product_version_pattern:
+        required: false
+        type: string
+        default: "2.4.3-*"
+      vs_product_name:
+        required: false
+        type: string
+        default: "project-movai-studio"
 
     secrets:
       auto_commit_user:
@@ -2062,6 +2070,20 @@ jobs:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
           registry: ${{ env.REGISTRY }}
+      
+      - name: fetch platform version
+        shell: bash
+        run: |
+          source ci_scripts/bin/activate
+
+          rm -rf product
+          mkdir -p product
+          integration-pipeline fetch_product_by_version \
+                --product_version_search ${{ inputs.vs_product_version_pattern }} \
+                --repo ${{ inputs.product_name }} \
+                --gh_api_user ${{ secrets.RAISE_BOT_COMMIT_USER }} \
+                --gh_api_pwd ${{ secrets.RAISE_BOT_COMMIT_PASSWORD }} \
+                --target_dir product
 
       
 
