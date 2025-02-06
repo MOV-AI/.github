@@ -14,6 +14,10 @@ on:
         required: false
         type: string
         default: ''
+      raised_component:
+        required: true
+        type: string
+        default: ''
       custom_requirements:
         required: false
         type: string
@@ -44,6 +48,22 @@ on:
         required: true
 
 jobs:
+  pre_check:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Check if raised component in component list
+      shell: bash
+      run: |
+        sub_component_expr="${{inputs.components}}"
+        sub_component_str=$(echo $sub_component_expr | sed -e 's/\[//g' | sed -e 's/\]//g')
+        IFS=',' read -r -a sub_components_array <<< $sub_component_str
+        if printf '%s\n' "${sub_components_array[@]}" | grep -qx "${{inputs.raised_component}}"; then
+            echo "Element ${{inputs.raised_component}} found in $sub_component_expr"
+        else
+            echo "Element ${{inputs.raised_component}} was not found in $sub_component_expr! Exiting"
+            exit 1
+        fi
+
   Build:
     strategy:
       matrix:
@@ -185,7 +205,7 @@ jobs:
         sub_component_str=$(echo $sub_component_expr | sed -e 's/\[//g' | sed -e 's/\]//g')
 
         IFS=',' read -r -a sub_components_array <<< $sub_component_str
-
+        MAIN_RAISE=""
         for sub_component in "${sub_components_array[@]}"
         do
           echo "$sub_component"
@@ -197,13 +217,15 @@ jobs:
           build_id="${PACKAGE_VERSION#*-}"
           raised_buildid=$(($build_id+1))
           RAISED_PACKAGE_VERSION="$main_version-$raised_buildid"
+          if ${{inputs.raised_component}} == $sub_component; then
+            MAIN_RAISE=$RAISED_PACKAGE_VERSION
+          fi
           dch -v $RAISED_PACKAGE_VERSION -b -D "UNRELEASED" "bump version"
 
           popd >/dev/null
         done
 
-        #echo ::set-output name=pkg_version::$RAISED_PACKAGE_VERSION
-        echo "pkg_version=$RAISED_PACKAGE_VERSION" >> $GITHUB_OUTPUT
+        echo "pkg_version=$MAIN_RAISE" >> $GITHUB_OUTPUT
       #working-directory: ${{ matrix.sub_component }}
 
     - name: Commit raise version
