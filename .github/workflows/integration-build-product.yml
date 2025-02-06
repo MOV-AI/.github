@@ -545,6 +545,8 @@ jobs:
       - name: Installation
         shell: bash
         run: |
+          sudo apt-mark unhold movai-service || true
+          sudo apt-mark unhold movai-cli || true
           timeout 30 movai-cli remove --all || true
 
           mkdir -p artifacts
@@ -1046,6 +1048,8 @@ jobs:
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         shell: bash
         run: |
+          sudo apt-mark unhold movai-service || true
+          sudo apt-mark unhold movai-cli || true
           timeout 30 movai-cli remove --all || true
 
           mkdir -p artifacts
