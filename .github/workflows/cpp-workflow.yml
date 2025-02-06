@@ -206,27 +206,27 @@ jobs:
         sub_component_str=$(echo $sub_component_expr | sed -e 's/\[//g' | sed -e 's/\]//g')
 
         IFS=',' read -r -a sub_components_array <<< $sub_component_str
-        MAIN_RAISE=""
+
+        pushd ${{ inputs.raised_component }} >/dev/null
+        echo "Calculating raise version based on main component ${{ inputs.raised_component }}"
+        PACKAGE_VERSION=$(dpkg-parsechangelog --show-field Version)
+        main_version=${PACKAGE_VERSION%-*}
+        build_id="${PACKAGE_VERSION#*-}"
+        raised_buildid=$(($build_id+1))
+        RAISED_PACKAGE_VERSION="$main_version-$raised_buildid"
+        popd >/dev/null
+
         for sub_component in "${sub_components_array[@]}"
         do
           echo "$sub_component"
-          pushd $sub_component >/dev/null
-
           echo "raising component $sub_component"
-          PACKAGE_VERSION=$(dpkg-parsechangelog --show-field Version)
-          main_version=${PACKAGE_VERSION%-*}
-          build_id="${PACKAGE_VERSION#*-}"
-          raised_buildid=$(($build_id+1))
-          RAISED_PACKAGE_VERSION="$main_version-$raised_buildid"
-          if ${{inputs.raised_component}} == $sub_component; then
-            MAIN_RAISE=$RAISED_PACKAGE_VERSION
-          fi
+          pushd $sub_component >/dev/null
           dch -v $RAISED_PACKAGE_VERSION -b -D "UNRELEASED" "bump version"
 
           popd >/dev/null
         done
 
-        echo "pkg_version=$MAIN_RAISE" >> $GITHUB_OUTPUT
+        echo "pkg_version=$RAISED_PACKAGE_VERSION" >> $GITHUB_OUTPUT
       #working-directory: ${{ matrix.sub_component }}
 
     - name: Commit raise version
