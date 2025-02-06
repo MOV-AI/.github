@@ -70,6 +70,7 @@ jobs:
         sub_component: ${{ fromJSON(inputs.components) }}
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-20.04
+    needs: [pre_check]
     container:
       image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.13
       options: --user root
