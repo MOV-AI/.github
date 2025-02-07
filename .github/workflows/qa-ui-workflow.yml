@@ -156,6 +156,7 @@ jobs:
           cp -r *.tar ./qa_artifacts || true
           cp -r *.json ./qa_artifacts || true
           cp -r *.html ./qa_artifacts || true
+          cp -r tests_artifacts ./qa_artifacts || true
 
           # install
           mkdir -p qa_artifacts/install
