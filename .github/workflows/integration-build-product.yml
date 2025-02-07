@@ -1878,7 +1878,7 @@ jobs:
           unzip awscliv2.zip
           sudo ./aws/install --update
           URI_OBJ_PATH=ci-artifacts/${{ github.repository }}/$(date '+%Y_%m_%d')/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}
-set +e
+          set +e
           
           MAX_RETRIES=5
           RETRY_DELAY=10
@@ -1899,6 +1899,7 @@ set +e
                   sleep $RETRY_DELAY
               fi
           done
+          set -e
           if [[ "$SUCCESS" == "false" ]]; then
               echo "Failed to upload after $MAX_RETRIES attempts. Exiting..."
               exit 1
