@@ -71,6 +71,8 @@ on:
         required: true
       proxmox_ve_sim_password:
         required: true
+      ssh_priv_key:
+        required: true
       jira_username:
         required: true
       jira_password:
