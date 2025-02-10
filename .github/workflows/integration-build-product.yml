@@ -1890,7 +1890,8 @@ jobs:
                   s3://$URI_OBJ_PATH \
                   --recursive \
                   --content-type="text/plain" \
-                  --multipart-chunksize 8MB
+                  --checksum-algorithm SHA256 \
+                  --debug
               if [[ $? -eq 0 ]]; then
                   SUCCESS=true
                   echo "Upload successful!"
