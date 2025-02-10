@@ -140,8 +140,8 @@ jobs:
           integration-pipeline generate_meta_simulator_artifacts \
                 --manifest_platform_base_key product_components \
                 --product_name ${{ inputs.product_name }} \
-                # --branch ${GITHUB_REF#refs/heads/}
                 --branch ${{ github.base_ref }}
+                # --branch ${GITHUB_REF#refs/heads/}
 
           mkdir simulator_artifacts
           cp ci_artifacts/* ./simulator_artifacts
