@@ -1790,7 +1790,9 @@ jobs:
                   s3 cp qa_artifacts/ \
                   s3://$URI_OBJ_PATH \
                   --recursive \
-                  --content-type="text/plain"
+                  --content-type="text/plain" \
+                  --checksum-mode DISABLED \
+                  --debug
               if [[ $? -eq 0 ]]; then
                   SUCCESS=true
                   echo "Upload successful!"
