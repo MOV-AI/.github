@@ -67,6 +67,10 @@ on:
         required: true
       proxmox_ve_password:
         required: true
+      proxmox_ve_sim_username:
+        required: true
+      proxmox_ve_sim_password:
+        required: true
       jira_username:
         required: true
       jira_password:
@@ -2146,8 +2150,8 @@ jobs:
           echo 'ip_list=["dhcp"]'>>input.tfvars
           echo 'tags=["ip-simul-ci"]'>>input.tfvars
           echo 'pool="IP-Temp-VMs"'>>input.tfvars
-          echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars 
-          echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars 
+          echo 'proxmox_ve_username="${{ secrets.proxmox_ve_sim_username }}"'>>input.tfvars 
+          echo 'proxmox_ve_password="${{ secrets.proxmox_ve_sim_password }}"'>>input.tfvars 
           echo "\n">>input
 
           echo "File args: $var_file_arg"
