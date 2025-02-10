@@ -1791,7 +1791,8 @@ jobs:
                   s3://$URI_OBJ_PATH \
                   --recursive \
                   --content-type="text/plain" \
-                  --checksum-mode DISABLED
+                  --checksum-mode DISABLED \
+                  --debug
               if [[ $? -eq 0 ]]; then
                   SUCCESS=true
                   echo "Upload successful!"
