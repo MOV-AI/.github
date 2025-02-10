@@ -1307,6 +1307,7 @@ jobs:
         shell: bash
         run: |
           branch=$(echo ${GITHUB_REF#refs/heads/} | sed "s;\.;-;g" )
+          branch=${{ github.base_ref }}
 
           local_manager_prefix="ip-$branch-manager"
           local_worker_prefix="ip-$branch-worker"
@@ -2109,6 +2110,7 @@ jobs:
         shell: bash
         run: |
           BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          BRANCH_NAME=${{ github.base_ref }}
           branch=$(echo ${BRANCH_NAME} | sed "s;\.;-;g" )
 
           run_type="ci"
