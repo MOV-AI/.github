@@ -1784,6 +1784,7 @@ jobs:
           MAX_RETRIES=5
           RETRY_DELAY=10
           SUCCESS=false
+          aws configure set default.s3.multipart_threshold 100GB
           for i in $(seq 1 $MAX_RETRIES); do
            echo "Attempt $i of $MAX_RETRIES: Uploading artifacts to Minio"
               aws --endpoint-url "${{ env.MINIO_S3_URL }}" \
@@ -1791,7 +1792,6 @@ jobs:
                   s3://$URI_OBJ_PATH \
                   --recursive \
                   --content-type="text/plain" \
-                  --checksum-mode DISABLED \
                   --debug
               if [[ $? -eq 0 ]]; then
                   SUCCESS=true
