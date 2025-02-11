@@ -203,3 +203,10 @@ jobs:
         with:
           name: test_artifacts
           path: test_artifacts
+
+      - name: Docker cleanups
+        if: always()
+        shell: bash
+        run: |
+          docker system prune -f
+          docker image prune --all -f
