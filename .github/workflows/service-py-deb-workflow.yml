@@ -96,7 +96,7 @@ jobs:
       if: ${{ inputs.run_black == 'true' }}
       run: |
         python3 -m black \
-          --line-length 100 \
+          --line-length 120 \
           --diff \
           --check \
           .
@@ -107,8 +107,8 @@ jobs:
         python3 -m flake8 \
           --isolated \
           --exclude dist,.*\.egg-info,.git,__pycache__,.tox,venv \
-          --max-complexity 10 \
-          --max-line-length 100 \
+          --max-complexity 16 \
+          --max-line-length 120 \
           --exit-zero \
           --output-file flake8-report.txt
 
@@ -118,7 +118,7 @@ jobs:
         python3 -m pylint \
           --rcfile dummy-pylint-config \
           --ignore-patterns dist,.*\.egg-info,.git,__pycache__,.tox,venv \
-          --max-line-length 100 \
+          --max-line-length 120 \
           --exit-zero \
           --recursive y \
           --output pylint-report.txt \
@@ -441,6 +441,8 @@ jobs:
           -Dsonar.coverage.exclusions=tests/**
           -Dsonar.cpd.exclusions=tests/**
           -Dsonar.python.version=3
+          -Dsonar.python.line_length=120
+          -Dsonar.python.cyclomatic.complexity=16
           -Dsonar.python.flake8.reportPaths=flake8-report.txt
           -Dsonar.python.pylint.reportPaths=pylint-report.txt
 
@@ -462,6 +464,8 @@ jobs:
           -Dsonar.coverage.exclusions=tests/**
           -Dsonar.cpd.exclusions=tests/**
           -Dsonar.python.version=3
+          -Dsonar.python.line_length=120
+          -Dsonar.python.cyclomatic.complexity=16
           -Dsonar.python.flake8.reportPaths=flake8-report.txt
           -Dsonar.python.pylint.reportPaths=pylint-report.txt
           -Dsonar.python.coverage.reportPaths=coverage.xml
