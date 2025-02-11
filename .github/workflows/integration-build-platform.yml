@@ -2254,8 +2254,12 @@ jobs:
             set -e
             docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
           '
-            
-      - name: Fetch product version and merge platform product
+      
+      - name: Remote - unstash manifest
+        shell: bash
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no product-manifest.yaml ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/product-manifest.yaml
+    
+      - name: Remote - Fetch product version and merge platform product
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
@@ -2275,7 +2279,7 @@ jobs:
               --gh_api_pwd ${{ secrets.auto_commit_pwd }}
           '
 
-      - name: Setup Integration tests
+      - name: Remote - Setup Integration tests
         id: simulator_tests_setup
         shell: bash
         run: |
