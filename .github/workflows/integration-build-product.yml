@@ -1792,7 +1792,7 @@ jobs:
                   s3://$URI_OBJ_PATH \
                   --recursive \
                   --content-type="text/plain" \
-                  --debug
+                  --checksum-algorithm SHA256
               if [[ $? -eq 0 ]]; then
                   SUCCESS=true
                   echo "Upload successful!"
