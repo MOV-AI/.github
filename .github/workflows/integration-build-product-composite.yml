@@ -1072,7 +1072,7 @@ jobs:
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=0.0.1-38
+          provision_infra_version=0.0.1-39
           provision_infra_repo_name=devops-tf-proxmox-fleet
 
           rm -rf $provision_infra_dir
@@ -1122,6 +1122,7 @@ jobs:
           TF_VAR_template_name_no_gpu: "ubuntu-2004-cloudinit-template2"
           TF_VAR_fleet_worker_name_prefix: ${{ steps.infra_names.outputs.worker_prefix }}
           TF_VAR_fleet_worker_memory: 8192
+          TF_VAR_include_simulators: ${{ inputs.with_simulation }}
 
       - name: Prepare Devops provisioning slack message
         if: always()
@@ -1422,7 +1423,7 @@ jobs:
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=0.0.1-38
+          provision_infra_version=0.0.1-39
           provision_infra_repo_name=devops-tf-proxmox-fleet
 
           rm -rf $provision_infra_dir
@@ -1472,6 +1473,7 @@ jobs:
           TF_VAR_template_name_no_gpu: "ubuntu-2004-cloudinit-template2"
           TF_VAR_fleet_worker_name_prefix: ${{ steps.infra_names.outputs.worker_prefix }}
           TF_VAR_fleet_worker_memory: 8192
+          TF_VAR_include_simulators: ${{ inputs.with_simulation }}
 
       - name: Prepare Devops provisioning slack message
         if: always()
