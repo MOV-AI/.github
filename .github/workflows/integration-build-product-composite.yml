@@ -1072,7 +1072,7 @@ jobs:
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=0.0.1-39
+          provision_infra_version=0.0.1-40
           provision_infra_repo_name=devops-tf-proxmox-fleet
 
           rm -rf $provision_infra_dir
@@ -1423,7 +1423,7 @@ jobs:
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=0.0.1-39
+          provision_infra_version=0.0.1-40
           provision_infra_repo_name=devops-tf-proxmox-fleet
 
           rm -rf $provision_infra_dir
