@@ -173,7 +173,9 @@ jobs:
           generate_meta_sim_args="$generate_meta_sim_args --branch ${GITHUB_REF#refs/heads/}"
           generate_meta_sim_args="$generate_meta_sim_args --docker_registry ${{ env.PUSH_REGISTRY }}"
 
-          integration-pipeline generate_meta_simulator_artifacts $generate_meta_sim_args
+          if [[ "${{ inputs.with_simulation }}" == "true" ]]; then
+            integration-pipeline generate_meta_simulator_artifacts $generate_meta_sim_args
+          fi
 
           mkdir simulator_artifacts
           cp ci_artifacts/* ./simulator_artifacts
