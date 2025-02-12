@@ -1185,6 +1185,7 @@ jobs:
           '
 
       - name: Docker load Composite Simulator (Remote)
+        if: ${{ inputs.with_simulation == 'true' }}
         shell: bash
         run: |
           ssh_conn_string=${{ steps.wait_for_machines.outputs.manager_ssh_conn_string }}
@@ -1533,6 +1534,7 @@ jobs:
             docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
           '
       - name: Docker load Composite Simulator (Remote)
+        if: ${{ inputs.with_simulation == 'true' }}
         shell: bash
         run: |
           ssh_conn_string=${{ steps.wait_for_machines.outputs.manager_ssh_conn_string }}
