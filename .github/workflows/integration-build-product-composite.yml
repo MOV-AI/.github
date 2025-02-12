@@ -167,20 +167,19 @@ jobs:
 
           integration-pipeline merge_manifest_multi_dependency $merge_manifest_args
 
-          generate_meta_sim_args="--manifest_platform_base_key product_dependencies.product_base"
-          generate_meta_sim_args="$generate_meta_sim_args --product_name ${{ inputs.product_name }}"
-          generate_meta_sim_args="$generate_meta_sim_args --update_simulator"
-          generate_meta_sim_args="$generate_meta_sim_args --branch ${GITHUB_REF#refs/heads/}"
-          generate_meta_sim_args="$generate_meta_sim_args --docker_registry ${{ env.PUSH_REGISTRY }}"
-
           if [[ "${{ inputs.with_simulation }}" == "true" ]]; then
+            generate_meta_sim_args="--manifest_platform_base_key product_dependencies.product_base"
+            generate_meta_sim_args="$generate_meta_sim_args --product_name ${{ inputs.product_name }}"
+            generate_meta_sim_args="$generate_meta_sim_args --update_simulator"
+            generate_meta_sim_args="$generate_meta_sim_args --branch ${GITHUB_REF#refs/heads/}"
+            generate_meta_sim_args="$generate_meta_sim_args --docker_registry ${{ env.PUSH_REGISTRY }}"
             integration-pipeline generate_meta_simulator_artifacts $generate_meta_sim_args
+            mkdir simulator_artifacts
+            cp ci_artifacts/* ./simulator_artifacts
           fi
 
-          mkdir simulator_artifacts
-          cp ci_artifacts/* ./simulator_artifacts
-
       - name: Stash sim_configs
+        if: ${{ inputs.with_simulation == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: sim_configs
