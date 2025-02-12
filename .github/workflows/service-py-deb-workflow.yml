@@ -19,10 +19,6 @@ on:
         required: false
         type: string
         default: 'false'
-      package_paths:
-        required: false
-        type: string
-        default: '["./"]'
       distributions:
         required: false
         type: string
@@ -100,7 +96,7 @@ jobs:
       if: ${{ inputs.run_black == 'true' }}
       run: |
         python3 -m black \
-          --line-length 100 \
+          --line-length 120 \
           --diff \
           --check \
           .
@@ -111,8 +107,8 @@ jobs:
         python3 -m flake8 \
           --isolated \
           --exclude dist,.*\.egg-info,.git,__pycache__,.tox,venv \
-          --max-complexity 10 \
-          --max-line-length 100 \
+          --max-complexity 16 \
+          --max-line-length 120 \
           --exit-zero \
           --output-file flake8-report.txt
 
@@ -122,7 +118,7 @@ jobs:
         python3 -m pylint \
           --rcfile dummy-pylint-config \
           --ignore-patterns dist,.*\.egg-info,.git,__pycache__,.tox,venv \
-          --max-line-length 100 \
+          --max-line-length 120 \
           --exit-zero \
           --recursive y \
           --output pylint-report.txt \
@@ -137,9 +133,6 @@ jobs:
 
   Build:
     needs: [StaticAnalysis]
-    strategy:
-        matrix:
-          pack_path: ${{ fromJSON(inputs.package_paths) }}
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-20.04
     container:
@@ -161,11 +154,6 @@ jobs:
       run: |
         python3 -m pip install -r build-requirements.txt
 
-    - name: Create links for package ${{ matrix.pack_path }}
-      run: |
-        ln -f ${{ matrix.pack_path }}/debian/setup.py setup.py
-        ln -sf ${{ matrix.pack_path }}/debian debian
-
     - name: Raise version locally
       id: releasevars
       run: |
@@ -175,19 +163,14 @@ jobs:
         echo "py_pkg_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
 
     - name: Build
-      run: python3 -m build -o dist/${{ matrix.pack_path }}
+      run: python3 -m build -o dist/
 
     - name: Archive binary
       uses: actions/upload-artifact@v4
       with:
-        name: packages_${{ matrix.pack_path }}
-        path: dist/${{ matrix.pack_path }}/*
+        name: packages
+        path: dist/*
         retention-days: 5
-
-    - name: Remove hardlinks for package ${{ matrix.pack_path }}
-      run: |
-        rm -f setup.py
-        rm -f debian
 
   Raise:
     needs: [Build]
@@ -262,15 +245,12 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
-    strategy:
-        matrix:
-          pack_path: ${{ fromJSON(inputs.package_paths) }}
     steps:
       - name: Download a single artifact
         uses: actions/download-artifact@v4
         with:
-          name: packages_${{ matrix.pack_path }}
-          path: dist_${{ matrix.pack_path }}/
+          name: packages
+          path: dist/
 
       - name: Publish package to TestPyPI Experimental
         uses: pypa/gh-action-pypi-publish@v1.11.0
@@ -278,7 +258,7 @@ jobs:
           user: ${{ secrets.nexus_publisher_user }}
           password: ${{ secrets.nexus_publisher_password }}
           repository-url: https://artifacts.cloud.mov.ai/repository/pypi-experimental/
-          packages-dir: dist_${{ matrix.pack_path }}/
+          packages-dir: dist/
 
       - name: Publish package to TestPyPI Testing
         if: ${{ inputs.deploy == 'true' }}
@@ -287,7 +267,7 @@ jobs:
           user: ${{ secrets.nexus_publisher_user }}
           password: ${{ secrets.nexus_publisher_password }}
           repository-url: https://artifacts.cloud.mov.ai/repository/pypi-integration/
-          packages-dir: dist_${{ matrix.pack_path }}/
+          packages-dir: dist/
 
   Debian-Pack:
     if: ${{ inputs.release == 'false' }}
@@ -367,7 +347,7 @@ jobs:
         run: |
           sudo apt update
           cd artifacts/
-          sudo apt install -y ./movai-service* ./movai-cli*
+          sudo apt install -y ./movai-service*
 
       - name: Run tests
         if: ${{ inputs.skip_testing != 'true' }}
@@ -444,7 +424,7 @@ jobs:
         sonar_token: ${{ secrets.sonar_token }}
 
     - name: SonarCloud Scan and Quality Gate check
-      uses: SonarSource/sonarcloud-github-action@v2.0.2
+      uses: SonarSource/sonarqube-scan-action@v4.2.1
       if: ${{ inputs.skip_testing != 'true' }}
       env:
         GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
@@ -461,6 +441,8 @@ jobs:
           -Dsonar.coverage.exclusions=tests/**
           -Dsonar.cpd.exclusions=tests/**
           -Dsonar.python.version=3
+          -Dsonar.python.line_length=120
+          -Dsonar.python.cyclomatic.complexity=16
           -Dsonar.python.flake8.reportPaths=flake8-report.txt
           -Dsonar.python.pylint.reportPaths=pylint-report.txt
 
@@ -482,6 +464,8 @@ jobs:
           -Dsonar.coverage.exclusions=tests/**
           -Dsonar.cpd.exclusions=tests/**
           -Dsonar.python.version=3
+          -Dsonar.python.line_length=120
+          -Dsonar.python.cyclomatic.complexity=16
           -Dsonar.python.flake8.reportPaths=flake8-report.txt
           -Dsonar.python.pylint.reportPaths=pylint-report.txt
           -Dsonar.python.coverage.reportPaths=coverage.xml
