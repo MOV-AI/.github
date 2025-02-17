@@ -453,6 +453,7 @@ jobs:
           cp -r "${UI_DIR}"/*.tar ./qa_artifacts || true
           cp -r "${UI_DIR}"/*.json ./qa_artifacts || true
           cp -r "${UI_DIR}"/*.html ./qa_artifacts || true
+          cp -r "${UI_DIR}"/tests_artifacts ./qa_artifacts || true
 
       - name: Stash QA artifacts
         if: always()
@@ -697,6 +698,7 @@ jobs:
           cp -r "${INSTALL_DIR}"/results/*.log ./qa_artifacts || true
           cp -r "${INSTALL_DIR}"/results/*.zip ./qa_artifacts || true
           cp -r "${INSTALL_DIR}"/results/test_report_*.html ./qa_artifacts || true
+          cp -r "${INSTALL_DIR}"/tests_artifacts ./qa_artifacts || true
 
       - name: Stash QA artifacts
         if: always()
@@ -957,6 +959,7 @@ jobs:
           cp -r "${API_DIR}"/*.log ./qa_artifacts || true
           cp -r "${API_DIR}"/*.tar ./qa_artifacts || true
           cp -r "${API_DIR}"/results/*.zip ./qa_artifacts || true
+          cp -r "${API_DIR}"/tests_artifacts ./qa_artifacts || true
 
       - name: Stash QA artifacts
         if: always()
@@ -1183,6 +1186,7 @@ jobs:
           mkdir -p qa_artifacts
           cp -r "${FLOW_DIR}"/*.log ./qa_artifacts || true
           cp -r "${FLOW_DIR}"/*.tar ./qa_artifacts || true
+          cp -r "${FLOW_DIR}"/tests_artifacts ./qa_artifacts || true
 
       - name: Stash QA artifacts
         if: always()
@@ -1953,6 +1957,7 @@ jobs:
           mkdir -p qa_artifacts
           cp -r "${SIM_DIR}"/*.log ./qa_artifacts || true
           cp -r "${SIM_DIR}"/*.tar ./qa_artifacts || true
+          cp -r "${SIM_DIR}"/tests_artifacts ./qa_artifacts || true
 
       - name: Stash QA artifacts
         if: always()
