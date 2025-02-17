@@ -1776,21 +1776,25 @@ jobs:
         shell: bash
         id: minio_publish
         run: |
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-2.22.35.zip" -o "awscliv2.zip"
           unzip awscliv2.zip
           sudo ./aws/install --update
           URI_OBJ_PATH=ci-artifacts/${{ github.repository }}/$(date '+%Y_%m_%d')/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}
 
+          set +e
+
           MAX_RETRIES=5
           RETRY_DELAY=10
           SUCCESS=false
+          aws configure set default.s3.multipart_threshold 100GB
           for i in $(seq 1 $MAX_RETRIES); do
            echo "Attempt $i of $MAX_RETRIES: Uploading artifacts to Minio"
               aws --endpoint-url "${{ env.MINIO_S3_URL }}" \
                   s3 cp qa_artifacts/ \
                   s3://$URI_OBJ_PATH \
                   --recursive \
-                  --content-type="text/plain"
+                  --content-type="text/plain" \
+                  --checksum-algorithm SHA256
               if [[ $? -eq 0 ]]; then
                   SUCCESS=true
                   echo "Upload successful!"
@@ -1800,6 +1804,7 @@ jobs:
                   sleep $RETRY_DELAY
               fi
           done
+          set -e
           if [[ "$SUCCESS" == "false" ]]; then
               echo "Failed to upload after $MAX_RETRIES attempts. Exiting..."
               exit 1
