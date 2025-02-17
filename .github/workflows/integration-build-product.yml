@@ -1826,6 +1826,7 @@ jobs:
             # *.log might not exist if the test fails early
             mkdir -p qa_artifacts
             cp -r "${{ steps.simulator_tests_setup.outputs.target_dir }}"/*.log ./qa_artifacts || true
+            cp -r "${{ steps.simulator_tests_setup.outputs.target_dir }}"/tests_artifacts ./qa_artifacts || true
           '
           scp -r -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/qa_artifacts .
 
@@ -1878,8 +1879,9 @@ jobs:
           unzip awscliv2.zip
           sudo ./aws/install --update
           URI_OBJ_PATH=ci-artifacts/${{ github.repository }}/$(date '+%Y_%m_%d')/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}
+
           set +e
-          
+
           MAX_RETRIES=5
           RETRY_DELAY=10
           SUCCESS=false
@@ -1905,7 +1907,7 @@ jobs:
               echo "Failed to upload after $MAX_RETRIES attempts. Exiting..."
               exit 1
           fi
-          
+
           PUBLISH_URL="${{ env.MINIO_PUBLIC_URL }}/browser/$URI_OBJ_PATH"
           echo "publish_url=$PUBLISH_URL" >> $GITHUB_OUTPUT
 
