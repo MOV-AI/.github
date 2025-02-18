@@ -1818,6 +1818,42 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.minio_secret_key_id }}
           AWS_DEFAULT_REGION: "us-east-1"
           AWS_DEFAULT_OUTPUT: "none"
+          
+      - name: Stash QA artifacts (AWS S3)
+        if: ${{ always() && inputs.with_simulation_tests && steps.minio_publish.outcome != 'success' }}
+        shell: bash
+        id: s3_publish
+        run: |
+          URI_OBJ_PATH=ci-artifacts/${{ github.repository }}/$(date '+%Y_%m_%d')/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}
+          set +e
+          MAX_RETRIES=5
+          RETRY_DELAY=10
+          SUCCESS=false
+          aws configure set default.s3.multipart_threshold 100GB
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $i of $MAX_RETRIES: Uploading artifacts to AWS S3"
+            aws s3 cp qa_artifacts/ \
+              s3://ci-artefacts-es/$URI_OBJ_PATH \
+              --recursive \
+              --content-type="text/plain" \
+              --checksum-algorithm SHA256
+            if [[ $? -eq 0 ]]; then
+              SUCCESS=true
+              echo "Upload successful!"
+              break
+            else
+              echo "Upload failed. Retrying in $RETRY_DELAY seconds..."
+              sleep $RETRY_DELAY
+            fi
+          done
+          set -e
+          if [[ "$SUCCESS" == "false" ]]; then
+            echo "Failed to upload to AWS S3 after $MAX_RETRIES attempts. Exiting..."
+            exit 1
+          fi
+
+          PUBLISH_URL="https://ci-artefacts-es.s3.eu-south-2.amazonaws.com/$URI_OBJ_PATH" # Construct S3 URL
+          echo "publish_url=$PUBLISH_URL" >> $GITHUB_OUTPUT     
 
       - name: Slack message Artifact info
         uses: archive/github-actions-slack@master
