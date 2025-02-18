@@ -1850,7 +1850,7 @@ jobs:
             exit 1
           fi
 
-          PUBLISH_URL="https://ci-artefacts-es.s3.amazonaws.com/$URI_OBJ_PATH" # Construct S3 URL
+          PUBLISH_URL="https://ci-artefacts-es.s3.eu-south-2.amazonaws.com/$URI_OBJ_PATH" # Construct S3 URL
           echo "publish_url=$PUBLISH_URL" >> $GITHUB_OUTPUT     
 
       - name: Slack message Artifact info
