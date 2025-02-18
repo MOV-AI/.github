@@ -56,8 +56,6 @@ on:
         required: false
         type: boolean
         default: false
-
-
     secrets:
       auto_commit_user:
         required: true
@@ -1328,7 +1326,6 @@ jobs:
           echo "simul_prefix=${local_manager_prefix}" | tee >> $GITHUB_OUTPUT
           echo "tfstate_name=${tf_state}" | tee >> $GITHUB_OUTPUT
 
-
       - name: Provision remote vms (Proxmox)
         if: ${{ inputs.with_simulation_tests }}
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -1775,9 +1772,10 @@ jobs:
         if: ${{ always() &&  inputs.with_simulation_tests }}
         shell: bash
         id: minio_publish
+        continue-on-error: true
         run: |
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-2.22.35.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
+          curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-2.22.35.zip" -o "awscliv2.zip"
+          unzip -q awscliv2.zip
           sudo ./aws/install --update
           URI_OBJ_PATH=ci-artifacts/${{ github.repository }}/$(date '+%Y_%m_%d')/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}
 
@@ -1786,14 +1784,14 @@ jobs:
           MAX_RETRIES=5
           RETRY_DELAY=10
           SUCCESS=false
-          aws configure set default.s3.multipart_threshold 100GB
+
           for i in $(seq 1 $MAX_RETRIES); do
            echo "Attempt $i of $MAX_RETRIES: Uploading artifacts to Minio"
-              aws --endpoint-url "${{ env.MINIO_S3_URL }}" \
-                  s3 cp qa_artifacts/ \
-                  s3://$URI_OBJ_PATH \
-                  --recursive \
-                  --content-type="text/plain" \
+                zip -r qa_artifacts.zip qa_artifacts/
+                aws --endpoint-url "${{ env.MINIO_S3_URL }}" \
+                  s3 cp qa_artifacts.zip \
+                  s3://$URI_OBJ_PATH/qa_artifacts.zip \
+                  --content-type="application/zip" \
                   --checksum-algorithm SHA256
               if [[ $? -eq 0 ]]; then
                   SUCCESS=true
@@ -1818,7 +1816,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.minio_secret_key_id }}
           AWS_DEFAULT_REGION: "us-east-1"
           AWS_DEFAULT_OUTPUT: "none"
-          
+
       - name: Stash QA artifacts (AWS S3)
         if: ${{ always() && inputs.with_simulation_tests && steps.minio_publish.outcome != 'success' }}
         shell: bash
@@ -1829,13 +1827,13 @@ jobs:
           MAX_RETRIES=5
           RETRY_DELAY=10
           SUCCESS=false
-          aws configure set default.s3.multipart_threshold 100GB
+
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Attempt $i of $MAX_RETRIES: Uploading artifacts to AWS S3"
-            aws s3 cp qa_artifacts/ \
-              s3://ci-artefacts-es/$URI_OBJ_PATH \
-              --recursive \
-              --content-type="text/plain" \
+            zip -r qa_artifacts.zip qa_artifacts/
+            aws s3 cp qa_artifacts.zip \
+              s3://ci-artefacts-es/$URI_OBJ_PATH/qa_artifacts.zip \
+              --content-type="application/zip" \
               --checksum-algorithm SHA256
             if [[ $? -eq 0 ]]; then
               SUCCESS=true
@@ -1853,7 +1851,7 @@ jobs:
           fi
 
           PUBLISH_URL="https://ci-artefacts-es.s3.eu-south-2.amazonaws.com/$URI_OBJ_PATH" # Construct S3 URL
-          echo "publish_url=$PUBLISH_URL" >> $GITHUB_OUTPUT     
+          echo "publish_url=$PUBLISH_URL" >> $GITHUB_OUTPUT
 
       - name: Slack message Artifact info
         uses: archive/github-actions-slack@master
