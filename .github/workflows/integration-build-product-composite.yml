@@ -1235,7 +1235,7 @@ jobs:
           # generate inputs variable file from terraform generated hosts file
           integration-pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory hosts --nb_workers_per_squad $nb_workers_per_squad
           # generate new format hosts file from inputs file
-          ansible localhost -m template -a "src=./examples/inventories/fleet.yml.j2 dest=hosts"  --extra-vars "@inputs" -e "hostmode=${{ !inputs.with_simulation }}"
+          ansible localhost -m template -a "src=./examples/inventories/fleet.yml.j2 dest=hosts"  --extra-vars "@inputs"
           cat hosts
 
           while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
