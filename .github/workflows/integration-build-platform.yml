@@ -1558,22 +1558,24 @@ jobs:
         if: ${{ ( !inputs.debug_fleet_keep_alive && success() ) || cancelled() || ( !inputs.debug_fleet_keep_alive && failure() ) }}
         shell: bash
         run: |
+          set +e
           attempts=3
           count=0
+          exit_status=-1
           while [ $count -lt $attempts ]; do
             var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/hel_fleet_test.tfvars'
             terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
               break
-            elif [ $exit_status -eq 1 ]; then
+            else
               ((count++))
               echo "Retrying Terraform destroy (attempt $count)..."
-            else
-                  echo "Terraform destroy failed with exit status ${exit_status:-unknown}. Exiting..."
-                  exit ${exit_status:-1}
             fi
           done
+          set -e
+          echo "Terraform destroy returned with exit status ${exit_status}. Attempted $count times."
+          exit ${exit_status}
 
   Build-Simulator:
     needs: [Validate-boostrap-configs]
