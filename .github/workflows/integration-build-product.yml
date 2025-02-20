@@ -1932,8 +1932,10 @@ jobs:
         if: ${{ inputs.with_simulation_tests && inputs.debug_simulation_tests_keep_alive == false && always() }}
         shell: bash
         run: |
+          set +e
           attempts=3
           count=0
+          exit_status=-1
           while [ $count -lt $attempts ]; do
             var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
             terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
@@ -1942,12 +1944,12 @@ jobs:
               break
             elif [ $exit_status -eq 1 ]; then
               ((count++))
-              echo "Retrying Terraform destroy (attempt $count)..."
-            else
-                  echo "Terraform destroy failed with exit status ${exit_status:-unknown}. Exiting..."
-                  exit ${exit_status:-1}
+              echo "Retrying Terraform destroy (attempt $count)...
             fi
           done
+          set -e
+          echo "Terraform destroy returned with exit status ${exit_status}. Attempted $count times."
+          exit ${exit_status}
 
       - name: Job Summary Success
         shell: bash
