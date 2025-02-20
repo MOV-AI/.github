@@ -426,7 +426,7 @@ jobs:
           # for sanity
           docker ps -a
 
-          for container in backend spawner messager-server; do
+          for container in backend spawner message-server; do
              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
           done || true
@@ -670,7 +670,7 @@ jobs:
           # for sanity
           docker ps -a
 
-          for container in backend spawner messager-server; do
+          for container in backend spawner message-server; do
              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
           done || true
@@ -933,7 +933,7 @@ jobs:
           # for sanity
           docker ps -a
 
-          for container in backend spawner messager-server; do
+          for container in backend spawner message-server; do
              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
           done || true
@@ -1162,7 +1162,7 @@ jobs:
           # for sanity
           docker ps -a
 
-          for container in backend spawner messager-server; do
+          for container in backend spawner message-server; do
              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
           done || true
@@ -1466,7 +1466,7 @@ jobs:
           # for sanity
           docker ps -a
 
-          for container in backend spawner messager-server; do
+          for container in backend spawner message-server; do
              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
           done || true
@@ -1932,7 +1932,7 @@ jobs:
           # for sanity
           docker ps -a
 
-          for container in backend spawner messager-server; do
+          for container in backend spawner message-server; do
              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
           done || true
