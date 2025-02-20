@@ -264,7 +264,7 @@ jobs:
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
           source ci_scripts/bin/activate
           cat product-manifest.yaml
-          integration-pipeline generate_composite_meta_artifacts --manifest_platform_base_key "product_dependencies.products" --override_spawner ${{ inputs.product_name }}
+          integration-pipeline generate_composite_meta_artifacts --manifest_platform_base_key "product_dependencies.products" --override_spawner ${{ inputs.product_name }} --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }}
           deactivate
 
       - name: Stash manifest
