@@ -115,7 +115,7 @@ env:
 
 jobs:
   Validate-boostrap-configs:
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-hel0
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
@@ -228,7 +228,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-hel0
     outputs:
       raised_version: ${{ steps.pre_build.outputs.raised_version }}
       slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
@@ -398,7 +398,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-hel0
     outputs:
       slack_thread_id: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
     steps:
@@ -609,7 +609,7 @@ jobs:
 
   Build-Simulator:
     needs: [Validate-boostrap-configs, Build-Spawner]
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-hel0
     env:
       DISTRO: noetic
     outputs:
@@ -795,7 +795,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-hel0
     outputs:
       slack_thread_id: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
       skip_simulator: ${{ needs.Build-Simulator.outputs.skip_simulator }}
@@ -1027,7 +1027,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-hel0
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
@@ -1378,7 +1378,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-hel0
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
@@ -1695,7 +1695,7 @@ jobs:
 
   publish:
     needs: [Install-Robot, Install-Heterogeneous-Fleet-Single-VM,Install-Heterogeneous-Fleet-Multi-VM, Install-Simulator-Robot]
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-hel0
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
