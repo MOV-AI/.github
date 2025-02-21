@@ -1870,37 +1870,42 @@ jobs:
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
           slack-optional-thread_ts: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
 
-      - name: Stash QA artifacts (Minio)
+      - name: Prepare QA artifacts upload
         if: ${{ always() &&  inputs.with_simulation_tests }}
         shell: bash
-        id: minio_publish
         run: |
           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-2.22.35.zip" -o "awscliv2.zip"
           unzip awscliv2.zip
           sudo ./aws/install --update
-          URI_OBJ_PATH=ci-artifacts/${{ github.repository }}/$(date '+%Y_%m_%d')/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}
+          zip -r qa_artifacts.zip qa_artifacts/
 
+      - name: Stash QA artifacts (Minio)
+        if: ${{ always() &&  inputs.with_simulation_tests }}
+        shell: bash
+        id: minio_publish
+        continue-on-error: true
+        run: |
           set +e
-
           MAX_RETRIES=5
           RETRY_DELAY=10
           SUCCESS=false
+          URI_OBJ_PATH=ci-artifacts/${{ github.repository }}/$(date '+%Y_%m_%d')/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}
+
           for i in $(seq 1 $MAX_RETRIES); do
-           echo "Attempt $i of $MAX_RETRIES: Uploading artifacts to Minio"
-              aws --endpoint-url "${{ env.MINIO_S3_URL }}" \
-                  s3 cp qa_artifacts/ \
-                  s3://$URI_OBJ_PATH \
-                  --recursive \
-                  --content-type="text/plain" \
-                  --checksum-algorithm SHA256
-              if [[ $? -eq 0 ]]; then
-                  SUCCESS=true
-                  echo "Upload successful!"
-                  break
-              else
-                  echo "Upload failed. Retrying in $RETRY_DELAY seconds..."
-                  sleep $RETRY_DELAY
-              fi
+            echo "Attempt $i of $MAX_RETRIES: Uploading artifacts to Minio"
+            aws --endpoint-url "${{ env.MINIO_S3_URL }}" \
+              s3 cp qa_artifacts.zip \
+              s3://$URI_OBJ_PATH/qa_artifacts.zip \
+              --content-type="application/zip" \
+              --checksum-algorithm SHA256
+            if [[ $? -eq 0 ]]; then
+                SUCCESS=true
+                echo "Upload successful!"
+                break
+            else
+                echo "Upload failed. Retrying in $RETRY_DELAY seconds..."
+                sleep $RETRY_DELAY
+            fi
           done
           set -e
           if [[ "$SUCCESS" == "false" ]]; then
@@ -1910,12 +1915,47 @@ jobs:
 
           PUBLISH_URL="${{ env.MINIO_PUBLIC_URL }}/browser/$URI_OBJ_PATH"
           echo "publish_url=$PUBLISH_URL" >> $GITHUB_OUTPUT
-
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.minio_key_id }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.minio_secret_key_id }}
           AWS_DEFAULT_REGION: "us-east-1"
           AWS_DEFAULT_OUTPUT: "none"
+
+      - name: Stash QA artifacts (AWS S3)
+        if: ${{ always() && inputs.with_simulation_tests && steps.minio_publish.outcome != 'success' }}
+        shell: bash
+        id: s3_publish
+        run: |
+          URI_OBJ_PATH=ci-artifacts/${{ github.repository }}/$(date '+%Y_%m_%d')/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}
+          set +e
+          MAX_RETRIES=5
+          RETRY_DELAY=10
+          SUCCESS=false
+
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $i of $MAX_RETRIES: Uploading artifacts to AWS S3"
+
+            aws s3 cp qa_artifacts.zip \
+              s3://ci-artefacts-es/$URI_OBJ_PATH/qa_artifacts.zip \
+              --content-type="application/zip" \
+              --checksum-algorithm SHA256
+            if [[ $? -eq 0 ]]; then
+              SUCCESS=true
+              echo "Upload successful!"
+              break
+            else
+              echo "Upload failed. Retrying in $RETRY_DELAY seconds..."
+              sleep $RETRY_DELAY
+            fi
+          done
+          set -e
+          if [[ "$SUCCESS" == "false" ]]; then
+            echo "Failed to upload to AWS S3 after $MAX_RETRIES attempts. Exiting..."
+            exit 1
+          fi
+
+          PUBLISH_URL="https://ci-artefacts-es.s3.eu-south-2.amazonaws.com/$URI_OBJ_PATH" # Construct S3 URL
+          echo "publish_url=$PUBLISH_URL" >> $GITHUB_OUTPUT
 
       - name: Slack message Artifact info
         uses: archive/github-actions-slack@master
@@ -1961,7 +2001,11 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          summary_message=":x: Failed \n Artifacts url: ${{ steps.minio_publish.outputs.publish_url }}"
+          if [[ "${{ steps.minio_publish.outputs.publish_url }}" == "" ]]; then
+            summary_message=":x: Failed \n Artifacts uploaded to AWS S3: ${{ steps.s3_publish.outputs.publish_url }}"
+          else
+            summary_message=":x: Failed \n Artifacts uploaded to: ${{ steps.minio_publish.outputs.publish_url }}"
+          fi
           echo -e "## ${{ github.job }} Summary\n${summary_message}" >> $GITHUB_STEP_SUMMARY
 
   publish:
