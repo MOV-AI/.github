@@ -1944,7 +1944,7 @@ jobs:
               break
             elif [ $exit_status -eq 1 ]; then
               ((count++))
-              echo "Retrying Terraform destroy (attempt $count)...
+              echo "Retrying Terraform destroy (attempt $count)..."
             fi
           done
           set -e
