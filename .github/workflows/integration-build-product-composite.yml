@@ -22,7 +22,7 @@ on:
       docker_registry:
         required: false
         type: string
-        default: "registry.hel.mov.ai"
+        default: "registry.hel0.mov.ai"
       use_project_data_viewer:
         required: false
         type: boolean
@@ -51,6 +51,10 @@ on:
         required: false
         type: boolean
         default: false
+      cluster:
+        required: false
+        default: "hel0"
+        type: string
 
     secrets:
       auto_commit_user:
@@ -77,11 +81,9 @@ on:
         required: true
       ssh_pem_fleet_aws_vm:
         required: true
-      proxmox_api_url:
+      proxmox_ve_username:
         required: true
-      proxmox_api_token_id:
-        required: true
-      proxmox_api_token_secret:
+      proxmox_ve_password:
         required: true
       ssh_priv_key:
         required: true
@@ -101,17 +103,19 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   REGISTRY: ${{ inputs.docker_registry }}
   PUSH_REGISTRY: registry.cloud.mov.ai
-  MID_REGISTRY: registry.hel.mov.ai
+  MID_REGISTRY: registry.hel0.mov.ai
   USERSPACE_FOLDER_PATH: userspace
   REMOTE_WORKSPACE_PATH: workspace
-  PROVISION_INFRA_REPO: "devops-tf-proxmox-fleet"
-  PROVISION_INFRA_VERSION: "0.1.0-7"
+  PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
+  PROVISION_INFRA_VERSION: "2.0.0-3"
   # slack channel movai-projects
   SLACK_CHANNEL: ${{ inputs.overwrite_slack_channel }}
   # development slack channel
   #SLACK_CHANNEL: "C05K2KF1UP8"
   PROJECT_DATA_VIEWER_API: "https://personal-7vf0v2cu.outsystemscloud.com/ProjectDataViewer5/rest/V1//CreateProject"
   MINIO_S3_URL: "https://s3.mov.ai"
+  PROVISIONING_ENV_VERSION: 2.0.0-3
+  PROVISIONING_ENV_REPO: devops-tf-env-conf
 
 jobs:
   Validate-boostrap-configs:
@@ -325,7 +329,7 @@ jobs:
       - name: Docker build
         shell: bash
         run: |
-          docker build --add-host ${{ env.REGISTRY }}:172.22.0.106 \
+          docker build --add-host ${{ env.REGISTRY }}:10.26.0.10 \
             --build-arg DOCKER_REGISTRY=${{ env.REGISTRY }} \
             --build-arg BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} \
             --build-arg TAG=${{ steps.pre_build.outputs.base_version }} \
@@ -723,7 +727,7 @@ jobs:
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation}}
         shell: bash
         run: |
-          docker build --add-host ${{ env.REGISTRY }}:172.22.0.106 \
+          docker build --add-host ${{ env.REGISTRY }}:10.26.0.10 \
             --build-arg BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} \
             --build-arg CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }} \
             --file docker/${{ env.DISTRO }}/Dockerfile-simulator \
@@ -1067,18 +1071,34 @@ jobs:
         run: |
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
+      - name: Setup infra environment configs
+        id: infra_env_configs_setup
+        shell: bash
+        run: |
+          env_configs_dir=infra_env_configs
+          env_configs_version=${{ env.PROVISIONING_ENV_VERSION }}
+          env_configs_repo_name=${{ env.PROVISIONING_ENV_REPO }}
+          rm -rf $env_configs_dir
+          . .ci-venv/bin/activate
+          integration-pipeline fetch_by_tag --repo $env_configs_repo_name --version $env_configs_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $env_configs_dir
+          ls -la $env_configs_dir
+          echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
+          deactivate
+  
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=0.0.1-40
-          provision_infra_repo_name=devops-tf-proxmox-fleet
+          provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
+          provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
 
           rm -rf $provision_infra_dir
+          . .ci-venv/bin/activate
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
+          deactivate
           ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}/hosts/generic/" >> $GITHUB_OUTPUT
+          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
 
       - name: Define Instance names
         id: infra_names
@@ -1098,31 +1118,32 @@ jobs:
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
         run: |
-          terraform init -backend-config="key=hel-fleet-composite-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
-          terraform plan
-          terraform apply -auto-approve
-        env:
-          TF_VAR_number_agents: ${{ inputs.single_vm_fleet_number_members }}
-          TF_VAR_proxmox_api_url: "https://hel.mov.ai:8006/api2/json"
-          TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
-          TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
-          TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
-          TF_VAR_ip_list: ${{ inputs.single_vm_fleet_ips }}
-          TF_VAR_proxmox_host: "hel"
-          TF_VAR_vm_gateway: "172.22.0.1"
-          TF_VAR_ip_mask: 24
-          TF_VAR_bios: "seabios"
-          TF_VAR_pool: "IP-Temp-VMs"
-          TF_VAR_tags: "ip-fleet"
+          multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..1})
+          node_list_str=${multiply_node::-1}
 
-          TF_VAR_fleet_hosts_user: "devops"
-          TF_VAR_template_name: "ubuntu-2004-cloudinit-template2"
-          TF_VAR_fleet_manager_name: ${{ steps.infra_names.outputs.manager_prefix }}
-          TF_VAR_fleet_manager_memory: 8192
-          TF_VAR_template_name_no_gpu: "ubuntu-2004-cloudinit-template2"
-          TF_VAR_fleet_worker_name_prefix: ${{ steps.infra_names.outputs.worker_prefix }}
-          TF_VAR_fleet_worker_memory: 8192
-          TF_VAR_include_simulators: ${{ inputs.with_simulation }}
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel0/${{ inputs.cluster }}_simul_bpg.tfvars'
+
+          echo "proxmox_host_list=[$node_list_str]">>input.tfvars
+          nb_workers=${{ inputs.single_vm_fleet_number_members }}-1
+          echo "fleet_peer_nr=$nb_workers">>input.tfvars
+          echo 'fleet_password="${{ secrets.provision_infra_pwd }}"'>>input.tfvars
+          echo 'fleet_manager_name="${{ steps.infra_names.outputs.manager_prefix }}"'>>input.tfvars
+          echo 'ip_list=["10.26.0.40/24","10.26.0.41/24","10.26.0.42/24","10.26.0.43/24","10.26.0.44/24","10.26.0.45/24"]'>>input.tfvars
+          echo 'tags=["ip-simul-ci"]'>>input.tfvars
+          echo 'pool="IP-Temp-VMs"'>>input.tfvars
+          echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
+          echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
+          echo 'include_simulators=${{ inputs.with_simulation }}'>>input.tfvars
+          echo "\n">>input
+
+          echo "File args: $var_file_arg"
+          echo "Input File args: $(cat input.tfvars)"
+          terraform init -backend-config="key=hel0-fleet-composite-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
+          terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
+          terraform refresh $var_file_arg -var-file=input.tfvars
+
+          echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
+          sudo chmod 600 ~/.ssh/ci_priv_key.pem
 
       - name: Prepare Devops provisioning slack message
         if: always()
@@ -1175,7 +1196,7 @@ jobs:
           ssh_conn_string=${{ steps.wait_for_machines.outputs.manager_ssh_conn_string }}
           ssh $ssh_conn_string -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
             sudo cp /etc/hosts /etc/hosts.bak
-            echo '172.22.0.106 registry.hel.mov.ai' | sudo tee -a /etc/hosts
+            echo '10.26.0.10 registry.hel0.mov.ai' | sudo tee -a /etc/hosts
             docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
             docker login ${{ env.PUSH_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
             docker login ${{ env.MID_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
@@ -1526,7 +1547,7 @@ jobs:
           ssh_conn_string=${{ steps.wait_for_machines.outputs.manager_ssh_conn_string }}
           ssh $ssh_conn_string -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
             sudo cp /etc/hosts /etc/hosts.bak
-            echo '172.22.0.106 registry.hel.mov.ai' | sudo tee -a /etc/hosts
+            echo '10.26.0.10 registry.hel0.mov.ai' | sudo tee -a /etc/hosts
             docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
             docker login ${{ env.PUSH_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
             docker login ${{ env.MID_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
