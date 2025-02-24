@@ -76,6 +76,7 @@ env:
   #SLACK_CHANNEL: "C05K2KF1UP8"
   PROVISIONING_ENV_VERSION: 0.1.0-8
   PROVISIONING_ENV_REPO: devops-tf-env-conf
+  ARTIFACTS_RETENTION_DAYS: 15
 
 jobs:
   Validate-boostrap-configs:
@@ -127,14 +128,14 @@ jobs:
         with:
           name: robot_configs
           path: "*.json*"
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Stash sim_configs
         uses: actions/upload-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts/*
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: raise
         run: |
@@ -166,7 +167,7 @@ jobs:
         with:
           name: raised_meta
           path: platform_configs/*
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
   Standalone-Validations:
     runs-on: ubuntu-20.04
@@ -449,10 +450,7 @@ jobs:
           # tests artifacts
           # *.log and *.zip might not exist if the test fails early
           mkdir -p qa_artifacts
-          cp -r "${UI_DIR}"/*.log ./qa_artifacts || true
-          cp -r "${UI_DIR}"/*.tar ./qa_artifacts || true
-          cp -r "${UI_DIR}"/*.json ./qa_artifacts || true
-          cp -r "${UI_DIR}"/*.html ./qa_artifacts || true
+          cp -r "${UI_DIR}"/*.{log,tar,json,html} ./qa_artifacts 2>/dev/null || true
           cp -r "${UI_DIR}"/tests_artifacts ./qa_artifacts || true
 
       - name: Stash QA artifacts
@@ -461,7 +459,7 @@ jobs:
         with:
           name: qa_artifacts_ui_tests
           path: qa_artifacts/*
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Remove robots
         if: always()
@@ -693,11 +691,8 @@ jobs:
           # tests artifacts
           # *.log might not exist if the test fails early
           mkdir -p qa_artifacts
-          cp -r "${INSTALL_DIR}"/*.log ./qa_artifacts || true
-          cp -r "${INSTALL_DIR}"/*.tar ./qa_artifacts || true
-          cp -r "${INSTALL_DIR}"/results/*.log ./qa_artifacts || true
-          cp -r "${INSTALL_DIR}"/results/*.zip ./qa_artifacts || true
-          cp -r "${INSTALL_DIR}"/results/test_report_*.html ./qa_artifacts || true
+          cp -r "${INSTALL_DIR}"/*.{log,tar} ./qa_artifacts 2>/dev/null || true
+          cp -r "${INSTALL_DIR}"/results/*.{log,zip,test_report_*.html} ./qa_artifacts 2>/dev/null || true
           cp -r "${INSTALL_DIR}"/tests_artifacts ./qa_artifacts || true
 
       - name: Stash QA artifacts
@@ -706,7 +701,7 @@ jobs:
         with:
           name: qa_artifacts_install_tests
           path: qa_artifacts/*
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Collect Installed components
         shell: bash
@@ -752,7 +747,7 @@ jobs:
         with:
           name: deploy_artifacts_noetic
           path: artifacts/*.dploy
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Stash QA artifacts
         if: always()
@@ -956,10 +951,7 @@ jobs:
           # tests artifacts
           # *.log and *.zip might not exist if the test fails early
           mkdir -p qa_artifacts
-          cp -r "${API_DIR}"/*.log ./qa_artifacts || true
-          cp -r "${API_DIR}"/*.tar ./qa_artifacts || true
-          cp -r "${API_DIR}"/results/*.zip ./qa_artifacts || true
-          cp -r "${API_DIR}"/tests_artifacts ./qa_artifacts || true
+          cp -r "${API_DIR}"/*.{log,tar} "${API_DIR}"/results/*.zip "${API_DIR}"/tests_artifacts ./qa_artifacts 2>/dev/null || true
 
       - name: Stash QA artifacts
         if: always()
@@ -967,7 +959,7 @@ jobs:
         with:
           name: qa_artifacts_api_tests
           path: qa_artifacts/*
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Remove robots
         if: always()
@@ -1184,9 +1176,7 @@ jobs:
 
           # tests artifacts, they might not exist
           mkdir -p qa_artifacts
-          cp -r "${FLOW_DIR}"/*.log ./qa_artifacts || true
-          cp -r "${FLOW_DIR}"/*.tar ./qa_artifacts || true
-          cp -r "${FLOW_DIR}"/tests_artifacts ./qa_artifacts || true
+          cp -r "${FLOW_DIR}"/*.{log,tar} "${FLOW_DIR}"/tests_artifacts ./qa_artifacts 2>/dev/null || true
 
       - name: Stash QA artifacts
         if: always()
@@ -1194,7 +1184,7 @@ jobs:
         with:
           name: qa_artifacts_flow_tests
           path: qa_artifacts/*
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Remove robots
         if: always()
@@ -1541,9 +1531,7 @@ jobs:
           # qa api tests artifacts
           # *.log and *.zip might not exist if the test fails early
           mkdir -p fleet_qa_artifacts/api
-          cp -r "${API_DIR}"/*.log fleet_qa_artifacts/api || true
-          cp -r "${API_DIR}"/*.tar fleet_qa_artifacts/api || true
-          cp -r "${API_DIR}"/results/*.zip fleet_qa_artifacts/api || true
+          cp -r "${API_DIR}"/*.{log,tar} "${API_DIR}"/results/*.zip fleet_qa_artifacts/api 2>/dev/null || true
 
       - name: Stash Fleet QA artifacts
         if: always()
@@ -1551,7 +1539,7 @@ jobs:
         with:
           name: fleet_qa_artifacts
           path: ${{ steps.ansible_install_setup.outputs.target_dir }}/fleet_qa_artifacts/*
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Teardown remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -1730,7 +1718,7 @@ jobs:
         with:
           name: deploy_simulator_artifacts
           path: simulator.image.artifact
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Docker cleanups
         if: always()
@@ -1957,9 +1945,7 @@ jobs:
           # tests artifacts
           # *.log might not exist if the test fails early
           mkdir -p qa_artifacts
-          cp -r "${SIM_DIR}"/*.log ./qa_artifacts || true
-          cp -r "${SIM_DIR}"/*.tar ./qa_artifacts || true
-          cp -r "${SIM_DIR}"/tests_artifacts ./qa_artifacts || true
+          cp -r "${SIM_DIR}"/*.{log,tar} "${SIM_DIR}"/tests_artifacts ./qa_artifacts 2>/dev/null || true
 
       - name: Stash QA artifacts
         if: always()
@@ -1967,7 +1953,7 @@ jobs:
         with:
           name: qa_artifacts_simulator_tests
           path: qa_artifacts/*
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Collect Installed components
         shell: bash
@@ -2013,7 +1999,7 @@ jobs:
         with:
           name: deploy_artifacts_simulator_noetic
           path: artifacts/*.dploy
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Remove robots
         if: always()
