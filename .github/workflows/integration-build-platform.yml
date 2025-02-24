@@ -2324,8 +2324,6 @@ jobs:
 
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            timeout 30 movai-cli remove --all || true
-
             mkdir -p artifacts
             cp *.json artifacts/
             CONFIG_FILE_NAME="standalone-${{ inputs.product_name }}-simulator-noetic.json"
