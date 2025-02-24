@@ -457,7 +457,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qa_artifacts_ui_tests
+          name: ${{ github.run_number }}_${{ github.run_attempt }}_qa_artifacts_ui_tests_${{ github.run_id }}
           path: qa_artifacts/*
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
@@ -699,7 +699,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qa_artifacts_install_tests
+          name: ${{ github.run_number }}_${{ github.run_attempt }}_qa_artifacts_install_tests_${{ github.run_id }}
           path: qa_artifacts/*
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
@@ -957,7 +957,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qa_artifacts_api_tests
+          name: ${{ github.run_number }}_${{ github.run_attempt }}_qa_artifacts_api_tests_${{ github.run_id }}
           path: qa_artifacts/*
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
@@ -1182,7 +1182,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qa_artifacts_flow_tests
+          name: ${{ github.run_number }}_${{ github.run_attempt }}_qa_artifacts_flow_tests_${{ github.run_id }}
           path: qa_artifacts/*
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
@@ -1521,7 +1521,7 @@ jobs:
 
             echo "From $fleet_host:"
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -a' > fleet_qa_artifacts/install/$fleet_host-docker_ps.log || true
-            echo "$(tail -n +2 fleet_qa_artifacts/install/$fleet_host-docker_ps.log )"
+            tail -n +2 fleet_qa_artifacts/install/$fleet_host-docker_ps.log
 
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u docker --boot --lines=all' > fleet_qa_artifacts/install/$fleet_host-all-docker.log || true
           done
@@ -1537,7 +1537,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fleet_qa_artifacts
+          name: ${{ github.run_number }}_${{ github.run_attempt }}_fleet_qa_artifacts_${{ github.run_id }}
           path: ${{ steps.ansible_install_setup.outputs.target_dir }}/fleet_qa_artifacts/*
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
@@ -1893,7 +1893,7 @@ jobs:
           MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
           MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+          echo -e "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
       - name: Slack message success
         uses: archive/github-actions-slack@master
@@ -1951,7 +1951,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qa_artifacts_simulator_tests
+          name: ${{ github.run_number }}_${{ github.run_attempt }}_qa_artifacts_simulator_tests_${{ github.run_id }}
           path: qa_artifacts/*
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
@@ -2088,7 +2088,7 @@ jobs:
           mkdir -p deployment_artifacts
           package-deployer join --dploy_workspace "$(pwd)/artifacts"
           integration-pipeline get_image_list_from_manifest --manifest_platform_base_key product_components --docker_registry $REGISTRY
-          cp *.json deployment_artifacts
+          cp ./*.json deployment_artifacts
           cp artifacts/merged.dploy deployment_artifacts/deployable.dploy
           echo -e "$(cat ./artifacts/product.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
           deactivate
@@ -2156,7 +2156,7 @@ jobs:
           PRS=$(echo "${ORIGINAL_RN}" | sed -rn "s/.* by @.* in https:\/\/github\.com\/${{ github.repository_owner }}\/${{ github.event.repository.name }}\/pull\/([0-9]+).*/\1/p" | tr '\n' ' ')
           # change to array
           PRS=($PRS)
-          echo "Found the following PRs: ${PRS[@]}"
+          echo "Found the following PRs: ${PRS[*]}"
 
           # new release notes file
           rm -rf notes.txt
