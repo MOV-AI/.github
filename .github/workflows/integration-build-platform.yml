@@ -2254,6 +2254,16 @@ jobs:
             set -e
             docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
           '
+
+      - name: unstash robot_configs
+        uses: actions/download-artifact@v4
+        with:
+          name: robot_configs
+          path: .
+      
+      - name: Remote - unstash robot configs
+        shell: bash
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ./*.json ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
       
       - name: Remote - unstash manifest
         shell: bash
@@ -2324,8 +2334,6 @@ jobs:
 
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            mkdir -p artifacts
-            cp *.json artifacts/
             CONFIG_FILE_NAME="standalone-${{ inputs.product_name }}-simulator-noetic.json"
             export PATH="$HOME/.local/bin:$PATH"
             integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
