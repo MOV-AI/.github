@@ -2336,8 +2336,18 @@ jobs:
 
             CONFIG_FILE_NAME="standalone-${{ inputs.product_name }}-simulator-noetic.json"
             export PATH="$HOME/.local/bin:$PATH"
-            integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
-            integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
+            docker run -u root \
+              -v "$(pwd)/simulator_workspace":$WORKSPACE \
+              -i registry.cloud.mov.ai/qa/ci-tools:${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              get_json_value --file $CONFIG_FILE_NAME.ci \
+              --key services_version \
+              --output_file movai_service_version
+            docker run -u root \
+              -v "$(pwd)/simulator_workspace":$WORKSPACE \
+              -i registry.cloud.mov.ai/qa/ci-tools:${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              get_json_value --file $CONFIG_FILE_NAME.ci \
+              --key quickstart_version \
+              --output_file quickstart_version
 
             export USERSPACE_FOLDER_PATH="/opt/userspace"
             sudo mkdir -p $USERSPACE_FOLDER_PATH/.git;sudo chown 1000:1000 $USERSPACE_FOLDER_PATH/ -Rf
