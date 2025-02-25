@@ -2263,7 +2263,7 @@ jobs:
       
       - name: Remote - unstash robot configs
         shell: bash
-        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ./*.json ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ./*.json* ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
       
       - name: Remote - unstash manifest
         shell: bash
