@@ -2332,19 +2332,21 @@ jobs:
             export DISPLAY=":0"
             echo "Display detected is $DISPLAY"
 
-            cd ${{ env.REMOTE_WORKSPACE_PATH }}
-
             CONFIG_FILE_NAME="basic-standalone-ignition-noetic.json"
+            cp -r $CONFIG_FILE_NAME* simulator_workspace/
+
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}/simulator_workspace
+
             export PATH="$HOME/.local/bin:$PATH"
             WORKSPACE=/opt/mov.ai/workspace
             docker run -u root \
-              -v "$(pwd)/simulator_workspace":$WORKSPACE \
+              -v "$(pwd)":$WORKSPACE \
               -i registry.cloud.mov.ai/qa/ci-tools:${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               get_json_value --file $CONFIG_FILE_NAME.ci \
               --key services_version \
               --output_file movai_service_version
             docker run -u root \
-              -v "$(pwd)/simulator_workspace":$WORKSPACE \
+              -v "$(pwd)":$WORKSPACE \
               -i registry.cloud.mov.ai/qa/ci-tools:${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               get_json_value --file $CONFIG_FILE_NAME.ci \
               --key quickstart_version \
