@@ -2334,7 +2334,7 @@ jobs:
 
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            CONFIG_FILE_NAME="standalone-${{ inputs.product_name }}-simulator-noetic.json"
+            CONFIG_FILE_NAME="basic-standalone-ignition-noetic.json"
             export PATH="$HOME/.local/bin:$PATH"
             WORKSPACE=/opt/mov.ai/workspace
             docker run -u root \
