@@ -2336,6 +2336,7 @@ jobs:
 
             CONFIG_FILE_NAME="standalone-${{ inputs.product_name }}-simulator-noetic.json"
             export PATH="$HOME/.local/bin:$PATH"
+            WORKSPACE=/opt/mov.ai/workspace
             docker run -u root \
               -v "$(pwd)/simulator_workspace":$WORKSPACE \
               -i registry.cloud.mov.ai/qa/ci-tools:${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
