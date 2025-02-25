@@ -1086,8 +1086,8 @@ jobs:
         run: |
           branch=$(echo ${GITHUB_REF#refs/heads/} | sed "s;\.;-;g" )
 
-          local_manager_prefix="ip-hgf-multi-$branch-manager"
-          local_worker_prefix="ip-hgf-multi-$branch-worker"
+          local_manager_prefix="ip-hgf-multi-${{ inputs.product_name }}-$branch-manager"
+          local_worker_prefix="ip-hgf-multi-${{ inputs.product_name }}-$branch-worker"
           echo "$local_manager_prefix"
           echo "$local_worker_prefix"
 
@@ -1437,8 +1437,8 @@ jobs:
         run: |
           branch=$(echo ${GITHUB_REF#refs/heads/} | sed "s;\.;-;g" )
 
-          local_manager_prefix="ip-hgf-$branch-manager"
-          local_worker_prefix="ip-hgf-$branch-worker"
+          local_manager_prefix="ip-hgf-${{ inputs.product_name }}-$branch-manager"
+          local_worker_prefix="ip-hgf-${{ inputs.product_name }}-$branch-worker"
           echo "$local_manager_prefix"
           echo "$local_worker_prefix"
 
