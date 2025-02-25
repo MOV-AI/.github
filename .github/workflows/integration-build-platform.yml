@@ -339,7 +339,7 @@ jobs:
           . test-venv/bin/activate
           python3 -m pytest \
             -ra \
-            --hub_url http://selenoid-ui.hel.mov.ai \
+            --hub_url http://selenoid-ui.hel0.mov.ai \
             --base_url https://${{ steps.agent_info.outputs.ip }}/ \
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
@@ -1288,10 +1288,10 @@ jobs:
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
         run: |
-          multiply_node=$(printf '"hel",%.0s' {1..${{ steps.infra_names.outputs.total_resources }}})
+          multiply_node=$(printf '"hel0",%.0s' {1..${{ steps.infra_names.outputs.total_resources }}})
           node_list_str=${multiply_node::-1}
 
-          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel0/hel0_fleet_test.tfvars'
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/hel0_fleet_test.tfvars'
 
           echo "proxmox_host_list=[$node_list_str]">>input.tfvars
           echo "fleet_peer_nr=${{ inputs.fleet_number_members }}">>input.tfvars
@@ -1305,7 +1305,7 @@ jobs:
 
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
-          terraform init -backend-config="key=hel-fleet-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
+          terraform init -backend-config="key=hel0-fleet-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
           terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
           terraform refresh $var_file_arg -var-file=input.tfvars
 
@@ -1404,7 +1404,7 @@ jobs:
             -e fleet_domain_dns="" \
             -e "{\"proxycerts__remote_redis_servers_fqn\": [$(cat ../staging/manager_private_ip.txt)]}" \
             -e "{\"fleet_manager_san\": [ \"DNS:$(cat ../staging/manager_private_ip.txt)\" ]}" \
-            -e "{\"fleet_extra_hosts\": [ \"172.22.0.106    registry.hel.mov.ai traefik\", \"$(cat ../staging/manager_private_ip.txt)    manager ${{ steps.infra_names.outputs.manager_prefix }}\" ]}" \
+            -e "{\"fleet_extra_hosts\": [ \"10.26.0.10    registry.hel0.mov.ai traefik\", \"$(cat ../staging/manager_private_ip.txt)    manager ${{ steps.infra_names.outputs.manager_prefix }}\" ]}" \
             --skip-tags "validate,ufw,hardening"
           execution_status=$?
           deactivate
@@ -1551,7 +1551,7 @@ jobs:
           count=0
           exit_status=-1
           while [ $count -lt $attempts ]; do
-            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/hel_fleet_test.tfvars'
+            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/hel0_fleet_test.tfvars'
             terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
