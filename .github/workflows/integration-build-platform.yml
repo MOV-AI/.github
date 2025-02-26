@@ -2338,8 +2338,11 @@ jobs:
             ls -la
 
             CONFIG_FILE_NAME="basic-standalone-ignition-noetic.json"
-            cp -r $CONFIG_FILE_NAME* simulator_workspace/
-            cd simulator_workspace/
+
+            mkdir -p config_workspace/
+            cp product-manifest.yaml config_workspace/product-manifest.yaml
+            cp -r $CONFIG_FILE_NAME* config_workspace/
+            cd config_workspace/
 
             export PATH="$HOME/.local/bin:$PATH"
             WORKSPACE=/opt/mov.ai/workspace
