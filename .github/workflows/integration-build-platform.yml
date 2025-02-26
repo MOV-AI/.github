@@ -2332,6 +2332,9 @@ jobs:
             export DISPLAY=":0"
             echo "Display detected is $DISPLAY"
 
+            pwd
+            ls -la
+
             CONFIG_FILE_NAME="basic-standalone-ignition-noetic.json"
             cp -r $CONFIG_FILE_NAME* simulator_workspace/
 
