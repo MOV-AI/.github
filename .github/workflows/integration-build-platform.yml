@@ -2058,7 +2058,7 @@ jobs:
           docker image prune --all -f
   
   Robotic-Stack-Integration:
-    needs: [Standalone-Validations, Simulator-Validations]
+    needs: [Standalone-Validations]
     runs-on: simul-${{ inputs.cluster }}-queuer
     outputs:
       slack_thread_id: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
