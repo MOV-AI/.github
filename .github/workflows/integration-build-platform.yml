@@ -2056,7 +2056,7 @@ jobs:
         run: |
           docker system prune -f
           docker image prune --all -f
-  
+
   Robotic-Stack-Integration:
     needs: [Standalone-Validations]
     runs-on: simul-${{ inputs.cluster }}-queuer
@@ -2073,7 +2073,7 @@ jobs:
         id: agent_info
         run: |
           echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
-      
+
       - name: Login to Private Registry
         uses: docker/login-action@v2
         with:
@@ -2088,7 +2088,7 @@ jobs:
           . .ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-      
+
       - name: Setup infra environment configs
         id: infra_env_configs_setup
         shell: bash
@@ -2147,13 +2147,13 @@ jobs:
 
           echo "proxmox_host_list=[$node_list_str]">>input.tfvars
           echo "fleet_peer_nr=0">>input.tfvars
-          echo 'fleet_password="${{ secrets.provision_infra_pwd }}"'>>input.tfvars 
+          echo 'fleet_password="${{ secrets.provision_infra_pwd }}"'>>input.tfvars
           echo 'fleet_manager_name="${{ steps.infra_names.outputs.simul_prefix }}"'>>input.tfvars
           echo 'ip_list=["dhcp"]'>>input.tfvars
           echo 'tags=["ip-simul-ci"]'>>input.tfvars
           echo 'pool="IP-Temp-VMs"'>>input.tfvars
-          echo 'proxmox_ve_username="${{ secrets.proxmox_ve_sim_username }}"'>>input.tfvars 
-          echo 'proxmox_ve_password="${{ secrets.proxmox_ve_sim_password }}"'>>input.tfvars 
+          echo 'proxmox_ve_username="${{ secrets.proxmox_ve_sim_username }}"'>>input.tfvars
+          echo 'proxmox_ve_password="${{ secrets.proxmox_ve_sim_password }}"'>>input.tfvars
           echo "\n">>input
 
           echo "File args: $var_file_arg"
@@ -2187,7 +2187,7 @@ jobs:
             set -e
             cloud-init status --wait; rm -rf ./${{ env.REMOTE_WORKSPACE_PATH }}; mkdir -p ./${{ env.REMOTE_WORKSPACE_PATH }}
           '
-  
+
       - name: Prepare Devops provisioning slack message
         if: ${{ github.event_name != 'pull_request' }}
         id: pre_slack_infra
@@ -2213,7 +2213,7 @@ jobs:
             set -e
             ip=$(hostname -I | cut -d " " -f1)
             echo $ip '
-            
+
       - name: Nvidia slack message
         id: nvidia_err_msg
         run: |
@@ -2237,7 +2237,7 @@ jobs:
               sleep 3
               docker run --gpus=all --rm nvcr.io/nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi 2>&1
               '
-      
+
       - name: Slack message failure
         if: ${{ failure() && github.event_name != 'pull_request' }}
         uses: slackapi/slack-github-action@v1.23.0
@@ -2260,15 +2260,15 @@ jobs:
         with:
           name: robot_configs
           path: .
-      
+
       - name: Remote - unstash robot configs
         shell: bash
         run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ./*.json* ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
-      
+
       - name: Remote - unstash manifest
         shell: bash
         run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no product-manifest.yaml ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/product-manifest.yaml
-    
+
       - name: Remote - Fetch product version and merge platform product
         shell: bash
         run: |
@@ -2308,7 +2308,7 @@ jobs:
               --key product_components.qa.$qa_key \
               --gh_api_user ${{ secrets.auto_commit_user }} \
               --gh_api_pwd ${{ secrets.auto_commit_pwd }}
-            
+
             # install test dependencies
             target_dir=$(cat simulator_workspace/target_dir.txt)
             rm -rf venv
@@ -2334,26 +2334,22 @@ jobs:
 
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            pwd
-            ls -la
-
             CONFIG_FILE_NAME="basic-standalone-ignition-noetic.json"
 
             mkdir -p config_workspace/
             cp product-manifest.yaml config_workspace/product-manifest.yaml
             cp -r $CONFIG_FILE_NAME* config_workspace/
-            cd config_workspace/
 
             export PATH="$HOME/.local/bin:$PATH"
             WORKSPACE=/opt/mov.ai/workspace
             docker run -u root \
-              -v "$(pwd)":$WORKSPACE \
+              -v "$(pwd)/config_workspace":$WORKSPACE \
               -i registry.cloud.mov.ai/qa/ci-tools:${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               get_json_value --file $CONFIG_FILE_NAME.ci \
               --key services_version \
               --output_file movai_service_version
             docker run -u root \
-              -v "$(pwd)":$WORKSPACE \
+              -v "$(pwd)/config_workspace":$WORKSPACE \
               -i registry.cloud.mov.ai/qa/ci-tools:${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               get_json_value --file $CONFIG_FILE_NAME.ci \
               --key quickstart_version \
@@ -2371,9 +2367,9 @@ jobs:
             sudo sh -c "echo MOVAI_SERVICE_LOGGER_LEVEL=DEBUG >> /etc/movai/config.env"
             sudo chmod -R +r /etc/movai
 
-            wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
-            chmod +x ./QuickStart_$(cat quickstart_version).bash
-            ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
+            wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat config_workspace/quickstart_version).bash
+            chmod +x ./QuickStart_$(cat config_workspace/quickstart_version).bash
+            ./QuickStart_$(cat config_workspace/quickstart_version).bash --apps $(cat config_workspace/movai_service_version) $CONFIG_FILE_NAME
             MOVAI_USER="ci"
             MOVAI_PWD="4Iva6UHAQq9DGITj"
             for robot in $(movai-cli robots list); do
@@ -2382,7 +2378,7 @@ jobs:
 
             execution_status=$?
             exit $execution_status
-            rm movai_service_version
+            rm config_workspace/movai_service_version
           '
           echo "movai_user=ci" >> $GITHUB_OUTPUT
           echo "movai_pwd=4Iva6UHAQq9DGITj" >> $GITHUB_OUTPUT
@@ -2425,7 +2421,7 @@ jobs:
                 --movai-pw ${{ steps.install.outputs.movai_pwd }} \
                 --tb=short \
                 $extra_options
-            
+
             deactivate
           '
 
@@ -2455,7 +2451,7 @@ jobs:
             # docker logs
             journalctl -u docker --since "1hour ago" &> "docker-service.log"
           '
-  
+
       - name: Remote - Stash QA artifacts
         if: ${{ always() }}
         shell: bash
@@ -2522,7 +2518,7 @@ jobs:
           unzip awscliv2.zip
           sudo ./aws/install --update
           URI_OBJ_PATH=ci-artifacts/${{ github.repository }}/$(date '+%Y_%m_%d')/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}
-          
+
           MAX_RETRIES=5
           RETRY_DELAY=10
           SUCCESS=false
@@ -2546,7 +2542,7 @@ jobs:
               echo "Failed to upload after $MAX_RETRIES attempts. Exiting..."
               exit 1
           fi
-          
+
           PUBLISH_URL="${{ env.MINIO_PUBLIC_URL }}/browser/$URI_OBJ_PATH"
           echo "publish_url=$PUBLISH_URL" >> $GITHUB_OUTPUT
 
@@ -2566,7 +2562,7 @@ jobs:
           slack-channel: ${{ env.SLACK_CHANNEL }}
           slack-text: ":information_source: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) Job artifacts url: ${{ steps.minio_publish.outputs.publish_url }}"
           slack-optional-thread_ts: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
-      
+
       - name: Teardown remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         if: ${{ inputs.debug_simulation_tests_keep_alive == false && always() }}
@@ -2601,7 +2597,7 @@ jobs:
         run: |
           summary_message=":x: Failed \n Artifacts url: ${{ steps.minio_publish.outputs.publish_url }}"
           echo -e "## ${{ github.job }} Summary\n${summary_message}" >> $GITHUB_STEP_SUMMARY
-  
+
 
   # publish:
   #   needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
