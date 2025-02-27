@@ -2414,8 +2414,10 @@ jobs:
               extra_options="$extra_options --out-values test-output.json --ext-metrics"
             fi
 
+            cd simulator_workspace/${target_dir}
+
             pytest \
-                simulator_workspace/${target_dir}/${test_dir} \
+                ${test_dir} \
                 -m $marker \
                 --movai-user ${{ steps.install.outputs.movai_user }} \
                 --movai-pw ${{ steps.install.outputs.movai_pwd }} \
