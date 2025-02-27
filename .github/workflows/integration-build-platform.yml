@@ -2414,6 +2414,7 @@ jobs:
               extra_options="$extra_options --out-values test-output.json --ext-metrics"
             fi
 
+            sudo chmod +777 -R simulator_workspace
             cd simulator_workspace/${target_dir}
 
             pytest \
