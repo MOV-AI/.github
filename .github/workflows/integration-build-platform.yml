@@ -2602,233 +2602,233 @@ jobs:
           echo -e "## ${{ github.job }} Summary\n${summary_message}" >> $GITHUB_STEP_SUMMARY
 
 
-  # publish:
-  #   needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
-  #   runs-on: integration-pipeline
-  #   outputs:
-  #     slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
-  #   steps:
-  #     - name: Cleanup Workspace
-  #       uses: rtCamp/action-cleanup@master
+  publish:
+    needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
+    runs-on: integration-pipeline
+    outputs:
+      slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
+    steps:
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
 
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  #     - name: Agent info
-  #       id: agent_info
-  #       run: |
-  #         echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
+      - name: Agent info
+        id: agent_info
+        run: |
+          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
 
-  #     - name: unstash robot_configs
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: robot_configs
-  #         path: .
+      - name: unstash robot_configs
+        uses: actions/download-artifact@v4
+        with:
+          name: robot_configs
+          path: .
 
-  #     - name: unstash raised_meta
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: raised_meta
-  #         path: platform_configs
+      - name: unstash raised_meta
+        uses: actions/download-artifact@v4
+        with:
+          name: raised_meta
+          path: platform_configs
 
-  #     - name: unstash deploy_artifacts_noetic
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: deploy_artifacts_noetic
-  #         path: artifacts
+      - name: unstash deploy_artifacts_noetic
+        uses: actions/download-artifact@v4
+        with:
+          name: deploy_artifacts_noetic
+          path: artifacts
 
-  #     - name: unstash deploy_artifacts_simulator_noetic
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: deploy_artifacts_simulator_noetic
-  #         path: artifacts
+      - name: unstash deploy_artifacts_simulator_noetic
+        uses: actions/download-artifact@v4
+        with:
+          name: deploy_artifacts_simulator_noetic
+          path: artifacts
 
-  #     - name: unstash deploy_simulator_artifacts
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: deploy_simulator_artifacts
-  #         path: .
+      - name: unstash deploy_simulator_artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: deploy_simulator_artifacts
+          path: .
 
-  #     - name: Setup CI Scripts in .ci-venv
-  #       shell: bash
-  #       run: |
-  #         python3 -m venv .ci-venv --clear --system-site-packages
-  #         . .ci-venv/bin/activate
-  #         [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-  #         python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-  #         python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
+      - name: Setup CI Scripts in .ci-venv
+        shell: bash
+        run: |
+          python3 -m venv .ci-venv --clear --system-site-packages
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
-  #     - name: Publish and create release
-  #       id: prepare_publish
-  #       shell: bash
-  #       run: |
-  #         set -m
-  #         set -e
-  #         . .ci-venv/bin/activate
-  #         git config --global --add safe.directory $(pwd)
-  #         git config --global user.name '${{ secrets.auto_commit_user }}'
-  #         git config --global user.email '${{ secrets.auto_commit_mail }}'
-  #         git config --global user.password ${{ secrets.auto_commit_pwd }}
+      - name: Publish and create release
+        id: prepare_publish
+        shell: bash
+        run: |
+          set -m
+          set -e
+          . .ci-venv/bin/activate
+          git config --global --add safe.directory $(pwd)
+          git config --global user.name '${{ secrets.auto_commit_user }}'
+          git config --global user.email '${{ secrets.auto_commit_mail }}'
+          git config --global user.password ${{ secrets.auto_commit_pwd }}
 
-  #         cp ./platform_configs/product.version product.version
-  #         cp ./platform_configs/product-manifest.yaml product-manifest.yaml
+          cp ./platform_configs/product.version product.version
+          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
 
-  #         mkdir -p deployment_artifacts
-  #         package-deployer join --dploy_workspace "$(pwd)/artifacts"
-  #         integration-pipeline get_image_list_from_manifest --manifest_platform_base_key product_components --docker_registry $REGISTRY
-  #         cp *.json deployment_artifacts
-  #         cp artifacts/merged.dploy deployment_artifacts/deployable.dploy
-  #         echo -e "$(cat ./artifacts/product.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
-  #         deactivate
+          mkdir -p deployment_artifacts
+          package-deployer join --dploy_workspace "$(pwd)/artifacts"
+          integration-pipeline get_image_list_from_manifest --manifest_platform_base_key product_components --docker_registry $REGISTRY
+          cp *.json deployment_artifacts
+          cp artifacts/merged.dploy deployment_artifacts/deployable.dploy
+          echo -e "$(cat ./artifacts/product.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
+          deactivate
 
-  #         cp product.version deployment_artifacts
-  #         cp product-manifest.yaml deployment_artifacts
-  #         product_version=$(cat product.version)
+          cp product.version deployment_artifacts
+          cp product-manifest.yaml deployment_artifacts
+          product_version=$(cat product.version)
 
-  #         # danger zone. Everything will be deleted.
-  #         mv product-manifest.yaml product-manifest.yaml.bck
+          # danger zone. Everything will be deleted.
+          mv product-manifest.yaml product-manifest.yaml.bck
 
-  #         git restore product.version
-  #         git restore product-manifest.yaml
-  #         git pull
+          git restore product.version
+          git restore product-manifest.yaml
+          git pull
 
-  #         # get previous version so we can generate the release report
-  #         echo "previous_version=$(cat product.version)" >> $GITHUB_OUTPUT
+          # get previous version so we can generate the release report
+          echo "previous_version=$(cat product.version)" >> $GITHUB_OUTPUT
 
-  #         # write the raised version to be committed
-  #         echo "$product_version" > product.version
+          # write the raised version to be committed
+          echo "$product_version" > product.version
 
-  #         git add product.version
-  #         git commit -m "[skip actions] Automatic Raise"
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.gh_token }}
+          git add product.version
+          git commit -m "[skip actions] Automatic Raise"
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
 
-  #     - name: Prepare raise variables
-  #       id: pre_raise
-  #       run: |
-  #         echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+      - name: Prepare raise variables
+        id: pre_raise
+        run: |
+          echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
-  #     - name: Raise App version
-  #       uses: CasperWA/push-protected@v2.14.0
-  #       with:
-  #         token: ${{ secrets.auto_commit_pwd }}
-  #         branch: ${{ steps.pre_raise.outputs.branch }}
-  #         unprotect_reviews: true
+      - name: Raise App version
+        uses: CasperWA/push-protected@v2.14.0
+        with:
+          token: ${{ secrets.auto_commit_pwd }}
+          branch: ${{ steps.pre_raise.outputs.branch }}
+          unprotect_reviews: true
 
-  #     - name: Github Publish
-  #       shell: bash
-  #       run: |
-  #         commit_hash=$(git log --format="%H" -n 1)
-  #         product_version=$(cat product.version)
-  #         previous_version_option=""
-  #         if gh release view ${{ steps.prepare_publish.outputs.previous_version }}  &>/dev/null; then
-  #           previous_version_option="--notes-start-tag ${{ steps.prepare_publish.outputs.previous_version }}"
-  #         fi
-  #         gh release create -p --generate-notes $previous_version_option --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
-  #         # add all files in the deployment_artifacts folder
-  #         find deployment_artifacts -type f -exec gh release upload $product_version {} \;
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.gh_token }}
+      - name: Github Publish
+        shell: bash
+        run: |
+          commit_hash=$(git log --format="%H" -n 1)
+          product_version=$(cat product.version)
+          previous_version_option=""
+          if gh release view ${{ steps.prepare_publish.outputs.previous_version }}  &>/dev/null; then
+            previous_version_option="--notes-start-tag ${{ steps.prepare_publish.outputs.previous_version }}"
+          fi
+          gh release create -p --generate-notes $previous_version_option --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
+          # add all files in the deployment_artifacts folder
+          find deployment_artifacts -type f -exec gh release upload $product_version {} \;
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
 
-  #     - name: Update release notes
-  #       shell: bash
-  #       run: |
-  #         # release version
-  #         product_version=$(cat product.version)
+      - name: Update release notes
+        shell: bash
+        run: |
+          # release version
+          product_version=$(cat product.version)
 
-  #         # get existent release body
-  #         ORIGINAL_RN=$(gh release view "${product_version}" --json body | jq -r .body)
-  #         echo -e "ORIGINAL_RN:\n ${ORIGINAL_RN}"
+          # get existent release body
+          ORIGINAL_RN=$(gh release view "${product_version}" --json body | jq -r .body)
+          echo -e "ORIGINAL_RN:\n ${ORIGINAL_RN}"
 
-  #         # get release PRs
-  #         PRS=$(echo "${ORIGINAL_RN}" | sed -rn "s/.* by @.* in https:\/\/github\.com\/${{ github.repository_owner }}\/${{ github.event.repository.name }}\/pull\/([0-9]+).*/\1/p" | tr '\n' ' ')
-  #         # change to array
-  #         PRS=($PRS)
-  #         echo "Found the following PRs: ${PRS[@]}"
+          # get release PRs
+          PRS=$(echo "${ORIGINAL_RN}" | sed -rn "s/.* by @.* in https:\/\/github\.com\/${{ github.repository_owner }}\/${{ github.event.repository.name }}\/pull\/([0-9]+).*/\1/p" | tr '\n' ' ')
+          # change to array
+          PRS=($PRS)
+          echo "Found the following PRs: ${PRS[@]}"
 
-  #         # new release notes file
-  #         rm -rf notes.txt
+          # new release notes file
+          rm -rf notes.txt
 
-  #         # What's Changed - with info from PRs
-  #         echo "## What's Changed" >> notes.txt
+          # What's Changed - with info from PRs
+          echo "## What's Changed" >> notes.txt
 
-  #         if [ ${#PRS[@]} -eq 0 ]; then
-  #             # no PRs exist
-  #             echo "No relevant changes." >> notes.txt
-  #         else
-  #             # PRs exist
-  #             for pr in "${PRS[@]}"; do
-  #                 gh pr view "${pr}" --json body | jq -r .body >> notes.txt
-  #             done
-  #         fi
-  #         echo "" >> notes.txt
+          if [ ${#PRS[@]} -eq 0 ]; then
+              # no PRs exist
+              echo "No relevant changes." >> notes.txt
+          else
+              # PRs exist
+              for pr in "${PRS[@]}"; do
+                  gh pr view "${pr}" --json body | jq -r .body >> notes.txt
+              done
+          fi
+          echo "" >> notes.txt
 
-  #         # PRs
-  #         echo "## PRs" >> notes.txt
-  #         if [ ${#PRS[@]} -eq 0 ]; then
-  #             # no PRs exist
-  #             echo "No PRs." >> notes.txt
-  #         else
-  #             # PRs exist
-  #             echo "${ORIGINAL_RN}" | grep "\* .* by @.* in https://github.com/${{ github.repository_owner }}/" >> notes.txt
-  #         fi
-  #         echo "" >> notes.txt
+          # PRs
+          echo "## PRs" >> notes.txt
+          if [ ${#PRS[@]} -eq 0 ]; then
+              # no PRs exist
+              echo "No PRs." >> notes.txt
+          else
+              # PRs exist
+              echo "${ORIGINAL_RN}" | grep "\* .* by @.* in https://github.com/${{ github.repository_owner }}/" >> notes.txt
+          fi
+          echo "" >> notes.txt
 
-  #         ## Diff
-  #         echo "## Diff" >> notes.txt
-  #         echo "${ORIGINAL_RN}" | grep "\*\*Full Changelog\*\*" >> notes.txt
+          ## Diff
+          echo "## Diff" >> notes.txt
+          echo "${ORIGINAL_RN}" | grep "\*\*Full Changelog\*\*" >> notes.txt
 
-  #         # set new release notes
-  #         gh release edit "${product_version}" --notes-file notes.txt
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.gh_token }}
+          # set new release notes
+          gh release edit "${product_version}" --notes-file notes.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
 
-  #     - name: Prepare slack variables
-  #       if: always()
-  #       id: pre_slack
-  #       run: |
-  #         MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-  #         echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+      - name: Prepare slack variables
+        if: always()
+        id: pre_slack
+        run: |
+          MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
 
-  #     - name: Slack message
-  #       uses: archive/github-actions-slack@master
-  #       with:
-  #         slack-function: update-message
-  #         slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-  #         slack-channel: ${{ env.SLACK_CHANNEL }}
-  #         slack-update-message-text: ${{ steps.pre_slack.outputs.msg }}
-  #         slack-update-message-ts: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
+      - name: Slack message
+        uses: archive/github-actions-slack@master
+        with:
+          slack-function: update-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-update-message-text: ${{ steps.pre_slack.outputs.msg }}
+          slack-update-message-ts: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
 
 
 
-  # Run-Status:
-  #   runs-on: ubuntu-20.04
-  #   needs: [publish, Validate-boostrap-configs]
-  #   if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled'  || needs.publish.result == 'skipped') }}
-  #   steps:
-  #     - name: unstash raised_meta
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: raised_meta
-  #         path: platform_configs
+  Run-Status:
+    runs-on: ubuntu-20.04
+    needs: [publish, Validate-boostrap-configs]
+    if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled'  || needs.publish.result == 'skipped') }}
+    steps:
+      - name: unstash raised_meta
+        uses: actions/download-artifact@v4
+        with:
+          name: raised_meta
+          path: platform_configs
 
-  #     - name: Copy product configs
-  #       shell: bash
-  #       run: |
-  #         cp ./platform_configs/product.version product.version
-  #         cp ./platform_configs/product-manifest.yaml product-manifest.yaml
+      - name: Copy product configs
+        shell: bash
+        run: |
+          cp ./platform_configs/product.version product.version
+          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
 
-  #     - name: Prepare slack variables
-  #       id: pre_slack
-  #       run: |
-  #         MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is unstable (or cancelled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-  #         echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+      - name: Prepare slack variables
+        id: pre_slack
+        run: |
+          MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is unstable (or cancelled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
 
-  #     - name: Slack message
-  #       uses: archive/github-actions-slack@master
-  #       with:
-  #         slack-function: update-message
-  #         slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-  #         slack-channel: ${{ env.SLACK_CHANNEL }}
-  #         slack-update-message-text: ${{ steps.pre_slack.outputs.msg_error }}
-  #         slack-update-message-ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+      - name: Slack message
+        uses: archive/github-actions-slack@master
+        with:
+          slack-function: update-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-update-message-text: ${{ steps.pre_slack.outputs.msg_error }}
+          slack-update-message-ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
