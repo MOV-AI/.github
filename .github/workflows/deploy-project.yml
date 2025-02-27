@@ -87,12 +87,12 @@ jobs:
           pipeline_files=$(find -L .github/workflows/ -name "RunOnD*.yml")
           key=$(cat ${pipeline_files[0]} | grep "product_name" | sed s/product_name://g | sed s/' '//g | sed s/'"'//g)
           echo "name=$key" >> $GITHUB_OUTPUT
-          
+
       - name: Download product artifacts from release
         shell: bash
         run: |
           . .ci-venv/bin/activate
-          
+
           REPO_NAME=${GITHUB_REPOSITORY#*/}
           rm product-manifest.yaml
           integration-pipeline fetch_github_release_asset --repo $REPO_NAME --version ${{ inputs.deploy_version }} --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --all_assets --target_dir ./
@@ -168,7 +168,7 @@ jobs:
 
           mkdir -p artifacts
           cp *.json artifacts/
-          CONFIG_FILE_NAME="${{ steps.product_data.outputs.name }}-noetic.json" 
+          CONFIG_FILE_NAME="${{ steps.product_data.outputs.name }}-noetic.json"
           export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_dependencies.platform_components --output_file /tmp/components.json
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_dependencies.installion.quickstart.version --output_file /tmp/quickstart_version.txt
@@ -207,7 +207,7 @@ jobs:
             # for sanity
             docker ps -a
 
-            for container in backend spawner messager-server; do
+            for container in backend spawner message-server; do
               CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
               docker logs "${CONTAINER_ID}" &> "${container}.log" || true
             done || true

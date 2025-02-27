@@ -110,6 +110,7 @@ env:
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   TIMEOUT: 720
   PROVISIONING_ENV_CONF: "0.1.0-8"
+  ARTIFACTS_RETENTION_DAYS: 15
 
 jobs:
   Validate-boostrap-configs:
@@ -162,14 +163,14 @@ jobs:
         with:
           name: robot_configs
           path: "*.json*"
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Stash sim_configs
         uses: actions/upload-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts/*
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: raise
         run: |
@@ -201,7 +202,7 @@ jobs:
         with:
           name: raised_meta
           path: platform_configs/*
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
   Standalone-Validations:
     runs-on: ubuntu-20.04
@@ -461,7 +462,7 @@ jobs:
           # for sanity
           docker ps -a
 
-          for container in backend spawner messager-server; do
+          for container in backend spawner message-server; do
              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
           done || true
@@ -484,18 +485,16 @@ jobs:
           # tests artifacts
           # *.log and *.zip might not exist if the test fails early
           mkdir -p qa_artifacts
-          cp -r "${UI_DIR}"/*.log ./qa_artifacts || true
-          cp -r "${UI_DIR}"/*.tar ./qa_artifacts || true
-          cp -r "${UI_DIR}"/*.json ./qa_artifacts || true
-          cp -r "${UI_DIR}"/*.html ./qa_artifacts || true
+          cp -r "${UI_DIR}"/*.{log,tar,json,html} ./qa_artifacts 2>/dev/null || true
+          cp -r "${UI_DIR}"/tests_artifacts ./qa_artifacts || true
 
       - name: Stash QA artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qa_artifacts_ui_tests
+          name: ${{ github.run_number }}_${{ github.run_attempt }}_qa_artifacts_ui_tests_${{ github.run_id }}
           path: qa_artifacts/*
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Remove robots
         if: always()
@@ -704,7 +703,7 @@ jobs:
           # for sanity
           docker ps -a
 
-          for container in backend spawner messager-server; do
+          for container in backend spawner message-server; do
              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
           done || true
@@ -727,19 +726,17 @@ jobs:
           # tests artifacts
           # *.log might not exist if the test fails early
           mkdir -p qa_artifacts
-          cp -r "${INSTALL_DIR}"/*.log ./qa_artifacts || true
-          cp -r "${INSTALL_DIR}"/*.tar ./qa_artifacts || true
-          cp -r "${INSTALL_DIR}"/results/*.log ./qa_artifacts || true
-          cp -r "${INSTALL_DIR}"/results/*.zip ./qa_artifacts || true
-          cp -r "${INSTALL_DIR}"/results/test_report_*.html ./qa_artifacts || true
+          cp -r "${INSTALL_DIR}"/*.{log,tar} ./qa_artifacts 2>/dev/null || true
+          cp -r "${INSTALL_DIR}"/results/*.{log,zip,test_report_*.html} ./qa_artifacts 2>/dev/null || true
+          cp -r "${INSTALL_DIR}"/tests_artifacts ./qa_artifacts || true
 
       - name: Stash QA artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qa_artifacts_install_tests
+          name: ${{ github.run_number }}_${{ github.run_attempt }}_qa_artifacts_install_tests_${{ github.run_id }}
           path: qa_artifacts/*
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Collect Installed components
         shell: bash
@@ -785,7 +782,7 @@ jobs:
         with:
           name: deploy_artifacts_noetic
           path: artifacts/*.dploy
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Stash QA artifacts
         if: always()
@@ -966,7 +963,7 @@ jobs:
           # for sanity
           docker ps -a
 
-          for container in backend spawner messager-server; do
+          for container in backend spawner message-server; do
              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
           done || true
@@ -989,17 +986,15 @@ jobs:
           # tests artifacts
           # *.log and *.zip might not exist if the test fails early
           mkdir -p qa_artifacts
-          cp -r "${API_DIR}"/*.log ./qa_artifacts || true
-          cp -r "${API_DIR}"/*.tar ./qa_artifacts || true
-          cp -r "${API_DIR}"/results/*.zip ./qa_artifacts || true
+          cp -r "${API_DIR}"/*.{log,tar} "${API_DIR}"/results/*.zip "${API_DIR}"/tests_artifacts ./qa_artifacts 2>/dev/null || true
 
       - name: Stash QA artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qa_artifacts_api_tests
+          name: ${{ github.run_number }}_${{ github.run_attempt }}_qa_artifacts_api_tests_${{ github.run_id }}
           path: qa_artifacts/*
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Remove robots
         if: always()
@@ -1194,7 +1189,7 @@ jobs:
           # for sanity
           docker ps -a
 
-          for container in backend spawner messager-server; do
+          for container in backend spawner message-server; do
              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
           done || true
@@ -1216,16 +1211,15 @@ jobs:
 
           # tests artifacts, they might not exist
           mkdir -p qa_artifacts
-          cp -r "${FLOW_DIR}"/*.log ./qa_artifacts || true
-          cp -r "${FLOW_DIR}"/*.tar ./qa_artifacts || true
+          cp -r "${FLOW_DIR}"/*.{log,tar} "${FLOW_DIR}"/tests_artifacts ./qa_artifacts 2>/dev/null || true
 
       - name: Stash QA artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qa_artifacts_flow_tests
+          name: ${{ github.run_number }}_${{ github.run_attempt }}_qa_artifacts_flow_tests_${{ github.run_id }}
           path: qa_artifacts/*
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Remove robots
         if: always()
@@ -1498,7 +1492,7 @@ jobs:
           # for sanity
           docker ps -a
 
-          for container in backend spawner messager-server; do
+          for container in backend spawner message-server; do
              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
           done || true
@@ -1563,7 +1557,7 @@ jobs:
 
             echo "From $fleet_host:"
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -a' > fleet_qa_artifacts/install/$fleet_host-docker_ps.log || true
-            echo "$(tail -n +2 fleet_qa_artifacts/install/$fleet_host-docker_ps.log )"
+            tail -n +2 fleet_qa_artifacts/install/$fleet_host-docker_ps.log
 
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u docker --boot --lines=all' > fleet_qa_artifacts/install/$fleet_host-all-docker.log || true
           done
@@ -1573,39 +1567,39 @@ jobs:
           # qa api tests artifacts
           # *.log and *.zip might not exist if the test fails early
           mkdir -p fleet_qa_artifacts/api
-          cp -r "${API_DIR}"/*.log fleet_qa_artifacts/api || true
-          cp -r "${API_DIR}"/*.tar fleet_qa_artifacts/api || true
-          cp -r "${API_DIR}"/results/*.zip fleet_qa_artifacts/api || true
+          cp -r "${API_DIR}"/*.{log,tar} "${API_DIR}"/results/*.zip fleet_qa_artifacts/api 2>/dev/null || true
 
       - name: Stash Fleet QA artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fleet_qa_artifacts
+          name: ${{ github.run_number }}_${{ github.run_attempt }}_fleet_qa_artifacts_${{ github.run_id }}
           path: ${{ steps.ansible_install_setup.outputs.target_dir }}/fleet_qa_artifacts/*
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Teardown remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         if: ${{ ( !inputs.debug_fleet_keep_alive && success() ) || cancelled() || ( !inputs.debug_fleet_keep_alive && failure() ) }}
         shell: bash
         run: |
+          set +e
           attempts=3
           count=0
+          exit_status=-1
           while [ $count -lt $attempts ]; do
             var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/hel_fleet_test.tfvars'
             terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
               break
-            elif [ $exit_status -eq 1 ]; then
+            else
               ((count++))
               echo "Retrying Terraform destroy (attempt $count)..."
-            else
-                  echo "Terraform destroy failed with exit status ${exit_status:-unknown}. Exiting..."
-                  exit ${exit_status:-1}
             fi
           done
+          set -e
+          echo "Terraform destroy returned with exit status ${exit_status}. Attempted $count times."
+          exit ${exit_status}
 
   Build-Simulator:
     needs: [Validate-boostrap-configs]
@@ -1760,7 +1754,7 @@ jobs:
         with:
           name: deploy_simulator_artifacts
           path: simulator.image.artifact
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Docker cleanups
         if: always()
@@ -1964,7 +1958,7 @@ jobs:
           # for sanity
           docker ps -a
 
-          for container in backend spawner messager-server; do
+          for container in backend spawner message-server; do
              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
           done || true
@@ -1987,16 +1981,15 @@ jobs:
           # tests artifacts
           # *.log might not exist if the test fails early
           mkdir -p qa_artifacts
-          cp -r "${SIM_DIR}"/*.log ./qa_artifacts || true
-          cp -r "${SIM_DIR}"/*.tar ./qa_artifacts || true
+          cp -r "${SIM_DIR}"/*.{log,tar} "${SIM_DIR}"/tests_artifacts ./qa_artifacts 2>/dev/null || true
 
       - name: Stash QA artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qa_artifacts_simulator_tests
+          name: ${{ github.run_number }}_${{ github.run_attempt }}_qa_artifacts_simulator_tests_${{ github.run_id }}
           path: qa_artifacts/*
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Collect Installed components
         shell: bash
@@ -2042,7 +2035,7 @@ jobs:
         with:
           name: deploy_artifacts_simulator_noetic
           path: artifacts/*.dploy
-          retention-days: 5
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Remove robots
         if: always()
@@ -2676,7 +2669,7 @@ jobs:
           mkdir -p deployment_artifacts
           package-deployer join --dploy_workspace "$(pwd)/artifacts"
           integration-pipeline get_image_list_from_manifest --manifest_platform_base_key product_components --docker_registry $REGISTRY
-          cp *.json deployment_artifacts
+          cp ./*.json deployment_artifacts
           cp artifacts/merged.dploy deployment_artifacts/deployable.dploy
           echo -e "$(cat ./artifacts/product.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
           deactivate
@@ -2744,7 +2737,7 @@ jobs:
           PRS=$(echo "${ORIGINAL_RN}" | sed -rn "s/.* by @.* in https:\/\/github\.com\/${{ github.repository_owner }}\/${{ github.event.repository.name }}\/pull\/([0-9]+).*/\1/p" | tr '\n' ' ')
           # change to array
           PRS=($PRS)
-          echo "Found the following PRs: ${PRS[@]}"
+          echo "Found the following PRs: ${PRS[*]}"
 
           # new release notes file
           rm -rf notes.txt

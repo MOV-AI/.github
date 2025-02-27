@@ -41,8 +41,8 @@ on:
         type: number
       with_simulation:
         required: false
-        type: string
-        default: 'true'
+        type: boolean
+        default: true
       with_simulation_tests:
         required: false
         type: boolean
@@ -93,7 +93,7 @@ on:
         required: false
 
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "3.0.0.1"
+  CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.27" 
   MOBTEST_VERSION: "0.0.4.3"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.26"
   GITHUB_API_USR: "OttoMation-Movai"
@@ -115,7 +115,7 @@ env:
 
 jobs:
   Validate-boostrap-configs:
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-hel0
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
@@ -167,18 +167,19 @@ jobs:
 
           integration-pipeline merge_manifest_multi_dependency $merge_manifest_args
 
-          generate_meta_sim_args="--manifest_platform_base_key product_dependencies.product_base"
-          generate_meta_sim_args="$generate_meta_sim_args --product_name ${{ inputs.product_name }}"
-          generate_meta_sim_args="$generate_meta_sim_args --update_simulator"
-          generate_meta_sim_args="$generate_meta_sim_args --branch ${GITHUB_REF#refs/heads/}"
-          generate_meta_sim_args="$generate_meta_sim_args --docker_registry ${{ env.PUSH_REGISTRY }}"
-
-          integration-pipeline generate_meta_simulator_artifacts $generate_meta_sim_args
-
-          mkdir simulator_artifacts
-          cp ci_artifacts/* ./simulator_artifacts
+          if [[ "${{ inputs.with_simulation }}" == "true" ]]; then
+            generate_meta_sim_args="--manifest_platform_base_key product_dependencies.product_base"
+            generate_meta_sim_args="$generate_meta_sim_args --product_name ${{ inputs.product_name }}"
+            generate_meta_sim_args="$generate_meta_sim_args --update_simulator"
+            generate_meta_sim_args="$generate_meta_sim_args --branch ${GITHUB_REF#refs/heads/}"
+            generate_meta_sim_args="$generate_meta_sim_args --docker_registry ${{ env.PUSH_REGISTRY }}"
+            integration-pipeline generate_meta_simulator_artifacts $generate_meta_sim_args
+            mkdir simulator_artifacts
+            cp ci_artifacts/* ./simulator_artifacts
+          fi
 
       - name: Stash sim_configs
+        if: ${{ inputs.with_simulation }}
         uses: actions/upload-artifact@v4
         with:
           name: sim_configs
@@ -227,7 +228,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-hel0
     outputs:
       raised_version: ${{ steps.pre_build.outputs.raised_version }}
       slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
@@ -263,7 +264,7 @@ jobs:
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
           source ci_scripts/bin/activate
           cat product-manifest.yaml
-          integration-pipeline generate_composite_meta_artifacts --manifest_platform_base_key "product_dependencies.products" --override_spawner ${{ inputs.product_name }}
+          integration-pipeline generate_composite_meta_artifacts --manifest_platform_base_key "product_dependencies.products" --override_spawner ${{ inputs.product_name }} --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }}
           deactivate
 
       - name: Stash manifest
@@ -397,7 +398,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-hel0
     outputs:
       slack_thread_id: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
     steps:
@@ -460,6 +461,8 @@ jobs:
       - name: Installation
         shell: bash
         run: |
+          sudo apt-mark unhold movai-service || true
+          sudo apt-mark unhold movai-cli || true
           timeout 30 movai-cli remove --all || true
 
           mkdir -p artifacts
@@ -606,7 +609,7 @@ jobs:
 
   Build-Simulator:
     needs: [Validate-boostrap-configs, Build-Spawner]
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-hel0
     env:
       DISTRO: noetic
     outputs:
@@ -617,20 +620,20 @@ jobs:
     steps:
       - name: Pre clean ups
         uses: rtCamp/action-cleanup@master
-        if: ${{ inputs.with_simulation == 'true' }}
+        if: ${{ inputs.with_simulation }}
 
       - name: Checkout
         uses: actions/checkout@v4
-        if: ${{ inputs.with_simulation == 'true' }}
+        if: ${{ inputs.with_simulation }}
 
       - name: Agent info
-        if: ${{ inputs.with_simulation == 'true' }}
+        if: ${{ inputs.with_simulation }}
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: Install CI Scripts
-        if: ${{ inputs.with_simulation == 'true' }}
+        if: ${{ inputs.with_simulation }}
         shell: bash
         run: |
           python3 -m venv ci_scripts --clear
@@ -639,14 +642,14 @@ jobs:
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash sim_configs
-        if: ${{ inputs.with_simulation == 'true' }}
+        if: ${{ inputs.with_simulation }}
         uses: actions/download-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts
 
       - name: unstash manifest
-        if: ${{ inputs.with_simulation == 'true' }}
+        if: ${{ inputs.with_simulation }}
         uses: actions/download-artifact@v4
         with:
           name: manifest
@@ -654,7 +657,7 @@ jobs:
 
       - name: Prepare Skip variables
         id: pre_simulator_build
-        if: ${{ inputs.with_simulation == 'true' }}
+        if: ${{ inputs.with_simulation }}
         run: |
           if [ ! -f "simulator_artifacts/version" ]; then
             echo "skip_simulator_build=true" >> $GITHUB_OUTPUT
@@ -664,13 +667,13 @@ jobs:
           echo "image_name=${{ env.REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
 
       - name: Lint docker image
-        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation }}
         shell: bash
         run: |
           hadolint docker/$DISTRO/Dockerfile-simulator -t error
 
       - name: Fetch artifacts
-        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation }}
         shell: bash
         run: |
           source ci_scripts/bin/activate
@@ -682,7 +685,7 @@ jobs:
           if [ ! -d ./models ]; then mkdir -p ./models; fi
 
       - name: Login to ${{ env.REGISTRY }} Registry
-        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation }}
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
@@ -690,7 +693,7 @@ jobs:
           registry: ${{ env.REGISTRY }}
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
-        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation }}
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
@@ -698,7 +701,7 @@ jobs:
           registry: ${{ env.PUSH_REGISTRY }}
 
       - name: Login to ${{ env.MID_REGISTRY }} Registry
-        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation }}
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
@@ -706,7 +709,7 @@ jobs:
           registry: ${{ env.MID_REGISTRY }}
 
       - name: Prepare docker build variables
-        if: ${{ inputs.with_simulation == 'true' }}
+        if: ${{ inputs.with_simulation }}
         id: pre_build
         run: |
           push_name_tmp=$(echo "${{ steps.pre_simulator_build.outputs.image_name }}" | sed "s-${{ env.REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
@@ -717,7 +720,7 @@ jobs:
         uses: docker/setup-buildx-action@v2
 
       - name: Docker build
-        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true'}}
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation}}
         shell: bash
         run: |
           docker build --add-host ${{ env.REGISTRY }}:172.22.0.106 \
@@ -792,20 +795,20 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-hel0
     outputs:
       slack_thread_id: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
       skip_simulator: ${{ needs.Build-Simulator.outputs.skip_simulator }}
     steps:
       - uses: rtCamp/action-cleanup@master
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation }}
 
       - name: Checkout
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation }}
         uses: actions/checkout@v4
 
       - name: Agent info
-        if: ${{ inputs.with_simulation == 'true' }}
+        if: ${{ inputs.with_simulation }}
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
@@ -819,28 +822,28 @@ jobs:
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash raised_meta
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation }}
         uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: .
 
       - name: unstash manifest
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation }}
         uses: actions/download-artifact@v4
         with:
           name: manifest
           path: .
 
       - name: unstash robot_jsons_${{ matrix.distro }}
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation }}
         uses: actions/download-artifact@v4
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: .
 
       - name: Login to ${{ env.REGISTRY }} Registry
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation }}
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
@@ -848,7 +851,7 @@ jobs:
           registry: ${{ env.REGISTRY }}
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation }}
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
@@ -863,7 +866,7 @@ jobs:
           registry: ${{ env.MID_REGISTRY }}
 
       - name: Docker load spawner image
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation }}
         shell: bash
         run: |
           docker pull "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
@@ -871,7 +874,7 @@ jobs:
           docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
 
       - name: Docker load simulator image
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation }}
         shell: bash
         run: |
           set +e
@@ -884,14 +887,16 @@ jobs:
           fi
 
       - name: Installation
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation }}
         shell: bash
         run: |
+          sudo apt-mark unhold movai-service || true
+          sudo apt-mark unhold movai-cli || true
           timeout 30 movai-cli remove --all || true
 
           mkdir -p artifacts
           cp *.json artifacts/
-          CONFIG_FILE_NAME="standalone-manager-${{ matrix.distro }}-simulation-template.json"
+          CONFIG_FILE_NAME="standalone-manager-${{ matrix.distro }}-simulator-template.json"
           mkdir -p userspace/models_database/ userspace/tugbot_ignition/
 
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
@@ -930,7 +935,7 @@ jobs:
           retention-days: 5
 
       - name: Run mobtest
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation }}
         shell: bash
         run: |
           container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
@@ -942,7 +947,7 @@ jobs:
           '
 
       - name: Output simulator image
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation }}
         id: promote
         shell: bash
         run: |
@@ -991,13 +996,13 @@ jobs:
           slack-optional-thread_ts: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
 
       - name: pre-stash
-        if: ${{ inputs.with_simulation == 'true' }}
+        if: ${{ inputs.with_simulation }}
         shell: bash
         run: |
           echo "${{ steps.promote.outputs.image_name }}" > simulator.image.artifact
 
       - name: Stash deploy_simulator_artifacts
-        if: ${{ inputs.with_simulation == 'true' }}
+        if: ${{ inputs.with_simulation }}
         uses: actions/upload-artifact@v4
         with:
           name: deploy_simulator_artifacts
@@ -1067,7 +1072,7 @@ jobs:
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=0.0.1-38
+          provision_infra_version=0.0.1-40
           provision_infra_repo_name=devops-tf-proxmox-fleet
 
           rm -rf $provision_infra_dir
@@ -1081,8 +1086,8 @@ jobs:
         run: |
           branch=$(echo ${GITHUB_REF#refs/heads/} | sed "s;\.;-;g" )
 
-          local_manager_prefix="ip-hgf-multi-$branch-manager"
-          local_worker_prefix="ip-hgf-multi-$branch-worker"
+          local_manager_prefix="ip-hgf-multi-${{ inputs.product_name }}-$branch-manager"
+          local_worker_prefix="ip-hgf-multi-${{ inputs.product_name }}-$branch-worker"
           echo "$local_manager_prefix"
           echo "$local_worker_prefix"
 
@@ -1117,6 +1122,7 @@ jobs:
           TF_VAR_template_name_no_gpu: "ubuntu-2004-cloudinit-template2"
           TF_VAR_fleet_worker_name_prefix: ${{ steps.infra_names.outputs.worker_prefix }}
           TF_VAR_fleet_worker_memory: 8192
+          TF_VAR_include_simulators: ${{ inputs.with_simulation }}
 
       - name: Prepare Devops provisioning slack message
         if: always()
@@ -1180,6 +1186,7 @@ jobs:
           '
 
       - name: Docker load Composite Simulator (Remote)
+        if: ${{ inputs.with_simulation }}
         shell: bash
         run: |
           ssh_conn_string=${{ steps.wait_for_machines.outputs.manager_ssh_conn_string }}
@@ -1416,7 +1423,7 @@ jobs:
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=0.0.1-38
+          provision_infra_version=0.0.1-40
           provision_infra_repo_name=devops-tf-proxmox-fleet
 
           rm -rf $provision_infra_dir
@@ -1430,8 +1437,8 @@ jobs:
         run: |
           branch=$(echo ${GITHUB_REF#refs/heads/} | sed "s;\.;-;g" )
 
-          local_manager_prefix="ip-hgf-$branch-manager"
-          local_worker_prefix="ip-hgf-$branch-worker"
+          local_manager_prefix="ip-hgf-${{ inputs.product_name }}-$branch-manager"
+          local_worker_prefix="ip-hgf-${{ inputs.product_name }}-$branch-worker"
           echo "$local_manager_prefix"
           echo "$local_worker_prefix"
 
@@ -1466,6 +1473,7 @@ jobs:
           TF_VAR_template_name_no_gpu: "ubuntu-2004-cloudinit-template2"
           TF_VAR_fleet_worker_name_prefix: ${{ steps.infra_names.outputs.worker_prefix }}
           TF_VAR_fleet_worker_memory: 8192
+          TF_VAR_include_simulators: ${{ inputs.with_simulation }}
 
       - name: Prepare Devops provisioning slack message
         if: always()
@@ -1528,6 +1536,7 @@ jobs:
             docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
           '
       - name: Docker load Composite Simulator (Remote)
+        if: ${{ inputs.with_simulation }}
         shell: bash
         run: |
           ssh_conn_string=${{ steps.wait_for_machines.outputs.manager_ssh_conn_string }}
@@ -1686,7 +1695,7 @@ jobs:
 
   publish:
     needs: [Install-Robot, Install-Heterogeneous-Fleet-Single-VM,Install-Heterogeneous-Fleet-Multi-VM, Install-Simulator-Robot]
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-hel0
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
@@ -1722,14 +1731,14 @@ jobs:
           path: .
 
       - name: unstash sim_configs
-        if: ${{ inputs.with_simulation == 'true' }}
+        if: ${{ inputs.with_simulation }}
         uses: actions/download-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts
 
       - name: unstash deploy_simulator_artifacts
-        if: ${{ inputs.with_simulation == 'true' }}
+        if: ${{ inputs.with_simulation }}
         uses: actions/download-artifact@v4
         with:
           name: deploy_simulator_artifacts
@@ -1764,7 +1773,7 @@ jobs:
           registry: ${{ env.PUSH_REGISTRY }}
 
       - name: Publish simulator state
-        if: ${{ needs.Install-Simulator-Robot.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        if: ${{ needs.Install-Simulator-Robot.outputs.skip_simulator == 'false' && inputs.with_simulation }}
         shell: bash
         run: |
           source ci_scripts/bin/activate
