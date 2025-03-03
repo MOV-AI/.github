@@ -29,10 +29,6 @@ on:
         required: false
         default: "mary"
         type: string
-      duration:
-        required: false
-        type: string
-        default: "UNDEFINED"
       debug_simulation_tests_keep_alive:
         required: false
         type: boolean
