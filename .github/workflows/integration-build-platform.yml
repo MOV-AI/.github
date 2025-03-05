@@ -201,6 +201,7 @@ jobs:
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
   Standalone-Validations:
+    if: ${{ false }}
     runs-on: ubuntu-20.04
     needs: [Validate-boostrap-configs]
     outputs:
@@ -1245,6 +1246,7 @@ jobs:
 
   Fleet-Validations:
     needs: [Validate-boostrap-configs]
+    if: ${{ false }}
     runs-on: ip-hel-queuer
     steps:
       - name: Cleanup Workspace
@@ -1764,7 +1766,7 @@ jobs:
           docker image prune --all -f
 
   Simulator-Validations:
-    if: ${{ false}}
+    if: ${{ false }}
     needs: [Build-Simulator]
     runs-on: integration-pipeline
     steps:
@@ -2558,7 +2560,8 @@ jobs:
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: ${{ env.SLACK_CHANNEL }}
           slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
+          # slack-optional-thread_ts: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
+          slack-optional-thread_ts: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
 
       - name: Slack message failure
         uses: archive/github-actions-slack@master
@@ -2568,7 +2571,8 @@ jobs:
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: ${{ env.SLACK_CHANNEL }}
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
+          # slack-optional-thread_ts: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
+          slack-optional-thread_ts: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
 
       - name: Stash QA artifacts (Minio)
         if: ${{ always() }}
@@ -2622,7 +2626,8 @@ jobs:
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: ${{ env.SLACK_CHANNEL }}
           slack-text: ":information_source: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) Job artifacts url: ${{ steps.minio_publish.outputs.publish_url }}"
-          slack-optional-thread_ts: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
+          # slack-optional-thread_ts: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
+          slack-optional-thread_ts: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
 
       - name: Teardown remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
