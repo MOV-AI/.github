@@ -33,6 +33,10 @@ on:
         required: false
         type: boolean
         default: false
+      proxmox_cluster_name:
+        required: false
+        type: string
+        default: hel0
 
     secrets:
       auto_commit_user:
@@ -114,7 +118,7 @@ env:
 
 jobs:
   Validate-boostrap-configs:
-    runs-on: integration-pipeline-${{ vars.PROXMOX_NAME_CLUSTER }}
+    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
@@ -216,7 +220,7 @@ jobs:
 
   Validation-UI-Tests:
     needs: [Standalone-Validations]
-    runs-on: integration-pipeline-${{ vars.PROXMOX_NAME_CLUSTER }}
+    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     outputs:
       slack_thread_id: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
     steps:
@@ -375,7 +379,7 @@ jobs:
           . test-venv/bin/activate
           python3 -m pytest \
             -ra \
-            --hub_url http://selenoid-ui.${{ vars.PROXMOX_NAME_CLUSTER }}.mov.ai \
+            --hub_url http://selenoid-ui.${{ inputs.proxmox_cluster_name }}.mov.ai \
             --base_url https://${{ steps.agent_info.outputs.ip }}/ \
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
@@ -513,7 +517,7 @@ jobs:
   Validation-Install-Tests:
     if: ${{ false}}
     needs: [Standalone-Validations]
-    runs-on: integration-pipeline-${{ vars.PROXMOX_NAME_CLUSTER }}
+    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
@@ -810,7 +814,7 @@ jobs:
 
   Validation-API-Tests:
     needs: [Standalone-Validations]
-    runs-on: integration-pipeline-${{ vars.PROXMOX_NAME_CLUSTER }}
+    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
@@ -1013,7 +1017,7 @@ jobs:
 
   Validation-Flow-Tests:
     needs: [Standalone-Validations]
-    runs-on: integration-pipeline-${{ vars.PROXMOX_NAME_CLUSTER }}
+    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
@@ -1247,7 +1251,7 @@ jobs:
 
   Fleet-Validations:
     needs: [Validate-boostrap-configs]
-    runs-on: ip-${{ vars.PROXMOX_NAME_CLUSTER }}-queuer
+    runs-on: ip-${{ inputs.proxmox_cluster_name }}-queuer
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
@@ -1326,10 +1330,10 @@ jobs:
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
         run: |
-          multiply_node=$(printf '"${{ vars.PROXMOX_NAME_CLUSTER }}",%.0s' {1..${{ steps.infra_names.outputs.total_resources }}})
+          multiply_node=$(printf '"${{ inputs.proxmox_cluster_name }}",%.0s' {1..${{ steps.infra_names.outputs.total_resources }}})
           node_list_str=${multiply_node::-1}
 
-          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ vars.PROXMOX_NAME_CLUSTER }}_fleet_test.tfvars'
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.proxmox_cluster_name }}_fleet_test.tfvars'
 
           echo "proxmox_host_list=[$node_list_str]">>input.tfvars
           echo "fleet_peer_nr=${{ inputs.fleet_number_members }}">>input.tfvars
@@ -1343,7 +1347,7 @@ jobs:
 
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
-          terraform init -backend-config="key=${{ vars.PROXMOX_NAME_CLUSTER }}-fleet-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
+          terraform init -backend-config="key=${{ inputs.proxmox_cluster_name }}-fleet-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
           terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
           terraform refresh $var_file_arg -var-file=input.tfvars
 
@@ -1442,7 +1446,7 @@ jobs:
             -e fleet_domain_dns="" \
             -e "{\"proxycerts__remote_redis_servers_fqn\": [$(cat ../staging/manager_private_ip.txt)]}" \
             -e "{\"fleet_manager_san\": [ \"DNS:$(cat ../staging/manager_private_ip.txt)\" ]}" \
-            -e "{\"fleet_extra_hosts\": [ \"10.26.0.10    registry.${{ vars.PROXMOX_NAME_CLUSTER }}.mov.ai traefik\", \"$(cat ../staging/manager_private_ip.txt)    manager ${{ steps.infra_names.outputs.manager_prefix }}\" ]}" \
+            -e "{\"fleet_extra_hosts\": [ \"10.26.0.10    registry.${{ inputs.proxmox_cluster_name }}.mov.ai traefik\", \"$(cat ../staging/manager_private_ip.txt)    manager ${{ steps.infra_names.outputs.manager_prefix }}\" ]}" \
             --skip-tags "validate,ufw,hardening"
           execution_status=$?
           deactivate
@@ -1589,7 +1593,7 @@ jobs:
           count=0
           exit_status=-1
           while [ $count -lt $attempts ]; do
-            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ vars.PROXMOX_NAME_CLUSTER }}_fleet_test.tfvars'
+            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.proxmox_cluster_name }}_fleet_test.tfvars'
             terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
@@ -1605,7 +1609,7 @@ jobs:
 
   Build-Simulator:
     needs: [Validate-boostrap-configs]
-    runs-on: integration-pipeline-${{ vars.PROXMOX_NAME_CLUSTER }}
+    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     env:
       DISTRO: noetic
     outputs:
@@ -1768,7 +1772,7 @@ jobs:
   Simulator-Validations:
     if: ${{ false }}
     needs: [Build-Simulator]
-    runs-on: integration-pipeline-${{ vars.PROXMOX_NAME_CLUSTER }}
+    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     steps:
       - uses: rtCamp/action-cleanup@master
 
@@ -2667,7 +2671,7 @@ jobs:
 
   publish:
     needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
-    runs-on: integration-pipeline-${{ vars.PROXMOX_NAME_CLUSTER }}
+    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     outputs:
       slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
     steps:
