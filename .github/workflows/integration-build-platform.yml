@@ -2399,6 +2399,8 @@ jobs:
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
 
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
             EXECUTION_FOLDER="$(pwd)/temp"
             CONTAINER_ID=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
 
