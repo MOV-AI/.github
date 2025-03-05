@@ -77,8 +77,6 @@ env:
   PROVISIONING_ENV_VERSION: 0.1.0-9
   PROVISIONING_ENV_REPO: devops-tf-env-conf
   ARTIFACTS_RETENTION_DAYS: 15
-  vars:
-  RUNNER_LABEL: integration-pipeline-hel0
 
 jobs:
   Validate-boostrap-configs:
