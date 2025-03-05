@@ -77,10 +77,12 @@ env:
   PROVISIONING_ENV_VERSION: 0.1.0-9
   PROVISIONING_ENV_REPO: devops-tf-env-conf
   ARTIFACTS_RETENTION_DAYS: 15
+  vars:
+  RUNNER_LABEL: integration-pipeline-hel0
 
 jobs:
   Validate-boostrap-configs:
-    runs-on: integration-pipeline-hel0
+    runs-on: ${{ vars.RUNNER_LABEL }}
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
@@ -180,7 +182,7 @@ jobs:
 
   Validation-UI-Tests:
     needs: [Standalone-Validations]
-    runs-on: integration-pipeline-hel0
+    runs-on: ${{ vars.RUNNER_LABEL }}
     outputs:
       slack_thread_id: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
     steps:
@@ -476,7 +478,7 @@ jobs:
 
   Validation-Install-Tests:
     needs: [Standalone-Validations]
-    runs-on: integration-pipeline-hel0
+    runs-on: ${{ vars.RUNNER_LABEL }}
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
@@ -773,7 +775,7 @@ jobs:
 
   Validation-API-Tests:
     needs: [Standalone-Validations]
-    runs-on: integration-pipeline-hel0
+    runs-on: ${{ vars.RUNNER_LABEL }}
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
@@ -976,7 +978,7 @@ jobs:
 
   Validation-Flow-Tests:
     needs: [Standalone-Validations]
-    runs-on: integration-pipeline-hel0
+    runs-on: ${{ vars.RUNNER_LABEL }}
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
@@ -1567,7 +1569,7 @@ jobs:
 
   Build-Simulator:
     needs: [Validate-boostrap-configs]
-    runs-on: integration-pipeline-hel0
+    runs-on: ${{ vars.RUNNER_LABEL }}
     env:
       DISTRO: noetic
     outputs:
@@ -1729,7 +1731,7 @@ jobs:
 
   Simulator-Validations:
     needs: [Build-Simulator]
-    runs-on: integration-pipeline-hel0
+    runs-on: ${{ vars.RUNNER_LABEL }}
     steps:
       - uses: rtCamp/action-cleanup@master
 
@@ -2016,7 +2018,7 @@ jobs:
 
   publish:
     needs: [Validations-Finish, Fleet-Validations, Simulator-Validations]
-    runs-on: integration-pipeline-hel0
+    runs-on: ${{ vars.RUNNER_LABEL }}
     outputs:
       slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
     steps:
