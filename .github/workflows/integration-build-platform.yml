@@ -77,6 +77,10 @@ on:
         required: true
       xray_secret:
         required: true
+      minio_key_id:
+        required: true
+      minio_secret_key_id:
+        required: true
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "2.1.0.23"
   CI_INTEGRATION_CONTAINER_VERSION: "4.0.0.21"
