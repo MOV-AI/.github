@@ -1768,7 +1768,6 @@ jobs:
           docker image prune --all -f
 
   Simulator-Validations:
-    if: ${{ false }}
     needs: [Build-Simulator]
     runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     steps:
