@@ -209,7 +209,6 @@ jobs:
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
   Standalone-Validations:
-    if: ${{ false }}
     runs-on: ubuntu-20.04
     needs: [Validate-boostrap-configs]
     outputs:
@@ -515,7 +514,6 @@ jobs:
           docker image prune --all -f
 
   Validation-Install-Tests:
-    if: ${{ false}}
     needs: [Standalone-Validations]
     runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     steps:
@@ -2671,6 +2669,7 @@ jobs:
 
   publish:
     needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
+    if: ${{ false }}
     runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     outputs:
       slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
