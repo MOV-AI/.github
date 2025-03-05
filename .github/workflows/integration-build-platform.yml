@@ -2052,10 +2052,12 @@ jobs:
           docker image prune --all -f
 
   Robotic-Stack-Integration:
-    needs: [Simulator-Validations, Validations-Finish]
+    # needs: [Simulator-Validations, Validations-Finish]
+    needs: [Build-Simulator]
     runs-on: simul-${{ inputs.cluster }}-queuer
     outputs:
-      slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
+    #  slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
+      slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
