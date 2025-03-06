@@ -1,0 +1,694 @@
+name: Robotic Tests
+on:
+  workflow_call:
+    inputs:
+      product_name:
+        required: true
+        type: string
+      vs_product_version_pattern:
+        required: false
+        type: string
+        default: "2.4.3-*"
+      vs_product_name:
+        required: false
+        type: string
+        default: "project-movai-studio"
+      cluster:
+        required: false
+        default: "mary"
+        type: string
+      debug_simulation_tests_keep_alive:
+        required: false
+        type: boolean
+        default: false
+      slack_thread_id:
+        required: true
+        type: string
+
+    secrets:
+      auto_commit_user:
+        required: true
+      auto_commit_pwd:
+        required: true
+      registry_user:
+        required: true
+      registry_password:
+        required: true
+      gh_token:
+        required: true
+      aws_key_id:
+        required: true
+      aws_secret_key_id:
+        required: true
+      slack_token_id:
+        required: true
+      proxmox_ve_sim_username:
+        required: true
+      proxmox_ve_sim_password:
+        required: true
+      ssh_priv_key:
+        required: true
+      jira_username:
+        required: true
+      jira_password:
+        required: true
+      xray_clientid:
+        required: true
+      xray_secret:
+        required: true
+      minio_key_id:
+        required: true
+      minio_secret_key_id:
+        required: true
+env:
+  CI_INTEGRATION_SCRIPTS_VERSION: "2.1.0.23"
+  CI_INTEGRATION_CONTAINER_VERSION: "4.0.0.21"
+  GITHUB_API_USR: "OttoMation-Movai"
+  AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
+  AWS_DEFAULT_REGION: "us-east-1"
+  REGISTRY: registry.cloud.mov.ai
+  ENV: qa
+  USERSPACE_FOLDER_PATH: userspace
+  REMOTE_WORKSPACE_PATH: workspace
+  SIMULATION_ID: ci_simulation
+  XRAY_CLIENTID: ${{ secrets.xray_clientid}}
+  XRAY_SECRET: ${{ secrets.xray_secret}}
+  JIRA_USERNAME: ${{ secrets.jira_username}}
+  JIRA_PASSWORD: ${{ secrets.jira_password}}
+  SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
+  PROVISIONING_ENV_VERSION: 0.1.0-9
+  PROVISIONING_ENV_REPO: devops-tf-env-conf
+  PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
+  PROVISION_INFRA_VERSION: "2.0.0-3"
+  MINIO_S3_URL: "https://s3.mov.ai"
+  MINIO_PUBLIC_URL: "https://minio.mov.ai"
+  TIMEOUT: 720
+  PROVISIONING_ENV_CONF: "0.1.0-8"
+  ARTIFACTS_RETENTION_DAYS: 15
+
+jobs:
+  Robotic-Stack-Integration:
+    runs-on: simul-${{ inputs.cluster }}-queuer
+    steps:
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Agent info
+        id: agent_info
+        run: |
+          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
+
+      - name: Login to Private Registry
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.REGISTRY }}
+
+      - name: Setup CI Scripts in .ci-venv
+        shell: bash
+        run: |
+          python3 -m venv .ci-venv --clear
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+
+      - name: Setup infra environment configs
+        id: infra_env_configs_setup
+        shell: bash
+        run: |
+          env_configs_dir=infra_env_configs
+          env_configs_version=${{ env.PROVISIONING_ENV_CONF }}
+          env_configs_repo_name=devops-tf-env-conf
+
+          rm -rf $env_configs_dir
+          . .ci-venv/bin/activate
+          integration-pipeline fetch_by_tag --repo $env_configs_repo_name --version $env_configs_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $env_configs_dir
+          ls -la $env_configs_dir
+          echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
+          deactivate
+
+      - name: Setup terraform proxmox provisioner
+        id: provision_infra_setup
+        shell: bash
+        run: |
+          provision_infra_dir=provision_scripts
+          provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
+          provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
+
+          rm -rf $provision_infra_dir
+          . .ci-venv/bin/activate
+          integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
+          deactivate
+          ls -la $provision_infra_dir
+          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+
+      - name: Define Instance names
+        id: infra_names
+        shell: bash
+        run: |
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          # TO BE DELETED
+          BRANCH_NAME=${{ github.base_ref }}
+          branch=$(echo ${BRANCH_NAME} | sed "s;\.;-;g" )
+
+          run_type="ci"
+
+          local_manager_prefix="ip-$run_type-${{ inputs.cluster }}-${{ inputs.product_name }}-$branch"
+
+          tf_state="${{ inputs.cluster }}-sim-$local_manager_prefix"
+          echo "simul_prefix=${local_manager_prefix}" | tee >> $GITHUB_OUTPUT
+          echo "tfstate_name=${tf_state}" | tee >> $GITHUB_OUTPUT
+
+
+      - name: Provision remote vms (Proxmox)
+        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        shell: bash
+        run: |
+          multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..1})
+          node_list_str=${multiply_node::-1}
+
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
+
+          echo "proxmox_host_list=[$node_list_str]">>input.tfvars
+          echo "fleet_peer_nr=0">>input.tfvars
+          echo 'fleet_password="${{ secrets.provision_infra_pwd }}"'>>input.tfvars
+          echo 'fleet_manager_name="${{ steps.infra_names.outputs.simul_prefix }}"'>>input.tfvars
+          echo 'ip_list=["dhcp"]'>>input.tfvars
+          echo 'tags=["ip-simul-ci"]'>>input.tfvars
+          echo 'pool="IP-Temp-VMs"'>>input.tfvars
+          echo 'proxmox_ve_username="${{ secrets.proxmox_ve_sim_username }}"'>>input.tfvars
+          echo 'proxmox_ve_password="${{ secrets.proxmox_ve_sim_password }}"'>>input.tfvars
+          echo "\n">>input
+
+          echo "File args: $var_file_arg"
+          echo "Input File args: $(cat input.tfvars)"
+          terraform init -backend-config="key=${{ inputs.cluster }}-ci-simul-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
+          terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
+          terraform refresh $var_file_arg -var-file=input.tfvars
+
+          echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
+          sudo chmod 600 ~/.ssh/ci_priv_key.pem
+
+      - name: Gather Terraform outputs
+        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        id: infra_outputs
+        shell: bash
+        run: |
+          ip=$(terraform output manager_ip_address)
+          user=$(terraform output user)
+          echo "host_ip=$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
+          echo "host_user=$(echo $user | sed "s;\";;g")" >> $GITHUB_OUTPUT
+          echo "ssh_connect_string=$(echo $user | sed "s;\";;g")@$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
+
+      - name: Configure SSH
+        id: remote_ssh_setup
+        shell: bash
+        run: |
+          ssh-keygen -f ~/.ssh/known_hosts -R ${{ steps.infra_outputs.outputs.host_ip }} || true
+          ssh-keyscan -H ${{ steps.infra_outputs.outputs.host_ip }} >> ~/.ssh/known_hosts || true
+
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cloud-init status --wait; rm -rf ./${{ env.REMOTE_WORKSPACE_PATH }}; mkdir -p ./${{ env.REMOTE_WORKSPACE_PATH }}
+          '
+
+      - name: Prepare Devops provisioning slack message
+        if: ${{ github.event_name != 'pull_request' }}
+        id: pre_slack_infra
+        run: |
+          MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is being impacted by an infrastructural issue. \
+          Provisioning of fleet infrastructure failed. Please take a look! \
+          Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+
+      - name: Slack message failure
+        if: ${{ failure() && github.event_name != 'pull_request' }}
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          channel-id: "G0102LEV1CL"
+          slack-message: ${{ steps.pre_slack_infra.outputs.msg_error }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+
+      - name: Remote - Agent info
+        id: agent_info_remote
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            ip=$(hostname -I | cut -d " " -f1)
+            echo $ip '
+
+      - name: Nvidia slack message
+        id: nvidia_err_msg
+        run: |
+          echo "msg_error=Nvidia container error detected.\
+          Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
+
+      - name: Remote - Detect Nvidia mismatch
+        shell: bash
+        id: nvidia_check
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -t '
+              set -e
+              Architecture="$(uname -m)"
+              distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+              curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg --yes
+              curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | sed "s#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g" | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+              sudo apt-get update -q > /dev/null && sudo apt-get install -yq nvidia-docker2 nvidia-container-toolkit
+          '
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+              sudo systemctl restart docker
+              sleep 3
+              docker run --gpus=all --rm nvcr.io/nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi 2>&1
+              '
+
+      - name: Slack message failure
+        if: ${{ failure() && github.event_name != 'pull_request' }}
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          channel-id: "G0102LEV1CL"
+          slack-message: ${{ steps.nvidia_err_msg.outputs.msg_error }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+
+      - name: Remote - Login to Registry
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+          '
+
+      - name: unstash robot_configs
+        uses: actions/download-artifact@v4
+        with:
+          name: robot_configs
+          path: .
+
+      - name: Remote - unstash robot configs
+        shell: bash
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ./*.json* ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
+
+      - name: Remote - unstash manifest
+        shell: bash
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no product-manifest.yaml ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/product-manifest.yaml
+
+      - name: Remote - create execution folder
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
+            EXECUTION_FOLDER="$(pwd)/temp"
+            sudo rm -rf $EXECUTION_FOLDER
+            mkdir  -p $EXECUTION_FOLDER/platform
+            cp product-manifest.yaml $EXECUTION_FOLDER/platform/product-manifest.yaml
+            sudo chmod -R 777 $EXECUTION_FOLDER
+          '
+
+      - name: Remote - Fetch product version and merge platform product
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
+            WORKSPACE=/opt/mov.ai/workspace
+            EXECUTION_FOLDER="$(pwd)/temp"
+            docker run -u root \
+              -v "$EXECUTION_FOLDER":$WORKSPACE \
+              -i registry.cloud.mov.ai/qa/ci-tools:${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              merge_platform_product \
+              --product_version_search ${{ inputs.vs_product_version_pattern }} \
+              --product_repo ${{ inputs.vs_product_name }} \
+              --gh_api_user ${{ secrets.auto_commit_user }} \
+              --gh_api_pwd ${{ secrets.auto_commit_pwd }}
+          '
+
+      - name: Remote - Setup Integration tests
+        id: simulator_tests_setup
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
+            qa_key=simulator_tests
+            WORKSPACE=/opt/mov.ai/workspace
+            EXECUTION_FOLDER="$(pwd)/temp"
+
+            docker run -u root \
+              -v "$EXECUTION_FOLDER":$WORKSPACE \
+              -i registry.cloud.mov.ai/qa/ci-tools:${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              fetch_test_by_manifest \
+              --file product-manifest.yaml \
+              --key product_components.qa.$qa_key \
+              --gh_api_user ${{ secrets.auto_commit_user }} \
+              --gh_api_pwd ${{ secrets.auto_commit_pwd }}
+
+            # install test dependencies
+            target_dir=$(cat $EXECUTION_FOLDER/target_dir.txt)
+            rm -rf venv
+            python3 -m venv venv
+            . venv/bin/activate
+            python3 -m pip install --upgrade pip
+            pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r $EXECUTION_FOLDER/$target_dir/requirements.txt
+            sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
+            export PYTHONPATH="/usr/lib/python3/dist-packages"
+          '
+
+          scp -r -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/temp/*.txt /tmp/
+
+          echo "target_dir=$(cat /tmp/target_dir.txt)" >> $GITHUB_OUTPUT
+          echo "test_dir=$(cat /tmp/test_dir.txt)" >> $GITHUB_OUTPUT
+
+      - name: Remote - Install
+        id: install
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+
+            export DISPLAY="$(w -oush | grep -Eo " :[0-9]+" | uniq | cut -d \  -f 2)"
+            echo "Display detected (dinamic) is $DISPLAY"
+            export DISPLAY=":0"
+            echo "Display detected is $DISPLAY"
+
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
+            CONFIG_FILE_NAME="standalone-spawner-solution-simulator-noetic.json"
+
+            export PATH="$HOME/.local/bin:$PATH"
+            WORKSPACE=/opt/mov.ai/workspace
+            EXECUTION_FOLDER="$(pwd)/temp"
+
+            docker run -u root \
+              -v "$EXECUTION_FOLDER":$WORKSPACE \
+              -i registry.cloud.mov.ai/qa/ci-tools:${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              get_json_value --file $CONFIG_FILE_NAME.ci \
+              --key services_version \
+              --output_file movai_service_version
+            docker run -u root \
+              -v "$EXECUTION_FOLDER":$WORKSPACE \
+              -i registry.cloud.mov.ai/qa/ci-tools:${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              get_json_value --file $CONFIG_FILE_NAME.ci \
+              --key quickstart_version \
+              --output_file quickstart_version
+
+            cp -r $EXECUTION_FOLDER/* ./ && sudo rm -rf $EXECUTION_FOLDER
+
+            export USERSPACE_FOLDER_PATH="/opt/userspace"
+            sudo mkdir -p $USERSPACE_FOLDER_PATH/.git;sudo chown 1000:1000 $USERSPACE_FOLDER_PATH/ -Rf
+            export PUBLIC_IP="$(hostname -I | cut -d " " -f1)"
+            export SIMULATION_ID="CI"
+            export ROBOTNAME="ci_${{ inputs.product_name }}"
+            rm -rf userspace
+
+            # Enable debug logs of movai-service
+            sudo mkdir -p /etc/movai/
+            sudo sh -c "echo MOVAI_SERVICE_LOGGER_LEVEL=DEBUG >> /etc/movai/config.env"
+            sudo chmod -R +r /etc/movai
+
+            wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
+            chmod +x ./QuickStart_$(cat quickstart_version).bash
+            ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
+            MOVAI_USER="ci"
+            MOVAI_PWD="4Iva6UHAQq9DGITj"
+            for robot in $(movai-cli robots list); do
+              movai-cli robots user "$robot" "$MOVAI_USER" "$MOVAI_PWD"
+            done
+
+            execution_status=$?
+            exit $execution_status
+            rm movai_service_version
+          '
+          echo "movai_user=ci" >> $GITHUB_OUTPUT
+          echo "movai_pwd=4Iva6UHAQq9DGITj" >> $GITHUB_OUTPUT
+
+      - name: Remote - Firmware Patch
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
+            EXECUTION_FOLDER="$(pwd)/temp"
+            CONTAINER_ID=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
+
+            mkdir -p firmwares/
+            cp ./*.apt firmwares/
+            docker cp firmwares/ $CONTAINER_ID:/tmp/
+
+            # Install system requirements
+            docker exec -t -u root $CONTAINER_ID bash -c "\
+            set -e
+            ls -la /tmp/firmwares/
+            apt update
+            # Add archive-focal-backup proxy
+            echo \"deb [arch=all,amd64] https://artifacts.cloud.mov.ai/repository/ppa-archive-focal-backup focal-backup main\" >> /etc/apt/sources.list.d/movai-backup.list
+            # Add ppa-ports-focal-backup proxy
+            echo \"deb [arch=all,amd64] https://artifacts.cloud.mov.ai/repository/ppa-ports-focal-backup ports-focal-backup main\" >> /etc/apt/sources.list.d/movai-backup.list
+            # Add ros-proxy and ros-proxy-backup
+            echo \"deb https://artifacts.cloud.mov.ai/repository/ppa-proxy-ros-backup ros-backup main\" >> /etc/apt/sources.list.d/movai-backup.list
+            apt update
+            mobros install \$(cat /tmp/firmwares/sys_req_proj_base.apt) -y
+            rm -rf /etc/apt/sources.list.d/movai-backup.list
+            "
+
+            docker restart $CONTAINER_ID
+
+            # Reinforce the container with the firmware packages as /tmp/ is deleted on restart
+            docker cp firmwares/ $CONTAINER_ID:/tmp/
+
+            # Install firmware packages to transform spawner -> studio and then studio -> Project specific
+            docker exec -t -u root $CONTAINER_ID bash -c "\
+            set -e
+            ls -la /tmp/firmwares/
+
+            apt update
+
+            PKG_LIST=\"\$PKG_LIST \$(cat /tmp/firmwares/firmware_proj_specific.apt | tr \" \" "\n")\"
+
+            PKG_LIST=\"\$PKG_LIST \$(cat /tmp/firmwares/simul_firmware_proj_specific.apt | tr \" \" "\n")\"
+
+            echo \"mobros install \$PKG_LIST -y --fail-on-apt-update\"
+            mobros install \$PKG_LIST -y --fail-on-apt-update
+
+            "
+            docker restart $CONTAINER_ID
+            '
+
+      - name: Remote - Integration tests
+        id: simulation_tests
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
+            export DISPLAY="$(w -oush | grep -Eo " :[0-9]+" | uniq | cut -d \  -f 2)"
+            echo "Display detected (dinamic) is $DISPLAY"
+            export DISPLAY=":0"
+            echo "Display detected is $DISPLAY"
+            xhost +local:docker
+
+            export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
+            . venv/bin/activate
+
+            # run tests
+            marker='ci'
+
+            cd ${{ steps.simulator_tests_setup.outputs.target_dir }}
+
+            pytest \
+                ${{ steps.simulator_tests_setup.outputs.test_dir }} \
+                -m $marker \
+                --movai-user ${{ steps.install.outputs.movai_user }} \
+                --movai-pw ${{ steps.install.outputs.movai_pwd }} \
+                --tb=short \
+                --out-values test-output.json \
+                --ext-metrics
+
+            deactivate
+          '
+
+
+      - name: Remote - Save docker container logs
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.simulator_tests_setup.outputs.target_dir }}
+
+            # for sanity
+            docker ps -a
+
+            for container in backend spawner messager-server; do
+              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
+              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
+            done || true
+
+            # movai-service
+            journalctl -u movai-service --since "1hour ago" &> "movai-service.log"
+
+            # spawner (mobros firmware)
+            journalctl -u movai-service -t mobros --since "1hour ago" &> spawner-firmware.log || true
+
+            # docker logs
+            journalctl -u docker --since "1hour ago" &> "docker-service.log"
+          '
+
+      - name: Remote - Stash QA artifacts
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
+            # cleanup
+            rm -rf qa_artifacts
+
+            # tests artifacts
+            # *.log might not exist if the test fails early
+            mkdir -p qa_artifacts
+            cp -r "${{ steps.simulator_tests_setup.outputs.target_dir }}"/*.log ./qa_artifacts || true
+          '
+          scp -r -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/qa_artifacts .
+
+      - name: Get current job id
+        if: always()
+        shell: bash
+        id: job_info
+        run: |
+          job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
+          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
+          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+      - name: Prepare slack variables
+        if: ${{ always() && github.event_name != 'pull_request' }}
+        id: pre_slack_result
+        run: |
+          MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
+          MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
+          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+
+      - name: Slack message success
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: archive/github-actions-slack@master
+        with:
+          slack-function: send-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-text: ${{ steps.pre_slack_result.outputs.msg }}
+          slack-optional-thread_ts: ${{ inputs.slack_thread_id }}
+
+      - name: Slack message failure
+        uses: archive/github-actions-slack@master
+        if: ${{ failure() && github.event_name != 'pull_request' }}
+        with:
+          slack-function: send-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
+          slack-optional-thread_ts: ${{ inputs.slack_thread_id }}
+
+      - name: Stash QA artifacts (Minio)
+        if: ${{ always() }}
+        shell: bash
+        id: minio_publish
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install --update
+          URI_OBJ_PATH=ci-artifacts/${{ github.repository }}/$(date '+%Y_%m_%d')/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}
+
+          MAX_RETRIES=5
+          RETRY_DELAY=10
+          SUCCESS=false
+          for i in $(seq 1 $MAX_RETRIES); do
+           echo "Attempt $i of $MAX_RETRIES: Uploading artifacts to Minio"
+              aws --endpoint-url "${{ env.MINIO_S3_URL }}" \
+                  s3 cp qa_artifacts/ \
+                  s3://$URI_OBJ_PATH \
+                  --recursive \
+                  --content-type="text/plain"
+              if [[ $? -eq 0 ]]; then
+                  SUCCESS=true
+                  echo "Upload successful!"
+                  break
+              else
+                  echo "Upload failed. Retrying in $RETRY_DELAY seconds..."
+                  sleep $RETRY_DELAY
+              fi
+          done
+          if [[ "$SUCCESS" == "false" ]]; then
+              echo "Failed to upload after $MAX_RETRIES attempts. Exiting..."
+              exit 1
+          fi
+
+          PUBLISH_URL="${{ env.MINIO_PUBLIC_URL }}/browser/$URI_OBJ_PATH"
+          echo "publish_url=$PUBLISH_URL" >> $GITHUB_OUTPUT
+
+
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.minio_key_id }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.minio_secret_key_id }}
+          AWS_DEFAULT_REGION: "us-east-1"
+          AWS_DEFAULT_OUTPUT: "none"
+
+      - name: Slack message Artifact info
+        uses: archive/github-actions-slack@master
+        if: ${{ always() && github.event_name != 'pull_request' }}
+        with:
+          slack-function: send-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-text: ":information_source: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) Job artifacts url: ${{ steps.minio_publish.outputs.publish_url }}"
+          slack-optional-thread_ts: ${{ inputs.slack_thread_id }}
+
+      - name: Teardown remote vms (Proxmox)
+        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        if: ${{ inputs.debug_simulation_tests_keep_alive == false && always() }}
+        shell: bash
+        run: |
+          attempts=3
+          count=0
+          while [ $count -lt $attempts ]; do
+            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+            exit_status=$?
+            if [ $exit_status -eq 0 ]; then
+              break
+            elif [ $exit_status -eq 1 ]; then
+              ((count++))
+              echo "Retrying Terraform destroy (attempt $count)..."
+            else
+                  echo "Terraform destroy failed with exit status ${exit_status:-unknown}. Exiting..."
+                  exit ${exit_status:-1}
+            fi
+          done
+
+      - name: Job Summary Success
+        shell: bash
+        run: |
+          summary_message=":white_check_mark: Successfully passed\n Artifacts url: ${{ steps.minio_publish.outputs.publish_url }}"
+          echo -e "## ${{ github.job }} Summary\n${summary_message}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Job Summary Failure
+        if: failure()
+        shell: bash
+        run: |
+          summary_message=":x: Failed \n Artifacts url: ${{ steps.minio_publish.outputs.publish_url }}"
+          echo -e "## ${{ github.job }} Summary\n${summary_message}" >> $GITHUB_STEP_SUMMARY
+
