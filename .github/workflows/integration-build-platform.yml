@@ -17,14 +17,6 @@ on:
       fleet_number_members:
         required: true
         type: number
-      vs_product_version_pattern:
-        required: false
-        type: string
-        default: "2.4.3-*"
-      vs_product_name:
-        required: false
-        type: string
-        default: "project-movai-studio"
       cluster:
         required: false
         default: "mary"
