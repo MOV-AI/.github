@@ -156,9 +156,6 @@ jobs:
         shell: bash
         run: |
           BRANCH_NAME=${GITHUB_REF#refs/heads/}
-          # TO BE DELETED
-          BRANCH_NAME=${{ github.base_ref }}
-          branch=$(echo ${BRANCH_NAME} | sed "s;\.;-;g" )
 
           run_type="ci"
 
