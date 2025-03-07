@@ -61,8 +61,7 @@ on:
       minio_secret_key_id:
         required: true
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "2.1.0.23"
-  CI_INTEGRATION_CONTAINER_VERSION: "4.0.0.21"
+  CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.0.0.21"
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
@@ -109,13 +108,13 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.REGISTRY }}
 
-      - name: Setup CI Scripts in .ci-venv
+      - name: Create execution folder
         shell: bash
         run: |
-          python3 -m venv .ci-venv --clear
-          . .ci-venv/bin/activate
-          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          EXECUTION_FOLDER="$(pwd)/temp"
+          sudo rm -rf $EXECUTION_FOLDER
+          mkdir  -p $EXECUTION_FOLDER
+          sudo chmod -R 777 $EXECUTION_FOLDER
 
       - name: Setup infra environment configs
         id: infra_env_configs_setup
@@ -126,11 +125,19 @@ jobs:
           env_configs_repo_name=devops-tf-env-conf
 
           rm -rf $env_configs_dir
-          . .ci-venv/bin/activate
-          integration-pipeline fetch_by_tag --repo $env_configs_repo_name --version $env_configs_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $env_configs_dir
+          EXECUTION_FOLDER="$(pwd)/temp"
+          docker run \
+            -v "$EXECUTION_FOLDER":/opt/mov.ai/workspace \
+            -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+            fetch_by_tag --repo $env_configs_repo_name \
+            --version $env_configs_version \
+            --gh_api_user $GITHUB_API_USR \
+            --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
+            --target_dir $env_configs_dir
+          mv -r $EXECUTION_FOLDER/* ./ 
+          
           ls -la $env_configs_dir
           echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
-          deactivate
 
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
@@ -141,9 +148,17 @@ jobs:
           provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
 
           rm -rf $provision_infra_dir
-          . .ci-venv/bin/activate
-          integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
-          deactivate
+          EXECUTION_FOLDER="$(pwd)/temp"
+          docker run \
+            -v "$EXECUTION_FOLDER":/opt/mov.ai/workspace \
+            -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+            fetch_by_tag --repo $provision_infra_repo_name \
+            --version $provision_infra_version \
+            --gh_api_user $GITHUB_API_USR \
+            --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
+            --target_dir $provision_infra_dir
+          mv -r $EXECUTION_FOLDER/* ./
+
           ls -la $provision_infra_dir
           echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
 
@@ -323,7 +338,7 @@ jobs:
             EXECUTION_FOLDER="$(pwd)/temp"
             docker run -u root \
               -v "$EXECUTION_FOLDER":$WORKSPACE \
-              -i registry.cloud.mov.ai/qa/ci-tools:${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               merge_platform_product \
               --product_version_search ${{ inputs.vs_product_version_pattern }} \
               --product_repo ${{ inputs.vs_product_name }} \
@@ -345,7 +360,7 @@ jobs:
 
             docker run -u root \
               -v "$EXECUTION_FOLDER":$WORKSPACE \
-              -i registry.cloud.mov.ai/qa/ci-tools:${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               fetch_test_by_manifest \
               --file product-manifest.yaml \
               --key product_components.qa.$qa_key \
@@ -390,13 +405,13 @@ jobs:
 
             docker run -u root \
               -v "$EXECUTION_FOLDER":$WORKSPACE \
-              -i registry.cloud.mov.ai/qa/ci-tools:${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               get_json_value --file $CONFIG_FILE_NAME.ci \
               --key services_version \
               --output_file movai_service_version
             docker run -u root \
               -v "$EXECUTION_FOLDER":$WORKSPACE \
-              -i registry.cloud.mov.ai/qa/ci-tools:${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               get_json_value --file $CONFIG_FILE_NAME.ci \
               --key quickstart_version \
               --output_file quickstart_version
