@@ -98,12 +98,7 @@ env:
   #SLACK_CHANNEL: "C05K2KF1UP8"
   PROVISIONING_ENV_VERSION: 0.1.0-9
   PROVISIONING_ENV_REPO: devops-tf-env-conf
-  PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-3"
-  MINIO_S3_URL: "https://s3.mov.ai"
-  MINIO_PUBLIC_URL: "https://minio.mov.ai"
   TIMEOUT: 720
-  PROVISIONING_ENV_CONF: "0.1.0-8"
   ARTIFACTS_RETENTION_DAYS: 15
 
 jobs:
