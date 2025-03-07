@@ -150,6 +150,9 @@ jobs:
           echo ""
           echo "ERROR, the following files have changed:"
           git diff --name-only HEAD
+          echo ""
+          echo "Changes:"
+          git diff HEAD
           exit 1
         fi
 
