@@ -5,14 +5,6 @@ on:
       product_name:
         required: true
         type: string
-      vs_product_version_pattern:
-        required: false
-        type: string
-        default: "2.4.3-*"
-      vs_product_name:
-        required: false
-        type: string
-        default: "project-movai-studio"
       cluster:
         required: false
         default: "mary"
@@ -336,12 +328,28 @@ jobs:
 
             WORKSPACE=/opt/mov.ai/workspace
             EXECUTION_FOLDER="$(pwd)/temp"
+            docker run \
+              -v "$EXECUTION_FOLDER/platform":$WORKSPACE \
+              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              get_yml_value \
+              --file product-manifest.yaml \
+              --key  product_components.integration.integration_project.name \
+              --output_file integration_project_name
+            docker run \
+              -v "$EXECUTION_FOLDER/platform":$WORKSPACE \
+              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              get_yml_value \
+              --file product-manifest.yaml \
+              --key product_components.integration.integration_project.version \
+              --output_file integration_project_version
+            integration_project_name=$(cat $EXECUTION_FOLDER/platform/integration_project_name)
+            integration_project_version=$(cat $EXECUTION_FOLDER/platform/integration_project_version)
             docker run -u root \
               -v "$EXECUTION_FOLDER":$WORKSPACE \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               merge_platform_product \
-              --product_version_search ${{ inputs.vs_product_version_pattern }} \
-              --product_repo ${{ inputs.vs_product_name }} \
+              --product_version_search $integration_project_version \
+              --product_repo $integration_project_name \
               --gh_api_user ${{ secrets.auto_commit_user }} \
               --gh_api_pwd ${{ secrets.auto_commit_pwd }}
           '
