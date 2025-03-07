@@ -2050,6 +2050,8 @@ jobs:
     with:
       product_name: ${{ inputs.product_name }}
       slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
+      cluster: ${{ inputs.cluster }}
+      debug_simulation_tests_keep_alive: ${{ inputs.debug_simulation_tests_keep_alive }}
 
   publish:
     needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
