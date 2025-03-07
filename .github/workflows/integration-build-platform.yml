@@ -88,7 +88,6 @@ env:
   REGISTRY: registry.cloud.mov.ai
   ENV: qa
   USERSPACE_FOLDER_PATH: userspace
-  REMOTE_WORKSPACE_PATH: workspace
   SIMULATION_ID: ci_simulation
   XRAY_CLIENTID: ${{ secrets.xray_clientid}}
   XRAY_SECRET: ${{ secrets.xray_secret}}

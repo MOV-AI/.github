@@ -54,29 +54,30 @@ on:
         required: true
 env:
   CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.0.0.21"
+  CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
+  CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   AWS_DEFAULT_REGION: "us-east-1"
   REGISTRY: registry.cloud.mov.ai
-  ENV: qa
-  USERSPACE_FOLDER_PATH: userspace
+  USERSPACE_FOLDER_PATH: /opt/userspace
   REMOTE_WORKSPACE_PATH: workspace
-  SIMULATION_ID: ci_simulation
+  SIMULATION_ID: CI
   XRAY_CLIENTID: ${{ secrets.xray_clientid}}
   XRAY_SECRET: ${{ secrets.xray_secret}}
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
   SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
-  PROVISIONING_ENV_VERSION: 0.1.0-9
-  PROVISIONING_ENV_REPO: devops-tf-env-conf
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.0.0-3"
+  PROVISION_INFRA_DIR: "provision_scripts"
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   TIMEOUT: 720
-  PROVISIONING_ENV_CONF: "0.1.0-8"
-  ARTIFACTS_RETENTION_DAYS: 15
+  PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
+  PROVISIONING_ENV_CONF_VERSION: "0.1.0-8"
+  PROVISION_ENV_CONF_DIR: "infra_env_configs"
 
 jobs:
   Robotic-Stack-Integration:
@@ -103,30 +104,28 @@ jobs:
       - name: Create execution folder
         shell: bash
         run: |
-          EXECUTION_FOLDER="$(pwd)/temp"
-          sudo rm -rf $EXECUTION_FOLDER
-          mkdir  -p $EXECUTION_FOLDER
-          sudo chmod -R 777 $EXECUTION_FOLDER
+          sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+          mkdir  -p ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+          sudo chmod -R 777 ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
       - name: Setup infra environment configs
         id: infra_env_configs_setup
         shell: bash
         run: |
-          env_configs_dir=infra_env_configs
-          env_configs_version=${{ env.PROVISIONING_ENV_CONF }}
-          env_configs_repo_name=devops-tf-env-conf
+          env_configs_dir=${{ env.PROVISION_ENV_CONF_DIR }}
+          env_configs_version=${{ env.PROVISIONING_ENV_CONF_VERSION }}
+          env_configs_repo_name=${{ env.PROVISIONING_ENV_CONF_REPO }}
 
           rm -rf $env_configs_dir
-          EXECUTION_FOLDER="$(pwd)/temp"
           docker run \
-            -v "$EXECUTION_FOLDER":/opt/mov.ai/workspace \
+            -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
             -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
             fetch_by_tag --repo $env_configs_repo_name \
             --version $env_configs_version \
             --gh_api_user $GITHUB_API_USR \
             --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
             --target_dir $env_configs_dir
-          cp -r $EXECUTION_FOLDER/$env_configs_dir ./$env_configs_dir
+          cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/$env_configs_dir ./$env_configs_dir
           
           ls -la $env_configs_dir
           echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
@@ -135,21 +134,20 @@ jobs:
         id: provision_infra_setup
         shell: bash
         run: |
-          provision_infra_dir=provision_scripts
+          provision_infra_dir=${{ env.PROVISION_INFRA_DIR }}
           provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
           provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
 
           rm -rf $provision_infra_dir
-          EXECUTION_FOLDER="$(pwd)/temp"
           docker run \
-            -v "$EXECUTION_FOLDER":/opt/mov.ai/workspace \
+            -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
             -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
             fetch_by_tag --repo $provision_infra_repo_name \
             --version $provision_infra_version \
             --gh_api_user $GITHUB_API_USR \
             --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
             --target_dir $provision_infra_dir
-          cp -r $EXECUTION_FOLDER/$provision_infra_dir ./$provision_infra_dir
+          cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/$provision_infra_dir ./$provision_infra_dir
 
           ls -la $provision_infra_dir
           echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
@@ -312,11 +310,10 @@ jobs:
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            EXECUTION_FOLDER="$(pwd)/temp"
-            sudo rm -rf $EXECUTION_FOLDER
-            mkdir  -p $EXECUTION_FOLDER/platform
-            cp product-manifest.yaml $EXECUTION_FOLDER/platform/product-manifest.yaml
-            sudo chmod -R 777 $EXECUTION_FOLDER
+            sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+            mkdir  -p ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/platform
+            cp product-manifest.yaml ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/platform/product-manifest.yaml
+            sudo chmod -R 777 ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
           '
 
       - name: Remote - Fetch product version and merge platform product
@@ -326,26 +323,24 @@ jobs:
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            WORKSPACE=/opt/mov.ai/workspace
-            EXECUTION_FOLDER="$(pwd)/temp"
             docker run \
-              -v "$EXECUTION_FOLDER/platform":$WORKSPACE \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/platform":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               get_yml_value \
               --file product-manifest.yaml \
               --key  product_components.integration.integration_project.name \
               --output_file integration_project_name
             docker run \
-              -v "$EXECUTION_FOLDER/platform":$WORKSPACE \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/platform":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               get_yml_value \
               --file product-manifest.yaml \
               --key product_components.integration.integration_project.version \
               --output_file integration_project_version
-            integration_project_name=$(cat $EXECUTION_FOLDER/platform/integration_project_name)
-            integration_project_version=$(cat $EXECUTION_FOLDER/platform/integration_project_version)
+            integration_project_name=$(cat ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/platform/integration_project_name)
+            integration_project_version=$(cat ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/platform/integration_project_version)
             docker run -u root \
-              -v "$EXECUTION_FOLDER":$WORKSPACE \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               merge_platform_product \
               --product_version_search $integration_project_version \
@@ -363,11 +358,9 @@ jobs:
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
             qa_key=simulator_tests
-            WORKSPACE=/opt/mov.ai/workspace
-            EXECUTION_FOLDER="$(pwd)/temp"
 
             docker run -u root \
-              -v "$EXECUTION_FOLDER":$WORKSPACE \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               fetch_test_by_manifest \
               --file product-manifest.yaml \
@@ -376,12 +369,12 @@ jobs:
               --gh_api_pwd ${{ secrets.auto_commit_pwd }}
 
             # install test dependencies
-            target_dir=$(cat $EXECUTION_FOLDER/target_dir.txt)
+            target_dir=$(cat ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/target_dir.txt)
             rm -rf venv
             python3 -m venv venv
             . venv/bin/activate
             python3 -m pip install --upgrade pip
-            pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r $EXECUTION_FOLDER/$target_dir/requirements.txt
+            pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/$target_dir/requirements.txt
             sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
             export PYTHONPATH="/usr/lib/python3/dist-packages"
           '
@@ -408,28 +401,26 @@ jobs:
             CONFIG_FILE_NAME="standalone-spawner-solution-simulator-noetic.json"
 
             export PATH="$HOME/.local/bin:$PATH"
-            WORKSPACE=/opt/mov.ai/workspace
-            EXECUTION_FOLDER="$(pwd)/temp"
 
             docker run -u root \
-              -v "$EXECUTION_FOLDER":$WORKSPACE \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               get_json_value --file $CONFIG_FILE_NAME.ci \
               --key services_version \
               --output_file movai_service_version
             docker run -u root \
-              -v "$EXECUTION_FOLDER":$WORKSPACE \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               get_json_value --file $CONFIG_FILE_NAME.ci \
               --key quickstart_version \
               --output_file quickstart_version
 
-            cp -r $EXECUTION_FOLDER/* ./ && sudo rm -rf $EXECUTION_FOLDER
+            cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/* ./ && sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
-            export USERSPACE_FOLDER_PATH="/opt/userspace"
+            export USERSPACE_FOLDER_PATH="${{ env.USERSPACE_FOLDER_PATH }}"
             sudo mkdir -p $USERSPACE_FOLDER_PATH/.git;sudo chown 1000:1000 $USERSPACE_FOLDER_PATH/ -Rf
             export PUBLIC_IP="$(hostname -I | cut -d " " -f1)"
-            export SIMULATION_ID="CI"
+            export SIMULATION_ID="${{ env.SIMULATION_ID }}"
             export ROBOTNAME="ci_${{ inputs.product_name }}"
             rm -rf userspace
 
@@ -462,7 +453,6 @@ jobs:
 
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            EXECUTION_FOLDER="$(pwd)/temp"
             CONTAINER_ID=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
 
             mkdir -p firmwares/
