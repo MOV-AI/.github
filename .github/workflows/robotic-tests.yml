@@ -126,7 +126,7 @@ jobs:
             --gh_api_user $GITHUB_API_USR \
             --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
             --target_dir $env_configs_dir
-          mv -r $EXECUTION_FOLDER/* ./ 
+          cp -r $EXECUTION_FOLDER/$env_configs_dir ./$env_configs_dir
           
           ls -la $env_configs_dir
           echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
@@ -149,7 +149,7 @@ jobs:
             --gh_api_user $GITHUB_API_USR \
             --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
             --target_dir $provision_infra_dir
-          mv -r $EXECUTION_FOLDER/* ./
+          cp -r $EXECUTION_FOLDER/$provision_infra_dir ./$provision_infra_dir
 
           ls -la $provision_infra_dir
           echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
