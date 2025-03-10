@@ -62,7 +62,7 @@ jobs:
           MERGE_MSG: "Branch was auto-updated."
 
   Validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     if: ${{ inputs.release == 'false' }}
     steps:
       - name: Checkout
