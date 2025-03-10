@@ -53,7 +53,7 @@ jobs:
 
   RefreshSource:
     if: ${{ inputs.deploy == 'false' && inputs.release == 'false' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: docker://chinthakagodawita/autoupdate-action:v1
         continue-on-error: true
@@ -138,7 +138,7 @@ jobs:
           mv -f ./output/${{ matrix.image_type }} $RUN_STAGING_DIR
 
   Create-Release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: Build
     if: ${{ inputs.deploy == 'true' && inputs.release == 'false' }}
     steps:
@@ -289,7 +289,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN_ID }}
 
   Write-Build-Summary:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: [ Build, Create-Release, Deploy-Images ]
     if: ${{ inputs.release == 'false' }}
     steps:
@@ -301,7 +301,7 @@ jobs:
           echo -e "### Build Summary\n${summary_message}" >> $GITHUB_STEP_SUMMARY
 
   Write-Release-Summary:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: [ Release-Images ]
     if: ${{ inputs.release == 'true' }}
     steps:

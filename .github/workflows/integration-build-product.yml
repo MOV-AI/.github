@@ -121,7 +121,7 @@ env:
 
 jobs:
   Compute-timeout:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       timeout: ${{ steps.Compute-timeout.outputs.timeout }}
       jobtimeout: ${{ steps.Compute-timeout.outputs.jobtimeout }}
