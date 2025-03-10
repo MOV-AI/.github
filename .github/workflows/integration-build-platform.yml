@@ -2037,7 +2037,7 @@ jobs:
 
   Robotic-Stack-Integration:
     needs: [Simulator-Validations]
-    uses: MOV-AI/.github/.github/workflows/robotic-tests.yml@feature/dp-1647
+    uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@v2.1
     secrets: inherit
     with:
       product_name: ${{ inputs.product_name }}
