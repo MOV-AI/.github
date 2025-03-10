@@ -2036,7 +2036,7 @@ jobs:
           docker image prune --all -f
 
   Robotic-Stack-Integration:
-    needs: [Simulator-Validations, Validations-Finish]
+    needs: [Simulator-Validations]
     uses: MOV-AI/.github/.github/workflows/robotic-tests.yml@feature/dp-1647
     secrets: inherit
     with:
