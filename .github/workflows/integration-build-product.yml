@@ -51,11 +51,16 @@ on:
       docker_registry:
         required: false
         type: string
-        default: "registry.hel.mov.ai"
+        default: "registry.hel0.mov.ai"
       use_project_data_viewer:
         required: false
         type: boolean
         default: false
+      proxmox_cluster_name:
+        required: false
+        type: string
+        default: hel0
+
     secrets:
       auto_commit_user:
         required: true
@@ -116,7 +121,7 @@ env:
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   TIMEOUT: 720
-  PROVISIONING_ENV_VERSION: 0.1.0-8
+  PROVISIONING_ENV_VERSION: 0.1.0-9
   PROVISIONING_ENV_REPO: devops-tf-env-conf
 
 jobs:
