@@ -116,7 +116,7 @@ env:
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   TIMEOUT: 720
-  PROVISIONING_ENV_VERSION: 0.1.0-8
+  PROVISIONING_ENV_VERSION: 0.1.0-10
   PROVISIONING_ENV_REPO: devops-tf-env-conf
 
 jobs:
