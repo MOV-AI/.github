@@ -1751,6 +1751,8 @@ jobs:
   Simulator-Validations:
     needs: [Build-Simulator]
     runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    outputs:
+      slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
     steps:
       - uses: rtCamp/action-cleanup@master
 
