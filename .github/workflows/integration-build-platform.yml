@@ -364,7 +364,7 @@ jobs:
             --base_url https://${{ steps.agent_info.outputs.ip }}/ \
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
-            --cucumberjson=./results.json
+            --cucumberjson=./results.json \
             --junit-xml=junit.xml 
 
           curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
@@ -621,15 +621,14 @@ jobs:
               -ra \
               -k '${{ steps.install_tests_setup.outputs.test_set }}' \
               --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci" \
-              --jira_report
+              --jira_report \
               --junit-xml=junit.xml 
 
           else
           python3 -m pytest tests/ \
               -ra \
               -k '${{ steps.install_tests_setup.outputs.test_set }}' \
-              --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci"
-              --junit-xml=junit.xml
+              --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --junit-xml=junit.xml
           fi
           ./trunk flakytests upload \
               --org-url-slug "movai" \
@@ -910,7 +909,7 @@ jobs:
             --movai-ip ${{ steps.agent_info.outputs.ip }} \
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
-            -m "not fleet"
+            -m "not fleet" \
             --junit-xml=junit.xml
 
             
@@ -1142,7 +1141,7 @@ jobs:
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
             -m '${{ steps.flow_tests_setup.outputs.test_set }}' \
-            --tb=short
+            --tb=short \
             --junit-xml=junit.xml
 
             ./trunk flakytests upload \
@@ -1918,7 +1917,7 @@ jobs:
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
             -m 'simulator' \
-            --tb=short
+            --tb=short \
             --junit-xml=junit.xml
             
           ./trunk flakytests upload \
