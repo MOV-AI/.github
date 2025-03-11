@@ -365,7 +365,13 @@ jobs:
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
             --cucumberjson=./results.json
+            --junit-xml=junit.xml 
 
+          curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
+          ./trunk flakytests upload \
+              --org-url-slug "movai" \
+              --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
+              --junit-paths "*.xml" # replace this with the path to your junit files
           deactivate
 
       - name: Create Xray test execution
@@ -610,19 +616,27 @@ jobs:
           rm -rf results/*
 
           if [ "${{ steps.install_tests_setup.outputs.jira_report }}" == "True" ] ; then
+          curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
           python3 -m pytest tests/ \
               -ra \
               -k '${{ steps.install_tests_setup.outputs.test_set }}' \
               --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci" \
               --jira_report
+              --junit-xml=junit.xml 
+
           else
           python3 -m pytest tests/ \
               -ra \
               -k '${{ steps.install_tests_setup.outputs.test_set }}' \
               --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci"
+              --junit-xml=junit.xml
           fi
+          ./trunk flakytests upload \
+              --org-url-slug "movai" \
+              --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
+              --junit-paths "*.xml" # replace this with the path to your junit files
           deactivate
-
+          
           user=$(cat results/credentials.txt | awk -F: '{print $1}')
           pwd=$(cat results/credentials.txt | awk -F: '{print $2}')
 
@@ -891,13 +905,19 @@ jobs:
         shell: bash
         run: |
           . test-venv/bin/activate
-
+          curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
           python3 -m pytest src \
             --movai-ip ${{ steps.agent_info.outputs.ip }} \
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
             -m "not fleet"
+            --junit-xml=junit.xml
 
+            
+          ./trunk flakytests upload \
+              --org-url-slug "movai" \
+              --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
+              --junit-paths "**/*.xml" # replace this with the path to your junit file
           deactivate
 
       - name: Get current job id
@@ -1115,7 +1135,7 @@ jobs:
 
           # run tests
           . test-venv/bin/activate
-
+          curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
           python3 -m pytest \
             -s \
             -ra \
@@ -1123,6 +1143,12 @@ jobs:
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
             -m '${{ steps.flow_tests_setup.outputs.test_set }}' \
             --tb=short
+            --junit-xml=junit.xml
+
+            ./trunk flakytests upload \
+              --org-url-slug "movai" \
+              --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
+              --junit-paths "**/*.xml" # replace this with the path to your junit file
 
           deactivate
 
@@ -1885,7 +1911,7 @@ jobs:
 
           # run tests
           . test-venv/bin/activate
-
+          curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
           python3 -m pytest \
             -s \
             -ra \
@@ -1893,6 +1919,12 @@ jobs:
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
             -m 'simulator' \
             --tb=short
+            --junit-xml=junit.xml
+            
+          ./trunk flakytests upload \
+            --org-url-slug "movai" \
+            --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
+            --junit-paths "**/*.xml" # replace this with the path to your junit file
 
           deactivate
 
