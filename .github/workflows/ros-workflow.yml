@@ -36,11 +36,11 @@ on:
       MOBTEST_VERSION:
         required: false
         type: string
-        default: "0.0.4.3"
+        default: "0.0.6.1"
       ROS_BUILDTOOLS_TAG:
         required: false
         type: string
-        default: "v2.0.8"
+        default: "v2.0.13"
       MOBROS_VERSION:
         required: false
         type: string
@@ -177,7 +177,7 @@ jobs:
         catkin test
 
     - name: Archive binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: packages
         path: artifacts/*
@@ -276,7 +276,7 @@ jobs:
 
       - name: Download artifacts
         if: ${{ inputs.install_test }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: packages
           path: artifacts
@@ -323,7 +323,7 @@ jobs:
         submodules: recursive
 
     - name: Download a single artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: packages
         path: artifacts

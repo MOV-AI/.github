@@ -81,7 +81,7 @@ on:
 
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "2.2.0.26"
-  MOBTEST_VERSION: "0.0.4.3"
+  MOBTEST_VERSION: "0.0.6.1"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.26"
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
@@ -144,7 +144,7 @@ jobs:
           git config --global --add safe.directory $(pwd)
           git fetch
           git checkout origin/${GITHUB_REF#refs/heads/} -- product.version
-          
+
           source ci_scripts/bin/activate
 
           cat product.version
@@ -156,7 +156,7 @@ jobs:
           merge_manifest_args="$merge_manifest_args --merge_sub_prod_dep_keys platform_config,platform_components,installation"
           merge_manifest_args="$merge_manifest_args --merge_sub_prod_main_keys product_config,system_config,simulator_components"
 
-          integration-pipeline merge_manifest_multi_dependency $merge_manifest_args 
+          integration-pipeline merge_manifest_multi_dependency $merge_manifest_args
 
           generate_meta_sim_args="--manifest_platform_base_key product_dependencies.product_base"
           generate_meta_sim_args="$generate_meta_sim_args --product_name ${{ inputs.product_name }}"
@@ -171,12 +171,12 @@ jobs:
           deactivate
 
       - name: Stash sim_configs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts/*
           retention-days: 5
-  
+
       - name: raise
         shell: bash
         run: |
@@ -208,7 +208,7 @@ jobs:
           slack-text: ${{ steps.pre_slack.outputs.msg }}
 
       - name: Stash raised_meta
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: raised_meta
           path: platform_configs/*
@@ -244,7 +244,7 @@ jobs:
           deactivate
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: platform_configs
@@ -261,7 +261,7 @@ jobs:
           deactivate
 
       - name: Stash manifest
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: manifest
           path: product-manifest.yaml
@@ -378,7 +378,7 @@ jobs:
 
 
       - name: Stash robot_jsons_${{ matrix.distro }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: "*.json*"
@@ -412,19 +412,19 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: .
 
       - name: unstash manifest
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: manifest
           path: .
 
       - name: unstash robot_jsons_${{ matrix.distro }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: .
@@ -535,7 +535,7 @@ jobs:
             tar cvzf ./metadata_artifact/metadata.tar.gz ./proj_metadata
 
             echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)">artifacts/product-${{ matrix.distro }}.image.artifact
-  
+
       - name: Get current job id
         if: always()
         shell: bash
@@ -581,14 +581,14 @@ jobs:
       - name: Stash project metadata
 
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: project_metadata
           path: metadata_artifact/*
           retention-days: 3
 
       - name: Stash deploy_artifacts_noetic
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deploy_artifacts_noetic
           path: artifacts/*
@@ -649,14 +649,14 @@ jobs:
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts
 
       - name: unstash manifest
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: manifest
           path: .
@@ -829,21 +829,21 @@ jobs:
 
       - name: unstash raised_meta
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: .
 
       - name: unstash manifest
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: manifest
           path: .
 
       - name: unstash robot_jsons_${{ matrix.distro }}
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: .
@@ -934,7 +934,7 @@ jobs:
       - name: Stash Install simulator logs artifacts
         continue-on-error: true
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: install_simulator_logs
           path: install_logs/*
@@ -1012,7 +1012,7 @@ jobs:
 
       - name: Stash deploy_simulator_artifacts
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deploy_simulator_artifacts
           path: simulator.image.artifact
@@ -1034,7 +1034,7 @@ jobs:
         run: |
           docker system prune -f
           docker image prune --all -f
-        
+
 
   Install-Heterogeneos-Fleet:
     needs: [Build-Spawner]
@@ -1055,19 +1055,19 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: .
 
       - name: unstash manifest
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: manifest
           path: .
 
       - name: unstash robot_jsons_${{ matrix.distro }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: .
@@ -1079,7 +1079,7 @@ jobs:
           wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
           echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
           sudo apt update && sudo apt install terraform -y
-  
+
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
         shell: bash
@@ -1235,19 +1235,19 @@ jobs:
           integration-pipeline fetch_by_tag --repo $install_infra_repo_name --version $install_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $install_infra_dir
           ls -la $install_infra_dir
           echo "target_dir=${install_infra_dir}" >> $GITHUB_OUTPUT
-  
+
       - name: Ansible install platform
         id: ansible_install_platform
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
         shell: bash
         run: |
-          
+
           cp ../${{ steps.provision_infra_setup.outputs.target_dir }}/hosts hosts
           cp -r ../*.json ./templates/fleet/
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
           cat hosts
           while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
-          
+
           sudo apt install -y python3.9 python3.9-venv
           python3.9 -m venv ansible-venv
           source ansible-venv/bin/activate
@@ -1263,18 +1263,18 @@ jobs:
           tar -czf fleet_install.tar.gz -C ${{ steps.ansible_install_setup.outputs.target_dir }} .
 
       - name: Stash Install scripts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: install_archive
           path: fleet_install.tar.gz
           retention-days: 3
-  
+
       - name: Collect Installed components
         if: always()
         shell: bash
         run: |
             echo "PLACEHOLDER"
-  
+
       - name: Get current job id
         if: always()
         shell: bash
@@ -1329,17 +1329,17 @@ jobs:
           TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
           TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
           TF_VAR_ip_list: ${{ inputs.fleet_ips }}
-  
+
       - name: Stash project metadata
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: project_metadata
           path: metadata_artifact/*
           retention-days: 3
 
       - name: Stash deploy_artifacts_noetic
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deploy_artifacts_noetic
           path: artifacts/*
@@ -1385,40 +1385,40 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: platform_configs
 
       - name: unstash deploy_artifacts_noetic
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: deploy_artifacts_noetic
           path: artifacts
 
       - name: unstash manifest
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: manifest
           path: .
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts
       - name: unstash deploy_simulator_artifacts
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: deploy_simulator_artifacts
           path: .
       - name: unstash install_archive
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: install_archive
           path: .
-          
+
       - name: Install CI Scripts
         shell: bash
         run: |
@@ -1457,7 +1457,7 @@ jobs:
                 --product_name ${{ inputs.product_name }} \
                 --branch ${GITHUB_REF#refs/heads/}
           deactivate
-  
+
       - name: Publish and create release
         id: bump
         shell: bash
@@ -1638,7 +1638,7 @@ jobs:
     steps:
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: platform_configs

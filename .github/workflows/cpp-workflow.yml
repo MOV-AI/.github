@@ -14,6 +14,10 @@ on:
         required: false
         type: string
         default: ''
+      raised_component:
+        required: true
+        type: string
+        default: ''
       custom_requirements:
         required: false
         type: string
@@ -44,14 +48,31 @@ on:
         required: true
 
 jobs:
+  pre_check:
+    runs-on: ubuntu-20.04
+    steps:
+    - name: Check if raised component in component list
+      shell: bash
+      run: |
+        sub_component_expr="${{inputs.components}}"
+        sub_component_str=$(echo $sub_component_expr | sed -e 's/\[//g' | sed -e 's/\]//g')
+        IFS=',' read -r -a sub_components_array <<< $sub_component_str
+        if printf '%s\n' "${sub_components_array[@]}" | grep -qx "${{inputs.raised_component}}"; then
+            echo "Element ${{inputs.raised_component}} found in $sub_component_expr"
+        else
+            echo "Element ${{inputs.raised_component}} was not found in $sub_component_expr! Exiting"
+            exit 1
+        fi
+
   Build:
     strategy:
       matrix:
         sub_component: ${{ fromJSON(inputs.components) }}
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-20.04
+    needs: [pre_check]
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v1.1.10
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.13
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -147,9 +168,9 @@ jobs:
       working-directory: ${{ matrix.sub_component }}
 
     - name: Archive binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: packages
+        name: package_${{ matrix.sub_component }}
         path: ${{ matrix.sub_component }}/artifacts/*
         retention-days: 5
 
@@ -157,17 +178,18 @@ jobs:
       run: ls -la artifacts
       working-directory: ${{ matrix.sub_component }}
 
-  Publish:
+  Publish_and_Release:
     if: ${{ inputs.deploy == 'true' }}
     runs-on: ubuntu-20.04
     needs:  [Build]
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v1.1.10
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.13
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
-
+    outputs:
+      package_version: ${{ steps.vars-after-raise.outputs.pkg_version }}
     steps:
     - name: Checkout
       uses: actions/checkout@v2
@@ -175,16 +197,6 @@ jobs:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
         submodules: recursive
-
-    - name: Download a single artifact
-      uses: actions/download-artifact@v3
-      with:
-        name: packages
-        path: artifacts
-
-    - name: Print generated packages
-      run: |
-        ls -la artifacts
 
     - name: Raise Version
       id: vars-after-raise
@@ -195,90 +207,27 @@ jobs:
 
         IFS=',' read -r -a sub_components_array <<< $sub_component_str
 
+        pushd ${{ inputs.raised_component }} >/dev/null
+        echo "Calculating raise version based on main component ${{ inputs.raised_component }}"
+        PACKAGE_VERSION=$(dpkg-parsechangelog --show-field Version)
+        main_version=${PACKAGE_VERSION%-*}
+        build_id="${PACKAGE_VERSION#*-}"
+        raised_buildid=$(($build_id+1))
+        RAISED_PACKAGE_VERSION="$main_version-$raised_buildid"
+        popd >/dev/null
+
         for sub_component in "${sub_components_array[@]}"
         do
           echo "$sub_component"
-          pushd $sub_component >/dev/null
-
           echo "raising component $sub_component"
-          PACKAGE_VERSION=$(dpkg-parsechangelog --show-field Version)
-          main_version=${PACKAGE_VERSION%-*}
-          build_id="${PACKAGE_VERSION#*-}"
-          raised_buildid=$(($build_id+1))
-          RAISED_PACKAGE_VERSION="$main_version-$raised_buildid"
+          pushd $sub_component >/dev/null
           dch -v $RAISED_PACKAGE_VERSION -b -D "UNRELEASED" "bump version"
 
           popd >/dev/null
         done
 
-        #echo ::set-output name=pkg_version::$RAISED_PACKAGE_VERSION
         echo "pkg_version=$RAISED_PACKAGE_VERSION" >> $GITHUB_OUTPUT
-      working-directory: ${{ matrix.sub_component }}
-
-
-    - name: Publish to Nexus ppa-dev
-      shell: bash
-      run: |
-          NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-          NEXUS_REPO="ppa-dev"
-
-          for file in artifacts/*.deb
-          do
-            RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-            -H "Content-Type: multipart/form-data" \
-            --data-binary "@$file" \
-            -w '%{http_code}' \
-            "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
-
-            #retry
-            if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
-              echo "Failed upload with $RETURN_CODE. Retrying"
-
-              RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-                -H "Content-Type: multipart/form-data" \
-                --data-binary "@$file" \
-                -w '%{http_code}' \
-                "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
-            fi
-
-            if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
-              echo "Failed upload with $RETURN_CODE. Exiting"
-              exit 1
-            fi
-
-          done
-
-    - name: Publish to Nexus ppa-testing
-      shell: bash
-      run: |
-          NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-          NEXUS_REPO="ppa-testing"
-
-          for file in artifacts/*.deb
-          do
-            RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-            -H "Content-Type: multipart/form-data" \
-            --data-binary "@$file" \
-            -w '%{http_code}' \
-            "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
-
-            #retry
-            if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
-              echo "Failed upload with $RETURN_CODE. Retrying"
-
-              RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-                -H "Content-Type: multipart/form-data" \
-                --data-binary "@$file" \
-                -w '%{http_code}' \
-                "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
-            fi
-
-            if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
-              echo "Failed upload with $RETURN_CODE. Exiting"
-              exit 1
-            fi
-
-          done
+      #working-directory: ${{ matrix.sub_component }}
 
     - name: Commit raise version
       id: raise
@@ -312,7 +261,7 @@ jobs:
         commit_hash=$(git log --format="%H" -n 1)
         #echo ::set-output name=commit_id::$commit_hash
         echo "commit_id=$commit_hash" >> $GITHUB_OUTPUT
-  
+
     - name: Create Github Release
       uses: softprops/action-gh-release@v1
       with:
@@ -323,7 +272,114 @@ jobs:
         token: ${{ secrets.gh_token }}
         prerelease: true
         generate_release_notes: true
-        files: artifacts/*.deb
+        #files: artifacts/*.deb
+
+  Publish_assets:
+    needs: [Publish_and_Release]
+    strategy:
+      matrix:
+        sub_component: ${{ fromJSON(inputs.components) }}
+    if: ${{ inputs.deploy == 'true' }}
+    runs-on: ubuntu-20.04
+    container:
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.13
+      options: --user root
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          # Disabling shallow clone is recommended for improving relevancy of reporting
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Download a single artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: package_${{ matrix.sub_component }}
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish to Nexus ppa-dev
+        shell: bash
+        run: |
+            NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+            NEXUS_REPO="ppa-dev"
+
+            for file in artifacts/*.deb
+            do
+              RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+              -H "Content-Type: multipart/form-data" \
+              --data-binary "@$file" \
+              -w '%{http_code}' \
+              "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
+
+              #retry
+              if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
+                echo "Failed upload with $RETURN_CODE. Retrying"
+
+                RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+                  -H "Content-Type: multipart/form-data" \
+                  --data-binary "@$file" \
+                  -w '%{http_code}' \
+                  "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
+              fi
+
+              if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
+                echo "Failed upload with $RETURN_CODE. Exiting"
+                exit 1
+              fi
+
+            done
+
+      - name: Publish to Nexus ppa-testing
+        shell: bash
+        run: |
+            NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+            NEXUS_REPO="ppa-testing"
+
+            for file in artifacts/*.deb
+            do
+              RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+              -H "Content-Type: multipart/form-data" \
+              --data-binary "@$file" \
+              -w '%{http_code}' \
+              "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
+
+              #retry
+              if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
+                echo "Failed upload with $RETURN_CODE. Retrying"
+
+                RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+                  -H "Content-Type: multipart/form-data" \
+                  --data-binary "@$file" \
+                  -w '%{http_code}' \
+                  "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
+              fi
+
+              if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
+                echo "Failed upload with $RETURN_CODE. Exiting"
+                exit 1
+              fi
+
+            done
+
+      - name: Update Github Release
+        if: ${{ inputs.deploy == 'true' }}
+        shell: bash
+        run: |
+          git config --global --add safe.directory $(pwd)
+
+          for asset in artifacts/*; do
+            # do nothing if folder is empty
+            if [[ $asset != "artifacts/*" ]]; then
+              gh release upload ${{ needs.Publish_and_Release.outputs.package_version }} $asset
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
 
   Release:
     strategy:
@@ -332,7 +388,7 @@ jobs:
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-20.04
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v1.1.10
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.13
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}

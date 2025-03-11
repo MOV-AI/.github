@@ -188,7 +188,7 @@ jobs:
       run: npm publish
 
     - name: Archive binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: packages
         path: artifacts/*
@@ -218,7 +218,7 @@ jobs:
         token: ${{ secrets.npm_token }}
 
     - name: Download a single artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: packages
         path: artifacts

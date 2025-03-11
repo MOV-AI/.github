@@ -57,7 +57,7 @@ on:
         required: true
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "2.1.0.23"
-  MOBTEST_VERSION: "0.0.4.3"
+  MOBTEST_VERSION: "0.0.6.1"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.25"
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
@@ -125,14 +125,14 @@ jobs:
                 --manifest_platform_base_key product_components
 
       - name: Stash robot_configs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: robot_configs
           path: "*.json*"
           retention-days: 5
 
       - name: Stash sim_configs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts/*
@@ -164,7 +164,7 @@ jobs:
           slack-text: ${{ steps.pre_slack.outputs.msg }}
 
       - name: Stash raised_meta
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: raised_meta
           path: platform_configs/*
@@ -209,7 +209,7 @@ jobs:
         run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: unstash robot_configs
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_configs
           path: .
@@ -469,7 +469,7 @@ jobs:
 
       - name: Stash QA artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: qa_artifacts_ui_tests
           path: qa_artifacts/*
@@ -520,7 +520,7 @@ jobs:
         run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: unstash robot_configs
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_configs
           path: .
@@ -733,7 +733,7 @@ jobs:
 
       - name: Stash QA artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: qa_artifacts_install_tests
           path: qa_artifacts/*
@@ -778,7 +778,7 @@ jobs:
           cp /tmp/undeployable.dploy artifacts/host-noetic-3rdParty.dploy
 
       - name: Stash deploy_artifacts_noetic
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deploy_artifacts_noetic
           path: artifacts/*.dploy
@@ -838,7 +838,7 @@ jobs:
         run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: unstash robot_configs
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_configs
           path: .
@@ -1020,7 +1020,7 @@ jobs:
 
       - name: Stash QA artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: qa_artifacts_api_tests
           path: qa_artifacts/*
@@ -1071,7 +1071,7 @@ jobs:
         run: python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: unstash robot_configs
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_configs
           path: .
@@ -1273,7 +1273,7 @@ jobs:
 
       - name: Stash QA artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: qa_artifacts_flow_tests
           path: qa_artifacts/*
@@ -1329,7 +1329,7 @@ jobs:
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash robot_configs
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_configs
           path: .
@@ -1349,7 +1349,7 @@ jobs:
 
       - name: Stash ci_infra_artifacts (AWS)
         if: ${{ false }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ci_infra_artifacts
           path: aws_artifacts/*
@@ -1668,7 +1668,7 @@ jobs:
 
       - name: Stash Fleet QA artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: fleet_qa_artifacts
           path: ${{ steps.ansible_install_setup.outputs.target_dir }}/fleet_qa_artifacts/*
@@ -1717,7 +1717,7 @@ jobs:
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash sim_configs
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts
@@ -1840,7 +1840,7 @@ jobs:
           echo "$REGISTRY/qa/$(cat simulator_artifacts/simulator_name.ci)" > simulator.image.artifact
 
       - name: Stash deploy_simulator_artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deploy_simulator_artifacts
           path: simulator.image.artifact
@@ -1868,19 +1868,19 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: .
 
       - name: unstash sim_configs
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts
 
       - name: unstash robot_jsons_noetic
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_configs
           path: .
@@ -2087,7 +2087,7 @@ jobs:
 
       - name: Stash QA artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: qa_artifacts_simulator_tests
           path: qa_artifacts/*
@@ -2132,7 +2132,7 @@ jobs:
           cp /tmp/undeployable.dploy artifacts/simulator-noetic-3rdParty.dploy
 
       - name: Stash deploy_artifacts_simulator_noetic
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deploy_artifacts_simulator_noetic
           path: artifacts/*.dploy
@@ -2172,31 +2172,31 @@ jobs:
           echo $ip
           echo "ip=${ip}" >> $GITHUB_OUTPUT
       - name: unstash robot_configs
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_configs
           path: .
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: platform_configs
 
       - name: unstash deploy_artifacts_noetic
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: deploy_artifacts_noetic
           path: artifacts
 
       - name: unstash deploy_artifacts_simulator_noetic
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: deploy_artifacts_simulator_noetic
           path: artifacts
 
       - name: unstash deploy_simulator_artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: deploy_simulator_artifacts
           path: .
@@ -2361,7 +2361,7 @@ jobs:
     if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled'  || needs.publish.result == 'skipped') }}
     steps:
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: platform_configs

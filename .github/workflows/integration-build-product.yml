@@ -90,7 +90,7 @@ on:
 
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "2.2.0.27"
-  MOBTEST_VERSION: "0.0.4.3"
+  MOBTEST_VERSION: "0.0.6.1"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.26"
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
@@ -188,7 +188,7 @@ jobs:
 
       - name: Stash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts/*
@@ -227,7 +227,7 @@ jobs:
           slack-text: ${{ steps.pre_slack.outputs.msg }}
 
       - name: Stash raised_meta
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: raised_meta
           path: platform_configs/*
@@ -260,7 +260,7 @@ jobs:
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: platform_configs
@@ -275,7 +275,7 @@ jobs:
           integration-pipeline generate_meta_artifacts --update_simulator --override_spawner ${{ inputs.product_name }} --manifest_platform_base_key "product_dependencies"
 
       - name: Stash manifest
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: manifest
           path: product-manifest.yaml
@@ -326,9 +326,9 @@ jobs:
 
       - name: Stash dependency_version
         if: ${{ inputs.propagate_project == false }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: manifest
+          name: dependency_version
           path: dependency_version
           retention-days: 10
 
@@ -392,7 +392,7 @@ jobs:
 
 
       - name: Stash robot_jsons_${{ matrix.distro }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: "*.json*"
@@ -424,19 +424,19 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: .
 
       - name: unstash manifest
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: manifest
           path: .
 
       - name: unstash robot_jsons_${{ matrix.distro }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: .
@@ -507,7 +507,7 @@ jobs:
       - name: Stash Install logs artifacts
         continue-on-error: true
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: install_logs
           path: install_logs/*
@@ -565,9 +565,9 @@ jobs:
 
       - name: Un stash dependency_version
         if: ${{ inputs.propagate_project == false }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: manifest
+          name: dependency_version
           path: dependency_version
 
       - name: Get project and solution version
@@ -637,14 +637,14 @@ jobs:
       - name: Stash project metadata
 
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: project_metadata
           path: metadata_artifact/*
           retention-days: 3
 
       - name: Stash deploy_artifacts_noetic
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deploy_artifacts_noetic
           path: artifacts/*
@@ -702,14 +702,14 @@ jobs:
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts
 
       - name: unstash manifest
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: manifest
           path: .
@@ -882,21 +882,21 @@ jobs:
 
       - name: unstash raised_meta
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: .
 
       - name: unstash manifest
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: manifest
           path: .
 
       - name: unstash robot_jsons_${{ matrix.distro }}
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_jsons_${{ matrix.distro }}
           path: .
@@ -989,7 +989,7 @@ jobs:
       - name: Stash Install simulator logs artifacts
         continue-on-error: true
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: install_simulator_logs
           path: install_logs/*
@@ -1046,12 +1046,12 @@ jobs:
 
       - name: stash Sim project metadata
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: project_sim_metadata
           path: metadata_artifact/*
           retention-days: 3
-              
+
       - name: Get current job id
         if: always()
         shell: bash
@@ -1102,7 +1102,7 @@ jobs:
 
       - name: Stash deploy_simulator_artifacts
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deploy_simulator_artifacts
           path: simulator.image.artifact
@@ -1151,28 +1151,28 @@ jobs:
 
       - name: unstash raised_meta
         if: ${{ inputs.with_simulation_tests }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: .
 
       - name: unstash manifest
         if: ${{ inputs.with_simulation_tests }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: manifest
           path: .
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation_tests }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts
 
       - name: unstash robot_jsons_noetic
         if: ${{ inputs.with_simulation_tests }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: robot_jsons_noetic
           path: .
@@ -1274,7 +1274,7 @@ jobs:
 
 
       - name: Prepare Devops provisioning slack message
-        if: ${{ inputs.with_simulation_tests && always() }} 
+        if: ${{ inputs.with_simulation_tests && always() }}
         id: pre_slack_infra
         run: |
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is being impacted by an infrastructural issue. \
@@ -1343,7 +1343,7 @@ jobs:
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
-            
+
             promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.MID_REGISTRY }}-${{ env.REGISTRY }}-g")
             docker manifest inspect "$promoted_name"
             if [ $? -ne 0 ]; then
@@ -1556,6 +1556,7 @@ jobs:
             # *.log might not exist if the test fails early
             mkdir -p qa_artifacts
             cp -r "${{ steps.simulator_tests_setup.outputs.target_dir }}"/*.log ./qa_artifacts || true
+            cp -r "${{ steps.simulator_tests_setup.outputs.target_dir }}"/tests_artifacts ./qa_artifacts || true
           '
           scp -r -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/qa_artifacts .
 
@@ -1606,7 +1607,7 @@ jobs:
 
       - name: Stash QA artifacts
         if: ${{ always() &&  inputs.with_simulation_tests }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: qa_artifacts_simulator_tests
           path: qa_artifacts/*
@@ -1682,40 +1683,40 @@ jobs:
 
       - name: unstash raised_meta
         if: ${{ inputs.is_nightly_run == false }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: platform_configs
 
       - name: unstash deploy_artifacts_noetic
         if: ${{ inputs.is_nightly_run == false }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: deploy_artifacts_noetic
           path: artifacts
 
       - name: unstash manifest
         if: ${{ inputs.is_nightly_run == false }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: manifest
           path: .
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run == false }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: sim_configs
           path: simulator_artifacts
       - name: unstash project metadata
         if: ${{ inputs.is_nightly_run == false }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: project_metadata
           path: .
-          
+
       - name: unstash deploy_simulator_artifacts
         if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run == false }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: deploy_simulator_artifacts
           path: .
@@ -1829,7 +1830,7 @@ jobs:
 
           # get previous version so we can generate the release report
           echo "previous_version=$(cat product.version)" >> $GITHUB_OUTPUT
-          
+
           echo "$product_version" > product.version
 
           git add product.version
@@ -1964,7 +1965,7 @@ jobs:
     steps:
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: raised_meta
           path: platform_configs

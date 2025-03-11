@@ -212,7 +212,7 @@ jobs:
 
       - name: Download packages to include in build
         if: inputs.download_artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: packages
           path: ${{ inputs.download_artifact_path }}
