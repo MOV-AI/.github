@@ -638,7 +638,7 @@ jobs:
           ./trunk flakytests upload \
               --org-url-slug "movai" \
               --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
-              --junit-paths "*.xml" # replace this with the path to your junit files
+              --junit-paths "junit.xml" # replace this with the path to your junit files
           deactivate
           
           user=$(cat results/credentials.txt | awk -F: '{print $1}')
@@ -923,7 +923,7 @@ jobs:
           ./trunk flakytests upload \
               --org-url-slug "movai" \
               --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
-              --junit-paths "**/*.xml" # replace this with the path to your junit file
+              --junit-paths "junit.xml" # replace this with the path to your junit file
           deactivate
         env:
           BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
@@ -1157,7 +1157,7 @@ jobs:
             ./trunk flakytests upload \
               --org-url-slug "movai" \
               --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
-              --junit-paths "**/*.xml" # replace this with the path to your junit file
+              --junit-paths "junit.xml" # replace this with the path to your junit file
 
           deactivate
         env:
@@ -1935,7 +1935,7 @@ jobs:
           ./trunk flakytests upload \
             --org-url-slug "movai" \
             --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
-            --junit-paths "**/*.xml" # replace this with the path to your junit file
+            --junit-paths "junit.xml" # replace this with the path to your junit file
 
           deactivate
         env:
