@@ -121,12 +121,12 @@ env:
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   TIMEOUT: 720
-  PROVISIONING_ENV_VERSION: 0.1.0-9
+  PROVISIONING_ENV_VERSION: 0.1.0-10
   PROVISIONING_ENV_REPO: devops-tf-env-conf
 
 jobs:
   Compute-timeout:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       timeout: ${{ steps.Compute-timeout.outputs.timeout }}
       jobtimeout: ${{ steps.Compute-timeout.outputs.jobtimeout }}

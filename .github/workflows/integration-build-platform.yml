@@ -17,6 +17,14 @@ on:
       fleet_number_members:
         required: true
         type: number
+      cluster:
+        required: false
+        default: "mary"
+        type: string
+      debug_simulation_tests_keep_alive:
+        required: false
+        type: boolean
+        default: false
       proxmox_cluster_name:
         required: false
         type: string
@@ -51,6 +59,12 @@ on:
         required: true
       proxmox_ve_password:
         required: true
+      proxmox_ve_sim_username:
+        required: true
+      proxmox_ve_sim_password:
+        required: true
+      ssh_priv_key:
+        required: true
       jira_username:
         required: true
       jira_password:
@@ -59,6 +73,12 @@ on:
         required: true
       xray_secret:
         required: true
+      minio_key_id:
+        required: true
+      minio_secret_key_id:
+        required: true
+      buildkite_token:
+        required: false
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "2.1.0.23"
   MOBTEST_VERSION: "0.0.6.1"
@@ -78,7 +98,7 @@ env:
   SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
   # development slack channel
   #SLACK_CHANNEL: "C05K2KF1UP8"
-  PROVISIONING_ENV_VERSION: 0.1.0-9
+  PROVISIONING_ENV_VERSION: 0.1.0-10
   PROVISIONING_ENV_REPO: devops-tf-env-conf
   ARTIFACTS_RETENTION_DAYS: 15
 
@@ -113,7 +133,6 @@ jobs:
           git checkout origin/${GITHUB_REF#refs/heads/} -- product.version
           cat product.version
           rm -rf simulator_artifacts ci_artifacts
-
           integration-pipeline generate_meta_simulator_artifacts \
                 --manifest_platform_base_key product_components \
                 --product_name ${{ inputs.product_name }} \
@@ -341,15 +360,24 @@ jobs:
         shell: bash
         run: |
           . test-venv/bin/activate
+          pip install buildkite-test-collector
           python3 -m pytest \
             -ra \
             --hub_url http://selenoid-ui.${{ inputs.proxmox_cluster_name }}.mov.ai \
             --base_url https://${{ steps.agent_info.outputs.ip }}/ \
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
-            --cucumberjson=./results.json
+            --cucumberjson=./results.json \
+            --junit-xml=junit.xml 
 
+          curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
+          ./trunk flakytests upload \
+              --org-url-slug "movai" \
+              --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
+              --junit-paths "junit.xml" # replace this with the path to your junit files
           deactivate
+        env:
+          BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
 
       - name: Create Xray test execution
         id: ui_tests_xray
@@ -591,27 +619,36 @@ jobs:
           . test-venv/bin/activate
           export PATH="$HOME/.local/bin:$PATH"
           rm -rf results/*
-
+          pip install buildkite-test-collector
+          curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
           if [ "${{ steps.install_tests_setup.outputs.jira_report }}" == "True" ] ; then
+          
           python3 -m pytest tests/ \
               -ra \
               -k '${{ steps.install_tests_setup.outputs.test_set }}' \
               --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci" \
-              --jira_report
+              --jira_report \
+              --junit-xml=junit.xml 
+
           else
           python3 -m pytest tests/ \
               -ra \
               -k '${{ steps.install_tests_setup.outputs.test_set }}' \
-              --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci"
+              --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --junit-xml=junit.xml
           fi
+          ./trunk flakytests upload \
+              --org-url-slug "movai" \
+              --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
+              --junit-paths "junit.xml" # replace this with the path to your junit files
           deactivate
-
+          
           user=$(cat results/credentials.txt | awk -F: '{print $1}')
           pwd=$(cat results/credentials.txt | awk -F: '{print $2}')
 
           echo "movai_user=${user}" >> $GITHUB_OUTPUT
           echo "movai_pwd=${pwd}" >> $GITHUB_OUTPUT
-
+        env:
+          BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
       - name: Run mobtest
         shell: bash
         run: |
@@ -874,14 +911,23 @@ jobs:
         shell: bash
         run: |
           . test-venv/bin/activate
-
+          pip install buildkite-test-collector
+          curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
           python3 -m pytest src \
             --movai-ip ${{ steps.agent_info.outputs.ip }} \
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
-            -m "not fleet"
+            -m "not fleet" \
+            --junit-xml=junit.xml
 
+            
+          ./trunk flakytests upload \
+              --org-url-slug "movai" \
+              --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
+              --junit-paths "junit.xml" # replace this with the path to your junit file
           deactivate
+        env:
+          BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
 
       - name: Get current job id
         if: always()
@@ -1098,17 +1144,25 @@ jobs:
 
           # run tests
           . test-venv/bin/activate
-
+          curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
+          pip install buildkite-test-collector
           python3 -m pytest \
             -s \
             -ra \
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
             -m '${{ steps.flow_tests_setup.outputs.test_set }}' \
-            --tb=short
+            --tb=short \
+            --junit-xml=junit.xml
+
+            ./trunk flakytests upload \
+              --org-url-slug "movai" \
+              --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
+              --junit-paths "junit.xml" # replace this with the path to your junit file
 
           deactivate
-
+        env:
+          BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
       - name: Get current job id
         if: always()
         shell: bash
@@ -1734,6 +1788,8 @@ jobs:
   Simulator-Validations:
     needs: [Build-Simulator]
     runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    outputs:
+      slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
     steps:
       - uses: rtCamp/action-cleanup@master
 
@@ -1866,17 +1922,25 @@ jobs:
 
           # run tests
           . test-venv/bin/activate
-
+          pip install buildkite-test-collector
+          curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
           python3 -m pytest \
             -s \
             -ra \
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
             -m 'simulator' \
-            --tb=short
+            --tb=short \
+            --junit-xml=junit.xml
+            
+          ./trunk flakytests upload \
+            --org-url-slug "movai" \
+            --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
+            --junit-paths "junit.xml" # replace this with the path to your junit file
 
           deactivate
-
+        env:
+          BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
       - name: Get current job id
         if: always()
         shell: bash
@@ -2018,8 +2082,18 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
+  Robotic-Stack-Integration:
+    needs: [Simulator-Validations]
+    uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@v2.1
+    secrets: inherit
+    with:
+      product_name: ${{ inputs.product_name }}
+      slack_thread_id: ${{ needs.Simulator-Validations.outputs.slack_thread_id }}
+      cluster: ${{ inputs.cluster }}
+      debug_simulation_tests_keep_alive: ${{ inputs.debug_simulation_tests_keep_alive }}
+
   publish:
-    needs: [Validations-Finish, Fleet-Validations, Simulator-Validations]
+    needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
     runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     outputs:
       slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
