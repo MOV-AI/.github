@@ -620,8 +620,9 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           rm -rf results/*
           pip install buildkite-test-collector
-          if [ "${{ steps.install_tests_setup.outputs.jira_report }}" == "True" ] ; then
           curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
+          if [ "${{ steps.install_tests_setup.outputs.jira_report }}" == "True" ] ; then
+          
           python3 -m pytest tests/ \
               -ra \
               -k '${{ steps.install_tests_setup.outputs.test_set }}' \
