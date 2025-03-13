@@ -14,7 +14,7 @@ on:
         required: false
         type: string
         description: Selenoid server to use
-        default: http://selenoid-ui.hel.mov.ai
+        default: http://selenoid-ui.hel0.mov.ai
     secrets:
       gh_token:
         required: true
