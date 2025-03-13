@@ -10,6 +10,12 @@ on:
         required: true
         type: string
         description: Test set to execute
+      selenoid_server_url:
+        required: false
+        type: string
+        description: Selenoid server to use
+        default: http://selenoid-ui.hel0.mov.ai
+      
     secrets:
       gh_token:
         required: true
@@ -174,7 +180,7 @@ jobs:
           # tests execution
           python3 -m pytest \
             --ignore qa_install_tests \
-            --hub_url http://selenoid-ui.hel.mov.ai \
+            --hub_url ${{ inputs.selenoid_server_url }} \
             --base_url https://${{ steps.agent_info.outputs.ip }}/ \
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }}
