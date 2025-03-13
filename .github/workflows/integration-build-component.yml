@@ -130,6 +130,7 @@ jobs:
         id: post_install
         run: |
           export CONFIG_FILE_NAME=$(cat product/robot.json)
+          export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
           export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
           export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
           if test -f .github/workflows/post_install_platform.bash; then
@@ -148,6 +149,7 @@ jobs:
         shell: bash
         run: |
           export CONFIG_FILE_NAME=$(cat product/robot.json)
+          export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
           export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
           export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
           mkdir -p test_artifacts
@@ -160,6 +162,7 @@ jobs:
         shell: bash
         run: |
           export CONFIG_FILE_NAME=$(cat product/robot.json)
+          export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
           export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
           export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
           if test -f .github/workflows/run_tests.bash; then
@@ -172,6 +175,7 @@ jobs:
         shell: bash
         run: |
           export CONFIG_FILE_NAME=$(cat product/robot.json)
+          export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
           export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
           export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
           if test -f .github/workflows/collect_tests_artifacts.bash; then
