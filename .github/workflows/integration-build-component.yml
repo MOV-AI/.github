@@ -34,7 +34,7 @@ env:
 
 jobs:
   Platform-tests:
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-hel0
 
     steps:
       - name: Checkout
