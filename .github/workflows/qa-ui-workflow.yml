@@ -10,6 +10,11 @@ on:
         required: true
         type: string
         description: Test set to execute
+      selenoid_server_url:
+        required: false
+        type: string
+        description: Selenoid server to use
+        default: http://selenoid-ui.hel.mov.ai
     secrets:
       gh_token:
         required: true
@@ -118,7 +123,7 @@ jobs:
           . venv/bin/activate
           # tests execution
           pytest \
-            --hub_url http://selenoid-ui.hel.mov.ai \
+            --hub_url ${{ inputs.selenoid_server_url }} \
             --base_url https://${{ steps.agent_info.outputs.ip }}/ \
             --install-platform
 
