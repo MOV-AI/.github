@@ -208,7 +208,7 @@ jobs:
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
   Build-backend:
-    runs-on: ubuntu-20.04
+    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     needs: [Validate-boostrap-configs]
     outputs:
       slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
