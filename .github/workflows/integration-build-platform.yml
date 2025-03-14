@@ -242,12 +242,11 @@ jobs:
         with:
           name: component_artifacts
 
-      - name: extract product configs, manifest and component artifacts to main folder
+      - name: extract product configs, manifest to main folder
         shell: bash
         run: |
           cp ./platform_configs/product.version product.version
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
-          cp ./component_artifacts/* .
 
 
       - name: Lint docker image
