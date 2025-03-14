@@ -1927,7 +1927,7 @@ jobs:
           docker image prune --all -f
 
   Simulator-Validations:
-    needs: [Build-Simulator]
+    needs: [Build-Simulator, Build-backend]
     runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     outputs:
       slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
