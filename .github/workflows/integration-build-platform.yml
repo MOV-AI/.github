@@ -99,9 +99,9 @@ env:
   XRAY_SECRET: ${{ secrets.xray_secret}}
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
-  SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
+  #SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
   # development slack channel
-  #SLACK_CHANNEL: "C05K2KF1UP8"
+  SLACK_CHANNEL: "C05K2KF1UP8"
   PROVISIONING_ENV_VERSION: 0.1.0-10
   PROVISIONING_ENV_REPO: devops-tf-env-conf
   ARTIFACTS_RETENTION_DAYS: 15
