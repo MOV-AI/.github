@@ -252,7 +252,7 @@ jobs:
       - name: Lint docker image
         shell: bash
         run: |
-          hadolint docker/Dockerfile -t error
+          hadolint docker/backend/Dockerfile -t error
 
       - name: Login to ${{ env.REGISTRY }} Registry
         uses: docker/login-action@v3
