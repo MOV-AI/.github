@@ -1682,15 +1682,14 @@ jobs:
           for fleet_host in ${members[@]}; do
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'cloud-init status --wait'
           done
-
+          echo "Members before second loop: ${members[@]}"
           for fleet_host in ${members[@]}; do
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a '
               set -e
               docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
-              backend_image=${{ needs.Build-backend.outputs.backend_image }}
-              docker pull ${{ env.REGISTRY }}/ci/$backend_image
-              docker tag ${{ env.REGISTRY }}/ci/$backend_image ${{ env.REGISTRY }}/qa/$backend_image
-              docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
+              docker pull ${{ env.REGISTRY }}/ci/${{ needs.Build-backend.outputs.backend_image }}
+              docker tag ${{ env.REGISTRY }}/ci/${{ needs.Build-backend.outputs.backend_image }} ${{ env.REGISTRY }}/qa/${{ needs.Build-backend.outputs.backend_image }}
+              docker tag ${{ env.REGISTRY }}/ci/${{ needs.Build-backend.outputs.backend_image }} ${{ env.MID_REGISTRY }}/qa/${{ needs.Build-backend.outputs.backend_image }}
             '
           done
           
