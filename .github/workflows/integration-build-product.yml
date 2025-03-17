@@ -51,7 +51,7 @@ on:
       docker_registry:
         required: false
         type: string
-        default: "registry.hel0.mov.ai"
+        default: "registry.hel.mov.ai"
       use_project_data_viewer:
         required: false
         type: boolean
