@@ -131,6 +131,11 @@ jobs:
         run: |
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
+      - name: raise version
+        run: |
+          integration-pipeline raise
+          cat product.version
+
       - name: Bootstraping simulator metadata
         run: |
           git config --global --add safe.directory $(pwd)
@@ -176,11 +181,10 @@ jobs:
           path: simulator_artifacts/*
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
-      - name: raise
+      - name: Pre-stash organization configs
         run: |
           rm -rf simulator_artifacts ci_artifacts platform_configs
           mkdir platform_configs
-          integration-pipeline raise
           cp product.version ./platform_configs/product.version
           cp product-manifest.yaml ./platform_configs/product-manifest.yaml
 
