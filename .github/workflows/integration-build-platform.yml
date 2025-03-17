@@ -287,6 +287,7 @@ jobs:
             --push .
 
       - name: store image name
+        id: store_image_name
         shell: bash
         run: |
           echo "backend_image=${{ inputs.backend_name }}:${{ steps.pre_build.outputs.raised_version }}" >> $GITHUB_OUTPUT
