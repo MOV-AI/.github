@@ -212,6 +212,7 @@ jobs:
     needs: [Validate-boostrap-configs]
     outputs:
       slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+      backend_image: ${{ steps.store_image_name.outputs.backend_image }}
     steps:
       - uses: rtCamp/action-cleanup@master
 
@@ -285,6 +286,11 @@ jobs:
             --pull \
             --push .
 
+      - name: store image name
+        shell: bash
+        run: |
+          echo "backend_image=${{ inputs.backend_name }}:${{ steps.pre_build.outputs.raised_version }}" >> $GITHUB_OUTPUT
+
       - name: Get current job id
         if: always()
         shell: bash
@@ -331,12 +337,12 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
-
   Standalone-Validations:
     runs-on: ubuntu-20.04
     needs: [Build-backend]
     outputs:
       slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+      backend_image: ${{ needs.Build-backend.outputs.backend_image }}
     steps:
       - name: Pass through
         run: echo "Pass"
@@ -447,6 +453,20 @@ jobs:
           slack-message: ${{ steps.pre_slack.outputs.msg_error }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+
+      - name: Login to ${{ env.REGISTRY }} Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.REGISTRY }}
+
+      - name: Docker load built images
+        shell: bash
+        run: |
+          backend_image = ${{ needs.Standalone-Validations.outputs.backend_image }}
+          docker pull "${{ env.REGISTRY }}/ci/$backend_image"
+          docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
 
       - name: Install
         id: install
@@ -750,6 +770,20 @@ jobs:
         env:
           SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
+      - name: Login to ${{ env.REGISTRY }} Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.REGISTRY }}
+
+      - name: Docker load built images
+        shell: bash
+        run: |
+          backend_image = ${{ needs.Standalone-Validations.outputs.backend_image }}
+          docker pull "${{ env.REGISTRY }}/ci/$backend_image"
+          docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
+          
       - name: Install tests
         timeout-minutes: 45
         id: install
@@ -1018,6 +1052,21 @@ jobs:
           pip install -r "${tests_dir}"/requirements.txt
           deactivate
 
+      - name: Login to ${{ env.REGISTRY }} Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.REGISTRY }}
+
+      - name: Docker load built images
+        shell: bash
+        run: |
+          backend_image = ${{ needs.Standalone-Validations.outputs.backend_image }}
+          docker pull "${{ env.REGISTRY }}/ci/$backend_image"
+          docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
+       
+
       - name: Install
         id: install
         shell: bash
@@ -1234,6 +1283,20 @@ jobs:
           pip install -r "${tests_dir}"/requirements.txt
           deactivate
 
+      - name: Login to ${{ env.REGISTRY }} Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.REGISTRY }}
+
+      - name: Docker load built images
+        shell: bash
+        run: |
+          backend_image = ${{ needs.Standalone-Validations.outputs.backend_image }}
+          docker pull "${{ env.REGISTRY }}/ci/$backend_image"
+          docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
+       
       - name: Install
         id: install
         shell: bash
@@ -1507,6 +1570,17 @@ jobs:
           terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
           terraform refresh $var_file_arg -var-file=input.tfvars
 
+      - name: Gather Terraform outputs
+        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        id: infra_outputs
+        shell: bash
+        run: |
+          ip=$(terraform output manager_ip_address)
+          user=$(terraform output user)
+          echo "host_ip=$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
+          echo "host_user=$(echo $user | sed "s;\";;g")" >> $GITHUB_OUTPUT
+          echo "ssh_connect_string=$(echo $user | sed "s;\";;g")@$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
+
       - name: Prepare Devops provisioning slack message
         if: always()
         id: pre_slack_infra
@@ -1555,6 +1629,13 @@ jobs:
           echo "target_dir=${install_infra_dir}" >> $GITHUB_OUTPUT
           deactivate
 
+      - name: Login to ${{ env.REGISTRY }} Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.REGISTRY }}
+
       - name: Ansible install platform
         id: ansible_install_platform
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
@@ -1594,6 +1675,17 @@ jobs:
           for fleet_host in ${members[@]}; do
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'cloud-init status --wait'
           done
+
+          for fleet_host in ${members[@]}; do
+            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a '
+              set -e
+              docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+              backend_image = ${{ needs.Build-backend.outputs.backend_image }}
+              docker pull ${{ env.REGISTRY }}/ci/$backend_image
+              docker tag ${{ env.REGISTRY }}/ci/$backend_image ${{ env.REGISTRY }}/qa/$backend_image
+            '
+          done
+          
 
           ansible-playbook install.yml \
             -i ../staging/provisioned_inventory.yml \
@@ -2007,6 +2099,21 @@ jobs:
           . "${tests_dir}"/test-venv/bin/activate
           python3 -m pip install -r "${tests_dir}"/requirements.txt
           deactivate
+
+
+      - name: Login to ${{ env.REGISTRY }} Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.REGISTRY }}
+
+      - name: Docker load built images
+        shell: bash
+        run: |
+          backend_image = ${{ needs.Build-backend.outputs.backend_image }}
+          docker pull "${{ env.REGISTRY }}/ci/$backend_image"
+          docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
 
       - name: Installation
         id: install
