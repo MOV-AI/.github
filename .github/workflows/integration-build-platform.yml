@@ -92,6 +92,7 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   AWS_DEFAULT_REGION: "us-east-1"
   REGISTRY: registry.cloud.mov.ai
+  MID_REGISTRY: registry.hel.mov.ai
   ENV: qa
   USERSPACE_FOLDER_PATH: userspace
   SIMULATION_ID: ci_simulation
@@ -468,6 +469,8 @@ jobs:
           backend_image=${{ needs.Standalone-Validations.outputs.backend_image }}
           docker pull "${{ env.REGISTRY }}/ci/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
+          docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
+          
 
       - name: Install
         id: install
@@ -784,6 +787,7 @@ jobs:
           backend_image=${{ needs.Standalone-Validations.outputs.backend_image }}
           docker pull "${{ env.REGISTRY }}/ci/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
+          docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
           
       - name: Install tests
         timeout-minutes: 45
@@ -1066,6 +1070,7 @@ jobs:
           backend_image=${{ needs.Standalone-Validations.outputs.backend_image }}
           docker pull "${{ env.REGISTRY }}/ci/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
+          docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
        
 
       - name: Install
@@ -1297,6 +1302,7 @@ jobs:
           backend_image=${{ needs.Standalone-Validations.outputs.backend_image }}
           docker pull "${{ env.REGISTRY }}/ci/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
+          docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
        
       - name: Install
         id: install
@@ -1684,6 +1690,7 @@ jobs:
               backend_image=${{ needs.Build-backend.outputs.backend_image }}
               docker pull ${{ env.REGISTRY }}/ci/$backend_image
               docker tag ${{ env.REGISTRY }}/ci/$backend_image ${{ env.REGISTRY }}/qa/$backend_image
+              docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
             '
           done
           
@@ -2115,6 +2122,7 @@ jobs:
           backend_image=${{ needs.Build-backend.outputs.backend_image }}
           docker pull "${{ env.REGISTRY }}/ci/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
+          docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
 
       - name: Installation
         id: install
