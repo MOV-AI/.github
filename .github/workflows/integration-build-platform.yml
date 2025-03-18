@@ -1698,16 +1698,22 @@ jobs:
           echo "3-$REGISTRY_USER"
           echo "4-$REGISTRY_PASS"
           echo "5-$MID_REGISTRY"
+          for fleet_host in ${members[@]}; do
+            echo "Fleet host: $fleet_host"
+          done
+          SOURCE_TAG="$REGISTRY/ci/$BACKEND_IMAGE"
+          TARGET_TAG_REGISTRY="$REGISTRY/qa/$BACKEND_IMAGE"
+          TARGET_TAG_MID_REGISTRY="$MID_REGISTRY/qa/$BACKEND_IMAGE"
 
           for fleet_host in ${members[@]}; do
 
-            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a <<EOF
-              set -e
-              docker login "$REGISTRY" -u "$REGISTRY_USER" -p "$REGISTRY_PASS"  
-              docker pull "$REGISTRY/ci/$BACKEND_IMAGE"
-              docker tag "$REGISTRY/ci/$BACKEND_IMAGE" "$REGISTRY/qa/$BACKEND_IMAGE"
-              docker tag "$REGISTRY/ci/$BACKEND_IMAGE" "$MID_REGISTRY/qa/$BACKEND_IMAGE"
-          EOF
+            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "
+              set -e;
+              docker login $REGISTRY -u '${{ secrets.registry_user }}' -p '${{ secrets.registry_password }}';
+              docker pull $SOURCE_TAG;
+              docker tag $SOURCE_TAG $TARGET_TAG_REGISTRY;
+              docker tag $SOURCE_TAG $TARGET_TAG_MID_REGISTRY;
+            "
           done
           
 
