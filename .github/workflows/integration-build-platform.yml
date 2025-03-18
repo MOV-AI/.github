@@ -1707,7 +1707,7 @@ jobs:
               docker pull "$REGISTRY/ci/$BACKEND_IMAGE"
               docker tag "$REGISTRY/ci/$BACKEND_IMAGE" "$REGISTRY/qa/$BACKEND_IMAGE"
               docker tag "$REGISTRY/ci/$BACKEND_IMAGE" "$MID_REGISTRY/qa/$BACKEND_IMAGE"
-EOF
+          EOF
           done
           
 
