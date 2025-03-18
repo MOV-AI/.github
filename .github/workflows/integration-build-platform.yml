@@ -93,6 +93,7 @@ env:
   AWS_DEFAULT_REGION: "us-east-1"
   REGISTRY: registry.cloud.mov.ai
   MID_REGISTRY: registry.hel.mov.ai
+  PUSH_REGISTRY: registry.cloud.mov.ai
   ENV: qa
   USERSPACE_FOLDER_PATH: userspace
   SIMULATION_ID: ci_simulation
@@ -358,6 +359,7 @@ jobs:
     runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     outputs:
       slack_thread_id: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
+      backend_image: ${{ needs.Standalone-Validations.outputs.backend_image }}
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
@@ -1476,6 +1478,7 @@ jobs:
     runs-on: ubuntu-20.04
     outputs:
       slack_thread_id: ${{ needs.Validation-UI-Tests.outputs.slack_thread_id }}
+      backend_image: ${{ needs.Validation-UI-Tests.outputs.backend_image }}
     steps:
       - name: Pass through
         run: echo "Pass"
@@ -2405,6 +2408,20 @@ jobs:
           name: deploy_simulator_artifacts
           path: .
 
+      - name: Login to ${{ env.REGISTRY }} Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.REGISTRY }}
+  
+      - name: Login to ${{ env.PUSH_REGISTRY }} Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.PUSH_REGISTRY }}
+
       - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
@@ -2435,7 +2452,15 @@ jobs:
           cp ./*.json deployment_artifacts
           cp artifacts/merged.dploy deployment_artifacts/deployable.dploy
           echo -e "$(cat ./artifacts/product.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
+          echo "${{env.REGISTRY}}/qa/${{ needs.Validations-Finish.outputs.backend_image }}" >> deployment_artifacts/product.image.artifact
           deactivate
+
+          source="${{env.REGISTRY}}/ci/${{ needs.Validations-Finish.outputs.backend_image }}"
+          target="${{env.PUSH_REGISTRY}}/qa/${{ needs.Validations-Finish.outputs.backend_image }}"
+          docker pull $source
+          echo "tagging $source as $target"
+          docker tag $source $target
+          docker push $target
 
           cp product.version deployment_artifacts
           cp product-manifest.yaml deployment_artifacts
