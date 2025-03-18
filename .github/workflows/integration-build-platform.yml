@@ -1708,16 +1708,11 @@ jobs:
           TARGET_TAG_MID_REGISTRY="$MID_REGISTRY/qa/$BACKEND_IMAGE"
 
           for fleet_host in ${members[@]}; do
-
-            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "$(cat <<EOF
-                set -e
-                echo "can i even echo this?"
-                docker login "$REGISTRY" -u "$REGISTRY_USER" -p "$REGISTRY_PASS"
-                docker pull "$SOURCE_TAG"
-                docker tag "$SOURCE_TAG" "$TARGET_TAG_REGISTRY"
-                docker tag "$SOURCE_TAG" "$TARGET_TAG_MID_REGISTRY"
-          EOF
-          )"
+            ansible "$fleet_host" -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "echo Hello, $fleet_host"
+            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker login $REGISTRY -u $REGISTRY_USER -p $REGISTRY_PASS"
+            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker pull $SOURCE_TAG"
+            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker tag $SOURCE_TAG $TARGET_TAG_REGISTRY"
+            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker tag $SOURCE_TAG $TARGET_TAG_MID_REGISTRY"
           done
           
 
