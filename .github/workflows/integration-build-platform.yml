@@ -352,8 +352,6 @@ jobs:
     steps:
       - name: Pass through
         run: echo "Pass"
-      - name: fail
-        run: exit 1
 
   Validation-UI-Tests:
     needs: [Standalone-Validations]
@@ -1688,27 +1686,18 @@ jobs:
           for fleet_host in ${members[@]}; do
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'cloud-init status --wait'
           done
-          echo "Members before second loop: ${members[@]}"
+
           REGISTRY=${{ env.REGISTRY }}
           BACKEND_IMAGE=${{ needs.Build-backend.outputs.backend_image }}
           MID_REGISTRY=${{ env.MID_REGISTRY }}
           REGISTRY_USER=${{ secrets.registry_user }}
           REGISTRY_PASS=${{ secrets.registry_password }}
 
-          echo "1-$BACKEND_IMAGE"
-          echo "2-$REGISTRY"
-          echo "3-$REGISTRY_USER"
-          echo "4-$REGISTRY_PASS"
-          echo "5-$MID_REGISTRY"
-          for fleet_host in ${members[@]}; do
-            echo "Fleet host: $fleet_host"
-          done
           SOURCE_TAG="$REGISTRY/ci/$BACKEND_IMAGE"
           TARGET_TAG_REGISTRY="$REGISTRY/qa/$BACKEND_IMAGE"
           TARGET_TAG_MID_REGISTRY="$MID_REGISTRY/qa/$BACKEND_IMAGE"
 
           for fleet_host in ${members[@]}; do
-            ansible "$fleet_host" -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "echo Hello, $fleet_host"
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker login $REGISTRY -u $REGISTRY_USER -p $REGISTRY_PASS"
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker pull $SOURCE_TAG"
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker tag $SOURCE_TAG $TARGET_TAG_REGISTRY"
