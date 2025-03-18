@@ -1709,14 +1709,15 @@ jobs:
 
           for fleet_host in ${members[@]}; do
 
-            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a '
-              set -e;
-              echo 'can i even echo this?';
-              docker login '"${REGISTRY}"' -u '"${REGISTRY_USER}"' -p '"${REGISTRY_PASS}"';
-              docker pull '"${SOURCE_TAG}"';
-              docker tag '"${SOURCE_TAG}"' '"${TARGET_TAG_REGISTRY}"';
-              docker tag '"${SOURCE_TAG}"' '"${TARGET_TAG_MID_REGISTRY}"'
-            '
+            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "$(cat <<EOF
+                set -e
+                echo "can i even echo this?"
+                docker login "$REGISTRY" -u "$REGISTRY_USER" -p "$REGISTRY_PASS"
+                docker pull "$SOURCE_TAG"
+                docker tag "$SOURCE_TAG" "$TARGET_TAG_REGISTRY"
+                docker tag "$SOURCE_TAG" "$TARGET_TAG_MID_REGISTRY"
+          EOF
+          )"
           done
           
 
