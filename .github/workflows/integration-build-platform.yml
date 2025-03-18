@@ -352,6 +352,8 @@ jobs:
     steps:
       - name: Pass through
         run: echo "Pass"
+      - name: fail
+        run: exit 1
 
   Validation-UI-Tests:
     needs: [Standalone-Validations]
