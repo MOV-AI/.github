@@ -19,7 +19,7 @@ on:
       backend_name:
         required: false
         type: string
-        default: ""
+        default: ''
 
     secrets:
       auto_commit_user:
@@ -387,7 +387,7 @@ jobs:
           echo "test_dir=$(cat /tmp/test_dir.txt)" >> $GITHUB_OUTPUT
 
       - name: Remote - Fetch custom backend
-        if: ${{ inputs.backend_name != "" }}
+        if: ${{ inputs.backend_name != '' }}
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
