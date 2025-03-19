@@ -348,7 +348,7 @@ jobs:
     runs-on: ubuntu-20.04
     needs: [Build-backend]
     outputs:
-      slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image: ${{ needs.Build-backend.outputs.backend_image }}
     steps:
       - name: Pass through
@@ -1804,7 +1804,7 @@ jobs:
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: ${{ env.SLACK_CHANNEL }}
           slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          slack-optional-thread_ts: ${{ needs.Build-backend.outputs.slack_thread_id }}
 
       - name: Slack message failure
         uses: archive/github-actions-slack@master
@@ -1814,7 +1814,7 @@ jobs:
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: ${{ env.SLACK_CHANNEL }}
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          slack-optional-thread_ts: ${{ needs.Build-backend.outputs.slack_thread_id }}
 
       - name: Collect Fleet QA artifacts
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
@@ -1877,12 +1877,13 @@ jobs:
           exit ${exit_status}
 
   Build-Simulator:
-    needs: [Validate-boostrap-configs]
+    needs: [Build-backend]
     runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     env:
       DISTRO: noetic
     outputs:
-      slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+      backend_image: ${{ needs.Build-backend.outputs.backend_image }}
 
     steps:
       - name: Cleanup Workspace
@@ -2043,6 +2044,7 @@ jobs:
     runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     outputs:
       slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
+      backend_image: ${{ needs.Build-Simulator.outputs.backend_image }}
     steps:
       - uses: rtCamp/action-cleanup@master
 
@@ -2353,13 +2355,14 @@ jobs:
 
   Robotic-Stack-Integration:
     needs: [Simulator-Validations]
-    uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@v2.1
+    uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@v2.2
     secrets: inherit
     with:
       product_name: ${{ inputs.product_name }}
       slack_thread_id: ${{ needs.Simulator-Validations.outputs.slack_thread_id }}
       cluster: ${{ inputs.cluster }}
       debug_simulation_tests_keep_alive: ${{ inputs.debug_simulation_tests_keep_alive }}
+      backend_name: ${{ needs.Simulator-Validations.outputs.backend_image }}
 
   publish:
     needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
