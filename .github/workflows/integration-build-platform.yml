@@ -11,7 +11,7 @@ on:
       backend_name:
         required: false
         type: string
-        default: "backend-enterprise"
+        default: ''
       debug_fleet_keep_alive:
         required: false
         type: boolean
