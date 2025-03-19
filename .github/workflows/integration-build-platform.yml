@@ -2008,7 +2008,7 @@ jobs:
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: ${{ env.SLACK_CHANNEL }}
           slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          slack-optional-thread_ts: ${{ needs.Build-backend.outputs.slack_thread_id }}
 
       - name: Slack message failure
         uses: archive/github-actions-slack@master
@@ -2018,7 +2018,7 @@ jobs:
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: ${{ env.SLACK_CHANNEL }}
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          slack-optional-thread_ts: ${{ needs.Build-backend.outputs.slack_thread_id }}
 
       - name: pre-stash
         shell: bash
