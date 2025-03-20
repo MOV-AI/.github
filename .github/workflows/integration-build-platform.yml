@@ -473,6 +473,7 @@ jobs:
         shell: bash
         run: |
           backend_image=${{ needs.Standalone-Validations.outputs.backend_image }}
+          docker rmi "${{ env.REGISTRY }}/ci/$backend_image" -f || true
           docker pull "${{ env.REGISTRY }}/ci/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
@@ -796,6 +797,7 @@ jobs:
         shell: bash
         run: |
           backend_image=${{ needs.Standalone-Validations.outputs.backend_image }}
+          docker rmi "${{ env.REGISTRY }}/ci/$backend_image" -f || true
           docker pull "${{ env.REGISTRY }}/ci/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
@@ -1086,6 +1088,7 @@ jobs:
         shell: bash
         run: |
           backend_image=${{ needs.Standalone-Validations.outputs.backend_image }}
+          docker rmi "${{ env.REGISTRY }}/ci/$backend_image" -f || true
           docker pull "${{ env.REGISTRY }}/ci/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
@@ -1321,6 +1324,7 @@ jobs:
         shell: bash
         run: |
           backend_image=${{ needs.Standalone-Validations.outputs.backend_image }}
+          docker rmi "${{ env.REGISTRY }}/ci/$backend_image" -f || true
           docker pull "${{ env.REGISTRY }}/ci/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
@@ -2156,6 +2160,7 @@ jobs:
         shell: bash
         run: |
           backend_image=${{ needs.Build-backend.outputs.backend_image }}
+          docker rmi "${{ env.REGISTRY }}/ci/$backend_image" -f || true
           docker pull "${{ env.REGISTRY }}/ci/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
