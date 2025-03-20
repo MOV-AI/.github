@@ -539,15 +539,20 @@ jobs:
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
             --cucumberjson=./results.json \
             --junit-xml=junit.xml 
+          deactivate
+        env:
+          BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
 
+      - name: Publish test results trunk
+        if: always()
+        working-directory: ${{ steps.ui_tests_setup.outputs.target_dir }}
+        shell: bash
+        run: |
           curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
           ./trunk flakytests upload \
               --org-url-slug "movai" \
               --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
               --junit-paths "junit.xml" # replace this with the path to your junit files
-          deactivate
-        env:
-          BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
 
       - name: Create Xray test execution
         id: ui_tests_xray
@@ -805,7 +810,6 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           rm -rf results/*
           pip install buildkite-test-collector
-          curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
           if [ "${{ steps.install_tests_setup.outputs.jira_report }}" == "True" ] ; then
           
           python3 -m pytest tests/ \
@@ -821,10 +825,6 @@ jobs:
               -k '${{ steps.install_tests_setup.outputs.test_set }}' \
               --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --junit-xml=junit.xml
           fi
-          ./trunk flakytests upload \
-              --org-url-slug "movai" \
-              --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
-              --junit-paths "junit.xml" # replace this with the path to your junit files
           deactivate
           
           user=$(cat results/credentials.txt | awk -F: '{print $1}')
@@ -834,6 +834,18 @@ jobs:
           echo "movai_pwd=${pwd}" >> $GITHUB_OUTPUT
         env:
           BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
+
+      - name: Publish test results trunk
+        if: always()
+        working-directory: ${{ steps.install_tests_setup.outputs.target_dir }}
+        shell: bash
+        run: |
+          curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
+          ./trunk flakytests upload \
+              --org-url-slug "movai" \
+              --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
+              --junit-paths "junit.xml" # replace this with the path to your junit files
+
       - name: Run mobtest
         shell: bash
         run: |
@@ -1077,7 +1089,6 @@ jobs:
           docker pull "${{ env.REGISTRY }}/ci/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
-       
 
       - name: Install
         id: install
@@ -1113,22 +1124,26 @@ jobs:
         run: |
           . test-venv/bin/activate
           pip install buildkite-test-collector
-          curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
           python3 -m pytest src \
             --movai-ip ${{ steps.agent_info.outputs.ip }} \
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
             -m "not fleet" \
             --junit-xml=junit.xml
-
-            
-          ./trunk flakytests upload \
-              --org-url-slug "movai" \
-              --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
-              --junit-paths "junit.xml" # replace this with the path to your junit file
           deactivate
         env:
           BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
+      
+      - name: Publish test results trunk
+        if: always()
+        working-directory: ${{ steps.api_tests_setup.outputs.target_dir }}
+        shell: bash
+        run: |
+          curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
+          ./trunk flakytests upload \
+              --org-url-slug "movai" \
+              --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
+              --junit-paths "junit.xml" # replace this with the path to your junit files
 
       - name: Get current job id
         if: always()
@@ -1360,7 +1375,6 @@ jobs:
 
           # run tests
           . test-venv/bin/activate
-          curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
           pip install buildkite-test-collector
           python3 -m pytest \
             -s \
@@ -1371,14 +1385,21 @@ jobs:
             --tb=short \
             --junit-xml=junit.xml
 
-            ./trunk flakytests upload \
-              --org-url-slug "movai" \
-              --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
-              --junit-paths "junit.xml" # replace this with the path to your junit file
-
           deactivate
         env:
           BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
+
+      - name: Publish test results trunk
+        if: always()
+        working-directory: ${{ steps.flow_tests_setup.outputs.target_dir }}
+        shell: bash
+        run: |
+          curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
+          ./trunk flakytests upload \
+              --org-url-slug "movai" \
+              --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
+              --junit-paths "junit.xml" # replace this with the path to your junit files
+
       - name: Get current job id
         if: always()
         shell: bash
@@ -2582,8 +2603,6 @@ jobs:
           slack-channel: ${{ env.SLACK_CHANNEL }}
           slack-update-message-text: ${{ steps.pre_slack.outputs.msg }}
           slack-update-message-ts: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
-
-
 
   Run-Status:
     runs-on: ubuntu-20.04
