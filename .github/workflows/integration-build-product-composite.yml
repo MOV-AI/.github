@@ -1085,7 +1085,7 @@ jobs:
           env_configs_version=${{ env.PROVISIONING_ENV_VERSION }}
           env_configs_repo_name=${{ env.PROVISIONING_ENV_REPO }}
           rm -rf $env_configs_dir
-          . .ci-venv/bin/activate
+          . ci-venv/bin/activate
           integration-pipeline fetch_by_tag --repo $env_configs_repo_name --version $env_configs_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $env_configs_dir
           ls -la $env_configs_dir
           echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
@@ -1100,7 +1100,7 @@ jobs:
           provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
 
           rm -rf $provision_infra_dir
-          . .ci-venv/bin/activate
+          . ci-venv/bin/activate
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
           deactivate
           ls -la $provision_infra_dir
@@ -1456,7 +1456,7 @@ jobs:
           env_configs_version=${{ env.PROVISIONING_ENV_VERSION }}
           env_configs_repo_name=${{ env.PROVISIONING_ENV_REPO }}
           rm -rf $env_configs_dir
-          . .ci-venv/bin/activate
+          . ci-venv/bin/activate
           integration-pipeline fetch_by_tag --repo $env_configs_repo_name --version $env_configs_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $env_configs_dir
           ls -la $env_configs_dir
           echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
@@ -1471,7 +1471,7 @@ jobs:
           provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
 
           rm -rf $provision_infra_dir
-          . .ci-venv/bin/activate
+          . ci-venv/bin/activate
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
           deactivate
           ls -la $provision_infra_dir
