@@ -1046,6 +1046,14 @@ jobs:
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
+      - name: Setup CI Scripts in ci_scripts
+        shell: bash
+        run: |
+          python3 -m venv ci_scripts --clear
+          . ci_scripts/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+
       - name: unstash raised_meta
         uses: actions/download-artifact@v4
         with:
@@ -1126,7 +1134,7 @@ jobs:
           echo "fleet_peer_nr=$nb_workers">>input.tfvars
           echo 'fleet_password="${{ secrets.provision_infra_pwd }}"'>>input.tfvars
           echo 'fleet_manager_name="${{ steps.infra_names.outputs.manager_prefix }}"'>>input.tfvars
-          echo 'ip_list=["10.26.0.40/24","10.26.0.41/24","10.26.0.42/24","10.26.0.43/24","10.26.0.44/24","10.26.0.45/24"]'>>input.tfvars
+          echo 'ip_list=${{ inputs.single_vm_fleet_ips }}'>>input.tfvars
           echo 'tags=["ip-simul-ci"]'>>input.tfvars
           echo 'pool="IP-Temp-VMs"'>>input.tfvars
           echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
@@ -1414,6 +1422,14 @@ jobs:
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
+      - name: Setup CI Scripts in ci_scripts
+        shell: bash
+        run: |
+          python3 -m venv ci_scripts --clear
+          . ci_scripts/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+
       - name: unstash raised_meta
         uses: actions/download-artifact@v4
         with:
@@ -1432,23 +1448,34 @@ jobs:
           name: robot_jsons_${{ matrix.distro }}
           path: .
 
-      - name: Install CI Scripts in container
+      - name: Setup infra environment configs
+        id: infra_env_configs_setup
         shell: bash
         run: |
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-
+          env_configs_dir=infra_env_configs
+          env_configs_version=${{ env.PROVISIONING_ENV_VERSION }}
+          env_configs_repo_name=${{ env.PROVISIONING_ENV_REPO }}
+          rm -rf $env_configs_dir
+          . .ci-venv/bin/activate
+          integration-pipeline fetch_by_tag --repo $env_configs_repo_name --version $env_configs_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $env_configs_dir
+          ls -la $env_configs_dir
+          echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
+          deactivate
+  
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=0.0.1-40
-          provision_infra_repo_name=devops-tf-proxmox-fleet
+          provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
+          provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
 
           rm -rf $provision_infra_dir
+          . .ci-venv/bin/activate
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
+          deactivate
           ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}/hosts/generic/" >> $GITHUB_OUTPUT
+          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
 
       - name: Define Instance names
         id: infra_names
@@ -1456,8 +1483,8 @@ jobs:
         run: |
           branch=$(echo ${GITHUB_REF#refs/heads/} | sed "s;\.;-;g" )
 
-          local_manager_prefix="ip-hgf-${{ inputs.product_name }}-$branch-manager"
-          local_worker_prefix="ip-hgf-${{ inputs.product_name }}-$branch-worker"
+          local_manager_prefix="ip-hgf-multi-${{ inputs.product_name }}-$branch-manager"
+          local_worker_prefix="ip-hgf-multi-${{ inputs.product_name }}-$branch-worker"
           echo "$local_manager_prefix"
           echo "$local_worker_prefix"
 
@@ -1468,31 +1495,33 @@ jobs:
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
         run: |
-          terraform init -backend-config="key=hel-fleet-composite-${{ steps.infra_names.outputs.manager_prefix }}-multi.tfstate"
-          terraform plan
-          terraform apply -auto-approve
-        env:
-          TF_VAR_number_agents: ${{ inputs.multi_vm_fleet_number_members }}
-          TF_VAR_proxmox_api_url: "https://hel.mov.ai:8006/api2/json"
-          TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
-          TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
-          TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
-          TF_VAR_ip_list: ${{ inputs.multi_vm_fleet_ips }}
-          TF_VAR_proxmox_host: "hel"
-          TF_VAR_vm_gateway: "172.22.0.1"
-          TF_VAR_ip_mask: 24
-          TF_VAR_bios: "seabios"
-          TF_VAR_pool: "IP-Temp-VMs"
-          TF_VAR_tags: "ip-fleet"
+          multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..${{ inputs.multi_vm_fleet_number_members }}})
+          node_list_str=${multiply_node::-1}
 
-          TF_VAR_fleet_hosts_user: "devops"
-          TF_VAR_template_name: "ubuntu-2004-cloudinit-template2"
-          TF_VAR_fleet_manager_name: ${{ steps.infra_names.outputs.manager_prefix }}
-          TF_VAR_fleet_manager_memory: 8192
-          TF_VAR_template_name_no_gpu: "ubuntu-2004-cloudinit-template2"
-          TF_VAR_fleet_worker_name_prefix: ${{ steps.infra_names.outputs.worker_prefix }}
-          TF_VAR_fleet_worker_memory: 8192
-          TF_VAR_include_simulators: ${{ inputs.with_simulation }}
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel0/${{ inputs.cluster }}_simul_bpg.tfvars'
+
+          echo "proxmox_host_list=[$node_list_str]">>input.tfvars
+          nb_workers=${{ inputs.multi_vm_fleet_number_members }}-1
+          echo "fleet_peer_nr=$nb_workers">>input.tfvars
+          echo 'fleet_password="${{ secrets.provision_infra_pwd }}"'>>input.tfvars
+          echo 'fleet_manager_name="${{ steps.infra_names.outputs.manager_prefix }}"'>>input.tfvars
+          echo 'ip_list=${{ inputs.multi_vm_fleet_ips }}'>>input.tfvars
+          echo 'tags=["ip-simul-ci"]'>>input.tfvars
+          echo 'pool="IP-Temp-VMs"'>>input.tfvars
+          echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
+          echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
+          echo 'include_simulators=${{ inputs.with_simulation }}'>>input.tfvars
+          echo "\n">>input
+
+          echo "File args: $var_file_arg"
+          echo "Input File args: $(cat input.tfvars)"
+          terraform init -backend-config="key=hel0-fleet-composite-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
+          terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
+          terraform refresh $var_file_arg -var-file=input.tfvars
+
+          echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
+          sudo chmod 600 ~/.ssh/ci_priv_key.pem
+
 
       - name: Prepare Devops provisioning slack message
         if: always()
