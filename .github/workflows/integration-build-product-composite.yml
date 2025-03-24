@@ -95,7 +95,7 @@ on:
         required: false
 
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.25" 
+  CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.27" 
   MOBTEST_VERSION: "0.0.4.3"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.26"
   GITHUB_API_USR: "OttoMation-Movai"
@@ -1106,8 +1106,8 @@ jobs:
         run: |
           branch=$(echo ${GITHUB_REF#refs/heads/} | sed "s;\.;-;g" )
 
-          local_manager_prefix="ip-hgf-multi-$branch-manager"
-          local_worker_prefix="ip-hgf-multi-$branch-worker"
+          local_manager_prefix="ip-hgf-multi-${{ inputs.product_name }}-$branch-manager"
+          local_worker_prefix="ip-hgf-multi-${{ inputs.product_name }}-$branch-worker"
           echo "$local_manager_prefix"
           echo "$local_worker_prefix"
 
@@ -1458,8 +1458,8 @@ jobs:
         run: |
           branch=$(echo ${GITHUB_REF#refs/heads/} | sed "s;\.;-;g" )
 
-          local_manager_prefix="ip-hgf-$branch-manager"
-          local_worker_prefix="ip-hgf-$branch-worker"
+          local_manager_prefix="ip-hgf-${{ inputs.product_name }}-$branch-manager"
+          local_worker_prefix="ip-hgf-${{ inputs.product_name }}-$branch-worker"
           echo "$local_manager_prefix"
           echo "$local_worker_prefix"
 

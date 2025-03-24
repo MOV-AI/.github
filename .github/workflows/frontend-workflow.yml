@@ -150,6 +150,9 @@ jobs:
           echo ""
           echo "ERROR, the following files have changed:"
           git diff --name-only HEAD
+          echo ""
+          echo "Changes:"
+          git diff HEAD
           exit 1
         fi
 
@@ -213,8 +216,8 @@ jobs:
           -Dsonar.scm.provider=git
           -Dsonar.qualitygate.wait=true
           -Dsonar.qualitygate.timeout=300
-          -Dsonar.coverage.exclusions=**/*.test.js
-          -Dsonar.cpd.exclusions=**/*.test.js
+          -Dsonar.coverage.exclusions=**/*.test.js,**/*.test.jsx
+          -Dsonar.cpd.exclusions=**/*.test.js,**/*.test.jsx
           -Dsonar.javascript.lcov.reportPaths=./coverage/lcov.info
 
     - name: Link to SonarCloud dashboard
