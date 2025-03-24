@@ -87,8 +87,6 @@ on:
         required: true
       ssh_priv_key:
         required: true
-      pdv_auth_token:
-        required: false
       minio_key_id:
         required: false
       minio_secret_key_id:
