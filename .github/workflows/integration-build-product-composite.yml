@@ -22,7 +22,7 @@ on:
       docker_registry:
         required: false
         type: string
-        default: "registry.hel0.mov.ai"
+        default: "registry.hel.mov.ai"
       use_project_data_viewer:
         required: false
         type: boolean
@@ -103,7 +103,7 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   REGISTRY: ${{ inputs.docker_registry }}
   PUSH_REGISTRY: registry.cloud.mov.ai
-  MID_REGISTRY: registry.hel0.mov.ai
+  MID_REGISTRY: registry.hel.mov.ai
   USERSPACE_FOLDER_PATH: userspace
   REMOTE_WORKSPACE_PATH: workspace
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
