@@ -700,7 +700,10 @@ jobs:
           wget https://movai-scripts.s3.amazonaws.com/wait_robot_start.bash
           chmod +x ./wait_robot_start.bash
           ./wait_robot_start.bash
-
+          echo "image list:"
+          docker images
+          echo "container list:"
+          docker ps -a
           container_id=$(docker ps -q -f "ancestor=$REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)")
           docker exec -t "$container_id" bash -c '
             set -e
