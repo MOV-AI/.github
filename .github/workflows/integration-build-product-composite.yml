@@ -145,8 +145,8 @@ jobs:
       - name: Install CI Scripts in container
         shell: bash
         run: |
-          python3 -m venv ci_scripts --clear
-          source ci_scripts/bin/activate
+          python3 -m venv ci-venv --clear
+          source ci-venv/bin/activate
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
           deactivate
 
@@ -159,7 +159,7 @@ jobs:
           cat product.version
           rm -rf simulator_artifacts ci_artifacts
 
-          source ci_scripts/bin/activate
+          source ci-venv/bin/activate
 
           merge_manifest_args=" --dependency_name products"
           merge_manifest_args="$merge_manifest_args --gh_api_user $GITHUB_API_USR"
@@ -193,7 +193,7 @@ jobs:
         run: |
           rm -rf simulator_artifacts
           mkdir platform_configs
-          source ci_scripts/bin/activate
+          source ci-venv/bin/activate
           integration-pipeline raise
           cp product.version ./platform_configs/product.version
           cp product-manifest.yaml ./platform_configs/product-manifest.yaml
@@ -245,11 +245,11 @@ jobs:
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
-      - name: Setup CI Scripts in ci_scripts
+      - name: Setup CI Scripts in ci-venv
         shell: bash
         run: |
-          python3 -m venv ci_scripts --clear
-          source ci_scripts/bin/activate
+          python3 -m venv ci-venv --clear
+          source ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
@@ -264,7 +264,7 @@ jobs:
         run: |
           cp ./platform_configs/product.version product.version
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
-          source ci_scripts/bin/activate
+          source ci-venv/bin/activate
           cat product-manifest.yaml
           integration-pipeline generate_composite_meta_artifacts --manifest_platform_base_key "product_dependencies.products" --override_spawner ${{ inputs.product_name }} --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }}
           deactivate
@@ -307,7 +307,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p /tmp/ci_artifacts/dependency/
-          source ci_scripts/bin/activate
+          source ci-venv/bin/activate
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_dependencies.product_base.name --output_file /tmp/ci_artifacts/product_base_name.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_dependencies.product_base.version --output_file /tmp/ci_artifacts/product_base_version.txt
           integration-pipeline fetch_github_release_asset --asset_name product-manifest.yaml --repo $(cat /tmp/ci_artifacts/product_base_name.txt) --version $(cat /tmp/ci_artifacts/product_base_version.txt) --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir /tmp/ci_artifacts/dependency/
@@ -476,8 +476,8 @@ jobs:
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
 
-          python3 -m venv ci_scripts --clear
-          . ci_scripts/bin/activate
+          python3 -m venv ci-venv --clear
+          . ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
@@ -638,8 +638,8 @@ jobs:
         if: ${{ inputs.with_simulation }}
         shell: bash
         run: |
-          python3 -m venv ci_scripts --clear
-          . ci_scripts/bin/activate
+          python3 -m venv ci-venv --clear
+          . ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
@@ -678,7 +678,7 @@ jobs:
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation }}
         shell: bash
         run: |
-          source ci_scripts/bin/activate
+          source ci-venv/bin/activate
           integration-pipeline fetch_simulator_models \
             --manifest_platform_base_key product_dependencies.products \
             --gh_api_user $GITHUB_API_USR \
@@ -815,11 +815,11 @@ jobs:
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
-      - name: Setup CI Scripts in ci_scripts
+      - name: Setup CI Scripts in ci-venv
         shell: bash
         run: |
-          python3 -m venv ci_scripts --clear
-          . ci_scripts/bin/activate
+          python3 -m venv ci-venv --clear
+          . ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
@@ -904,7 +904,7 @@ jobs:
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           export SIMULATOR_IP=$PUBLIC_IP
-          . ci_scripts/bin/activate
+          . ci-venv/bin/activate
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
           deactivate
@@ -1046,11 +1046,11 @@ jobs:
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
-      - name: Setup CI Scripts in ci_scripts
+      - name: Setup CI Scripts in ci-venv
         shell: bash
         run: |
-          python3 -m venv ci_scripts --clear
-          . ci_scripts/bin/activate
+          python3 -m venv ci-venv --clear
+          . ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
@@ -1422,11 +1422,11 @@ jobs:
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
-      - name: Setup CI Scripts in ci_scripts
+      - name: Setup CI Scripts in ci-venv
         shell: bash
         run: |
-          python3 -m venv ci_scripts --clear
-          . ci_scripts/bin/activate
+          python3 -m venv ci-venv --clear
+          . ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
@@ -1801,8 +1801,8 @@ jobs:
       - name: Install CI Scripts
         shell: bash
         run: |
-          python3 -m venv ci_scripts --clear --system-site-packages # needed for apt dependencies
-          source ci_scripts/bin/activate
+          python3 -m venv ci-venv --clear --system-site-packages # needed for apt dependencies
+          source ci-venv/bin/activate
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
           python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
@@ -1824,7 +1824,7 @@ jobs:
         if: ${{ needs.Install-Simulator-Robot.outputs.skip_simulator == 'false' && inputs.with_simulation }}
         shell: bash
         run: |
-          source ci_scripts/bin/activate
+          source ci-venv/bin/activate
           cd simulator_artifacts
           integration-pipeline publish_simulator_state_artifacts \
                 --product_name ${{ inputs.product_name }} \
@@ -1844,7 +1844,7 @@ jobs:
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
           mkdir -p deployment_artifacts
 
-          source ci_scripts/bin/activate
+          source ci-venv/bin/activate
 
           ls -la
           mkdir -p pkgs_deployable
