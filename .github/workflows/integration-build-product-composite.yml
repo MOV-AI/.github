@@ -1262,6 +1262,7 @@ jobs:
           pushd ${{ steps.ci_scripts_setup.outputs.target_dir}}
           . ci-venv/bin/activate
           popd
+          pwd
           echo "Host file from terraform:"
           cat ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml
           cp -r ../*.json ./templates/fleet/
