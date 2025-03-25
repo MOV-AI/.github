@@ -1264,14 +1264,14 @@ jobs:
           popd
           pwd
           echo "Host file from terraform:"
-          cat ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml
+          cat ../${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml
           cp -r ../*.json ./templates/fleet/
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
 
           # It is assumed the nb of squads matches the number of members of the fleet
           nb_workers_per_squad=1
           # generate inputs variable file from terraform generated hosts file
-          integration-pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml --nb_workers_per_squad $nb_workers_per_squad
+          integration-pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory ../${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml --nb_workers_per_squad $nb_workers_per_squad
           # generate new format hosts file from inputs file
           ansible localhost -m template -a "src=./examples/inventories/fleet.yml.j2 dest=hosts"  --extra-vars "@inputs"
           echo "Generated hosts file:"
@@ -1656,14 +1656,14 @@ jobs:
           . ci-venv/bin/activate
           popd
           echo "Host file from terraform:"
-          cat ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml
+          cat ../${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml
           cp -r ../*.json ./templates/fleet/
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
 
           # It is assumed the nb of squads matches the number of members of the fleet
           nb_workers_per_squad=1
           # generate inputs variable file from terraform generated hosts file
-          integration-pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml --nb_workers_per_squad $nb_workers_per_squad
+          integration-pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory ../${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml --nb_workers_per_squad $nb_workers_per_squad
           # generate new format hosts file from inputs file
           ansible localhost -m template -a "src=./examples/inventories/fleet.yml.j2 dest=hosts"  --extra-vars "@inputs"
           echo "Generated hosts file:"
