@@ -1112,8 +1112,8 @@ jobs:
         run: |
           branch=$(echo ${GITHUB_REF#refs/heads/} | sed "s;\.;-;g" )
 
-          local_manager_prefix="ip-hgf-multi-${{ inputs.product_name }}-$branch-manager"
-          local_worker_prefix="ip-hgf-multi-${{ inputs.product_name }}-$branch-worker"
+          local_manager_prefix="ip-hgf-single-${{ inputs.product_name }}-$branch-manager"
+          local_worker_prefix="ip-hgf-single-${{ inputs.product_name }}-$branch-worker"
           echo "$local_manager_prefix"
           echo "$local_worker_prefix"
 
@@ -1149,7 +1149,7 @@ jobs:
           terraform refresh $var_file_arg -var-file=input.tfvars
 
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
-          sudo chmod 600 ~/.ssh/ci_priv_key.pem
+          chmod 600 ~/.ssh/ci_priv_key.pem
 
       - name: Prepare Devops provisioning slack message
         if: always()
