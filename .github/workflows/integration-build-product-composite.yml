@@ -1177,7 +1177,7 @@ jobs:
           echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
           chmod 600 ~/.ssh/aws_slave.pem
 
-          stripped_ips=$(echo ${{ inputs.single_vm_fleet_ips }} | sed "s;\[;;g" | sed "s;];;g" | sed "s; ;;g")
+          stripped_ips=$(echo ${{ inputs.single_vm_fleet_ips }} | sed "s;\[;;g" | sed "s;];;g" | sed "s; ;;g" | sed "s;/24;;g")
           touch ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
           IFS=',' read -r -a stripped_ips_arr <<< $stripped_ips
