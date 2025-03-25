@@ -1531,6 +1531,7 @@ jobs:
           echo "fleet_peer_nr=$nb_workers">>input.tfvars
           echo 'fleet_password="${{ secrets.provision_infra_pwd }}"'>>input.tfvars
           echo 'fleet_manager_name="${{ steps.infra_names.outputs.manager_prefix }}"'>>input.tfvars
+          echo 'fleet_peer_name_prefix="${{ steps.infra_names.outputs.worker_prefix }}"'>>input.tfvars
           echo 'ip_list=${{ inputs.multi_vm_fleet_ips }}'>>input.tfvars
           echo 'tags=["ip-simul-ci"]'>>input.tfvars
           echo 'pool="IP-Temp-VMs"'>>input.tfvars
