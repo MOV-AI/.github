@@ -476,7 +476,7 @@ jobs:
         with:
           pattern: artifacts*
           merge-multiple: true
-          path: dist
+          path: artifacts
 
       - name: Install debian artifacts
         run: |
@@ -617,7 +617,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Download all artifact
+      - name: Download all pips
         uses: actions/download-artifact@v4
         with:
           pattern: packages*
