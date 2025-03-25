@@ -1234,7 +1234,7 @@ jobs:
         shell: bash
         run: |
           install_key=ansible_deploy
-
+          . ci-venv/bin/activate
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.version --output_file /tmp/version.txt
@@ -1247,27 +1247,31 @@ jobs:
           integration-pipeline fetch_by_tag --repo $install_infra_repo_name --version $install_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $install_infra_dir
           ls -la $install_infra_dir
           echo "target_dir=${install_infra_dir}" >> $GITHUB_OUTPUT
+          deactivate
 
       - name: Ansible install platform
         id: ansible_install_platform
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
         shell: bash
         run: |
-          cp ../${{ steps.provision_infra_setup.outputs.target_dir }}/hosts hosts
+          . ci-venv/bin/activate
+          echo "Host file from terraform:"
+          cat ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml
           cp -r ../*.json ./templates/fleet/
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
 
           # It is assumed the nb of squads matches the number of members of the fleet
           nb_workers_per_squad=1
           # generate inputs variable file from terraform generated hosts file
-          integration-pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory hosts --nb_workers_per_squad $nb_workers_per_squad
+          integration-pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml --nb_workers_per_squad $nb_workers_per_squad
           # generate new format hosts file from inputs file
           ansible localhost -m template -a "src=./examples/inventories/fleet.yml.j2 dest=hosts"  --extra-vars "@inputs"
+          echo "Generated hosts file:"
           cat hosts
 
-          while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
           echo "./fleet_install.sh setup --python-path python3.9 --product-artifacts ./templates/fleet/ -i hosts -m install" >> INSTALL.TXT
           ./fleet_install.sh setup --python-path python3.9 --product-artifacts ./templates/fleet/ -i hosts -m install
+          deactivate
         env:
           GITHUB_USER: ${{ env.GITHUB_API_USR }}
           GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
@@ -1615,7 +1619,7 @@ jobs:
         shell: bash
         run: |
           install_key=ansible_deploy
-
+          . ci-venv/bin/activate
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.version --output_file /tmp/version.txt
@@ -1628,12 +1632,14 @@ jobs:
           integration-pipeline fetch_by_tag --repo $install_infra_repo_name --version $install_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $install_infra_dir
           ls -la $install_infra_dir
           echo "target_dir=${install_infra_dir}" >> $GITHUB_OUTPUT
+          deactivate
 
       - name: Ansible install platform
         id: ansible_install_platform
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
         shell: bash
         run: |
+          . ci-venv/bin/activate
           echo "Host file from terraform:"
           cat ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml
           cp -r ../*.json ./templates/fleet/
@@ -1650,6 +1656,7 @@ jobs:
 
           echo "./fleet_install.sh setup --python-path python3.9 --product-artifacts ./templates/fleet/ -i hosts -m install" >> INSTALL.TXT
           ./fleet_install.sh setup --python-path python3.9 --product-artifacts ./templates/fleet/ -i hosts -m install
+          deactivate
         env:
           GITHUB_USER: ${{ env.GITHUB_API_USR }}
           GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
