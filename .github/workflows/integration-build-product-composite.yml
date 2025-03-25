@@ -1048,11 +1048,14 @@ jobs:
 
       - name: Setup CI Scripts in ci-venv
         shell: bash
+        id: ci_scripts_setup
         run: |
           python3 -m venv ci-venv --clear
           . ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          deactivate
+          echo "target_dir=$(pwd)" >> $GITHUB_OUTPUT
 
       - name: unstash raised_meta
         uses: actions/download-artifact@v4
@@ -1234,7 +1237,9 @@ jobs:
         shell: bash
         run: |
           install_key=ansible_deploy
+          pushd ${{ steps.ci_scripts_setup.outputs.target_dir}}
           . ci-venv/bin/activate
+          popd
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.version --output_file /tmp/version.txt
@@ -1254,7 +1259,9 @@ jobs:
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
         shell: bash
         run: |
+          pushd ${{ steps.ci_scripts_setup.outputs.target_dir}}
           . ci-venv/bin/activate
+          popd
           echo "Host file from terraform:"
           cat ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml
           cp -r ../*.json ./templates/fleet/
@@ -1439,11 +1446,14 @@ jobs:
 
       - name: Setup CI Scripts in ci-venv
         shell: bash
+        id: ci_scripts_setup
         run: |
           python3 -m venv ci-venv --clear
           . ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          deactivate
+          echo "target_dir=$(pwd)" >> $GITHUB_OUTPUT
 
       - name: unstash raised_meta
         uses: actions/download-artifact@v4
@@ -1619,7 +1629,9 @@ jobs:
         shell: bash
         run: |
           install_key=ansible_deploy
+          pushd ${{ steps.ci_scripts_setup.outputs.target_dir}}
           . ci-venv/bin/activate
+          popd
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installation.$install_key.version --output_file /tmp/version.txt
@@ -1639,7 +1651,9 @@ jobs:
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
         shell: bash
         run: |
+          pushd ${{ steps.ci_scripts_setup.outputs.target_dir}}
           . ci-venv/bin/activate
+          popd
           echo "Host file from terraform:"
           cat ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml
           cp -r ../*.json ./templates/fleet/
