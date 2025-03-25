@@ -474,8 +474,9 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: artifacts-
-          path: artifacts
+          pattern: artifacts*
+          merge-multiple: true
+          path: dist
 
       - name: Install debian artifacts
         run: |
@@ -616,17 +617,18 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Download a all artifact
+      - name: Download all artifact
         uses: actions/download-artifact@v4
         with:
           pattern: packages*
           merge-multiple: true
           path: dist
 
-      - name: Download a single artifact
+      - name: Download all artifact
         uses: actions/download-artifact@v4
         with:
-          name: artifacts*
+          pattern: artifacts*
+          merge-multiple: true
           path: artifacts
 
       - name: Publish to Nexus ppa-dev
