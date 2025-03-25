@@ -1531,7 +1531,7 @@ jobs:
           terraform refresh $var_file_arg -var-file=input.tfvars
 
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
-          sudo chmod 600 ~/.ssh/ci_priv_key.pem
+          chmod 600 ~/.ssh/ci_priv_key.pem
 
 
       - name: Prepare Devops provisioning slack message
