@@ -1634,16 +1634,18 @@ jobs:
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
         shell: bash
         run: |
-          cp ../${{ steps.provision_infra_setup.outputs.target_dir }}/hosts hosts
+          echo "Host file from terraform:"
+          cat ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml
           cp -r ../*.json ./templates/fleet/
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
 
           # It is assumed the nb of squads matches the number of members of the fleet
           nb_workers_per_squad=1
           # generate inputs variable file from terraform generated hosts file
-          integration-pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory hosts --nb_workers_per_squad $nb_workers_per_squad
+          integration-pipeline generate_fleet_composition --output_file inputs --product_manifest ./templates/fleet/product-manifest.yaml --inventory ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml --nb_workers_per_squad $nb_workers_per_squad
           # generate new format hosts file from inputs file
           ansible localhost -m template -a "src=./examples/inventories/fleet.yml.j2 dest=hosts"  --extra-vars "@inputs"
+          echo "Generated hosts file:"
           cat hosts
 
           echo "./fleet_install.sh setup --python-path python3.9 --product-artifacts ./templates/fleet/ -i hosts -m install" >> INSTALL.TXT
