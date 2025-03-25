@@ -1127,7 +1127,7 @@ jobs:
           multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..1})
           node_list_str=${multiply_node::-1}
 
-          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel0/${{ inputs.cluster }}_simul_bpg.tfvars'
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.cluster }}_simul_bpg.tfvars'
 
           echo "proxmox_host_list=[$node_list_str]">>input.tfvars
           nb_workers=${{ inputs.single_vm_fleet_number_members }}-1
@@ -1361,14 +1361,25 @@ jobs:
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         if: ${{ ( !inputs.debug_fleet_keep_alive && success() ) || cancelled() || ( !inputs.debug_fleet_keep_alive && failure() ) }}
         shell: bash
-        run: terraform destroy -auto-approve
-        env:
-          TF_VAR_number_agents: ${{ inputs.single_vm_fleet_number_members }}
-          TF_VAR_proxmox_api_url: "https://hel.mov.ai:8006/api2/json"
-          TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
-          TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
-          TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
-          TF_VAR_ip_list: ${{ inputs.single_vm_fleet_ips }}
+        run: |
+          set +e
+          attempts=3
+          count=0
+          exit_status=-1
+          while [ $count -lt $attempts ]; do
+            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.cluster }}_simul_bpg.tfvars'
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+            exit_status=$?
+            if [ $exit_status -eq 0 ]; then
+              break
+            else
+              ((count++))
+              echo "Retrying Terraform destroy (attempt $count)..."
+            fi
+          done
+          set -e
+          echo "Terraform destroy returned with exit status ${exit_status}. Attempted $count times."
+          exit ${exit_status}
 
       - name: Stash project metadata
         if: always()
@@ -1498,7 +1509,7 @@ jobs:
           multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..${{ inputs.multi_vm_fleet_number_members }}})
           node_list_str=${multiply_node::-1}
 
-          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel0/${{ inputs.cluster }}_simul_bpg.tfvars'
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.cluster }}_simul_bpg.tfvars'
 
           echo "proxmox_host_list=[$node_list_str]">>input.tfvars
           nb_workers=${{ inputs.multi_vm_fleet_number_members }}-1
@@ -1716,14 +1727,25 @@ jobs:
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         if: ${{ ( !inputs.debug_fleet_keep_alive && success() ) || cancelled() || ( !inputs.debug_fleet_keep_alive && failure() ) }}
         shell: bash
-        run: terraform destroy -auto-approve
-        env:
-          TF_VAR_number_agents: ${{ inputs.multi_vm_fleet_number_members }}
-          TF_VAR_proxmox_api_url: "https://hel.mov.ai:8006/api2/json"
-          TF_VAR_proxmox_api_token_id: ${{ secrets.proxmox_api_token_id }}
-          TF_VAR_proxmox_api_token_secret: ${{ secrets.proxmox_api_token_secret }}
-          TF_VAR_provision_ssh_pem: ${{ secrets.ssh_pem_fleet_aws_vm }}
-          TF_VAR_ip_list: ${{ inputs.multi_vm_fleet_ips }}
+        run: |
+          set +e
+          attempts=3
+          count=0
+          exit_status=-1
+          while [ $count -lt $attempts ]; do
+            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.cluster }}_simul_bpg.tfvars'
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+            exit_status=$?
+            if [ $exit_status -eq 0 ]; then
+              break
+            else
+              ((count++))
+              echo "Retrying Terraform destroy (attempt $count)..."
+            fi
+          done
+          set -e
+          echo "Terraform destroy returned with exit status ${exit_status}. Attempted $count times."
+          exit ${exit_status}
 
       - name: Remove robots
         if: always()
