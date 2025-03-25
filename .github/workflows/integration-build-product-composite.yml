@@ -1127,7 +1127,7 @@ jobs:
           multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..1})
           node_list_str=${multiply_node::-1}
 
-          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.cluster }}_simul_bpg.tfvars'
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.cluster }}_fleet_test.tfvars'
 
           echo "proxmox_host_list=[$node_list_str]">>input.tfvars
           nb_workers=${{ inputs.single_vm_fleet_number_members }}-1
@@ -1367,7 +1367,7 @@ jobs:
           count=0
           exit_status=-1
           while [ $count -lt $attempts ]; do
-            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.cluster }}_simul_bpg.tfvars'
+            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.cluster }}_fleet_test.tfvars'
             terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
@@ -1509,7 +1509,7 @@ jobs:
           multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..${{ inputs.multi_vm_fleet_number_members }}})
           node_list_str=${multiply_node::-1}
 
-          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.cluster }}_simul_bpg.tfvars'
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.cluster }}_fleet_test.tfvars'
 
           echo "proxmox_host_list=[$node_list_str]">>input.tfvars
           nb_workers=${{ inputs.multi_vm_fleet_number_members }}-1
@@ -1733,7 +1733,7 @@ jobs:
           count=0
           exit_status=-1
           while [ $count -lt $attempts ]; do
-            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.cluster }}_simul_bpg.tfvars'
+            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.cluster }}_fleet_test.tfvars'
             terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
