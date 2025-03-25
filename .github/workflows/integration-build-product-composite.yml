@@ -327,7 +327,7 @@ jobs:
       - name: Docker build
         shell: bash
         run: |
-          docker build --add-host ${{ env.REGISTRY }}:10.26.0.10 \
+          docker build --add-host ${{ env.REGISTRY }}:10.26.0.2 \
             --build-arg DOCKER_REGISTRY=${{ env.REGISTRY }} \
             --build-arg BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} \
             --build-arg TAG=${{ steps.pre_build.outputs.base_version }} \
@@ -725,7 +725,7 @@ jobs:
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation}}
         shell: bash
         run: |
-          docker build --add-host ${{ env.REGISTRY }}:10.26.0.10 \
+          docker build --add-host ${{ env.REGISTRY }}:10.26.0.2 \
             --build-arg BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} \
             --build-arg CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }} \
             --file docker/${{ env.DISTRO }}/Dockerfile-simulator \
@@ -1202,7 +1202,7 @@ jobs:
           ssh_conn_string=${{ steps.wait_for_machines.outputs.manager_ssh_conn_string }}
           ssh $ssh_conn_string -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
             sudo cp /etc/hosts /etc/hosts.bak
-            echo '10.26.0.10 registry.hel.mov.ai' | sudo tee -a /etc/hosts
+            echo '10.26.0.2 registry.hel.mov.ai' | sudo tee -a /etc/hosts
             docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
             docker login ${{ env.PUSH_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
             docker login ${{ env.MID_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
@@ -1585,7 +1585,7 @@ jobs:
           ssh_conn_string=${{ steps.wait_for_machines.outputs.manager_ssh_conn_string }}
           ssh $ssh_conn_string -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
             sudo cp /etc/hosts /etc/hosts.bak
-            echo '10.26.0.10 registry.hel.mov.ai' | sudo tee -a /etc/hosts
+            echo '10.26.0.2 registry.hel.mov.ai' | sudo tee -a /etc/hosts
             docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
             docker login ${{ env.PUSH_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
             docker login ${{ env.MID_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
