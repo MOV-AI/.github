@@ -212,10 +212,10 @@ jobs:
     - name: Build
       run: python3 -m build
 
-    - name: Archive binary
+    - name: Archive binary ${{ matrix.pack_path }}
       uses: actions/upload-artifact@v4
       with:
-        name: packages
+        name: packages-${{ matrix.pack_path }}
         path: dist/*
         retention-days: 5
 
@@ -330,7 +330,7 @@ jobs:
     - name: Download a single artifact
       uses: actions/download-artifact@v4
       with:
-        name: packages
+        name: packages-${{ matrix.pack_path }}
         path: dist
 
     - name: Create links for package ${{ matrix.pack_path }}
@@ -358,7 +358,7 @@ jobs:
     - name: Archive binary
       uses: actions/upload-artifact@v4
       with:
-        name: artifacts
+        name: artifacts-${{ matrix.pack_path }}
         path: artifacts/*.deb
         retention-days: 5
 
@@ -393,7 +393,7 @@ jobs:
       if: ${{ inputs.release == 'false' && inputs.rpm_build == 'true' }}
       uses: actions/download-artifact@v4
       with:
-        name: packages
+        name: packages-${{ matrix.pack_path }}
         path: dist
 
     - name: Sync setup.py
@@ -474,7 +474,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: artifacts
+          name: artifacts-
           path: artifacts
 
       - name: Install debian artifacts
@@ -616,16 +616,17 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Download a single artifact
+      - name: Download a all artifact
         uses: actions/download-artifact@v4
         with:
-          name: packages
+          pattern: packages*
+          merge-multiple: true
           path: dist
 
       - name: Download a single artifact
         uses: actions/download-artifact@v4
         with:
-          name: artifacts
+          name: artifacts*
           path: artifacts
 
       - name: Publish to Nexus ppa-dev
