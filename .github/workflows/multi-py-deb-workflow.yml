@@ -212,15 +212,15 @@ jobs:
     - name: Build
       run: python3 -m build
 
-    - name: Archive binary
+    - name: Archive binary ${{ matrix.pack_path }}
       uses: actions/upload-artifact@v4
       with:
-        name: packages
+        name: packages-${{ matrix.pack_path }}
         path: dist/*
         retention-days: 5
 
     - name: Publish package to TestPyPI Experimental
-      uses: pypa/gh-action-pypi-publish@release/v1
+      uses: pypa/gh-action-pypi-publish@v1.11.0
       with:
         user: ${{ secrets.nexus_publisher_user }}
         password: ${{ secrets.nexus_publisher_password }}
@@ -228,7 +228,7 @@ jobs:
 
     - name: Publish package to TestPyPI Testing
       if: ${{ inputs.deploy == 'true' }}
-      uses: pypa/gh-action-pypi-publish@release/v1
+      uses: pypa/gh-action-pypi-publish@v1.11.0
       with:
         user: ${{ secrets.nexus_publisher_user }}
         password: ${{ secrets.nexus_publisher_password }}
@@ -330,7 +330,7 @@ jobs:
     - name: Download a single artifact
       uses: actions/download-artifact@v4
       with:
-        name: packages
+        name: packages-${{ matrix.pack_path }}
         path: dist
 
     - name: Create links for package ${{ matrix.pack_path }}
@@ -358,7 +358,7 @@ jobs:
     - name: Archive binary
       uses: actions/upload-artifact@v4
       with:
-        name: artifacts
+        name: artifacts-${{ matrix.pack_path }}
         path: artifacts/*.deb
         retention-days: 5
 
@@ -393,7 +393,7 @@ jobs:
       if: ${{ inputs.release == 'false' && inputs.rpm_build == 'true' }}
       uses: actions/download-artifact@v4
       with:
-        name: packages
+        name: packages-${{ matrix.pack_path }}
         path: dist
 
     - name: Sync setup.py
@@ -474,8 +474,9 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: artifacts
-          path: artifacts
+          pattern: artifacts*
+          merge-multiple: true
+          path: dist
 
       - name: Install debian artifacts
         run: |
@@ -616,16 +617,18 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Download a single artifact
+      - name: Download all artifact
         uses: actions/download-artifact@v4
         with:
-          name: packages
+          pattern: packages*
+          merge-multiple: true
           path: dist
 
-      - name: Download a single artifact
+      - name: Download all artifact
         uses: actions/download-artifact@v4
         with:
-          name: artifacts
+          pattern: artifacts*
+          merge-multiple: true
           path: artifacts
 
       - name: Publish to Nexus ppa-dev
@@ -815,7 +818,7 @@ jobs:
         retention-days: 5
 
     - name: Publish package to prod PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
+      uses: pypa/gh-action-pypi-publish@v1.11.0
       with:
         user: ${{ secrets.nexus_publisher_user }}
         password: ${{ secrets.nexus_publisher_password }}
