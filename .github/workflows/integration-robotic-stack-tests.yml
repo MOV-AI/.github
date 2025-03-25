@@ -266,6 +266,17 @@ jobs:
               distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
               curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg --yes
               curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | sed "s#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g" | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+              max_retries=12  # Maximum number of retries (12 retries with 5 seconds sleep = 1 minute)
+              retries=0
+              while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do
+                if [ $retries -ge $max_retries ]; then
+                  echo "Reached maximum retry limit, exiting."
+                  exit 1
+                fi
+                echo "Waiting for other software managers to finish... (retry: $retries)"
+                retries=$((retries + 1))
+                sleep 5
+              done
               sudo apt-get update -q > /dev/null && sudo apt-get install -yq nvidia-docker2 nvidia-container-toolkit
           '
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
