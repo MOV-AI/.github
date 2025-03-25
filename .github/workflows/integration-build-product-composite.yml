@@ -107,9 +107,9 @@ env:
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.0.0-4"
   # slack channel movai-projects
-  #SLACK_CHANNEL: ${{ inputs.overwrite_slack_channel }}
+  SLACK_CHANNEL: ${{ inputs.overwrite_slack_channel }}
   # development slack channel
-  SLACK_CHANNEL: "C05K2KF1UP8"
+  # SLACK_CHANNEL: "C05K2KF1UP8"
   PROJECT_DATA_VIEWER_API: "https://personal-7vf0v2cu.outsystemscloud.com/ProjectDataViewer5/rest/V1//CreateProject"
   MINIO_S3_URL: "https://s3.mov.ai"
   PROVISIONING_ENV_VERSION: 0.1.0-11
@@ -1262,7 +1262,6 @@ jobs:
           pushd ${{ steps.ci_scripts_setup.outputs.target_dir}}
           . ci-venv/bin/activate
           popd
-          pwd
           echo "Host file from terraform:"
           cat ../${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml
           cp -r ../*.json ./templates/fleet/
