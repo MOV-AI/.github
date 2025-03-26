@@ -547,7 +547,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: debian_test_journal
+          name: debian_test_journal-${{ matrix.distro }}
           path: ./logs/*
           retention-days: 5
 
