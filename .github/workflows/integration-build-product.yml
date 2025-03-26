@@ -620,7 +620,7 @@ jobs:
           fi
 
           movai-cli restart "${robots[0]}"
-          sleep 3
+          sleep 5
 
           wget https://movai-scripts.s3.amazonaws.com/wait_robot_start.bash
           chmod +x ./wait_robot_start.bash
