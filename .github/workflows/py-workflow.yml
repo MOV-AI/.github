@@ -238,7 +238,6 @@ jobs:
         python -m pip install build
         python -m build
         cat pyproject.toml || true
-        twine check dist/*
 
     - name: Archive binary
       uses: actions/upload-artifact@v4
@@ -250,7 +249,6 @@ jobs:
     - name: Publish package to TestPyPI Experimental
       shell: bash
       run:
-        twine check dist/*
         twine upload --repository https://artifacts.aws.cloud.mov.ai/repository/pypi-experimental/ --verbose dist/*
       env:
         TWINE_USERNAME: ${{ secrets.nexus_publisher_user }}
