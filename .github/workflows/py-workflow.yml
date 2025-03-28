@@ -300,7 +300,7 @@ jobs:
 
     - name: Publish package to TestPyPI Integration
       if: ${{ inputs.deploy }}
-      uses: pypa/gh-action-pypi-publish@v1.11.0
+      uses: pypa/gh-action-pypi-publish@v1.12.4
       with:
         user: ${{ secrets.nexus_publisher_user }}
         password: ${{ secrets.nexus_publisher_password }}
@@ -336,11 +336,6 @@ jobs:
         publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
     if: ${{ inputs.release }}
     runs-on: ubuntu-20.04
-    container:
-      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
 
     steps:
     - name: Checkout
@@ -368,7 +363,7 @@ jobs:
         retention-days: 5
 
     - name: Publish package to ${{ matrix.publish_repo }}
-      uses: pypa/gh-action-pypi-publish@v1.11.0
+      uses: pypa/gh-action-pypi-publish@v1.12.4
       with:
         user: ${{ secrets.nexus_publisher_user }}
         password: ${{ secrets.nexus_publisher_password }}
