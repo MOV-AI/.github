@@ -243,6 +243,7 @@ jobs:
       run: |
         python -m pip install build
         python -m build
+        cat pyproject.toml || true
 
     - name: Archive binary
       uses: actions/upload-artifact@v4
@@ -257,6 +258,7 @@ jobs:
         user: ${{ secrets.nexus_publisher_user }}
         password: ${{ secrets.nexus_publisher_password }}
         repository-url: https://artifacts.aws.cloud.mov.ai/repository/pypi-experimental/
+        verbose: true
 
     - name: Build docs
       if: ${{ inputs.with_docs }}
