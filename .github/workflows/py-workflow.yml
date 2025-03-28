@@ -248,6 +248,15 @@ jobs:
         retention-days: 5
 
     - name: Publish package to TestPyPI Experimental
+      shell: bash
+      run:
+        twine check dist/*
+        twine upload --repository https://artifacts.aws.cloud.mov.ai/repository/pypi-experimental/ --verbose dist/*
+      env:
+        TWINE_USERNAME: ${{ secrets.nexus_publisher_user }}
+        TWINE_PASSWORD: ${{ secrets.nexus_publisher_password }}
+
+    - name: Publish package to TestPyPI Experimental
       uses: pypa/gh-action-pypi-publish@v1.11.0
       with:
         user: ${{ secrets.nexus_publisher_user }}
