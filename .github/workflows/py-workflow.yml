@@ -249,6 +249,7 @@ jobs:
     - name: Publish package to TestPyPI Experimental
       shell: bash
       run:
+        python -m pip install twine
         twine upload --repository https://artifacts.aws.cloud.mov.ai/repository/pypi-experimental/ --verbose dist/*
       env:
         TWINE_USERNAME: ${{ secrets.nexus_publisher_user }}
