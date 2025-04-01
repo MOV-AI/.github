@@ -63,7 +63,7 @@ on:
 jobs:
   RefreshSource:
     if: ${{ inputs.deploy == 'false' && inputs.release == 'false' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: docker://chinthakagodawita/autoupdate-action:v1
         continue-on-error: true
@@ -73,7 +73,7 @@ jobs:
 
   StaticAnalysis:
     if: ${{ inputs.release == 'false' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -141,7 +141,7 @@ jobs:
         matrix:
           pack_path: ${{ fromJSON(inputs.package_paths) }}
     if: ${{ inputs.release == 'false' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -192,7 +192,7 @@ jobs:
   Raise:
     needs: [Build]
     if: ${{ inputs.release == 'false' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -256,7 +256,7 @@ jobs:
   PublishPypi:
     needs: [Raise]
     if: ${{ inputs.release == 'false' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -295,7 +295,7 @@ jobs:
       matrix:
         distro: ${{ fromJSON(inputs.distributions) }}
     needs: [Raise]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     outputs:
       package_version: ${{ needs.Raise.outputs.package_version }}
       commit_id: ${{ needs.Raise.outputs.commit_id }}
@@ -407,7 +407,7 @@ jobs:
   SonarCloud:
     if: ${{ inputs.release == 'false' }}
     needs: [Debian-Test]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -501,7 +501,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.distributions) }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -582,7 +582,7 @@ jobs:
 
   Github-Release:
     needs: [Raise, Debian-Pack, Debian-Test, SonarCloud, PublishDebian]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -632,7 +632,7 @@ jobs:
   
   Github-Release-Debian-Upload:
     needs: [Raise, Debian-Pack, Debian-Test, SonarCloud, PublishDebian, Github-Release]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -672,7 +672,7 @@ jobs:
 
   ReleasePypi:
     if: ${{ inputs.release == 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -723,7 +723,7 @@ jobs:
   ReleasePpa:
     needs: [ReleasePypi]
     if: ${{ inputs.release == 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
