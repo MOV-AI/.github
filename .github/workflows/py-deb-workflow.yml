@@ -312,7 +312,7 @@ jobs:
 
     - name: Publish package to TestPyPI Integration
       if: ${{ inputs.deploy }}
-      uses: pypa/gh-action-pypi-publish@v1.12.4
+      uses: pypa/gh-action-pypi-publish@release/v1
       with:
         user: ${{ secrets.nexus_publisher_user }}
         password: ${{ secrets.nexus_publisher_password }}
