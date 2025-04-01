@@ -32,6 +32,10 @@ on:
         required: false
         type: string
         default: "3.8.10"
+      DOCKER_PYTHON_IMAGE:
+        required: false
+        type: string
+        default: "registry.aws.cloud.mov.ai/devops/py-buildserver:v3.0.4" # based on focal, embed python 3.8
     secrets:
       auto_commit_user:
         required: false # only when deploy true
@@ -67,7 +71,7 @@ jobs:
     if: ${{ inputs.pre_commit }}
     runs-on: ubuntu-22.04
     container:
-      image: ${{ format('python:{0}', inputs.PYTHON_VERSION) }}
+      image: ${{ inputs.DOCKER_PYTHON_IMAGE }}
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -96,7 +100,7 @@ jobs:
     if: ${{ ! inputs.release }}
     runs-on: ubuntu-22.04
     container:
-      image: ${{ format('python:{0}', inputs.PYTHON_VERSION) }}
+      image: ${{ inputs.DOCKER_PYTHON_IMAGE }}
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
