@@ -10,11 +10,6 @@ on:
         required: false
         type: string
         default: 'false'
-      skip_linting:
-        required: false
-        type: string
-        default: 'false'
-        description: DEPRECATED - to be removed on v2
       run_black:
         required: false
         type: string
@@ -28,30 +23,18 @@ on:
         required: false
         type: string
         default: '["./"]'
-      rpm_build:
+      distributions:
         required: false
         type: string
-        default: 'false'
+        default: '["focal", "jammy", "noble"]'
       install_test:
         required: false
         type: string
         default: 'true'
-      install_test_docker:
-        required: false
-        type: string
-        default: 'false'
-      install_test_distros:
-        required: false
-        type: string
-        default: '["20.04", "22.04"]'
-      install_test_zmq:
-        required: false
-        type: string
-        default: 'false'
       prod_publish_repos:
         required: false
         type: string
-        default: '["ppa-main"]'
+        default: '["ppa-stable"]'
       prod_publish_pypi:
         required: false
         type: string
@@ -103,7 +86,6 @@ jobs:
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
-        submodules: recursive
 
     - name: Install build-requirements
       run: |
@@ -118,7 +100,7 @@ jobs:
       if: ${{ inputs.run_black == 'true' }}
       run: |
         python3 -m black \
-          --line-length 100 \
+          --line-length 120 \
           --diff \
           --check \
           .
@@ -129,8 +111,8 @@ jobs:
         python3 -m flake8 \
           --isolated \
           --exclude dist,.*\.egg-info,.git,__pycache__,.tox,venv \
-          --max-complexity 10 \
-          --max-line-length 100 \
+          --max-complexity 16 \
+          --max-line-length 120 \
           --exit-zero \
           --output-file flake8-report.txt
 
@@ -140,7 +122,7 @@ jobs:
         python3 -m pylint \
           --rcfile dummy-pylint-config \
           --ignore-patterns dist,.*\.egg-info,.git,__pycache__,.tox,venv \
-          --max-line-length 100 \
+          --max-line-length 120 \
           --exit-zero \
           --recursive y \
           --output pylint-report.txt \
@@ -166,7 +148,6 @@ jobs:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     outputs:
-      package_name: ${{ steps.vars.outputs.py_pkg_name }}
       package_version: ${{ steps.releasevars.outputs.py_pkg_version }}
 
     steps:
@@ -175,10 +156,10 @@ jobs:
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
-        submodules: recursive
 
     - name: Install build-requirements
-      run: python3 -m pip install -r build-requirements.txt
+      run: |
+        python3 -m pip install -r build-requirements.txt
 
     - name: Create links for package ${{ matrix.pack_path }}
       run: |
@@ -186,28 +167,12 @@ jobs:
         ln -sf ${{ matrix.pack_path }}/debian debian
 
     - name: Raise version locally
-      if: ${{ inputs.deploy == 'true' }}
-      run: bump2version build setup.py --no-tag --no-commit --allow-dirty
-
-    - name: Find Package details
-      id: vars
-      run: |
-        PACKAGE_VERSION=$(cat .bumpversion.cfg | sed s/' '/''/g | grep 'current_version=' | sed s/'current_version='/''/g)
-        PACKAGE_NAME=$(cat setup.py | grep name | cut -d '"' -f2)
-
-        echo "py_pkg_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
-        echo "py_pkg_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
-
-    - name: Sync setup.py
-      run: sed -i s/"$(cat setup.py | grep version=)"/"    version=\"${{ steps.vars.outputs.py_pkg_version }}\","/g setup.py
-
-    - name: Enable 4 digit version
       id: releasevars
       run: |
-        PACKAGE_RELEASE_VERSION=$(echo ${{ steps.vars.outputs.py_pkg_version }} | sed s/"-"/"."/g)
-        sed -i s/"$(cat setup.py | grep version=)"/"$(cat setup.py | grep version= | sed s/"-"/"."/g)"/g setup.py
-
-        echo "py_pkg_version=$PACKAGE_RELEASE_VERSION" >> $GITHUB_OUTPUT
+        make install_bump_requirements
+        make bump_version 
+        PACKAGE_VERSION=$(cat .bumpversion.cfg | sed s/' '/''/g | grep 'current_version=' | sed s/'current_version='/''/g)
+        echo "py_pkg_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
 
     - name: Build
       run: python3 -m build -o dist/${{ matrix.pack_path }}
@@ -239,8 +204,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Install build-requirements
         run: |
@@ -249,14 +212,16 @@ jobs:
 
       - name: Auto Raise version
         if: ${{ inputs.deploy == 'true' }}
+        env:
+          PACKAGE_VERSION: ${{ needs.Build.outputs.package_version }}
         run: |
-          bump2version build setup.py --no-tag --no-commit --allow-dirty
+          make install_bump_requirements
+          make bump_version
 
       - name: Find Package details
         id: vars
         run: |
           PACKAGE_VERSION=$(cat .bumpversion.cfg | sed s/' '/''/g | grep 'current_version=' | sed s/'current_version='/''/g)
-          #echo ::set-output name=py_pkg_version::$PACKAGE_VERSION
           echo "py_pkg_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
 
       - name: Push auto raise version
@@ -265,14 +230,12 @@ jobs:
           git config --global user.name ${{ secrets.auto_commit_user }}
           git config --global user.email ${{ secrets.auto_commit_mail }}
           git add .bumpversion.cfg
-          git add **__version__.py || true
           git commit -m "[skip actions] Automatic Bump of build version"
 
       - name: Set branch output
         id: var_branch
         run: |
           echo "Branch name is: ${GITHUB_REF#refs/heads/}"
-          #echo ::set-output name=branch::${GITHUB_REF#refs/heads/}
           echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
       - name: Raise App version
@@ -330,15 +293,9 @@ jobs:
     if: ${{ inputs.release == 'false' }}
     strategy:
       matrix:
-        pack_path: ${{ fromJSON(inputs.package_paths) }}
+        distro: ${{ fromJSON(inputs.distributions) }}
     needs: [Raise]
     runs-on: ubuntu-22.04
-    container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.10
-      options: --user root
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
     outputs:
       package_version: ${{ needs.Raise.outputs.package_version }}
       commit_id: ${{ needs.Raise.outputs.commit_id }}
@@ -346,135 +303,37 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
       with:
-        submodules: recursive
-
-    - name: Download a single artifact
-      uses: actions/download-artifact@v4
+        ref: ${{ needs.Raise.outputs.commit_id }}
+    
+    - name: Login to registry.cloud.mov.ai Registry
+      uses: docker/login-action@v3
       with:
-        name: packages_${{ matrix.pack_path }}
-        path: dist
-
-    - name: Create links for package ${{ matrix.pack_path }}
-      run: |
-        ln -f ${{ matrix.pack_path }}/debian/setup.py setup.py
-        ln -sf ${{ matrix.pack_path }}/debian debian
-
-    - name: Sync setup.py
-      run: sed -i s/"$(cat setup.py | grep version=)"/"    version=\"${{ needs.Raise.outputs.package_version }}\","/g setup.py
+        username: ${{ secrets.registry_user }}
+        password: ${{ secrets.registry_password }}
+        registry: registry.cloud.mov.ai
 
     - name: Raise & Deb Pack
+      env:
+        PACKAGE_VERSION: ${{ needs.Raise.outputs.package_version }}
       run: |
-        dch -b -v "${{ needs.Raise.outputs.package_version }}" "Auto created package version ${{ needs.Raise.outputs.package_version }}"
-        PKG_VERSION_ANCHOR='$PKG_VERSION'
-        sed -i "s/$PKG_VERSION_ANCHOR/${{ needs.Raise.outputs.package_version }}/g" ./debian/postinst
-        sed -i "s/$PKG_VERSION_ANCHOR/${{ needs.Raise.outputs.package_version }}/g" ./debian/prerm
-        curl -fsSL https://artifacts.cloud.mov.ai/repository/movai-applications/gpg | sudo apt-key add -
-        apt update
-        install_tool="apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends --yes"
-        mk-build-deps --install --root-cmd sudo --tool="${install_tool}" debian/control
-        dpkg-buildpackage -nc -d -b -rfakeroot -us -uc -tc
-        mkdir artifacts && \
-        mv ../*.deb artifacts
+        sudo make install_bump_requirements
+        make bump_version
+        make pack_${{ matrix.distro }}
 
     - name: Archive binary
       uses: actions/upload-artifact@v4
       with:
-        name: deb_artifacts_${{ matrix.pack_path }}
-        path: artifacts/*.deb
-        retention-days: 5
-
-    - name: Remove hardlinks for package ${{ matrix.pack_path }}
-      run: |
-        rm -f setup.py
-        rm -f debian
-
-  Rpm-Pack:
-    strategy:
-      matrix:
-        pack_path: ${{ fromJSON(inputs.package_paths) }}
-    needs: [Raise]
-    runs-on: ubuntu-22.04
-    container:
-      image: centos:8
-    steps:
-    - name: Prereq
-      if: ${{ inputs.release == 'false' && inputs.rpm_build == 'true' }}
-      run: |
-        sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
-        sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
-        yum install -y rpm-build rpmdevtools gcc make python38 git
-
-    - name: Checkout
-      if: ${{ inputs.release == 'false' && inputs.rpm_build == 'true' }}
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-
-    - name: Download a single artifact
-      if: ${{ inputs.release == 'false' && inputs.rpm_build == 'true' }}
-      uses: actions/download-artifact@v4
-      with:
-        name: packages_${{ matrix.pack_path }}
-        path: dist
-
-    - name: Sync setup.py
-      if: ${{ inputs.release == 'false' && inputs.rpm_build == 'true' }}
-      run: |
-        cd ${{ matrix.pack_path }}/
-        if [ -f setup.py ] ; then
-          sed -i s/"$(cat setup.py | grep version=)"/"    version=\"${{ needs.Raise.outputs.package_version }}\","/g setup.py
-        fi
-
-    - name: Raise & RPM Pack
-      if: ${{ inputs.release == 'false' && inputs.rpm_build == 'true' }}
-      run: |
-        cd ${{ matrix.pack_path }}/
-        if [ ! -d rpm ] ; then
-          echo "No RPM dir found. skipping"
-          exit 0
-        fi
-        RPM_BUILD_ARGS=""
-        ARGS_LIST=(
-        '--define "_topdir %(pwd)"'
-        '--define "_builddir %{_topdir}"'
-        '--define "_rpmdir %{_topdir}"'
-        '--define "_sourcedir %{_topdir}"'
-        '--define "_srcrpmdir %{_topdir}"'
-        '--define "_rpmfilename %%{NAME}-%%{VERSION}-%%{RELEASE}.%%{ARCH}.rpm"'
-        )
-        for ARG in ${ARGS_LIST[@]}; do
-            RPM_BUILD_ARGS="$RPM_BUILD_ARGS $ARG"
-        done
-        PKG_VERSION_ANCHOR='_VERSION_'
-        PKG_BUILD_ID_ANCHOR='_BUILD_ID_'
-        PKG_VERSION=$(echo ${{ needs.Raise.outputs.package_version }} | cut -d '-' -f 1)
-        PKG_BUILD_ID=$(echo ${{ needs.Raise.outputs.package_version }} | cut -d '-' -f 2)
-        sed -i "s/$PKG_VERSION_ANCHOR/$PKG_VERSION/g" ./rpm/template.spec
-        sed -i "s/$PKG_BUILD_ID_ANCHOR/$PKG_BUILD_ID/g" ./rpm/template.spec
-
-        cmd="rpmbuild $RPM_BUILD_ARGS -ba rpm/template.spec"
-        eval $cmd
-        # store RPM packages
-        cd ..
-        mkdir artifacts && \
-        mv ./${{ matrix.pack_path }}/*.rpm artifacts
-
-    - name: Archive binary
-      if: ${{ inputs.release == 'false' && inputs.rpm_build == 'true' }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: rpm_artifacts_${{ matrix.pack_path }}
-        path: artifacts/*.rpm
+        name: deb_artifacts_${{ matrix.distro }}
+        path: artifacts/${{ matrix.distro }}/*.deb
         retention-days: 5
 
   Debian-Test:
     strategy:
       matrix:
-        distro: ${{ fromJSON(inputs.install_test_distros) }}
-      fail-fast: false
+        distro: ${{ fromJSON(inputs.distributions) }}
     needs: [Raise, Debian-Pack]
     if: ${{ inputs.release == 'false' && inputs.install_test == 'true' }}
-    runs-on: ubuntu-${{ matrix.distro }}
+    runs-on: ubuntu-${{ matrix.distro == 'focal' && '20.04' || matrix.distro == 'jammy' && '22.04' || matrix.distro == 'noble' && '24.04' }}
     timeout-minutes: 90
     steps:
       - name: Maximize build space
@@ -489,8 +348,6 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Install test requirements
         run: |
@@ -499,17 +356,10 @@ jobs:
           python3 -m pip install -r build-requirements.txt
           deactivate
 
-      - name: Prereq Docker
-        if: ${{ inputs.install_test_docker == 'true' }}
-        run: |
-          sudo apt update && sudo apt install -y curl
-          curl -fsSL https://get.docker.com -o get-docker.sh
-          sh get-docker.sh
-
       - name: Download deb artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: deb_artifacts_*
+          pattern: deb_artifacts_${{ matrix.distro }}
           path: artifacts
           merge-multiple: true
 
@@ -517,7 +367,7 @@ jobs:
         run: |
           sudo apt update
           cd artifacts/
-          find ./ -name "*.deb" -not -name "*src*" -exec sudo apt install -y {} \;
+          sudo apt install -y ./movai-service* ./movai-cli*
 
       - name: Run tests
         if: ${{ inputs.skip_testing != 'true' }}
@@ -537,7 +387,7 @@ jobs:
         with:
           name: coverage_report
           path: ./coverage.xml
-        if: ${{ matrix.distro == '20.04' && inputs.skip_testing != 'true' }}
+        if: ${{ matrix.distro == 'focal' && inputs.skip_testing != 'true' }}
 
       - name: Store logs of journalctl
         shell: bash
@@ -551,57 +401,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: debian_test_journal_${{ matrix.distro }}
-          path: ./logs/*
-          retention-days: 5
-
-  Rpm-Test:
-    needs: [Raise, Rpm-Pack]
-    runs-on: ubuntu-22.04
-    container:
-      image: centos:8
-    steps:
-      - name: Prereq Docker
-        if: ${{ inputs.install_test_docker == 'true' && inputs.release == 'false' && inputs.install_test == 'true' &&  inputs.rpm_build == 'true'  }}
-        run: |
-          sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
-          sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
-          # install docker
-          yum install -y python38 git curl
-          curl -fsSL https://get.docker.com -o get-docker.sh
-          sh get-docker.sh
-
-      - name: Prereq Zmq
-        if: ${{ inputs.install_test_zmq == 'true'  && inputs.release == 'false' && inputs.install_test == 'true' &&  inputs.rpm_build == 'true' }}
-        run: |
-          # add zeromq repo
-          dnf config-manager --add-repo "https://download.opensuse.org/repositories/network:/messaging:/zeromq:/release-stable/RHEL_7/"
-          yum install --nogpgcheck -y zeromq-devel
-
-      - name: Download artifacts
-        if: ${{ inputs.release == 'false' && inputs.install_test == 'true' &&  inputs.rpm_build == 'true' }}
-        uses: actions/download-artifact@v4
-        with:
-          pattern: rpm_artifacts_*
-          path: artifacts
-          merge-multiple: true
-
-      - name: Install rpm artifacts
-        if: ${{ inputs.release == 'false' && inputs.install_test == 'true' &&  inputs.rpm_build == 'true' }}
-        run: |
-          find artifacts/ -name "*.rpm" -not -name "*src*" -print0 | xargs -0 -n1 -r yum install -y
-
-      - name: Store logs of journalctl
-        shell: bash
-        if: always()
-        run: |
-          mkdir -p logs
-          journalctl -u movai-service > ./logs/movai-service-journal-centos.log || true
-
-      - name: Stash logs of journalctl
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rpm_test_journal
           path: ./logs/*
           retention-days: 5
 
@@ -620,7 +419,6 @@ jobs:
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
-        submodules: recursive
 
     - name: Install build-requirements
       run: |
@@ -663,6 +461,8 @@ jobs:
           -Dsonar.coverage.exclusions=tests/**
           -Dsonar.cpd.exclusions=tests/**
           -Dsonar.python.version=3
+          -Dsonar.python.line_length=120
+          -Dsonar.python.cyclomatic.complexity=16
           -Dsonar.python.flake8.reportPaths=flake8-report.txt
           -Dsonar.python.pylint.reportPaths=pylint-report.txt
 
@@ -684,6 +484,8 @@ jobs:
           -Dsonar.coverage.exclusions=tests/**
           -Dsonar.cpd.exclusions=tests/**
           -Dsonar.python.version=3
+          -Dsonar.python.line_length=120
+          -Dsonar.python.cyclomatic.complexity=16
           -Dsonar.python.flake8.reportPaths=flake8-report.txt
           -Dsonar.python.pylint.reportPaths=pylint-report.txt
           -Dsonar.python.coverage.reportPaths=coverage.xml
@@ -693,9 +495,12 @@ jobs:
       run: |
         echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
-  Publish:
-    needs: [Raise, Debian-Pack, Rpm-Pack, Debian-Test, SonarCloud]
+  PublishDebian:
+    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud]
     if: ${{ inputs.deploy == 'true' }}
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(inputs.distributions) }}
     runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
@@ -705,27 +510,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Download package artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: packages_*
-          path: dist
-          merge-multiple: true
 
       - name: Download deb artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: deb_artifacts_*
-          path: artifacts
-          merge-multiple: true
-
-      - name: Download rpm artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: rpm_artifacts_*
+          pattern: deb_artifacts_${{ matrix.distro }}
           path: artifacts
           merge-multiple: true
 
@@ -733,7 +522,7 @@ jobs:
         shell: bash
         run: |
             NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-            NEXUS_REPO="ppa-dev"
+            NEXUS_REPO="ppa-devel-${{ matrix.distro }}"
 
             for file in artifacts/*.deb
             do
@@ -764,7 +553,7 @@ jobs:
         shell: bash
         run: |
             NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-            NEXUS_REPO="ppa-testing"
+            NEXUS_REPO="ppa-testing-${{ matrix.distro }}"
 
             for file in artifacts/*.deb
             do
@@ -791,47 +580,24 @@ jobs:
               fi
             done
 
-      - name: Publish to Nexus yum-integration (new Nexus)
-        if: ${{ inputs.rpm_build == 'true' }}
-        shell: bash
-        run: |
-            NEXUS_ENDPOINT="artifacts.aws.cloud.mov.ai"
-            NEXUS_REPO="yum-integration"
+  Github-Release:
+    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud, PublishDebian]
+    runs-on: ubuntu-22.04
+    container:
+      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-            cd artifacts
-            for file in $(find -name "*.rpm" -not -name "*src*" -printf '%f\n')
-            do
-              echo "Uploading $file"
-              RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-                "https://$NEXUS_ENDPOINT/service/rest/v1/components?repository=$NEXUS_REPO" \
-                -H 'accept: application/json' \
-                -H 'Content-Type: multipart/form-data' \
-                -w '%{http_code}' \
-                -F 'yum.directory=system' \
-                -F "yum.asset=@$file;type=application/x-rpm" \
-                -F "yum.asset.filename=$file"
-              )
-
-              #retry
-              if [[ ! "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
-                echo "Failed upload $file with $RETURN_CODE. Retrying"
-
-                RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-                  "https://$NEXUS_ENDPOINT/service/rest/v1/components?repository=$NEXUS_REPO" \
-                  -H 'accept: application/json' \
-                  -H 'Content-Type: multipart/form-data' \
-                  -w '%{http_code}' \
-                  -F 'yum.directory=system' \
-                  -F "yum.asset=@$file;type=application/x-rpm" \
-                  -F "yum.asset.filename=$file"
-                )
-              fi
-
-              if [[ ! "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
-                echo "Failed upload $file with $RETURN_CODE. Exiting"
-                exit 1
-              fi
-            done
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: packages_*
+          path: dist
+          merge-multiple: true
 
       - name: Create Github Release
         if: ${{ inputs.deploy == 'true' }}
@@ -863,8 +629,99 @@ jobs:
           done
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
+  
+  Github-Release-Debian-Upload:
+    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud, PublishDebian, Github-Release]
+    runs-on: ubuntu-22.04
+    container:
+      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(inputs.distributions) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  Release:
+      - name: Download deb artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: deb_artifacts_${{ matrix.distro }}
+          path: artifacts
+          merge-multiple: true
+
+      - name: Update Github Release
+        if: ${{ inputs.deploy == 'true' }}
+        shell: bash
+        run: |
+          git config --global --add safe.directory $(pwd)
+
+          for asset in artifacts/*; do
+            # do nothing if folder is empty
+            if [[ $asset != "artifacts/*" ]]; then
+              # Add sufix of distro to asset name
+              asset_renamed=$(basename $asset .deb)_${{ matrix.distro }}.deb
+              cp $asset $asset_renamed
+              gh release upload ${{ needs.Debian-Pack.outputs.package_version }} $asset_renamed
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+  ReleasePypi:
+    if: ${{ inputs.release == 'true' }}
+    runs-on: ubuntu-22.04
+    container:
+      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+  
+      - name: Set tag output
+        id: vars
+        run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+  
+      - name: Fetch artifact from github release
+        run: |
+          git config --global --add safe.directory $(pwd)
+          mkdir dist artifacts
+          cd dist
+          gh release download ${{ steps.vars.outputs.tag}} -p *.whl
+          gh release download ${{ steps.vars.outputs.tag}} -p *.tar.gz
+          cd ../artifacts
+          gh release download ${{ steps.vars.outputs.tag}} -p *.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
+  
+      - name: Archive binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: released_packages
+          path: dist/*
+          retention-days: 5
+  
+      - name: Archive binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: released_deb_artifacts
+          path: artifacts/*.deb
+          retention-days: 5
+
+      - name: Publish package to prod PyPI
+        uses: pypa/gh-action-pypi-publish@v1.11.0
+        with:
+          user: ${{ secrets.nexus_publisher_user }}
+          password: ${{ secrets.nexus_publisher_password }}
+          repository-url: https://artifacts.cloud.mov.ai/repository/${{ inputs.prod_publish_pypi }}/
+      
+
+  ReleasePpa:
+    needs: [ReleasePypi]
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-22.04
     container:
@@ -875,67 +732,28 @@ jobs:
     strategy:
       matrix:
         publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
+        distro: ${{ fromJSON(inputs.distributions) }}
+      max-parallel: 1
 
     steps:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Set tag output
-      id: vars
-      run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
-
-    - name: Fetch artifact from github release
-      run: |
-        git config --global --add safe.directory $(pwd)
-        mkdir dist artifacts
-        cd dist
-        gh release download ${{ steps.vars.outputs.tag}} -p *.whl
-        gh release download ${{ steps.vars.outputs.tag}} -p *.tar.gz
-        cd ../artifacts
-        gh release download ${{ steps.vars.outputs.tag}} -p *.deb
-        gh release download ${{ steps.vars.outputs.tag}} -p *.rpm
-      env:
-        GITHUB_TOKEN: ${{ secrets.gh_token }}
-
-    - name: Archive binary
-      uses: actions/upload-artifact@v4
-      with:
-        name: released_packages
-        path: dist/*
-        retention-days: 5
-
-    - name: Archive binary
-      uses: actions/upload-artifact@v4
+    - name: Download deb artifacts
+      uses: actions/download-artifact@v4
       with:
         name: released_deb_artifacts
-        path: artifacts/*.deb
-        retention-days: 5
-
-    - name: Archive binary
-      uses: actions/upload-artifact@v4
-      with:
-        name: released_rpm_artifacts
-        path: artifacts/*.rpm
-        retention-days: 5
-
-    - name: Publish package to prod PyPI
-      uses: pypa/gh-action-pypi-publish@v1.11.0
-      with:
-        user: ${{ secrets.nexus_publisher_user }}
-        password: ${{ secrets.nexus_publisher_password }}
-        repository-url: https://artifacts.cloud.mov.ai/repository/${{ inputs.prod_publish_pypi }}/
+        path: artifacts/
 
     - name: Publish to Nexus
       shell: bash
       run: |
-            NEXUS_REPO="${{ matrix.publish_repo }}"
-            if [ "$NEXUS_REPO" != "ppa-public" ]; then
-              NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-            else
-              NEXUS_ENDPOINT="artifacts.aws.cloud.mov.ai"
-            fi
+            NEXUS_REPO="${{ matrix.publish_repo }}-${{ matrix.distro }}"
+            NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
 
-            for file in artifacts/*.deb
+            ls -la artifacts
+
+            for file in artifacts/*_${{ matrix.distro }}.deb
             do
               RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
               -H "Content-Type: multipart/form-data" \

@@ -56,7 +56,7 @@ on:
 jobs:
   RefreshSource:
     if: ${{ inputs.deploy == 'false' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: docker://chinthakagodawita/autoupdate-action:v1
         continue-on-error: true
@@ -66,7 +66,7 @@ jobs:
 
   Build:
     if: ${{ inputs.release == 'false' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -292,7 +292,7 @@ jobs:
   Debian-Pack:
     if: ${{ inputs.release == 'false' }}
     needs: [Build]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.10
       options: --user root
@@ -341,7 +341,7 @@ jobs:
   Publish:
     needs: [Debian-Pack]
     if: ${{ inputs.deploy == 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -459,7 +459,7 @@ jobs:
 
   Release-Pypi:
     if: ${{ inputs.release == 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -498,7 +498,7 @@ jobs:
       matrix:
         publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
     if: ${{ inputs.release == 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:

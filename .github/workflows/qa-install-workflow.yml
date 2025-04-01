@@ -40,7 +40,7 @@ on:
 
 jobs:
   Validate-features:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
 
       - name: Checkout
@@ -195,7 +195,7 @@ jobs:
           docker image prune --all -f
 
   Slack-Message-On-Failure:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs:  [Validate-features, Run-Tests]
     if: always()
     steps:
