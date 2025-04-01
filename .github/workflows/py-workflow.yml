@@ -29,11 +29,11 @@ on:
         type: string
         default: '["pypi-edge"]'
       PYTHON_VERSION:
-        required: false
+        required: true
         type: string
         default: "3.8.10"
       DOCKER_PYTHON_IMAGE:
-        required: false
+        required: true
         type: string
         default: "registry.aws.cloud.mov.ai/devops/py-buildserver:v3.0.4" # based on focal, embed python 3.8
     secrets:
