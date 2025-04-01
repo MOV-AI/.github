@@ -59,7 +59,7 @@ jobs:
 
   RefreshSource:
     if: ${{ inputs.deploy == 'false' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: docker://chinthakagodawita/autoupdate-action:v1
         continue-on-error: true
@@ -69,7 +69,7 @@ jobs:
 
   Pre-commit:
     if: ${{ inputs.release == 'false' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v2
@@ -78,7 +78,7 @@ jobs:
     - uses: pre-commit/action@v2.0.3
 
   Pack:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: [Pre-commit]
     if: ${{ inputs.release == 'false' }}
     container:
@@ -229,7 +229,7 @@ jobs:
   Publish-To-Testing:
     needs: [Pack]
     if: ${{ inputs.release == 'false' && inputs.deploy == 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         artifact_repo_ppas: ${{fromJson(inputs.testing_publish_repos)}}
@@ -252,7 +252,7 @@ jobs:
 
   Publish-To-Stable:
     if: ${{ inputs.release == 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         artifact_repo_ppas: ${{fromJson(inputs.prod_publish_repos)}}
