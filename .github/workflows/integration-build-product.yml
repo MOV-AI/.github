@@ -2323,7 +2323,7 @@ jobs:
           slack-update-message-ts: ${{ needs.Install-Simulator-Robot.outputs.slack_thread_id }}
 
   Run-Status:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: [publish, Validate-boostrap-configs]
     if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled' || needs.publish.result == 'skipped' ) }}
     steps:
