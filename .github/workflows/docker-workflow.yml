@@ -98,7 +98,7 @@ jobs:
 
   RefreshSource:
     if: ${{ inputs.deploy == 'false' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: docker://chinthakagodawita/autoupdate-action:v1
         continue-on-error: true
@@ -107,7 +107,7 @@ jobs:
           MERGE_MSG: "Branch was auto-updated."
 
   build_deploy:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     permissions:
       contents: read # for actions/checkout to fetch code
       packages: write  # for gcr publishing
