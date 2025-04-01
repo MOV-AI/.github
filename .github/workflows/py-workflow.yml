@@ -32,10 +32,6 @@ on:
         required: true
         type: string
         default: "3.8.10"
-      DOCKER_PYTHON_IMAGE:
-        required: true
-        type: string
-        default: "registry.aws.cloud.mov.ai/devops/py-buildserver:v3.0.4" # based on focal, embed python 3.8
     secrets:
       auto_commit_user:
         required: false # only when deploy true
@@ -67,21 +63,17 @@ jobs:
           GITHUB_TOKEN: '${{ secrets.auto_commit_password }}'
           MERGE_MSG: "Branch was auto-updated."
 
-  Pre-commit:
-    if: ${{ inputs.pre_commit }}
+  Pre-commit-38:
+    if: ${{ inputs.pre_commit && startsWith(inputs.PYTHON_VERSION, '3.8') }}
     runs-on: ubuntu-22.04
     container:
-      image: ${{ inputs.DOCKER_PYTHON_IMAGE }}
+      image: registry.aws.cloud.mov.ai/devops/py-buildserver:v3.0.4
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      # - uses: actions/setup-python@v5
-      #   with:
-      #     python-version: ${{ inputs.PYTHON_VERSION }}
 
       - name: Install dependencies and package
         run: |
@@ -96,11 +88,33 @@ jobs:
           git config --global --add safe.directory $(pwd)
           python -m pre_commit run --show-diff-on-failure --color=always --all-files
 
-  Build:
-    if: ${{ ! inputs.release }}
+  Pre-commit-other:
+    if: ${{ inputs.pre_commit && !startsWith(inputs.PYTHON_VERSION, '3.8') }}
     runs-on: ubuntu-22.04
     container:
-      image: ${{ inputs.DOCKER_PYTHON_IMAGE }}
+      image: python:${{ inputs.PYTHON_VERSION }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies and package
+        run: |
+          python3 -m pip install pip --upgrade
+          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r build-requirements.txt
+          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple .
+
+          python3 -m pip install pre-commit
+
+      - name: Run pre-commit
+        run: |
+          git config --global --add safe.directory $(pwd)
+          python -m pre_commit run --show-diff-on-failure --color=always --all-files
+
+  Build-38:
+    if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') }}
+    runs-on: ubuntu-22.04
+    container:
+      image: registry.aws.cloud.mov.ai/devops/py-buildserver:v3.0.4
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -113,9 +127,229 @@ jobs:
         fetch-depth: 0
         submodules: recursive
 
-    # - uses: actions/setup-python@v5
-    #   with:
-    #     python-version: ${{ inputs.PYTHON_VERSION }}
+    - name: Upgrade pip
+      run: python -m pip install pip --upgrade
+
+    - name: Configure pip with custom index
+      run: |
+        mkdir -p ~/.config/pip
+        echo "[global]" > ~/.config/pip/pip.conf
+        echo "index-url = https://artifacts.cloud.mov.ai/repository/pypi-experimental/simple" >> ~/.config/pip/pip.conf
+        echo "extra-index-url =" >> ~/.config/pip/pip.conf
+        echo "  https://pypi.org/simple" >> ~/.config/pip/pip.conf
+        echo "trusted-host =" >> ~/.config/pip/pip.conf
+        echo "  artifacts.cloud.mov.ai" >> ~/.config/pip/pip.conf
+        echo "  pypi.org" >> ~/.config/pip/pip.conf
+
+    - name: Install build-requirements
+      run: python -m pip install -r build-requirements.txt
+
+    - name: Install python package
+      run: python -m pip install .
+
+    - name: Run Black
+      if: ${{ inputs.run_black }}
+      run: |
+        python -m black \
+          --line-length 100 \
+          --diff \
+          --check \
+          .
+
+    - name: Python Linters
+      run: |
+        python -m flake8 \
+          --isolated \
+          --exclude dist,.*\.egg-info,.git,__pycache__,.tox,venv \
+          --max-complexity 10 \
+          --max-line-length 100 \
+          --exit-zero \
+          --output-file flake8-report.txt
+
+        touch dummy-pylint-config
+
+        python -m pylint \
+          --rcfile dummy-pylint-config \
+          --ignore-patterns dist,.*\.egg-info,.git,__pycache__,.tox,venv \
+          --max-line-length 100 \
+          --exit-zero \
+          --output pylint-report.txt \
+          .
+
+    - name: Run tests
+      run: |
+        if [ -f tox.ini ]; then
+            # run tests and generates coverage.xml
+            tox
+        else
+            # run tests
+            python -m pytest tests/
+        fi
+
+    - name: Create SonarCloud project and disable autoscan
+      uses: MOV-AI/action-sonarcloud-proj-config@v1
+      with:
+        sonar_org: 'mov-ai'
+        sonar_token: ${{ secrets.sonar_token }}
+
+    - name: SonarCloud Scan
+      uses: SonarSource/sonarqube-scan-action@v4.2.1
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        SONAR_TOKEN: ${{ secrets.sonar_token }}
+      with:
+        projectBaseDir: ./
+        args: >
+          -Dsonar.organization=mov-ai
+          -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
+          -Dsonar.sources=.
+          -Dsonar.scm.provider=git
+          -Dsonar.qualitygate.wait=true
+          -Dsonar.qualitygate.timeout=300
+          -Dsonar.coverage.exclusions=tests/**,docs/**
+          -Dsonar.cpd.exclusions=tests/**,docs/**
+          -Dsonar.python.version=3
+          -Dsonar.python.flake8.reportPaths=flake8-report.txt
+          -Dsonar.python.pylint.reportPaths=pylint-report.txt
+          -Dsonar.python.coverage.reportPaths=coverage.xml
+
+    - name: Link to SonarCloud dashboard
+      shell: bash
+      run: |
+        echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
+
+    - name: Raise version
+      id: bump
+      run: |
+        python -m venv venv --clear
+        . venv/bin/activate
+        pip install bump-my-version==0.29.0
+        bump-my-version bump build --no-tag --no-commit
+
+        current_version=$(bump-my-version show current_version)
+        echo "Bumped to version ${current_version}"
+
+        echo "current_version=${current_version}" >> $GITHUB_OUTPUT
+
+    - name: Commit auto raise version
+      id: raise
+      run: |
+        git config --global --add safe.directory $(pwd)
+        git config --global user.name ${{ secrets.auto_commit_user }}
+        git config --global user.email ${{ secrets.auto_commit_mail }}
+        git commit -am "[skip actions] Automatic Bump of build version to ${{ steps.bump.outputs.current_version }}"
+
+    - name: Set branch output
+      if: ${{ inputs.deploy }}
+      id: var_branch
+      run: |
+        echo "Branch name is: ${GITHUB_REF#refs/heads/}"
+        echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+
+    - name: Raise App version
+      if: ${{ inputs.deploy }}
+      uses: CasperWA/push-protected@v2.14.0
+      with:
+        token: ${{ secrets.auto_commit_password }}
+        branch: ${{ steps.var_branch.outputs.branch }}
+        unprotect_reviews: true
+
+    - name: Commit of version
+      if: ${{ inputs.deploy }}
+      id: commit_id
+      run: |
+        commit_hash=$(git log --format="%H" -n 1)
+        echo "commit_id=${commit_hash}" >> $GITHUB_OUTPUT
+
+    - name: build
+      run: |
+        python -m pip install build
+        python -m build
+        cat pyproject.toml || true
+
+    - name: Archive binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: packages
+        path: dist/*
+        retention-days: 5
+
+    - name: Publish package to TestPyPI Experimental
+      uses: pypa/gh-action-pypi-publish@v1.11.0
+      with:
+        user: ${{ secrets.nexus_publisher_user }}
+        password: ${{ secrets.nexus_publisher_password }}
+        repository-url: https://artifacts.aws.cloud.mov.ai/repository/pypi-experimental/
+        verbose: true
+
+    - name: Build docs
+      if: ${{ inputs.with_docs }}
+      run: |
+        VERSION=${GITHUB_REF##*/} tox -e docs
+
+    - name: Checkout gh-pages
+      if: ${{ inputs.deploy && inputs.with_docs }}
+      uses: actions/checkout@v4
+      with:
+        ref: gh-pages
+        path: gh-pages
+
+    - name: Push docs
+      if: ${{ inputs.deploy && inputs.with_docs }}
+      run: |
+        cd gh-pages
+        touch .nojekyll
+        rm -rf ${GITHUB_REF##*/}
+        cp -r ../docs/build/* .
+        ls -mQd */ | sed 's/\///g' | sed 's/^/[/' | sed 's/$/]/' > versions.json
+        git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+        git config --global user.name "${{ github.actor }}"
+        git add .
+        git commit -am "Updating docs for commit ${GITHUB_SHA} in ${GITHUB_REF}"
+        git push --force --set-upstream origin gh-pages
+
+    - name: Publish package to TestPyPI Integration
+      if: ${{ inputs.deploy }}
+      uses: pypa/gh-action-pypi-publish@v1.11.0
+      with:
+        user: ${{ secrets.nexus_publisher_user }}
+        password: ${{ secrets.nexus_publisher_password }}
+        repository-url: https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/
+
+    - name: Create Github Release
+      if: ${{ inputs.deploy }}
+      shell: bash
+      run: |
+        title="Release of ${{ steps.bump.outputs.current_version }}"
+        git config --global --add safe.directory $(pwd)
+
+        gh release create -p -t "$title" -n "Release notes for ${{ github.event.repository.name }}" \
+        --target ${{ steps.commit_id.outputs.commit_id }} \
+        --generate-notes \
+        ${{ steps.bump.outputs.current_version }}
+
+        assets=()
+        for asset in dist/*; do
+          if [[ $asset != "dist/*" ]]; then
+            gh release upload ${{ steps.bump.outputs.current_version }} $asset
+          fi
+        done
+
+      env:
+        GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+  Build-other:
+    if: ${{ !inputs.release && !startsWith(inputs.PYTHON_VERSION, '3.8') }}
+    runs-on: ubuntu-22.04
+    container:
+      image: python:${{ inputs.PYTHON_VERSION }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: recursive
 
     - name: Upgrade pip
       run: python -m pip install pip --upgrade
