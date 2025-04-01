@@ -49,7 +49,7 @@ env:
 jobs:
 
   Deploy:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.cloud.mov.ai/qa/tf-buildserver:v1.0.7
       credentials:

@@ -59,7 +59,7 @@ on:
 jobs:
   RefreshSource:
     if: ${{ ! inputs.deploy }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: docker://chinthakagodawita/autoupdate-action:v1
         continue-on-error: true
@@ -69,7 +69,7 @@ jobs:
 
   Pre-commit:
     if: ${{ inputs.pre_commit }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,7 +92,7 @@ jobs:
 
   Build:
     if: ${{ ! inputs.release }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     outputs:
       package_name: ${{ steps.bump.outputs.py_pkg_name }}
       package_version: ${{ steps.bump.outputs.py_pkg_version }}
@@ -312,7 +312,7 @@ jobs:
   Debian-Pack:
     if: ${{ ! inputs.release }}
     needs: [Build]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.10
       options: --user root
@@ -361,7 +361,7 @@ jobs:
   Publish:
     needs: [Debian-Pack]
     if: ${{ inputs.deploy }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -479,7 +479,7 @@ jobs:
 
   Release-Pypi:
     if: ${{ inputs.release }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -518,7 +518,7 @@ jobs:
       matrix:
         publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
     if: ${{ inputs.release }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Checkout
