@@ -26,7 +26,12 @@ on:
 
 jobs:
   Validate-features:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
+    container:
+      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

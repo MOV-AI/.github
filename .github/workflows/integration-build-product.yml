@@ -1531,7 +1531,7 @@ jobs:
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
               sudo systemctl restart docker
               sleep 3
-              docker run --gpus=all --rm nvcr.io/nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi 2>&1
+              docker run --gpus=all --rm nvcr.io/nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi 2>&1
           '
 
       - name: Slack message failure
@@ -2306,7 +2306,7 @@ jobs:
           slack-update-message-ts: ${{ needs.Install-Simulator-Robot.outputs.slack_thread_id }}
 
   Run-Status:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: [publish, Validate-boostrap-configs]
     if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled' || needs.publish.result == 'skipped' ) }}
     steps:
