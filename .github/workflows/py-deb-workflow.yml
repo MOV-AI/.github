@@ -93,7 +93,7 @@ jobs:
 
       - name: Run pre-commit
         run: |
-          git config --global --add safe.directory /opt/mov.ai
+          git config --global --add safe.directory $(pwd)
           python3 -m pre_commit run --show-diff-on-failure --color=always --all-files
 
   Build:
