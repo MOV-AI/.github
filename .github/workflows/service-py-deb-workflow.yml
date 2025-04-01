@@ -22,7 +22,7 @@ on:
       distributions:
         required: false
         type: string
-        default: '["focal", "jammy", "noble"]'
+        default: '["jammy", "noble"]'
       install_test:
         required: false
         type: string
