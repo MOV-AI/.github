@@ -367,7 +367,7 @@ jobs:
         with:
           name: coverage_report
           path: ./coverage.xml
-        if: ${{ matrix.distro == 'focal' && inputs.skip_testing != 'true' }}
+        if: ${{ matrix.distro == fromJSON(inputs.distributions)[0] && inputs.skip_testing != 'true' }}
 
       - name: Store logs of journalctl
         shell: bash
