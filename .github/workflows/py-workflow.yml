@@ -66,6 +66,11 @@ jobs:
   Pre-commit:
     if: ${{ inputs.pre_commit }}
     runs-on: ubuntu-22.04
+    container:
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
