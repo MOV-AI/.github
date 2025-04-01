@@ -193,7 +193,7 @@ jobs:
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
   Standalone-Validations:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: [Validate-boostrap-configs]
     outputs:
       slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
@@ -1259,7 +1259,7 @@ jobs:
 
   Validations-Finish:
     needs: [Validation-UI-Tests, Validation-Install-Tests, Validation-API-Tests, Validation-Flow-Tests]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     outputs:
       slack_thread_id: ${{ needs.Validation-UI-Tests.outputs.slack_thread_id }}
     steps:
@@ -2292,7 +2292,7 @@ jobs:
 
 
   Run-Status:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: [publish, Validate-boostrap-configs]
     if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled'  || needs.publish.result == 'skipped') }}
     steps:
