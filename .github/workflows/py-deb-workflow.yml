@@ -85,15 +85,16 @@ jobs:
 
       - name: Install dependencies and package
         run: |
-          python -m pip install pip --upgrade
-          python -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r build-requirements.txt
-          python -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple .
+          python3 -m pip install pip --upgrade
+          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r build-requirements.txt
+          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple .
 
-          python -m pip install pre-commit
+          python3 -m pip install pre-commit
+          git config --global --add safe.directory /opt/mov.ai
 
       - name: Run pre-commit
         run: |
-          python -m pre_commit run --show-diff-on-failure --color=always --all-files
+          python3 -m pre_commit run --show-diff-on-failure --color=always --all-files
 
   Build:
     if: ${{ ! inputs.release }}
