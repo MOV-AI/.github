@@ -49,7 +49,7 @@ on:
 
 jobs:
   pre_check:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
     - name: Check if raised component in component list
       shell: bash
@@ -69,7 +69,7 @@ jobs:
       matrix:
         sub_component: ${{ fromJSON(inputs.components) }}
     if: ${{ inputs.release == 'false' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: [pre_check]
     container:
       image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.13
@@ -180,7 +180,7 @@ jobs:
 
   Publish_and_Release:
     if: ${{ inputs.deploy == 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs:  [Build]
     container:
       image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.13
@@ -280,7 +280,7 @@ jobs:
       matrix:
         sub_component: ${{ fromJSON(inputs.components) }}
     if: ${{ inputs.deploy == 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.13
       options: --user root
@@ -386,7 +386,7 @@ jobs:
       matrix:
         publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
     if: ${{ inputs.release == 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.13
       options: --user root
