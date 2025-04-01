@@ -52,7 +52,7 @@ on:
 jobs:
   RefreshSource:
     if: ${{ inputs.deploy == 'false' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: docker://chinthakagodawita/autoupdate-action:v1
         continue-on-error: true
@@ -61,7 +61,7 @@ jobs:
           MERGE_MSG: "Branch was auto-updated."
   Build:
     if: ${{ inputs.release == 'false' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:
@@ -309,7 +309,7 @@ jobs:
       matrix:
         publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
     if: ${{ inputs.release == 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
       credentials:

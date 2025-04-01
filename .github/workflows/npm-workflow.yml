@@ -34,7 +34,7 @@ on:
 jobs:
   Build:
 
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
       options: --user root
@@ -114,7 +114,7 @@ jobs:
 
   Post-publish:
     if: ${{ inputs.deploy == 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs:  [Build]
     container:
       image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest

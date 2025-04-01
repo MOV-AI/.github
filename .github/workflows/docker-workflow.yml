@@ -91,7 +91,7 @@ on:
 
 jobs:
   build_deploy:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     permissions:
       contents: read # for actions/checkout to fetch code
       packages: write  # for gcr publishing

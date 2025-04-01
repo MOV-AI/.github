@@ -46,7 +46,7 @@ on:
 jobs:
   Build:
     if: ${{ inputs.release == 'false' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
       credentials:
@@ -168,7 +168,7 @@ jobs:
 
   Publish:
     if: ${{ inputs.deploy == 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs:  [Build]
     container:
       image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
@@ -278,7 +278,7 @@ jobs:
       matrix:
         publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
     if: ${{ inputs.release == 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
       credentials:
