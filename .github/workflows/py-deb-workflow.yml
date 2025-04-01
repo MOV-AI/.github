@@ -90,10 +90,10 @@ jobs:
           python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple .
 
           python3 -m pip install pre-commit
-          git config --global --add safe.directory /opt/mov.ai
 
       - name: Run pre-commit
         run: |
+          git config --global --add safe.directory /opt/mov.ai
           python3 -m pre_commit run --show-diff-on-failure --color=always --all-files
 
   Build:
