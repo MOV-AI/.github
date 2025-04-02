@@ -137,6 +137,12 @@ jobs:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: recursive
+
     - name: Upgrade pip
       run: python -m pip install pip --upgrade
 
@@ -425,8 +431,13 @@ jobs:
           (needs.Build-other.result == 'success' || needs.Build-other.result == 'skipped'))
       }}
     runs-on: ubuntu-22.04
-
     steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        # Disabling shallow clone is recommended for improving relevancy of reporting
+        fetch-depth: 0
+
     - name: Download tests-report
       uses: actions/download-artifact@v4
       with:
