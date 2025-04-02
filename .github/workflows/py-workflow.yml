@@ -72,7 +72,6 @@ jobs:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     outputs:
-      current_version: ${{ steps.bump.outputs.current_version }}
       branch: ${{ steps.var_branch.outputs.branch }}
     steps:
     - name: Checkout
