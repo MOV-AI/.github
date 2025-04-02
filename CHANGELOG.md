@@ -1,3 +1,4 @@
-# v2.2
-## qa-ui-workflow.yml
-- [QAP-3935](https://movai.atlassian.net/browse/QAP-3935): Bring platform install robot.json to UI tests
+# v2.3
+
+- py-workflow : added support  for pre-commit, build, and test on different versions of python (3.8 apart , and other versions)
+- service-py-deb-workflow : dedicated workflow for building, packaging and testing movai-service
