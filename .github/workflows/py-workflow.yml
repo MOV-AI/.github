@@ -112,7 +112,7 @@ jobs:
   Pre-commit-38:
     if: ${{ inputs.pre_commit && startsWith(inputs.PYTHON_VERSION, '3.8') }}
     runs-on: ubuntu-22.04
-    needs: Pre-build
+    needs: [ Pre-build ]
     container:
       image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
       credentials:
@@ -132,7 +132,7 @@ jobs:
 
   Pre-commit-other:
     if: ${{ inputs.pre_commit && !startsWith(inputs.PYTHON_VERSION, '3.8') }}
-    needs: Pre-build
+    needs: [ Pre-build ]
     runs-on: ubuntu-22.04
     container:
       image: python:${{ inputs.PYTHON_VERSION }}
