@@ -831,7 +831,7 @@ jobs:
           python3 -m pytest tests/ \
               -ra \
               -k '${{ steps.install_tests_setup.outputs.test_set }}' \
-              --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci" \
+              --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" \
               --jira_report \
               --junit-xml=junit.xml 
 
@@ -839,7 +839,7 @@ jobs:
           python3 -m pytest tests/ \
               -ra \
               -k '${{ steps.install_tests_setup.outputs.test_set }}' \
-              --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --junit-xml=junit.xml
+              --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --junit-xml=junit.xml
           fi
           deactivate
           
