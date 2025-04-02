@@ -151,7 +151,7 @@ jobs:
   Build-38:
     if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') }}
     runs-on: ubuntu-22.04
-    needs: [ Pre-build, Pre-commit-38 ]
+    needs: [ Pre-build ]
     container:
       image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
       credentials:
@@ -284,7 +284,7 @@ jobs:
   Build-other:
     if: ${{ !inputs.release && !startsWith(inputs.PYTHON_VERSION, '3.8') }}
     runs-on: ubuntu-22.04
-    needs: [ Pre-build, Pre-commit-other ]
+    needs: [ Pre-build]
     container:
       image: python:${{ inputs.PYTHON_VERSION }}
 
