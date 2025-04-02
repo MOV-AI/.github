@@ -63,18 +63,61 @@ jobs:
           GITHUB_TOKEN: '${{ secrets.auto_commit_password }}'
           MERGE_MSG: "Branch was auto-updated."
 
-  Pre-commit-38:
-    if: ${{ inputs.pre_commit && startsWith(inputs.PYTHON_VERSION, '3.8') }}
+  Pre-build:
+    if: ${{ !inputs.release }}
     runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:v3.0.4
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
+    outputs:
+      current_version: ${{ steps.bump.outputs.current_version }}
+      branch: ${{ steps.var_branch.outputs.branch }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: recursive
 
+    - name: Raise version
+      id: bump
+      run: |
+        python -m venv venv --clear
+        . venv/bin/activate
+        pip install bump-my-version==0.29.0
+        bump-my-version bump build --no-tag --no-commit
+
+        current_version=$(bump-my-version show current_version)
+        echo "Bumped to version ${current_version}"
+
+        echo "current_version=${current_version}" >> $GITHUB_OUTPUT
+
+    - name: Commit auto raise version
+      id: raise
+      run: |
+        git config --global user.name ${{ secrets.auto_commit_user }}
+        git config --global user.email ${{ secrets.auto_commit_mail }}
+        git commit -am "[skip actions] Automatic Bump of build version to ${{ steps.bump.outputs.current_version }}"
+
+    - name: Set branch output
+      if: ${{ inputs.deploy }}
+      id: var_branch
+      run: |
+        echo "Branch name is: ${GITHUB_REF#refs/heads/}"
+        echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+
+  Pre-commit-38:
+    if: ${{ inputs.pre_commit && startsWith(inputs.PYTHON_VERSION, '3.8') }}
+    runs-on: ubuntu-22.04
+    needs: Pre-build
+    container:
+      image: registry.aws.cloud.mov.ai/devops/py-buildserver:v3.0.4
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
       - name: Install dependencies and package
         run: |
           python3 -m pip install pip pre-commit--upgrade
@@ -88,13 +131,11 @@ jobs:
 
   Pre-commit-other:
     if: ${{ inputs.pre_commit && !startsWith(inputs.PYTHON_VERSION, '3.8') }}
+    needs: Pre-build
     runs-on: ubuntu-22.04
     container:
       image: python:${{ inputs.PYTHON_VERSION }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Install dependencies and package
         run: |
           python3 -m pip install pip pre-commit --upgrade
@@ -109,20 +150,13 @@ jobs:
   Build-38:
     if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') }}
     runs-on: ubuntu-22.04
+    needs: [ Pre-build, Pre-commit-38 ]
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:v3.0.4
       credentials:
         username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}pypa/gh-action-pypi-publish@v1.11.0
-
+        password: ${{secrets.registry_password}}
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        # Disabling shallow clone is recommended for improving relevancy of reporting
-        fetch-depth: 0
-        submodules: recursive
-
     - name: Upgrade pip
       run: python -m pip install pip --upgrade
 
@@ -249,6 +283,7 @@ jobs:
   Build-other:
     if: ${{ !inputs.release && !startsWith(inputs.PYTHON_VERSION, '3.8') }}
     runs-on: ubuntu-22.04
+    needs: [ Pre-build, Pre-commit-other ]
     container:
       image: python:${{ inputs.PYTHON_VERSION }}
 
@@ -383,15 +418,11 @@ jobs:
           dist/*
 
   Post-Build:
-    needs: [Build-38, Build-other]
+    needs: [ Pre-build, Build-38, Build-other ]
     if: ${{ !inputs.release }}
     runs-on: ubuntu-22.04
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
+    steps:
     - name: Download tests-report
       uses: actions/download-artifact@v4
       with:
@@ -430,39 +461,12 @@ jobs:
       run: |
         echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
-    - name: Raise version
-      id: bump
-      run: |
-        python -m venv venv --clear
-        . venv/bin/activate
-        pip install bump-my-version==0.29.0
-        bump-my-version bump build --no-tag --no-commit
-
-        current_version=$(bump-my-version show current_version)
-        echo "Bumped to version ${current_version}"
-
-        echo "current_version=${current_version}" >> $GITHUB_OUTPUT
-
-    - name: Commit auto raise version
-      id: raise
-      run: |
-        git config --global user.name ${{ secrets.auto_commit_user }}
-        git config --global user.email ${{ secrets.auto_commit_mail }}
-        git commit -am "[skip actions] Automatic Bump of build version to ${{ steps.bump.outputs.current_version }}"
-
-    - name: Set branch output
-      if: ${{ inputs.deploy }}
-      id: var_branch
-      run: |
-        echo "Branch name is: ${GITHUB_REF#refs/heads/}"
-        echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
-
     - name: Raise App version
       if: ${{ inputs.deploy }}
       uses: CasperWA/push-protected@v2.14.0
       with:
         token: ${{ secrets.auto_commit_password }}
-        branch: ${{ steps.var_branch.outputs.branch }}
+        branch: ${{ needs.Pre-build.outputs.branch }}
         unprotect_reviews: true
 
     - name: Commit of version
@@ -476,17 +480,17 @@ jobs:
       if: ${{ inputs.deploy }}
       shell: bash
       run: |
-        title="Release of ${{ steps.bump.outputs.current_version }}"
+        title="Release of ${{ needs.Pre-build.outputs.current_version }}"
 
         gh release create -p -t "$title" -n "Release notes for ${{ github.event.repository.name }}" \
         --target ${{ steps.commit_id.outputs.commit_id }} \
         --generate-notes \
-        ${{ steps.bump.outputs.current_version }}
+        ${{ needs.Pre-build.outputs.current_version }}
 
         assets=()
         for asset in dist/*; do
           if [[ $asset != "dist/*" ]]; then
-            gh release upload ${{ steps.bump.outputs.current_version }} $asset
+            gh release upload ${{ needs.Pre-build.outputs.current_version }} $asset
           fi
         done
 
