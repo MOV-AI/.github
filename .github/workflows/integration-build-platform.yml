@@ -823,6 +823,9 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           rm -rf results/*
           pip install buildkite-test-collector
+          sudo rm -rf $USERSPACE_FOLDER_PATH || true
+          sudo mkdir -p $USERSPACE_FOLDER_PATH
+          sudo chmod 777 $USERSPACE_FOLDER_PATH
           if [ "${{ steps.install_tests_setup.outputs.jira_report }}" == "True" ] ; then
           
           python3 -m pytest tests/ \
