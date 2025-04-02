@@ -117,7 +117,7 @@ jobs:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:v3.0.4
       credentials:
         username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
+        password: ${{secrets.registry_password}}pypa/gh-action-pypi-publish@v1.11.0
 
     steps:
     - name: Checkout
@@ -347,7 +347,7 @@ jobs:
         retention-days: 5
 
     - name: Publish package to TestPyPI Experimental
-      uses: pypa/gh-action-pypi-publish@v1.12.4
+      uses: pypa/gh-action-pypi-publish@v1.11.0
       with:
         user: ${{ secrets.nexus_publisher_user }}
         password: ${{ secrets.nexus_publisher_password }}
@@ -382,7 +382,7 @@ jobs:
 
     - name: Publish package to TestPyPI Integration
       if: ${{ inputs.deploy }}
-      uses: pypa/gh-action-pypi-publish@v1.12.4
+      uses: pypa/gh-action-pypi-publish@v1.11.0
       with:
         user: ${{ secrets.nexus_publisher_user }}
         password: ${{ secrets.nexus_publisher_password }}
@@ -532,7 +532,7 @@ jobs:
         retention-days: 5
 
     - name: Publish package to ${{ matrix.publish_repo }}
-      uses: pypa/gh-action-pypi-publish@v1.12.4
+      uses: pypa/gh-action-pypi-publish@v1.11.0
       with:
         user: ${{ secrets.nexus_publisher_user }}
         password: ${{ secrets.nexus_publisher_password }}
