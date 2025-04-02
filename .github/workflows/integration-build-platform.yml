@@ -2212,8 +2212,9 @@ jobs:
           CONFIG_FILE_NAME="basic-standalone-ignition-noetic.json"
           mkdir -p userspace/
           sudo rm -rf $USERSPACE_FOLDER_PATH || true
-          sudo mkdir -p $USERSPACE_FOLDER_PATH
+          sudo mkdir -p $USERSPACE_FOLDER_PATH $USERSPACE_FOLDER_PATH/models_shared
           sudo chmod 777 $USERSPACE_FOLDER_PATH
+          sudo chmod 777 $USERSPACE_FOLDER_PATH/models_shared
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           . .ci-venv/bin/activate
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
