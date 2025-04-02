@@ -95,7 +95,7 @@ env:
   MID_REGISTRY: registry.hel.mov.ai
   PUSH_REGISTRY: registry.cloud.mov.ai
   ENV: qa
-  USERSPACE_FOLDER_PATH: userspace
+  USERSPACE_FOLDER_PATH: /opt/movai/userspace
   SIMULATION_ID: ci_simulation
   XRAY_CLIENTID: ${{ secrets.xray_clientid}}
   XRAY_SECRET: ${{ secrets.xray_secret}}
@@ -497,7 +497,10 @@ jobs:
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
           deactivate
-
+          sudo rm -rf $USERSPACE_FOLDER_PATH || true
+          sudo mkdir -p $USERSPACE_FOLDER_PATH
+          sudo chmod 777 $USERSPACE_FOLDER_PATH
+          
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
@@ -1118,6 +1121,9 @@ jobs:
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
           deactivate
+          sudo rm -rf $USERSPACE_FOLDER_PATH || true
+          sudo mkdir -p $USERSPACE_FOLDER_PATH
+          sudo chmod 777 $USERSPACE_FOLDER_PATH
 
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
@@ -1358,7 +1364,9 @@ jobs:
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
           deactivate
-
+          sudo rm -rf $USERSPACE_FOLDER_PATH || true
+          sudo mkdir -p $USERSPACE_FOLDER_PATH
+          sudo chmod 777 $USERSPACE_FOLDER_PATH
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
@@ -2200,8 +2208,9 @@ jobs:
 
           CONFIG_FILE_NAME="basic-standalone-ignition-noetic.json"
           mkdir -p userspace/
-
-          export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
+          sudo rm -rf $USERSPACE_FOLDER_PATH || true
+          sudo mkdir -p $USERSPACE_FOLDER_PATH
+          sudo chmod 777 $USERSPACE_FOLDER_PATH
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           . .ci-venv/bin/activate
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
