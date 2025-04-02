@@ -152,6 +152,7 @@ jobs:
     - name: Install build-requirements
       run: |
         python3 -m pip install -r build-requirements.txt
+        apt-get update && apt-get install -y make
 
     - name: Raise version locally
       id: releasevars
@@ -192,6 +193,7 @@ jobs:
         run: |
           git config --global --add safe.directory $(pwd)
           python3 -m pip install -r build-requirements.txt
+          apt-get update && apt-get install -y make
 
       - name: Raise version
         if: ${{ inputs.deploy == 'true' }}
@@ -349,8 +351,7 @@ jobs:
       - name: Install debian artifacts
         run: |
           sudo apt update
-          cd artifacts/
-          sudo apt install -y ./movai-service*
+          sudo apt install -y ./artifacts/movai-service*
 
       - name: Run tests
         if: ${{ inputs.skip_testing != 'true' }}
