@@ -104,7 +104,7 @@ jobs:
     - name: Python Linters
       run: |
         python3 -m flake8 \
-          --isolated # run linters isolated so no issues are masked from SonarCloud\
+          --isolated \
           --exclude dist,.*\.egg-info,.git,__pycache__,.tox,venv \
           --max-complexity 16 \
           --max-line-length 120 \
