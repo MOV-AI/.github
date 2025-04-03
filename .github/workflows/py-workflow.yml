@@ -97,6 +97,12 @@ jobs:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
       - name: Install dependencies and package
         run: |
           python3 -m pip install pip pre-commit--upgrade
@@ -115,6 +121,12 @@ jobs:
     container:
       image: python:${{ inputs.PYTHON_VERSION }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
       - name: Install dependencies and package
         run: |
           python3 -m pip install pip pre-commit --upgrade
@@ -157,7 +169,9 @@ jobs:
         echo "  pypi.org" >> ~/.config/pip/pip.conf
 
     - name: Install build-requirements
-      run: python -m pip install -r build-requirements.txt
+      run: |
+        python -m pip install -r build-requirements.txt
+        python -m pip install build twine
 
     - name: Raise version before build
       id: bump
@@ -222,7 +236,6 @@ jobs:
 
     - name: Build
       run: |
-        python -m pip install build twine
         python -m build
         cat pyproject.toml || true
 
