@@ -167,8 +167,8 @@ jobs:
         if: ${{ always() }}
         id: pre_slack
         run: |
-          MESSAGE=":white_check_mark: ${{ github.job }} IP runners destroyed (Attempt: #${{ github.run_attempt }})"
-          MESSAGE_ERR=":x: ${{ github.job }} Failed to destroy IP runners (Attempt: #${{ github.run_attempt }})"
+          MESSAGE=":white_check_mark: ${{ github.job }} ${{ matrix.node }} IP runners destroyed (Attempt: #${{ github.run_attempt }})"
+          MESSAGE_ERR=":x: ${{ github.job }} ${{ matrix.node }} Failed to destroy IP runners (Attempt: #${{ github.run_attempt }})"
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
           echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
@@ -316,8 +316,8 @@ jobs:
       if: ${{ always() }}
       id: pre_slack
       run: |
-        MESSAGE=":white_check_mark: ${{ github.job }} IP runners provisioned successfully! (Attempt: #${{ github.run_attempt }})"
-        MESSAGE_ERR=":x: ${{ github.job }} Failed to provision IP runners! (Attempt: #${{ github.run_attempt }})"
+        MESSAGE=":white_check_mark: ${{ github.job }} ${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }} IP runners provisioned successfully in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
+        MESSAGE_ERR=":x: ${{ github.job }} Failed to provision IP runners in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
         echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
         echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
@@ -463,8 +463,8 @@ jobs:
         if: ${{ always() }}
         id: pre_slack
         run: |
-          MESSAGE=":white_check_mark: ${{ github.job }} QA runners destroyed (Attempt: #${{ github.run_attempt }})"
-          MESSAGE_ERR=":x: ${{ github.job }} Failed to destroy QA runners (Attempt: #${{ github.run_attempt }})"
+          MESSAGE=":white_check_mark: ${{ github.job }} ${{ matrix.node }} QA runners destroyed (Attempt: #${{ github.run_attempt }})"
+          MESSAGE_ERR=":x: ${{ github.job }} ${{ matrix.node }} Failed to destroy QA runners (Attempt: #${{ github.run_attempt }})"
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
           echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
@@ -611,8 +611,8 @@ jobs:
       if: ${{ always() }}
       id: pre_slack
       run: |
-        MESSAGE=":white_check_mark: ${{ github.job }} QA runners provisioned successfully! (Attempt: #${{ github.run_attempt }})"
-        MESSAGE_ERR=":x: ${{ github.job }} Failed to provision QA runners! (Attempt: #${{ github.run_attempt }})"
+        MESSAGE=":white_check_mark: ${{ github.job }} ${{ fromJson(inputs.INFRA_QA_CONFIGURATION)[matrix.node] }} QA runners provisioned successfully in ${{matrix.node}}! (Attempt: #${{ github.run_attempt }})"
+        MESSAGE_ERR=":x: ${{ github.job }} Failed to provision QA runners in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
         echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
         echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
