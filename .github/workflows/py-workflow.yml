@@ -88,7 +88,7 @@ jobs:
         echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
   Pre-commit-38:
-    if: ${{ inputs.pre_commit && startsWith(inputs.PYTHON_VERSION, '3.8') }}
+    if: ${{ !inputs.release  && inputs.pre_commit && startsWith(inputs.PYTHON_VERSION, '3.8') }}
     runs-on: ubuntu-22.04
     needs: [ Pre-build ]
     container:
