@@ -1029,7 +1029,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline-hel0
+    runs-on: ip-hel0-queuer
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
@@ -1427,7 +1427,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline-hel0
+    runs-on: ip-hel0-queuer
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
