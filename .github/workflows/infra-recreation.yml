@@ -27,12 +27,16 @@ on:
         required: true
       ssh_priv_key:
         required: true
+      slack_token_id:
+        required: true
+
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.31"
   PROVISION_INFRA_REPO: "devops-tf-bpg-runners"
   PROVISION_INFRA_VERSION: "dev"
   PROVISION_ENV_CONF_REPO: "devops-tf-env-conf"
   PROVISION_ENV_CONF_VERSION: "feat/DP-1737-2"
+  SLACK_CHANNEL: "C050L85R6VC"
   #INFRA_NODES: '["hel0", "hel1"]'
   #INFRA_IP_CONFIGURATION: '{"hel0": 0,"hel1": 4}'
   #INFRA_QA_CONFIGURATION: '{"hel0": 0,"hel1": 1}'
@@ -145,7 +149,47 @@ jobs:
           aws_key_id_ID: ${{ secrets.aws_key_id }}
           aws_secret_key_id: ${{ secrets.aws_secret_key_id }}
           AWS_DEFAULT_REGION: "us-east-1"
-    
+
+      - name: Get current job id
+        if: always()
+        shell: bash
+        id: job_info
+        run: |
+          sudo apt update
+          sudo apt install gh jq -y
+          job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
+          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
+          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
+
+      - name: Prepare slack variables
+        if: ${{ always() }}
+        id: pre_slack
+        run: |
+          MESSAGE=":white_check_mark: ${{ github.job }} IP runners destroyed (Attempt: #${{ github.run_attempt }})"
+          MESSAGE_ERR=":x: ${{ github.job }} Failed to destroy IP runners (Attempt: #${{ github.run_attempt }})"
+          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+
+      - name: Send Slack Message
+        uses: archive/github-actions-slack@master
+        with:
+          slack-function: send-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-text: ${{ steps.pre_slack.outputs.msg }}
+
+      - name: Send Slack Message
+        uses: archive/github-actions-slack@master
+        if: ${{ failure() }}
+        with:
+          slack-function: send-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-text: ${{ steps.pre_slack.outputs.msg_error }}
+
+
   Provision-IP-Runners:
     needs: Destroy-IP-Runners
     runs-on: infra-runner
@@ -255,6 +299,44 @@ jobs:
         aws_secret_key_id: ${{ secrets.aws_secret_key_id }}
         AWS_DEFAULT_REGION: "us-east-1"
 
+    - name: Get current job id
+      if: always()
+      shell: bash
+      id: job_info
+      run: |
+        sudo apt update
+        sudo apt install gh jq -y
+        job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
+        job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
+        echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+      env:
+        GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
+
+    - name: Prepare slack variables
+      if: ${{ always() }}
+      id: pre_slack
+      run: |
+        MESSAGE=":white_check_mark: ${{ github.job }} IP runners provisioned successfully! (Attempt: #${{ github.run_attempt }})"
+        MESSAGE_ERR=":x: ${{ github.job }} Failed to provision IP runners! (Attempt: #${{ github.run_attempt }})"
+        echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+        echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+
+    - name: Send Slack Message
+      uses: archive/github-actions-slack@master
+      with:
+        slack-function: send-message
+        slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+        slack-channel: ${{ env.SLACK_CHANNEL }}
+        slack-text: ${{ steps.pre_slack.outputs.msg }}
+
+    - name: Send Slack Message
+      uses: archive/github-actions-slack@master
+      if: ${{ failure() }}
+      with:
+        slack-function: send-message
+        slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+        slack-channel: ${{ env.SLACK_CHANNEL }}
+        slack-text: ${{ steps.pre_slack.outputs.msg_error }}
 
   Destroy-QA-Runners:
     runs-on: infra-runner
@@ -364,6 +446,45 @@ jobs:
           aws_secret_key_id: ${{ secrets.aws_secret_key_id }}
           AWS_DEFAULT_REGION: "us-east-1"
   
+      - name: Get current job id
+        if: always()
+        shell: bash
+        id: job_info
+        run: |
+          sudo apt update
+          sudo apt install gh jq -y
+          job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
+          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
+          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
+
+      - name: Prepare slack variables
+        if: ${{ always() }}
+        id: pre_slack
+        run: |
+          MESSAGE=":white_check_mark: ${{ github.job }} QA runners destroyed (Attempt: #${{ github.run_attempt }})"
+          MESSAGE_ERR=":x: ${{ github.job }} Failed to destroy QA runners (Attempt: #${{ github.run_attempt }})"
+          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+
+      - name: Send Slack Message
+        uses: archive/github-actions-slack@master
+        with:
+          slack-function: send-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-text: ${{ steps.pre_slack.outputs.msg }}
+
+      - name: Send Slack Message
+        uses: archive/github-actions-slack@master
+        if: ${{ failure() }}
+        with:
+          slack-function: send-message
+          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-text: ${{ steps.pre_slack.outputs.msg_error }}
+
   Provision-QA-Runners:
     needs: Destroy-QA-Runners
     runs-on: infra-runner
@@ -473,3 +594,41 @@ jobs:
         aws_secret_key_id: ${{ secrets.aws_secret_key_id }}
         AWS_DEFAULT_REGION: "us-east-1"
 
+    - name: Get current job id
+      if: always()
+      shell: bash
+      id: job_info
+      run: |
+        sudo apt update
+        sudo apt install gh jq -y
+        job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
+        job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
+        echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+      env:
+        GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
+
+    - name: Prepare slack variables
+      if: ${{ always() }}
+      id: pre_slack
+      run: |
+        MESSAGE=":white_check_mark: ${{ github.job }} QA runners provisioned successfully! (Attempt: #${{ github.run_attempt }})"
+        MESSAGE_ERR=":x: ${{ github.job }} Failed to provision QA runners! (Attempt: #${{ github.run_attempt }})"
+        echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+        echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+
+    - name: Send Slack Message
+      uses: archive/github-actions-slack@master
+      with:
+        slack-function: send-message
+        slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+        slack-channel: ${{ env.SLACK_CHANNEL }}
+        slack-text: ${{ steps.pre_slack.outputs.msg }}
+
+    - name: Send Slack Message
+      uses: archive/github-actions-slack@master
+      if: ${{ failure() }}
+      with:
+        slack-function: send-message
+        slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
+        slack-channel: ${{ env.SLACK_CHANNEL }}
+        slack-text: ${{ steps.pre_slack.outputs.msg_error }}
