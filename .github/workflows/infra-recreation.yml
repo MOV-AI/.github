@@ -36,7 +36,7 @@ env:
   PROVISION_INFRA_VERSION: "dev"
   PROVISION_ENV_CONF_REPO: "devops-tf-env-conf"
   PROVISION_ENV_CONF_VERSION: "feat/DP-1737-2"
-  SLACK_CHANNEL: "C050L85R6VC"
+  SLACK_CHANNEL: "G0102LEV1CL"
   #INFRA_NODES: '["hel0", "hel1"]'
   #INFRA_IP_CONFIGURATION: '{"hel0": 0,"hel1": 4}'
   #INFRA_QA_CONFIGURATION: '{"hel0": 0,"hel1": 1}'
@@ -146,8 +146,8 @@ jobs:
           sudo chmod 600 ~/.ssh/ci_priv_key.pem
 
         env:
-          aws_key_id_ID: ${{ secrets.aws_key_id }}
-          aws_secret_key_id: ${{ secrets.aws_secret_key_id }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
+          AWS_SECRET_ACCESS_KEY ${{ secrets.aws_secret_key_id }}
           AWS_DEFAULT_REGION: "us-east-1"
 
       - name: Get current job id
@@ -295,8 +295,8 @@ jobs:
         sudo chmod 600 ~/.ssh/ci_priv_key.pem
 
       env:
-        aws_key_id_ID: ${{ secrets.aws_key_id }}
-        aws_secret_key_id: ${{ secrets.aws_secret_key_id }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
+        AWS_SECRET_ACCESS_KEY ${{ secrets.aws_secret_key_id }}
         AWS_DEFAULT_REGION: "us-east-1"
 
     - name: Get current job id
@@ -442,8 +442,8 @@ jobs:
           sudo chmod 600 ~/.ssh/ci_priv_key.pem
 
         env:
-          aws_key_id_ID: ${{ secrets.aws_key_id }}
-          aws_secret_key_id: ${{ secrets.aws_secret_key_id }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
+          AWS_SECRET_ACCESS_KEY ${{ secrets.aws_secret_key_id }}
           AWS_DEFAULT_REGION: "us-east-1"
   
       - name: Get current job id
@@ -590,8 +590,8 @@ jobs:
         sudo chmod 600 ~/.ssh/ci_priv_key.pem
 
       env:
-        aws_key_id_ID: ${{ secrets.aws_key_id }}
-        aws_secret_key_id: ${{ secrets.aws_secret_key_id }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
+        AWS_SECRET_ACCESS_KEY ${{ secrets.aws_secret_key_id }}
         AWS_DEFAULT_REGION: "us-east-1"
 
     - name: Get current job id
