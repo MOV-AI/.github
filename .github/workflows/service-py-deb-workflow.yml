@@ -151,9 +151,10 @@ jobs:
 
     - name: Install build-requirements
       run: |
+        git config --global --add safe.directory $(pwd)
         python3 -m pip install -r build-requirements.txt
         apt-get update && apt-get install -yq make
-        git config --global --add safe.directory $(pwd)
+        make install_bump_requirements
 
     - name: Raise version locally
       id: releasevars
@@ -195,6 +196,7 @@ jobs:
           git config --global --add safe.directory $(pwd)
           python3 -m pip install -r build-requirements.txt
           apt-get update && apt-get install -yq make
+          make install_bump_requirements
 
       - name: Raise version
         id: raise_version
