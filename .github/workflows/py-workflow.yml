@@ -109,7 +109,7 @@ jobs:
           python -m pre_commit run --show-diff-on-failure --color=always --all-files
 
   Pre-commit-other:
-    if: ${{ inputs.pre_commit && !startsWith(inputs.PYTHON_VERSION, '3.8') }}
+    if: ${{ !inputs.release && inputs.pre_commit && !startsWith(inputs.PYTHON_VERSION, '3.8') }}
     needs: [ Pre-build ]
     runs-on: ubuntu-22.04
     container:
