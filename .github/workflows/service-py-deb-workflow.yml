@@ -152,13 +152,12 @@ jobs:
     - name: Install build-requirements
       run: |
         python3 -m pip install -r build-requirements.txt
-        apt-get update && apt-get install -y make
+        apt-get update && apt-get install -yq make
         git config --global --add safe.directory $(pwd)
 
     - name: Raise version locally
       id: releasevars
       run: |
-        make install_bump_requirements &> /dev/null
         export PACKAGE_BUMP=build
         make bump_version
         # read the version from the file after bumping
@@ -195,14 +194,13 @@ jobs:
         run: |
           git config --global --add safe.directory $(pwd)
           python3 -m pip install -r build-requirements.txt
-          apt-get update && apt-get install -y make
+          apt-get update && apt-get install -yq make
 
       - name: Raise version
         id: raise_version
         env:
           PACKAGE_VERSION: ${{ needs.Build.outputs.package_version }}
         run: |
-          make install_bump_requirements &> /dev/null
           export PACKAGE_BUMP=build
           make bump_version
           PACKAGE_VERSION=$(cat .bumpversion.cfg | sed s/' '/''/g | grep 'current_version=' | sed s/'current_version='/''/g)
