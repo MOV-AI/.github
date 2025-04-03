@@ -161,6 +161,7 @@ jobs:
         make install_bump_requirements &> /dev/null
         export PACKAGE_BUMP=build
         make bump_version
+        # read the version from the file after bumping
         PACKAGE_VERSION=$(cat .bumpversion.cfg | sed s/' '/''/g | grep 'current_version=' | sed s/'current_version='/''/g)
         echo "py_pkg_version=$PACKAGE_VERSION" | tee -a $GITHUB_OUTPUT
 
@@ -184,7 +185,7 @@ jobs:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     outputs:
-      package_version: ${{ steps.vars.outputs.py_pkg_version }}
+      package_version: ${{ steps.raise_version.outputs.py_pkg_version }}
       commit_id: ${{ steps.commit_id.outputs.commit_id }}
     steps:
       - name: Checkout
@@ -197,17 +198,13 @@ jobs:
           apt-get update && apt-get install -y make
 
       - name: Raise version
-        if: ${{ inputs.deploy == 'true' }}
+        id: raise_version
         env:
           PACKAGE_VERSION: ${{ needs.Build.outputs.package_version }}
         run: |
           make install_bump_requirements &> /dev/null
           export PACKAGE_BUMP=build
           make bump_version
-
-      - name: Find Package details
-        id: vars
-        run: |
           PACKAGE_VERSION=$(cat .bumpversion.cfg | sed s/' '/''/g | grep 'current_version=' | sed s/'current_version='/''/g)
           echo "py_pkg_version=$PACKAGE_VERSION" | tee -a $GITHUB_OUTPUT
 
@@ -224,8 +221,15 @@ jobs:
       - name: Set branch output
         id: var_branch
         run: |
-          echo "Branch name is: ${GITHUB_REF#refs/heads/}"
-          echo "branch=${GITHUB_REF#refs/heads/}" | tee -a $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" = "pull_request" ];
+          then
+            BRANCH_NAME=${{ github.head_ref }}
+          else
+            BRANCH_NAME=${{ github.ref_name }}
+          fi
+
+          echo "Branch name is: $BRANCH_NAME"
+          echo "branch=$BRANCH_NAME" | tee -a $GITHUB_OUTPUT
 
       - name: Push raised version
         if: ${{ inputs.deploy == 'true' }}
@@ -236,43 +240,11 @@ jobs:
           unprotect_reviews: true
 
       - name: Store commit id of version
+        if: ${{ inputs.deploy == 'true' }}
         id: commit_id
         run: |
           commit_hash=$(git log --format="%H" -n 1)
           echo "commit_id=$commit_hash" | tee -a $GITHUB_OUTPUT
-
-  PublishPypi:
-    needs: [Raise]
-    if: ${{ inputs.release == 'false' }}
-    runs-on: ubuntu-22.04
-    container:
-      image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
-    steps:
-      - name: Download packages
-        uses: actions/download-artifact@v4
-        with:
-          name: packages
-          path: dist/
-
-      - name: Publish package to TestPyPI Experimental (dev branches or PRs)
-        uses: pypa/gh-action-pypi-publish@v1.11.0
-        with:
-          user: ${{ secrets.nexus_publisher_user }}
-          password: ${{ secrets.nexus_publisher_password }}
-          repository-url: https://artifacts.cloud.mov.ai/repository/pypi-experimental/
-          packages-dir: dist/
-
-      - name: Publish package to TestPyPI Testing
-        if: ${{ inputs.deploy == 'true' }}
-        uses: pypa/gh-action-pypi-publish@v1.11.0
-        with:
-          user: ${{ secrets.nexus_publisher_user }}
-          password: ${{ secrets.nexus_publisher_password }}
-          repository-url: https://artifacts.cloud.mov.ai/repository/pypi-integration/
-          packages-dir: dist/
 
   Debian-Pack:
     if: ${{ inputs.release == 'false' }}
@@ -480,6 +452,39 @@ jobs:
       run: |
         echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
+  PublishPypi:
+    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud]
+    if: ${{ inputs.release == 'false' }}
+    runs-on: ubuntu-22.04
+    container:
+      image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: dist/
+
+      - name: Publish package to TestPyPI Experimental (dev branches or PRs)
+        uses: pypa/gh-action-pypi-publish@v1.11.0
+        with:
+          user: ${{ secrets.nexus_publisher_user }}
+          password: ${{ secrets.nexus_publisher_password }}
+          repository-url: https://artifacts.cloud.mov.ai/repository/pypi-experimental/
+          packages-dir: dist/
+
+      - name: Publish package to TestPyPI Testing
+        if: ${{ inputs.deploy == 'true' }}
+        uses: pypa/gh-action-pypi-publish@v1.11.0
+        with:
+          user: ${{ secrets.nexus_publisher_user }}
+          password: ${{ secrets.nexus_publisher_password }}
+          repository-url: https://artifacts.cloud.mov.ai/repository/pypi-integration/
+          packages-dir: dist/
+
   PublishDebian:
     needs: [Raise, Debian-Pack, Debian-Test, SonarCloud]
     if: ${{ inputs.deploy == 'true' }}
@@ -563,8 +568,9 @@ jobs:
             done
 
   Github-Release:
-    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud, PublishDebian]
+    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud, PublishPypi, PublishDebian]
     runs-on: ubuntu-22.04
+    if: ${{ inputs.deploy == 'true' }}
     container:
       image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
       credentials:
@@ -579,7 +585,6 @@ jobs:
           merge-multiple: true
 
       - name: Create Github Release
-        if: ${{ inputs.deploy == 'true' }}
         shell: bash
         run: |
           title="Release of ${{ needs.Raise.outputs.package_version }}"
@@ -597,21 +602,22 @@ jobs:
           for asset in dist/*; do
             # do nothing if folder is empty
             if [[ $asset != "dist/*" ]]; then
-              gh release upload ${{ needs.Debian-Pack.outputs.package_version }} $asset
+              gh release upload ${{ needs.Raise.outputs.package_version }} $asset
             fi
           done
           for asset in artifacts/*; do
             # do nothing if folder is empty
             if [[ $asset != "artifacts/*" ]]; then
-              gh release upload ${{ needs.Debian-Pack.outputs.package_version }} $asset
+              gh release upload ${{ needs.Raise.outputs.package_version }} $asset
             fi
           done
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
   Github-Release-Debian-Upload:
-    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud, PublishDebian, Github-Release]
+    needs: [Raise, Github-Release]
     runs-on: ubuntu-22.04
+    if: ${{ inputs.deploy == 'true' }}
     container:
       image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
       credentials:
@@ -629,7 +635,6 @@ jobs:
           merge-multiple: true
 
       - name: Update Github Release
-        if: ${{ inputs.deploy == 'true' }}
         shell: bash
         run: |
           git config --global --add safe.directory $(pwd)
@@ -640,7 +645,7 @@ jobs:
               # Add sufix of distro to asset name
               asset_renamed=$(basename $asset .deb)_${{ matrix.distro }}.deb
               cp $asset $asset_renamed
-              gh release upload ${{ needs.Debian-Pack.outputs.package_version }} $asset_renamed
+              gh release upload ${{ needs.Raise.outputs.package_version }} $asset_renamed
             fi
           done
         env:
