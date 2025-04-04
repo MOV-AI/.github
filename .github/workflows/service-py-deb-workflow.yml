@@ -273,7 +273,7 @@ jobs:
       env:
         PACKAGE_VERSION: ${{ needs.Raise.outputs.package_version }}
       run: |
-        sudo make install_bump_requirements &> /dev/null
+        sudo make install_bump_requirements &> install_bump_requirements.log
         export PACKAGE_BUMP=build
         make bump_version
         make pack_${{ matrix.distro }}
