@@ -1025,7 +1025,7 @@ jobs:
           then
             echo "simul_tests_infra=simul-${{ inputs.cluster }}-queuer" >> $GITHUB_OUTPUT
           else
-            echo "simul_tests_infra=integration-pipeline" >> $GITHUB_OUTPUT
+            echo "simul_tests_infra=integration-pipeline-${{ inputs.proxmox_cluster_name }}" >> $GITHUB_OUTPUT
           fi
 
   Install-Simulator-Robot:
