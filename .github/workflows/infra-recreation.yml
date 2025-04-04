@@ -51,7 +51,7 @@ jobs:
         if: ${{ always() }}
         id: pre_slack
         run: |
-          MESSAGE="Infrastructure recreating in progress."
+          MESSAGE="Infrastructure recreation in progress :construction:"
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
 
       - name: Send Slack Message
@@ -674,7 +674,7 @@ jobs:
   Run-Status:
     needs: [Provision-IP-Runners, Provision-QA-Runners]
     runs-on: ubuntu-latest
-    if: ${{ always() && ( needs.Provision-IP-Runners.result == 'failure' || needs.Provision-IP-Runners.result == 'cancelled' || needs.Provision-IP-Runners.result == 'skipped' ) }}
+    if: ${{ always() }}
     steps:
       - name: Prepare slack variables
         if: ${{ always() }}
