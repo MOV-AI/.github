@@ -67,6 +67,7 @@ jobs:
     needs: Slack-thread
     runs-on: infra-runner
     strategy:
+      fail-fast: false
       matrix:
         node: ${{ fromJSON( inputs.INFRA_NODES ) }}
     outputs:
@@ -220,6 +221,7 @@ jobs:
     needs: Destroy-IP-Runners
     runs-on: infra-runner
     strategy:
+      fail-fast: false
       matrix:
         node: ${{ fromJSON( inputs.INFRA_NODES ) }}
     outputs:
@@ -372,6 +374,7 @@ jobs:
     needs: Slack-thread
     runs-on: infra-runner
     strategy:
+      fail-fast: false
       matrix:
         node: ${{ fromJSON( inputs.INFRA_NODES ) }}
     outputs:
@@ -524,6 +527,7 @@ jobs:
     needs: Destroy-QA-Runners
     runs-on: infra-runner
     strategy:
+      fail-fast: false
       matrix:
         node: ${{ fromJSON( inputs.INFRA_NODES ) }}
     outputs:
