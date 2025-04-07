@@ -588,8 +588,6 @@ jobs:
         shell: bash
         run: |
           title="Release of ${{ needs.Raise.outputs.package_version }}"
-          git config --global --add safe.directory $(pwd)
-
           gh release create -p -t "$title" \
           -n "Release notes of version ${{ needs.Raise.outputs.package_version }}" \
           --target "${{ needs.Raise.outputs.commit_id }}" \
@@ -637,8 +635,6 @@ jobs:
       - name: Update Github Release
         shell: bash
         run: |
-          git config --global --add safe.directory $(pwd)
-
           for asset in artifacts/*; do
             # do nothing if folder is empty
             if [[ $asset != "artifacts/*" ]]; then
@@ -666,7 +662,6 @@ jobs:
 
       - name: Fetch artifact from github release
         run: |
-          git config --global --add safe.directory $(pwd)
           mkdir dist artifacts
           cd dist
           gh release download ${{ steps.vars.outputs.tag}} -p *.whl
