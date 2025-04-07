@@ -43,6 +43,10 @@ on:
         required: false
         type: boolean
         default: true
+      with_fake_simulation:
+        required: false
+        type: boolean
+        default: false
       with_simulation_tests:
         required: false
         type: boolean
@@ -169,7 +173,7 @@ jobs:
 
           integration-pipeline merge_manifest_multi_dependency $merge_manifest_args
 
-          if [[ "${{ inputs.with_simulation }}" == "true" ]]; then
+          if [[ "${{ inputs.with_simulation }}" == "true" || "${{ inputs.with_fake_simulation }}" == "true" ]]; then
             generate_meta_sim_args="--manifest_platform_base_key product_dependencies.product_base"
             generate_meta_sim_args="$generate_meta_sim_args --product_name ${{ inputs.product_name }}"
             generate_meta_sim_args="$generate_meta_sim_args --update_simulator"
