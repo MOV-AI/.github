@@ -697,7 +697,7 @@ jobs:
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: ${{ env.SLACK_CHANNEL }}
           slack-update-message-text: ${{ steps.pre_slack.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Provision-IP-Runners.outputs.slack_thread_id }}
+          slack-update-message-ts: ${{ needs.Provision-IP-Runners.outputs.slack_thread_id }}
 
       - name: Send Slack Message
         if: ${{ always() && (! needs.Provision-IP-Runners.result == 'success' || ! needs.Provision-QA-Runners.result == 'success') }}
@@ -707,4 +707,4 @@ jobs:
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
           slack-channel: ${{ env.SLACK_CHANNEL }}
           slack-update-message-text: ${{ steps.pre_slack.outputs.msg_err }}
-          slack-optional-thread_ts: ${{ needs.Provision-IP-Runners.outputs.slack_thread_id }}
+          slack-update-message-ts: ${{ needs.Provision-IP-Runners.outputs.slack_thread_id }}
