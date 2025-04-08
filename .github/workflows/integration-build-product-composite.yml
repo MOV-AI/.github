@@ -106,7 +106,7 @@ env:
   REGISTRY: ${{ inputs.docker_registry }}
   PUSH_REGISTRY: registry.cloud.mov.ai
   MID_REGISTRY: registry.hel.mov.ai
-  USERSPACE_FOLDER_PATH: userspace
+  USERSPACE_FOLDER_PATH: /opt/movai/userspace
   REMOTE_WORKSPACE_PATH: workspace
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.0.0-4"
@@ -283,7 +283,7 @@ jobs:
       - name: Lint docker image
         shell: bash
         run: |
-          hadolint docker/${{ matrix.distro }}/Dockerfile -t error
+          docker run --rm -i -e HADOLINT_FAILURE_THRESHOLD=error hadolint/hadolint < docker/${{ matrix.distro }}/Dockerfile
 
       - name: Login to ${{ env.REGISTRY }} Registry
         uses: docker/login-action@v2
@@ -348,6 +348,8 @@ jobs:
         shell: bash
         id: job_info
         run: |
+          sudo apt update
+          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -475,9 +477,9 @@ jobs:
           cp *.json artifacts/
 
           CONFIG_FILE_NAME="standalone-manager-${{ matrix.distro }}-template.json"
-          mkdir -p userspace/models_database/ userspace/tugbot_ignition/
-
-          export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
+          sudo rm -rf $USERSPACE_FOLDER_PATH || true
+          sudo mkdir -p $USERSPACE_FOLDER_PATH $USERSPACE_FOLDER_PATH/models_database $USERSPACE_FOLDER_PATH/tugbot_ignition 
+          sudo chmod 777 -R $USERSPACE_FOLDER_PATH
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
 
           python3 -m venv ci-venv --clear
@@ -548,6 +550,8 @@ jobs:
         shell: bash
         id: job_info
         run: |
+          sudo apt update
+          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -676,7 +680,7 @@ jobs:
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation }}
         shell: bash
         run: |
-          hadolint docker/$DISTRO/Dockerfile-simulator -t error
+          docker run --rm -i -e HADOLINT_FAILURE_THRESHOLD=error hadolint/hadolint < docker/$DISTRO/Dockerfile-simulator
 
       - name: Fetch artifacts
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation }}
@@ -743,6 +747,8 @@ jobs:
         shell: bash
         id: job_info
         run: |
+          sudo apt update
+          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
@@ -903,9 +909,10 @@ jobs:
           mkdir -p artifacts
           cp *.json artifacts/
           CONFIG_FILE_NAME="standalone-manager-${{ matrix.distro }}-simulator-template.json"
-          mkdir -p userspace/models_database/ userspace/tugbot_ignition/
+          sudo rm -rf $USERSPACE_FOLDER_PATH || true
+          sudo mkdir -p $USERSPACE_FOLDER_PATH $USERSPACE_FOLDER_PATH/models_database $USERSPACE_FOLDER_PATH/tugbot_ignition 
+          sudo chmod 777 -R $USERSPACE_FOLDER_PATH
 
-          export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           export SIMULATOR_IP=$PUBLIC_IP
           . ci-venv/bin/activate
@@ -966,6 +973,8 @@ jobs:
         shell: bash
         id: job_info
         run: |
+          sudo apt update
+          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
@@ -1335,6 +1344,8 @@ jobs:
         shell: bash
         id: job_info
         run: |
+          sudo apt update
+          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -1714,6 +1725,8 @@ jobs:
         shell: bash
         id: job_info
         run: |
+          sudo apt update
+          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
