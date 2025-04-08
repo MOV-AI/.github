@@ -125,7 +125,8 @@ jobs:
           pytest \
             --hub_url ${{ inputs.selenoid_server_url }} \
             --base_url https://${{ steps.agent_info.outputs.ip }}/ \
-            --install-platform
+            --install-platform \
+            | tee tests_logs.txt
 
       - name: Save docker container logs
         if: always()
