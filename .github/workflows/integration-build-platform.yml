@@ -362,13 +362,13 @@ jobs:
         run: echo "Pass"
 
   Validation-UI-Tests:
-    needs: [Simulator-Validations]
+    needs: [Standalone-Validations]
     uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v2.3
     secrets: inherit
     with:
       test_infra_key: "ui_tests"
-      slack_thread_id: ${{ needs.Simulator-Validations.outputs.slack_thread_id }}
-      backend_image_name_and_tag: ${{ needs.Simulator-Validations.outputs.backend_image }}
+      slack_thread_id: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Standalone-Validations.outputs.backend_image }}
       test_timeout: 120
       pytest_args: "-ra --hub_url $selendoid_url --base_url https://$host_ip/ --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json --junit-xml=junit.xml"
       xray_label: "UI_Automation"
