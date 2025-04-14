@@ -265,14 +265,13 @@ jobs:
         shell: bash
         env:
           BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
+          selenoid_url: "http://selenoid-ui.hel0.mov.ai"
+          host_ip: ${{ steps.agent_info.outputs.ip }}
+          movai_user: ${{ steps.install.outputs.movai_user }}
+          movai_pwd: ${{ steps.install.outputs.movai_pwd }}
         run: |
           . test-venv/bin/activate
           pip install buildkite-test-collector
-          export selenoid_url="http://selenoid-ui.hel0.mov.ai"
-          export host_ip="${{ steps.agent_info.outputs.ip }}"
-          export movai_user="${{ steps.install.outputs.movai_user }}"
-          export movai_pwd="${{ steps.install.outputs.movai_pwd }}"
-          
           echo "python3 -m pytest ${{ inputs.pytest_args}}" 
           python3 -m pytest ${{ inputs.pytest_args}}
           deactivate
