@@ -87,6 +87,7 @@ env:
 
 jobs:
   Validation-Tests:
+    name: ${{ inputs.test_infra_key }}
     runs-on: integration-pipeline
     steps:
       - name: Cleanup Workspace
@@ -271,15 +272,7 @@ jobs:
         run: |
           . test-venv/bin/activate
           pip install buildkite-test-collector
-          python3 -m pyttest ${{ inputs.pytest_args}}
-          # python3 -m pytest \
-          #   -ra \
-          #   --hub_url $selendoid_url \
-          #   --base_url https://$host_ip/ \
-          #   --movai-user $movai_user \
-          #   --movai-pw $movai_pwd \
-          #   --cucumberjson=./results.json \
-          #   --junit-xml=junit.xml 
+          python3 -m pytest ${{ inputs.pytest_args}}
           deactivate
           
       - name: Publish test results trunk
