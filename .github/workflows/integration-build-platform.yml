@@ -33,6 +33,10 @@ on:
         required: false
         type: string
         default: hel0
+      slack_channel:
+        required: false
+        type: string
+        default: "C05K2KF1UP8"
 
     secrets:
       auto_commit_user:
@@ -368,7 +372,7 @@ jobs:
       test_timeout: 120
       pytest_args: "-ra --hub_url $selendoid_url --base_url https://$host_ip/ --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json --junit-xml=junit.xml"
       xray_label: "UI_Automation"
-      slack_channel: ${{ env.SLACK_CHANNEL }}
+      slack_channel: ${{ inputs.slack_channel }}
 
   Validation-Install-Tests:
     needs: [Standalone-Validations]
