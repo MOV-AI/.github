@@ -56,6 +56,9 @@ on:
 
 env:
   CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.0.0.31"
+  CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.32"
+  MOBTEST_VERSION: "0.0.6.1"
+  PACKAGE_DEPLOYER_VERSION: "1.0.0.25"
   CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
   CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
   GITHUB_API_USR: "OttoMation-Movai"
@@ -302,7 +305,7 @@ jobs:
             . test-venv/bin/activate
             export PATH="$HOME/.local/bin:$PATH"
 
-            if ! xray create ./results.json --version "EE ${{ steps.infra_tests_setup.outputs.platform_version }}" --label UI_Automation ; then
+            if ! xray create ./results.json --version "EE ${{ steps.infra_tests_setup.outputs.platform_version }}" --label ${{ inputs.xray_label}} ; then
                 status="failure"
             fi
 
