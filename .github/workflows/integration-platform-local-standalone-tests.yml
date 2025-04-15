@@ -273,6 +273,17 @@ jobs:
           echo "movai_user=${MOVAI_USER}" >> $GITHUB_OUTPUT
           echo "movai_pwd=${MOVAI_PWD}" >> $GITHUB_OUTPUT
 
+      - name: Run mobtest
+        shell: bash
+        run: |
+          container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
+          docker exec -t "$container_id" bash -c '
+            set -e
+            export PATH="$HOME/.local/bin:$PATH"
+            python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
+            mobtest proj /opt/ros/noetic/share/
+            '
+
       - name: Install dependencies in spawner
         working-directory: ${{ steps.infra_tests_setup.outputs.target_dir }}
         shell: bash
@@ -326,17 +337,6 @@ jobs:
               --org-url-slug "movai" \
               --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
               --junit-paths "junit.xml" # replace this with the path to your junit files
-
-      - name: Run mobtest
-        shell: bash
-        run: |
-          container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
-          docker exec -t "$container_id" bash -c '
-            set -e
-            export PATH="$HOME/.local/bin:$PATH"
-            python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
-            mobtest proj /opt/ros/noetic/share/
-            '
 
       - name: Create Xray test execution
         id: tests_xray
