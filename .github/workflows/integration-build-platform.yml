@@ -356,6 +356,7 @@ jobs:
     uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v2.3
     secrets: inherit
     with:
+      collect_deployable_artifacts: true
       test_infra_key: "ui_tests"
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}

@@ -2,6 +2,10 @@ name: Generic Tests
 on:
   workflow_call:
     inputs:
+      collect_deployable_artifacts:
+        required: false
+        type: boolean
+        default: false
       test_infra_key:
         required: true
         type: string
@@ -414,6 +418,54 @@ jobs:
 
           # spawner (mobros firmware)
           journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
+
+      - name: Collect Installed components
+        if: ${{ inputs.collect_deployable_artifacts}}
+        shell: bash
+        run: |
+          mkdir -p artifacts
+
+          used_images=($(docker images --format "{{.Repository}}:{{.Tag}}" | tr ' ' "\n"))
+          for image in "${used_images[@]}"
+          do
+            image_short_name=$(grep -oP "(?<=/$ENV/).*?(?=:)" <<< "$image" || grep -oP "(?<=/devops/).*?(?=:)" <<< "$image" || true)
+            if [[ "$image_short_name" =~ .*"backend".* || "$image_short_name" =~ .*"spawner".* || "$image_short_name" =~ .*"redis"*.* || "$image_short_name" =~ .*"health-node".* || "" =~ .*"message-server*.*" ]];
+            then
+              echo "scanning $image"
+              container_ids=($(docker ps -q -f "ancestor=$image" | tr ' ' "\n"))
+              for container_id in "${container_ids[@]}"
+              do
+                container_name=$(docker inspect --format="{{.Name}}" $container_id)
+                docker exec -t "$container_id" bash -c '
+                  set -e
+
+                  sudo apt update || apt update
+                  export PATH="$HOME/.local/bin:$PATH"
+                  python3 -m pip install --upgrade pip || wget https://bootstrap.pypa.io/get-pip.py -O - | python3
+                  python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple movai-package-deployer==${{ env.PACKAGE_DEPLOYER_VERSION }}
+                  package-deployer scan
+                  ls -la /tmp
+                ' || true
+                  docker cp $container_id:/tmp/deployable.dploy artifacts/$container_name-noetic-deployable.dploy
+                  docker cp $container_id:/tmp/undeployable.dploy artifacts/$container_name-noetic-3rdParty.dploy
+              done
+            else
+              echo "Skipping scan of $image"
+            fi
+          done
+          . .ci-venv/bin/activate
+          package-deployer scan
+          deactivate
+          cp /tmp/deployable.dploy artifacts/host-noetic-deployable.dploy
+          cp /tmp/undeployable.dploy artifacts/host-noetic-3rdParty.dploy
+  
+      - name: Stash deploy_artifacts_noetic
+        if: ${{ inputs.collect_deployable_artifacts }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy_artifacts_noetic
+          path: artifacts/*.dploy
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Stash QA artifacts
         if: always()
