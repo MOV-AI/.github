@@ -351,71 +351,61 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
-  Standalone-Validations:
-    runs-on: ubuntu-22.04
-    needs: [Build-backend]
-    outputs:
-      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-      backend_image: ${{ needs.Build-backend.outputs.backend_image }}
-    steps:
-      - name: Pass through
-        run: echo "Pass"
-
   Validation-UI-Tests:
-    needs: [Standalone-Validations]
+    needs: [Build-backend]
     uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v2.3
     secrets: inherit
     with:
       test_infra_key: "ui_tests"
-      slack_thread_id: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
-      backend_image_name_and_tag: ${{ needs.Standalone-Validations.outputs.backend_image }}
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 120
       pytest_args: '-ra --hub_url $selenoid_url --base_url https://$host_ip/ --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json --junit-xml=junit.xml'
       xray_label: "UI_Automation"
       slack_channel: ${{ inputs.slack_channel }}
 
   Validation-Install-Tests:
-    needs: [Standalone-Validations]
+    needs: [Build-backend]
     uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v2.3
     secrets: inherit
     with:
       test_infra_key: "install_tests"
-      slack_thread_id: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
-      backend_image_name_and_tag: ${{ needs.Standalone-Validations.outputs.backend_image }}
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 30
       pytest_args: 'tests/ -ra -k $test_set --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --jira_report --junit-xml=junit.xml'  
       slack_channel: ${{ inputs.slack_channel }}
 
   Validation-API-Tests:
-    needs: [Standalone-Validations]
+    needs: [Build-backend]
     uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v2.3
     secrets: inherit
     with:
       test_infra_key: "api_tests"
-      slack_thread_id: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
-      backend_image_name_and_tag: ${{ needs.Standalone-Validations.outputs.backend_image }}
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 30
       pytest_args: 'src --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd -m "not fleet" --junit-xml=junit.xml'
       slack_channel: ${{ inputs.slack_channel }}
 
   Validation-Flow-Tests:
-    needs: [Standalone-Validations]
+    needs: [Build-backend]
     uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v2.3
     secrets: inherit
     with:
       test_infra_key: "flow_tests"
-      slack_thread_id: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
-      backend_image_name_and_tag: ${{ needs.Standalone-Validations.outputs.backend_image }}
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 30
       pytest_args: '-s -ra --movai-user $movai_user --movai-pw $movai_pwd -m "$test_set" --tb=short --junit-xml=junit.xml'
       slack_channel: ${{ inputs.slack_channel }}
 
   Validations-Finish:
-    needs: [Standalone-Validations, Validation-UI-Tests, Validation-Install-Tests, Validation-API-Tests, Validation-Flow-Tests]
+    needs: [Build-backend, Validation-UI-Tests, Validation-Install-Tests, Validation-API-Tests, Validation-Flow-Tests]
     runs-on: ubuntu-22.04
     outputs:
-      slack_thread_id: ${{ needs.Standalone-Validations.outputs.slack_thread_id }}
-      backend_image: ${{ needs.Standalone-Validations.outputs.backend_image }}
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+      backend_image: ${{ needs.Build-backend.outputs.backend_image }}
     steps:
       - name: Pass through
         run: echo "Pass"

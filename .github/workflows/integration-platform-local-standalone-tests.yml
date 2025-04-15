@@ -154,7 +154,7 @@ jobs:
           deactivate
 
           # setup tests venv in a step that is always executed
-          python3 -m venv "${tests_dir}"/test-venv --clear --system-site-packages
+          python3 -m venv "${tests_dir}"/test-venv --clear
           . "${tests_dir}"/test-venv/bin/activate
           pip install -r "${tests_dir}"/requirements.txt
           deactivate
@@ -284,23 +284,6 @@ jobs:
             python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
             mobtest proj /opt/ros/noetic/share/
             '
-
-      - name: Install dependencies in spawner
-        working-directory: ${{ steps.infra_tests_setup.outputs.target_dir }}
-        shell: bash
-        run: |
-          # install test dependencies on spawner
-          if [ -f apt-requirements.txt ]; then
-            ## get spawner container name
-            CONTAINER_ID=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
-            ## get apt dependencies
-            APT_DEPS=$(cat apt-requirements.txt | tr "\n" " ")
-            ## install
-            docker exec -t "${CONTAINER_ID}" bash -c "
-              sudo apt update
-              sudo apt install -y ${APT_DEPS}
-            "
-          fi
 
       - name: Pre-Run-Install-Tests
         if: ${{ inputs.test_infra_key == 'install_tests' }}
@@ -447,7 +430,7 @@ jobs:
           cp -r "${TEST_INFRA_DIR}"/*.{log,tar,json,html} ./qa_artifacts 2>/dev/null || true
           cp -r "${TEST_INFRA_DIR}"/tests_artifacts ./qa_artifacts || true
 
-      - name: Stash QA artifacts
+      - name: Upload QA artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
