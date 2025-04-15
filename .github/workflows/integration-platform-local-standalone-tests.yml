@@ -5,6 +5,10 @@ on:
       test_infra_key:
         required: true
         type: string
+      robot_config:
+        required: false
+        type: string
+        default: 'basic-standalone-noetic.json'
       slack_thread_id:
         required: true
         type: string
@@ -124,7 +128,6 @@ jobs:
         run: |
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/jira_report.txt /tmp/test_set.txt
           . .ci-venv/bin/activate
-          sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
@@ -244,13 +247,14 @@ jobs:
           cp *.json artifacts/
 
           . .ci-venv/bin/activate
-          CONFIG_FILE_NAME="basic-standalone-noetic.json"
+          CONFIG_FILE_NAME="${{ inputs.robot_config}}"
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
           deactivate
           sudo rm -rf $USERSPACE_FOLDER_PATH || true
-          sudo mkdir -p $USERSPACE_FOLDER_PATH
+          sudo mkdir -p $USERSPACE_FOLDER_PATH $USERSPACE_FOLDER_PATH/models_shared
           sudo chmod 777 $USERSPACE_FOLDER_PATH
+          sudo chmod 777 $USERSPACE_FOLDER_PATH/models_shared
           
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
@@ -381,8 +385,8 @@ jobs:
         if: always()
         id: pre_slack_result
         run: |
-          MESSAGE=":white_check_mark:${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
-          MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
+          MESSAGE=":white_check_mark:${{ github.job }}/${{inputs.test_infra_key}} (Attempt: #${{ github.run_attempt }}) job passed"
+          MESSAGE_ERR=":x: ${{ github.job }}/${{inputs.test_infra_key}} (Attempt: #${{ github.run_attempt }}) job failed"
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
           echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
