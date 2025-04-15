@@ -1,4 +1,4 @@
-name: Robotic Tests
+name: Generic Tests
 on:
   workflow_call:
     inputs:
@@ -75,14 +75,6 @@ env:
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
   SLACK_CHANNEL: ${{ inputs.slack_channel }}
-  PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-3"
-  PROVISION_INFRA_DIR: "provision_scripts"
-  MINIO_S3_URL: "https://s3.mov.ai"
-  MINIO_PUBLIC_URL: "https://minio.mov.ai"
-  PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISIONING_ENV_CONF_VERSION: "0.1.0-8"
-  PROVISION_ENV_CONF_DIR: "infra_env_configs"
   ARTIFACTS_RETENTION_DAYS: 15
 
 jobs:
@@ -168,6 +160,7 @@ jobs:
         id: feature_file
         working-directory: ${{ steps.infra_tests_setup.outputs.target_dir }}
         shell: bash
+        if: ${{ inputs.test_infra_key == 'ui_tests' }}
         run: |
           . test-venv/bin/activate
           export PATH="$HOME/.local/bin:$PATH" # needed for reformat-gherkin
@@ -190,6 +183,36 @@ jobs:
         with:
           channel-id: "C02PB9A9F45"
           slack-message: ${{ steps.pre_slack.outputs.msg_error }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+
+      - name: Feature File Validation
+        id: feature_file_install
+        working-directory: ${{ steps.infra_tests_setup.outputs.target_dir }}
+        shell: bash
+        if: ${{ inputs.test_infra_key == 'install_tests' }}
+        run: |
+          . test-venv/bin/activate
+          export PATH="$HOME/.local/bin:$PATH" # needed for reformat-gherkin
+          python3 testcasemanagement/testcase_importer.py --target "${{ steps.infra_tests_setup.outputs.test_set }}"
+          python3 testcasemanagement/feature_file_processor.py --validate
+          deactivate
+
+      - name: Prepare QA Feature File Validation slack message
+        if: always()
+        id: pre_slack_install
+        run: |
+          MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is unstable :rain_cloud: \
+          ${{ github.job }} feature file validation: ${{ steps.feature_file_install.outcome }} \
+          Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+
+      - name: Slack message failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          channel-id: "C02PB9A9F45"
+          slack-message: ${{ steps.pre_slack_install.outputs.msg_error }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
@@ -265,10 +288,11 @@ jobs:
         shell: bash
         env:
           BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
-          selenoid_url: "http://selenoid-ui.hel0.mov.ai"
+          selenoid_url: "http://selenoid-ui.hel.mov.ai"
           host_ip: ${{ steps.agent_info.outputs.ip }}
           movai_user: ${{ steps.install.outputs.movai_user }}
           movai_pwd: ${{ steps.install.outputs.movai_pwd }}
+          test_set: ${{ steps.infra_tests_setup.outputs.test_set }}
         run: |
           . test-venv/bin/activate
           pip install buildkite-test-collector
@@ -287,9 +311,20 @@ jobs:
               --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
               --junit-paths "junit.xml" # replace this with the path to your junit files
 
+      - name: Run mobtest
+        shell: bash
+        run: |
+          container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
+          docker exec -t "$container_id" bash -c '
+            set -e
+            export PATH="$HOME/.local/bin:$PATH"
+            python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
+            mobtest proj /opt/ros/noetic/share/
+            '
+
       - name: Create Xray test execution
         id: tests_xray
-        if: always()
+        if: ${{ always() && inputs.test_infra_key == 'ui_tests' }}
         working-directory: ${{ steps.infra_tests_setup.outputs.target_dir }}
         run: |
           status="success"
