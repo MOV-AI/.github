@@ -240,6 +240,9 @@ jobs:
         if: ${{ inputs.test_infra_key != 'install_tests' }}
         id: install
         shell: bash
+        env:
+          DISPLAY: ":0"
+          SIMULATION_ID: "CI"
         run: |
           timeout 30 movai-cli remove --all || true
 
