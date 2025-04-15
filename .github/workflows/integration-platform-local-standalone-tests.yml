@@ -234,6 +234,7 @@ jobs:
           
 
       - name: Install
+        if: ${{ inputs.test_infra_key != 'install_tests' }}
         id: install
         shell: bash
         run: |
@@ -281,6 +282,14 @@ jobs:
               sudo apt install -y ${APT_DEPS}
             "
           fi
+
+      - name: Pre-Run-Install-Tests
+        if: ${{ inputs.test_infra_key == 'install_tests' }}
+        shell: bash
+        run: |
+          sudo rm -rf $USERSPACE_FOLDER_PATH || true
+          sudo mkdir -p $USERSPACE_FOLDER_PATH/automated_install
+          sudo chmod 777 -R $USERSPACE_FOLDER_PATH
 
       - name: Run tests
         timeout-minutes: ${{ inputs.test_timeout }}
