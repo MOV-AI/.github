@@ -132,7 +132,7 @@ env:
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   TIMEOUT: 720
-  PROVISIONING_ENV_CONF: "0.1.0-10"
+  PROVISIONING_ENV_CONF: "0.1.0-15"
 
 jobs:
   Compute-timeout:
