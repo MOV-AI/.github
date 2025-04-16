@@ -988,15 +988,15 @@ jobs:
       robot_config: 'basic-standalone-ignition-noetic.json'
 
   Robotic-Stack-Integration:
-    needs: [Simulator-Validations]
+    needs: [Simulator-Validations, Build-Simulator]
     uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@v2.2
     secrets: inherit
     with:
       product_name: ${{ inputs.product_name }}
-      slack_thread_id: ${{ needs.Simulator-Validations.outputs.slack_thread_id }}
+      slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
       cluster: ${{ inputs.cluster }}
       debug_simulation_tests_keep_alive: ${{ inputs.debug_simulation_tests_keep_alive }}
-      backend_name: ${{ needs.Simulator-Validations.outputs.backend_image }}
+      backend_name: ${{ needs.Build-Simulator.outputs.backend_image }}
 
   publish:
     needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
