@@ -521,9 +521,11 @@ jobs:
         run: |
           ip=$(terraform output manager_ip_address)
           user=$(terraform output user)
+          members=$(terraform output peers_ip_addresses)
           echo "host_ip=$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
           echo "host_user=$(echo $user | sed "s;\";;g")" >> $GITHUB_OUTPUT
           echo "ssh_connect_string=$(echo $user | sed "s;\";;g")@$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
+          echo "fleet_ips=$(echo $members | sed "s;\";;g")" >> $GITHUB_OUTPUT
 
       - name: Prepare Devops provisioning slack message
         if: always()
@@ -593,31 +595,14 @@ jobs:
           python3 -m pip install -r requirements.txt
           ansible-galaxy install -r requirements.yml --timeout 120
 
-          stripped_ips=$(echo ${{ inputs.fleet_ips }} | sed "s;\[;;g" | sed "s;];;g" | sed "s; ;;g")
           touch ~/.ssh/known_hosts
           sudo chmod 600 ~/.ssh/known_hosts
-          IFS=',' read -r -a stripped_ips_arr <<< $stripped_ips
 
-          manager_ip=${stripped_ips_arr[0]}
-          echo "manager_ip=${manager_ip}" | tee >> $GITHUB_OUTPUT
-
-          for ip in "${stripped_ips_arr[@]}"
-          do
-            if [[ $ip == *"/"* ]]; then
-              ip=${ip%/*}
-            fi
-            ssh-keygen -f ~/.ssh/known_hosts -R $ip
-            ssh-keyscan -H $ip >> ~/.ssh/known_hosts
-          done
-
+          echo "Peer ips:${{ steps.infra_outputs.outputs.fleet_ips }}"
           # Ensure cloud init is done on all the hosts
           members=("manager")
           for i in $(seq 0 $(( ${{ inputs.fleet_number_members}} - 1 ))); do
             members+=("member$i")
-          done
-
-          for fleet_host in ${members[@]}; do
-            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'cloud-init status --wait'
           done
 
           REGISTRY=${{ env.REGISTRY }}
@@ -636,7 +621,6 @@ jobs:
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker tag $SOURCE_TAG $TARGET_TAG_REGISTRY"
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker tag $SOURCE_TAG $TARGET_TAG_MID_REGISTRY"
           done
-          
 
           ansible-playbook install.yml \
             -i ../staging/provisioned_inventory.yml \
