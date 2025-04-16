@@ -107,16 +107,13 @@ env:
   XRAY_SECRET: ${{ secrets.xray_secret}}
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
-  #SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
-  # development slack channel
-  SLACK_CHANNEL: "C05K2KF1UP8"
   PROVISIONING_ENV_VERSION: 0.1.0-12
   PROVISIONING_ENV_REPO: devops-tf-env-conf
   ARTIFACTS_RETENTION_DAYS: 15
 
 jobs:
   Validate-boostrap-configs:
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    runs-on: integration-pipeline
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
@@ -209,7 +206,7 @@ jobs:
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-channel: ${{ inputs.slack_channel }}
           slack-text: ${{ steps.pre_slack.outputs.msg }}
 
       - name: Stash raised_meta
@@ -332,7 +329,7 @@ jobs:
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-channel: ${{ inputs.slack_channel }}
           slack-text: ${{ steps.pre_slack_result.outputs.msg }}
           slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
 
@@ -342,7 +339,7 @@ jobs:
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-channel: ${{ inputs.slack_channel }}
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
           slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
 
@@ -735,7 +732,7 @@ jobs:
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-channel: ${{ inputs.slack_channel }}
           slack-text: ${{ steps.pre_slack_result.outputs.msg }}
           slack-optional-thread_ts: ${{ needs.Build-backend.outputs.slack_thread_id }}
 
@@ -745,7 +742,7 @@ jobs:
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-channel: ${{ inputs.slack_channel }}
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
           slack-optional-thread_ts: ${{ needs.Build-backend.outputs.slack_thread_id }}
 
@@ -942,7 +939,7 @@ jobs:
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-channel: ${{ inputs.slack_channel }}
           slack-text: ${{ steps.pre_slack_result.outputs.msg }}
           slack-optional-thread_ts: ${{ needs.Build-backend.outputs.slack_thread_id }}
 
@@ -952,7 +949,7 @@ jobs:
         with:
           slack-function: send-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-channel: ${{ inputs.slack_channel }}
           slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
           slack-optional-thread_ts: ${{ needs.Build-backend.outputs.slack_thread_id }}
 
@@ -1211,7 +1208,7 @@ jobs:
         with:
           slack-function: update-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-channel: ${{ inputs.slack_channel }}
           slack-update-message-text: ${{ steps.pre_slack.outputs.msg }}
           slack-update-message-ts: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
 
@@ -1243,6 +1240,6 @@ jobs:
         with:
           slack-function: update-message
           slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
+          slack-channel: ${{ inputs.slack_channel }}
           slack-update-message-text: ${{ steps.pre_slack.outputs.msg_error }}
           slack-update-message-ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
