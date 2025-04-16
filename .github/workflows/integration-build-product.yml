@@ -155,7 +155,7 @@ jobs:
           echo "jobtimeout=$calc_jobtimeout" >> $GITHUB_OUTPUT
 
   Validate-boostrap-configs:
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    runs-on: integration-pipeline
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
@@ -305,7 +305,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    runs-on: integration-pipeline
     outputs:
       raised_version: ${{ steps.pre_build.outputs.raised_version }}
       slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
@@ -483,7 +483,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    runs-on: integration-pipeline
     steps:
       - uses: rtCamp/action-cleanup@master
 
@@ -771,7 +771,7 @@ jobs:
 
   Build-Simulator:
     needs: [Validate-boostrap-configs, Build-Spawner]
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    runs-on: integration-pipeline
     env:
       DISTRO: noetic
     outputs:
@@ -966,7 +966,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    runs-on: integration-pipeline
     outputs:
       slack_thread_id: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
       skip_simulator: ${{ needs.Build-Simulator.outputs.skip_simulator }}
@@ -1933,7 +1933,7 @@ jobs:
 
   publish:
     needs: [Install-Robot, Install-Simulator-Robot, Validation-Simulator-Tests]
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    runs-on: integration-pipeline
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
