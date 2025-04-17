@@ -1141,8 +1141,8 @@ jobs:
         shell: bash
         run: |
           echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
-          sudo chmod 600 ~/.ssh/aws_slave.pem
-          sudo apt install jq -y
+          chmod 600 ~/.ssh/aws_slave.pem
+          apt install jq -y
 
           multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..1})
           node_list_str=${multiply_node::-1}
@@ -1531,8 +1531,8 @@ jobs:
         shell: bash
         run: |
           echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
-          sudo chmod 600 ~/.ssh/aws_slave.pem
-          sudo apt install jq -y
+          chmod 600 ~/.ssh/aws_slave.pem
+          apt install jq -y
 
           multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..${{ inputs.multi_vm_fleet_number_members }}})
           node_list_str=${multiply_node::-1}
