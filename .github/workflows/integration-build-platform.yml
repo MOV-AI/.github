@@ -110,7 +110,7 @@ env:
   PROVISIONING_ENV_VERSION: 0.1.0-12
   PROVISIONING_ENV_REPO: devops-tf-env-conf
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "enhancement/terraform-ensure-ssh-access"
+  PROVISION_INFRA_VERSION: "2.0.0-7"
   ARTIFACTS_RETENTION_DAYS: 15
 
 jobs:

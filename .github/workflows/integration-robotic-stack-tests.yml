@@ -20,6 +20,10 @@ on:
         required: false
         type: string
         default: ''
+      slack_channel:
+        required: false
+        type: string
+        default: 'C02PB9A9F45' # rnd-platform
 
     secrets:
       auto_commit_user:
@@ -73,7 +77,7 @@ env:
   XRAY_SECRET: ${{ secrets.xray_secret}}
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
-  SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
+  SLACK_CHANNEL: ${{ inputs.slack_channel }}
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.0.0-3"
   PROVISION_INFRA_DIR: "provision_scripts"
