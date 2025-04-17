@@ -972,7 +972,7 @@ jobs:
       robot_config: 'basic-standalone-ignition-noetic.json'
 
   Robotic-Stack-Integration:
-    needs: [Simulator-Validations,Build-Simulator]
+    needs: [Simulator-Validations, Build-Simulator]
     uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@v2.2
     secrets: inherit
     with:
