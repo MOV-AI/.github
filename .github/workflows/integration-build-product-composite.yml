@@ -109,7 +109,7 @@ env:
   USERSPACE_FOLDER_PATH: /opt/movai/userspace
   REMOTE_WORKSPACE_PATH: workspace
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-7"
+  PROVISION_INFRA_VERSION: "2.0.0-8"
   # slack channel movai-projects
   SLACK_CHANNEL: ${{ inputs.overwrite_slack_channel }}
   # development slack channel
@@ -1140,6 +1140,10 @@ jobs:
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
         run: |
+          echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
+          sudo chmod 600 ~/.ssh/aws_slave.pem
+          sudo apt install jq -y
+
           multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..1})
           node_list_str=${multiply_node::-1}
 
@@ -1166,6 +1170,12 @@ jobs:
 
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
           chmod 600 ~/.ssh/ci_priv_key.pem
+
+      - name: Check tf data fetch output
+        if: failure()
+        shell: bash
+        continue-on-error: true
+        run: cat /tmp/terraform-external-debug.log
 
       - name: Gather Terraform outputs
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -1379,7 +1389,7 @@ jobs:
           exit_status=-1
           while [ $count -lt $attempts ]; do
             var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.cluster }}_fleet_test.tfvars'
-            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars -var "fleet_peer_nr=0" -var "manager_ip_lookup=false"
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
               break
@@ -1520,6 +1530,10 @@ jobs:
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
         run: |
+          echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
+          sudo chmod 600 ~/.ssh/aws_slave.pem
+          sudo apt install jq -y
+
           multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..${{ inputs.multi_vm_fleet_number_members }}})
           node_list_str=${multiply_node::-1}
 
@@ -1547,7 +1561,13 @@ jobs:
 
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
           chmod 600 ~/.ssh/ci_priv_key.pem
-
+      
+      - name: Check tf data fetch output
+        if: failure()
+        shell: bash
+        continue-on-error: true
+        run: cat /tmp/terraform-external-debug.log
+      
       - name: Gather Terraform outputs
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         id: infra_outputs
@@ -1746,7 +1766,7 @@ jobs:
           exit_status=-1
           while [ $count -lt $attempts ]; do
             var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.cluster }}_fleet_test.tfvars'
-            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars -var "fleet_peer_nr=0" -var "manager_ip_lookup=false"
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
               break
