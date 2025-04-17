@@ -110,7 +110,7 @@ env:
   PROVISIONING_ENV_VERSION: 0.1.0-12
   PROVISIONING_ENV_REPO: devops-tf-env-conf
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-7"
+  PROVISION_INFRA_VERSION: "2.0.0-8"
   ARTIFACTS_RETENTION_DAYS: 15
 
 jobs:
@@ -493,6 +493,10 @@ jobs:
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
         run: |
+          echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
+          sudo chmod 600 ~/.ssh/aws_slave.pem
+          sudo apt install jq -y
+
           multiply_node=$(printf '"${{ inputs.proxmox_cluster_name }}",%.0s' {1..${{ steps.infra_names.outputs.total_resources }}})
           node_list_str=${multiply_node::-1}
 
@@ -513,6 +517,12 @@ jobs:
           terraform init -backend-config="key=${{ inputs.proxmox_cluster_name }}-fleet-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
           terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
           terraform refresh $var_file_arg -var-file=input.tfvars
+
+      - name: Check tf data fetch output
+        if: failure()
+        shell: bash
+        continue-on-error: true
+        run: cat /tmp/terraform-external-debug.log
 
       - name: Gather Terraform outputs
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -779,7 +789,7 @@ jobs:
           exit_status=-1
           while [ $count -lt $attempts ]; do
             var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.proxmox_cluster_name }}_fleet_test.tfvars'
-            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars -var "fleet_peer_nr=0" -var "manager_ip_lookup=false"
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
               break
