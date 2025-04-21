@@ -1530,6 +1530,7 @@ jobs:
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
         run: |
+          mkdir -p ~/.ssh
           echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
           chmod 600 ~/.ssh/aws_slave.pem
           apt install jq -y
