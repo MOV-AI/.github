@@ -1277,7 +1277,7 @@ jobs:
           cat ../${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml
           cp -r ../*.json ./templates/fleet/
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
-          ANSIBLE_HOST_KEY_CHECKING=False
+          export ANSIBLE_HOST_KEY_CHECKING=False
           # It is assumed the nb of squads matches the number of members of the fleet
           nb_workers_per_squad=1
           # generate inputs variable file from terraform generated hosts file
@@ -1303,7 +1303,7 @@ jobs:
           rm -rf fleet_qa_artifacts
           mkdir -p fleet_qa_artifacts/install
           source ansible-venv/bin/activate
-          ANSIBLE_HOST_KEY_CHECKING=False
+          export ANSIBLE_HOST_KEY_CHECKING=False
           # install fleet_tests artifacts
           for fleet_host in "manager"; do
             ansible $fleet_host -i hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u movai-service --since "1hour ago"' > fleet_qa_artifacts/install/$fleet_host.log || true
@@ -1671,7 +1671,7 @@ jobs:
           cat ../${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml
           cp -r ../*.json ./templates/fleet/
           cp ../product-manifest.yaml ./templates/fleet/product-manifest.yaml
-          ANSIBLE_HOST_KEY_CHECKING=False
+          export ANSIBLE_HOST_KEY_CHECKING=False
           # It is assumed the nb of squads matches the number of members of the fleet
           nb_workers_per_squad=1
           # generate inputs variable file from terraform generated hosts file
@@ -1696,7 +1696,7 @@ jobs:
           rm -rf fleet_qa_artifacts
           mkdir -p fleet_qa_artifacts/install
           source ansible-venv/bin/activate
-          ANSIBLE_HOST_KEY_CHECKING=False
+          export ANSIBLE_HOST_KEY_CHECKING=False
           # install fleet_tests artifacts
           for fleet_host in "manager" "pallet-worker1" "tugger-worker2"; do
             ansible $fleet_host -i hosts --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u movai-service --since "1hour ago"' > fleet_qa_artifacts/install/$fleet_host.log || true
