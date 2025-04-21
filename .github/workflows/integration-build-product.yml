@@ -123,7 +123,7 @@ env:
   USERSPACE_FOLDER_PATH: /opt/movai/userspace
   REMOTE_WORKSPACE_PATH: workspace
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-3"
+  PROVISION_INFRA_VERSION: "2.0.0-9"
   # slack channel movai-projects
   SLACK_CHANNEL: ${{ inputs.overwrite_slack_channel }}
   # development slack channel
@@ -1487,19 +1487,6 @@ jobs:
           echo "host_user=$(echo $user | sed "s;\";;g")" >> $GITHUB_OUTPUT
           echo "ssh_connect_string=$(echo $user | sed "s;\";;g")@$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
 
-      - name: Configure SSH
-        if: ${{ inputs.with_simulation_tests }}
-        id: remote_ssh_setup
-        shell: bash
-        run: |
-          ssh-keygen -f ~/.ssh/known_hosts -R ${{ steps.infra_outputs.outputs.host_ip }} || true
-          ssh-keyscan -H ${{ steps.infra_outputs.outputs.host_ip }} >> ~/.ssh/known_hosts || true
-
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
-            set -e
-            cloud-init status --wait; rm -rf ./${{ env.REMOTE_WORKSPACE_PATH }}; mkdir -p ./${{ env.REMOTE_WORKSPACE_PATH }}
-          '
-
       - name: Prepare Devops provisioning slack message
         if: ${{ inputs.with_simulation_tests && github.event_name != 'pull_request' }}
         id: pre_slack_infra
@@ -2011,7 +1998,7 @@ jobs:
           exit_status=-1
           while [ $count -lt $attempts ]; do
             var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
-            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars -var "fleet_peer_nr=0" -var "manager_ip_lookup=false"
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
               break
