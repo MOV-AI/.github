@@ -79,7 +79,7 @@ env:
   JIRA_PASSWORD: ${{ secrets.jira_password}}
   SLACK_CHANNEL: ${{ inputs.slack_channel }}
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-3"
+  PROVISION_INFRA_VERSION: "2.0.0-9"
   PROVISION_INFRA_DIR: "provision_scripts"
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
@@ -707,7 +707,7 @@ jobs:
           count=0
           while [ $count -lt $attempts ]; do
             var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
-            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars -var "fleet_peer_nr=0" -var "manager_ip_lookup=false"
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
               break
