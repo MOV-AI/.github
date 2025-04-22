@@ -23,7 +23,7 @@ on:
       slack_channel:
         required: false
         type: string
-        default: 'C02PB9A9F45' # rnd-platform
+        default: 'C02U028NMB7' # rnd-platform
 
     secrets:
       auto_commit_user:
