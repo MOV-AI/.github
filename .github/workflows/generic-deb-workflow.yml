@@ -30,7 +30,7 @@ on:
       test_runner:
         required: false
         type: string
-        default: 'ubuntu-20.04'
+        default: 'ubuntu-22.04'
       prod_publish_repos:  
         required: false  
         type: string  
