@@ -238,6 +238,8 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ];
           then
             BRANCH_NAME=${{ github.head_ref }}
+          elif [ "${{ inputs.is_nightly_run }}" = "true" ]:
+            BRANCH_NAME=${{ inputs.nightly_run_branch }}
           else
             BRANCH_NAME=${{ github.ref_name }}
           fi
