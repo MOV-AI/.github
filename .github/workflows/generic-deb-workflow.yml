@@ -30,7 +30,7 @@ on:
       test_runner:
         required: false
         type: string
-        default: 'ubuntu-20.04'
+        default: 'ubuntu-22.04'
       prod_publish_repos:  
         required: false  
         type: string  
@@ -72,10 +72,24 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
+
     - uses: actions/setup-python@v2
       with:
         python-version: '3.10'
-    - uses: pre-commit/action@v2.0.3
+
+    - name: Check if pre-commit config exists
+      id: check_files
+      uses: andstor/file-existence-action@v3
+      with:
+        files: ".pre-commit-config.yaml"
+
+    - name: Install dependencies
+      if: steps.check_files.outputs.files_exists == 'true'
+      run: pip install pre-commit
+
+    - name: Run pre-commit
+      if: steps.check_files.outputs.files_exists == 'true'
+      run: pre-commit run --show-diff-on-failure --color=always --all-files
 
   Pack:
     runs-on: ubuntu-22.04
