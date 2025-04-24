@@ -36,7 +36,7 @@ jobs:
 
     runs-on: ubuntu-22.04
     container:
-      image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
+      image: registry.aws.cloud.mov.ai/qa/npm-buildserver:v1.0.0
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
