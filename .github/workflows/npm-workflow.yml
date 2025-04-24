@@ -36,7 +36,7 @@ jobs:
 
     runs-on: ubuntu-22.04
     container:
-      image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
+      image: registry.aws.cloud.mov.ai/qa/npm-buildserver:v1.0.0
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -145,7 +145,7 @@ jobs:
         git add package.*
         git push
         commit_hash=$(git log --format="%H" -n 1)
-        echo ::set-output name=commit_id::$commit_hash
+        echo "commit_id=$commit_hash" >> $GITHUB_OUTPUT
 
     - name: Find Package details
       id: vars
@@ -153,8 +153,8 @@ jobs:
         PACKAGE_VERSION=$(cat package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
         PACKAGE_NAME=$(cat package.json | grep name |head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
 
-        echo ::set-output name=npm_pkg_name::$PACKAGE_NAME
-        echo ::set-output name=npm_pkg_version::$PACKAGE_VERSION
+        echo "npm_pkg_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+        echo "npm_pkg_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
 
     - name: Create Github Release
       uses: softprops/action-gh-release@v1
