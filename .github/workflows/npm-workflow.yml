@@ -81,9 +81,6 @@ jobs:
       if: ${{ inputs.run_tests == 'true' }}
       run: npm run test
 
-    - name: APT update
-      run: apt update
-
     - name: Create SonarCloud project and disable autoscan
       uses: MOV-AI/action-sonarcloud-proj-config@v1
       with:
