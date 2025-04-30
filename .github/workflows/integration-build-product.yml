@@ -400,6 +400,7 @@ jobs:
         shell: bash
         run: |
           . .ci-venv/bin/activate
+          sudo apt install jq -y
           # iterate over .json files and update images to use ci image
           for file in $(find . -maxdepth 1 -name "*.json"); do
             echo $file
