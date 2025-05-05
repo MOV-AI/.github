@@ -542,7 +542,7 @@ jobs:
           pip install buildkite-test-collector
           python3 -m pytest \
             -ra \
-            --hub_url http://selenoid-ui.hel0.mov.ai \
+            --hub_url http://selenoid-ui.hel.mov.ai \
             --base_url https://${{ steps.agent_info.outputs.ip }}/ \
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
