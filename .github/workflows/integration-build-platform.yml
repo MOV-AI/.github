@@ -107,7 +107,7 @@ env:
   XRAY_SECRET: ${{ secrets.xray_secret}}
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
-  PROVISIONING_ENV_VERSION: 0.1.0-12
+  PROVISIONING_ENV_VERSION: 0.1.0-15
   PROVISIONING_ENV_REPO: devops-tf-env-conf
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.0.0-9"
@@ -375,7 +375,7 @@ jobs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 30
-      pytest_args: 'tests/ -ra -k $test_set --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --jira_report --junit-xml=junit.xml'  
+      pytest_args: 'tests/ -ra -k $test_set --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --jira_report --junit-xml=junit.xml'
       slack_channel: ${{ inputs.slack_channel }}
 
   Validation-API-Tests:
@@ -1039,7 +1039,7 @@ jobs:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
           registry: ${{ env.REGISTRY }}
-  
+
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
         uses: docker/login-action@v3
         with:
