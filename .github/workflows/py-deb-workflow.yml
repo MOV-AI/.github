@@ -176,7 +176,7 @@ jobs:
     - name: Run tests
       run: |
         apt update
-        apt install -y docker-compose
+        apt install docker-compose-plugin
         docker version
         docker compose version 
         if [ -f tox.ini ]; then
