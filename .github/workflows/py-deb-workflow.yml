@@ -175,6 +175,7 @@ jobs:
 
     - name: Run tests
       run: |
+        docker version
         docker compose version 
         if [ -f tox.ini ]; then
             # run tests and generates coverage.xml
