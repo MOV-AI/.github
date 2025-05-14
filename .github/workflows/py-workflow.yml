@@ -283,17 +283,17 @@ jobs:
   
     - run: python --version --version && which python
 
-    - name: Add deadsnakes PPA
-      run: |
-        sudo apt update
-        sudo apt install -y software-properties-common
-        sudo add-apt-repository -y ppa:deadsnakes/ppa
+    # - name: Add deadsnakes PPA
+    #   run: |
+    #     sudo apt update
+    #     sudo apt install -y software-properties-common
+    #     sudo add-apt-repository -y ppa:deadsnakes/ppa
 
-    - name: Install python
-      run: |
-        sudo apt update
-        sudo apt install -y python3.8 python3.8-distutils
-        curl -sS https://bootstrap.pypa.io/pip/3.8/get-pip.py | python3.8
+    # - name: Install python
+    #   run: |
+    #     sudo apt update
+    #     sudo apt install -y python3.8 python3.8-distutils
+    #     curl -sS https://bootstrap.pypa.io/pip/3.8/get-pip.py | python3.8
 
     - name: Configure pip with custom index
       run: |
@@ -314,10 +314,10 @@ jobs:
         registry: ${{ env.REGISTRY }}
 
     - name: Install build-requirements
-      run: python3.8 -m pip install -r build-requirements.txt
+      run: python3 -m pip install -r build-requirements.txt
 
     - name: Install python package
-      run: python3.8 -m pip install .
+      run: python3 -m pip install .
 
     - name: Run tests
       run: |
@@ -328,7 +328,7 @@ jobs:
             tox
         else
             # run tests
-            python3.8 -m pytest tests/
+            python3 -m pytest tests/
         fi
     
     - name: Upload coverage
