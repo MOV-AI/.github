@@ -265,6 +265,8 @@ jobs:
     if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') && inputs.test_on_host }}
     runs-on: ubuntu-22.04
     # needs: [ Linting-38 ]
+    env:
+      PYTHON_MAJOR_MINOR: ${{ inputs.PYTHON_VERSION.split('.')[0] }}.${{ inputs.PYTHON_VERSION.split('.')[1] }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -274,7 +276,8 @@ jobs:
 
     - uses: deadsnakes/action@v3.2.0
       with:
-        python-version: ${{ inputs.PYTHON_VERSION }}  
+        python-version: ${{ env.PYTHON_MAJOR_MINOR }}
+  
     - run: python --version --version && which python
 
     - name: Add deadsnakes PPA
