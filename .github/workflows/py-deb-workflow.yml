@@ -269,9 +269,6 @@ jobs:
         echo "  artifacts.cloud.mov.ai" >> ~/.config/pip/pip.conf
         echo "  pypi.org" >> ~/.config/pip/pip.conf
   
-    # - name: Set up Docker Compose
-    #   uses: docker/setup-compose-action@v1
-  
     - name: Login to ${{ env.REGISTRY }} Registry
       uses: docker/login-action@v3
       with:
@@ -304,15 +301,11 @@ jobs:
         path: coverage.xml
         retention-days: 5
   
+  # Not necessary to run on containers
   SonarCloud:
     if: ${{ always() && ! inputs.release && (needs.Test-on-container.result == 'success' || needs.Test-on-host.result == 'success') }}
     runs-on: ubuntu-22.04
     needs: [Test-on-container, Test-on-host]
-    # container:
-    #   image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
-    #   credentials:
-    #     username: ${{secrets.registry_user}}
-    #     password: ${{secrets.registry_password}}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -521,7 +514,6 @@ jobs:
         password: ${{ secrets.nexus_publisher_password }}
         repository-url: https://artifacts.cloud.mov.ai/repository/pypi-integration/
 
-
   Debian-Pack:
     if: ${{ always() && ! inputs.release && needs.Build.result == 'success' }}
     needs: [Build]
@@ -723,7 +715,6 @@ jobs:
           user: ${{ secrets.nexus_publisher_user }}
           password: ${{ secrets.nexus_publisher_password }}
           repository-url: https://artifacts.cloud.mov.ai/repository/${{ inputs.prod_publish_pypi }}/
-
 
   Release-Deb:
     needs: [Release-Pypi]
