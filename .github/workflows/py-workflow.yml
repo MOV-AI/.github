@@ -32,6 +32,11 @@ on:
         required: true
         type: string
         default: "3.8.10"
+      test_on_host:
+        required: false
+        type: boolean
+        default: false
+        description: When true the tests are run on the host machine, otherwise they are run inside a container
     secrets:
       auto_commit_user:
         required: false # only when deploy true
@@ -51,6 +56,8 @@ on:
         required: true
       sonar_token:
         required: true
+env:
+  REGISTRY: registry.cloud.mov.ai
 
 jobs:
   RefreshSource:
@@ -138,10 +145,193 @@ jobs:
           git config --global --add safe.directory $(pwd)
           python -m pre_commit run --show-diff-on-failure --color=always --all-files
 
-  Build-38:
+  Linting-38:
     if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') }}
     runs-on: ubuntu-22.04
     needs: [ Pre-build ]
+    container:
+      image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: recursive
+
+    - name: Upgrade pip
+      run: python3 -m pip install pip --upgrade
+
+    - name: Install build-requirements
+      run: |
+        python3 -m pip install -r build-requirements.txt
+        python3 -m pip install build twine
+
+    - name: Run Black
+      if: ${{ inputs.run_black }}
+      run: |
+        python3 -m black \
+          --line-length 100 \
+          --diff \
+          --check \
+          .
+
+    - name: Python Linters
+      run: |
+        python3 -m flake8 \
+          --isolated \
+          --exclude dist,.*\.egg-info,.git,__pycache__,.tox,venv \
+          --max-complexity 10 \
+          --max-line-length 100 \
+          --exit-zero \
+          --output-file flake8-report.txt
+
+        touch dummy-pylint-config
+
+        python3 -m pylint \
+          --rcfile dummy-pylint-config \
+          --ignore-patterns dist,.*\.egg-info,.git,__pycache__,.tox,venv \
+          --max-line-length 100 \
+          --exit-zero \
+          --output pylint-report.txt \
+          .
+
+    - name: Upload tests report
+      uses: actions/upload-artifact@v4
+      with:
+        name: tests-report
+        path: |
+          flake8-report.txt
+          pylint-report.txt
+        retention-days: 5
+
+  Test-on-container-38:
+    if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') }}
+    runs-on: ubuntu-22.04
+    needs: [ Linting-38 ]
+    container:
+      image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: recursive
+    
+    - name: Upgrade pip
+      run: python3 -m pip install pip --upgrade
+
+    - name: Configure pip with custom index
+      run: |
+        mkdir -p ~/.config/pip
+        echo "[global]" > ~/.config/pip/pip.conf
+        echo "index-url = https://artifacts.cloud.mov.ai/repository/pypi-experimental/simple" >> ~/.config/pip/pip.conf
+        echo "extra-index-url =" >> ~/.config/pip/pip.conf
+        echo "  https://pypi.org/simple" >> ~/.config/pip/pip.conf
+        echo "trusted-host =" >> ~/.config/pip/pip.conf
+        echo "  artifacts.cloud.mov.ai" >> ~/.config/pip/pip.conf
+        echo "  pypi.org" >> ~/.config/pip/pip.conf
+
+    - name: Install build-requirements
+      run: |
+        python3 -m pip install -r build-requirements.txt
+
+    - name: Install python package
+      run: python3 -m pip install .
+    
+    - name: Run tests
+      run: |
+        if [ -f tox.ini ]; then
+            # run tests and generates coverage.xml
+            tox
+        else
+            # run tests
+            python3 -m pytest tests/
+        fi
+
+    - name: Upload tests report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage
+        path: coverage.xml
+        retention-days: 5
+
+  Test-on-host-38:
+    if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') }}
+    runs-on: ubuntu-22.04
+    needs: [ Linting-38 ]
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: recursive
+
+    - name: Add deadsnakes PPA
+      run: |
+        sudo apt update
+        sudo apt install -y software-properties-common
+        sudo add-apt-repository -y ppa:deadsnakes/ppa
+
+    - name: Install python
+      run: |
+        sudo apt update
+        sudo apt install -y python3.8 python3.8-distutils
+        curl -sS https://bootstrap.pypa.io/pip/3.8/get-pip.py | python3.8
+
+    - name: Configure pip with custom index
+      run: |
+        mkdir -p ~/.config/pip
+        echo "[global]" > ~/.config/pip/pip.conf
+        echo "index-url = https://artifacts.cloud.mov.ai/repository/pypi-experimental/simple" >> ~/.config/pip/pip.conf
+        echo "extra-index-url =" >> ~/.config/pip/pip.conf
+        echo "  https://pypi.org/simple" >> ~/.config/pip/pip.conf
+        echo "trusted-host =" >> ~/.config/pip/pip.conf
+        echo "  artifacts.cloud.mov.ai" >> ~/.config/pip/pip.conf
+        echo "  pypi.org" >> ~/.config/pip/pip.conf
+  
+    - name: Login to ${{ env.REGISTRY }} Registry
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.registry_user }}
+        password: ${{ secrets.registry_password }}
+        registry: ${{ env.REGISTRY }}
+
+    - name: Install build-requirements
+      run: python3.8 -m pip install -r build-requirements.txt
+
+    - name: Install python package
+      run: python3.8 -m pip install .
+
+    - name: Run tests
+      run: |
+        docker version
+        docker compose version 
+        if [ -f tox.ini ]; then
+            # run tests and generates coverage.xml
+            tox
+        else
+            # run tests
+            python3.8 -m pytest tests/
+        fi
+    
+    - name: Upload coverage
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage
+        path: coverage.xml
+        retention-days: 5
+
+
+  Build-38:
+    if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') }}
+    runs-on: ubuntu-22.04
+    needs: [ Test-on-container-38 , Test-on-host-38 ]
     container:
       image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
       credentials:
@@ -184,55 +374,6 @@ jobs:
 
     - name: Install python package
       run: python3 -m pip install .
-
-    - name: Run Black
-      if: ${{ inputs.run_black }}
-      run: |
-        python3 -m black \
-          --line-length 100 \
-          --diff \
-          --check \
-          .
-
-    - name: Python Linters
-      run: |
-        python3 -m flake8 \
-          --isolated \
-          --exclude dist,.*\.egg-info,.git,__pycache__,.tox,venv \
-          --max-complexity 10 \
-          --max-line-length 100 \
-          --exit-zero \
-          --output-file flake8-report.txt
-
-        touch dummy-pylint-config
-
-        python3 -m pylint \
-          --rcfile dummy-pylint-config \
-          --ignore-patterns dist,.*\.egg-info,.git,__pycache__,.tox,venv \
-          --max-line-length 100 \
-          --exit-zero \
-          --output pylint-report.txt \
-          .
-
-    - name: Run tests
-      run: |
-        if [ -f tox.ini ]; then
-            # run tests and generates coverage.xml
-            tox
-        else
-            # run tests
-            python3 -m pytest tests/
-        fi
-
-    - name: Upload tests report
-      uses: actions/upload-artifact@v4
-      with:
-        name: tests-report
-        path: |
-          coverage.xml
-          flake8-report.txt
-          pylint-report.txt
-        retention-days: 5
 
     - name: Build
       run: |
@@ -455,6 +596,13 @@ jobs:
       with:
         name: tests-report
         path: ./
+    
+    - name: Download coverage
+      if: ${{ startsWith(inputs.PYTHON_VERSION, '3.8')}}
+      uses: actions/download-artifact@v4
+      with:
+        name: coverage
+        path: coverage.xml
 
     - name: Create SonarCloud project and disable autoscan
       uses: MOV-AI/action-sonarcloud-proj-config@v1
