@@ -311,7 +311,6 @@ jobs:
   SonarCloud:
     if: ${{ always() && ! inputs.release && (needs.Test-on-container.result == 'success' || needs.Test-on-host.result == 'success') }}
     runs-on: ubuntu-22.04
-    # needs either test-on-host or test-on-container
     needs: [Test-on-container, Test-on-host]
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
@@ -377,7 +376,7 @@ jobs:
         echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
   Build:
-    if: ${{ ! inputs.release }}
+    if: ${{ always() && ! inputs.release && needs.SonarCloud.result == 'success' }}
     needs: [SonarCloud]
     runs-on: ubuntu-22.04
     container:
