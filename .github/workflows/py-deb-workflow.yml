@@ -236,7 +236,7 @@ jobs:
   Test-on-host:
     if: ${{ ! inputs.release && inputs.test_on_host }}
     runs-on: ubuntu-22.04
-    needs: [Linting]
+    # needs: [Linting]
     steps:
     - name: Checkout
       uses: actions/checkout@v4
