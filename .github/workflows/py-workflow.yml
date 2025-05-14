@@ -57,7 +57,7 @@ on:
       sonar_token:
         required: true
 env:
-  REGISTRY: registry.cloud.mov.ai
+  REGISTRY: "registry.hel.mov.ai"
 
 jobs:
   RefreshSource:
@@ -208,7 +208,7 @@ jobs:
         retention-days: 5
 
   Test-on-container-38:
-    if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') }}
+    if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') && !inputs.test_on_host }}
     runs-on: ubuntu-22.04
     needs: [ Linting-38 ]
     container:
@@ -262,7 +262,7 @@ jobs:
         retention-days: 5
 
   Test-on-host-38:
-    if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') }}
+    if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') && inputs.test_on_host }}
     runs-on: ubuntu-22.04
     needs: [ Linting-38 ]
     steps:
@@ -329,7 +329,7 @@ jobs:
 
 
   Build-38:
-    if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') }}
+    if: ${{ always() && !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') && (needs.Test-on-container-38.result == 'success' || needs.Test-on-host-38.result == 'success') }}
     runs-on: ubuntu-22.04
     needs: [ Test-on-container-38 , Test-on-host-38 ]
     container:
