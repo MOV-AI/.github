@@ -309,7 +309,7 @@ jobs:
         retention-days: 5
   
   SonarCloud:
-    if: ${{ ! inputs.release && (needs.Test-on-container.result == 'success' || needs.Test-on-host.result == 'success') }}
+    if: ${{ always() && ! inputs.release && (needs.Test-on-container.result == 'success' || needs.Test-on-host.result == 'success') }}
     runs-on: ubuntu-22.04
     # needs either test-on-host or test-on-container
     needs: [Test-on-container, Test-on-host]
