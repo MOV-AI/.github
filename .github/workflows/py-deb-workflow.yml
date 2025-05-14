@@ -527,7 +527,7 @@ jobs:
 
 
   Debian-Pack:
-    if: ${{ ! inputs.release }}
+    if: ${{ always() && ! inputs.release && needs.Build.result == 'success' }}
     needs: [Build]
     runs-on: ubuntu-22.04
     container:
@@ -577,7 +577,7 @@ jobs:
 
   Publish:
     needs: [Debian-Pack]
-    if: ${{ inputs.deploy }}
+    if: ${{ always() && inputs.deploy && needs.Debian-Pack.result == 'success' }}
     runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
