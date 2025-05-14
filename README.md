@@ -16,8 +16,8 @@ The images are built using the packer tool and rely on a self-hosted runner whic
 The images are built and tested but not published to GitHub releases or artifacts, instead the images are stored in the runner's filesystem and deployed to the CICD environment.
 
 The images are built for the following platforms:
-- Server and desktop images for Ubuntu 20.04 and 22.04
-- GitHub runner for Ubuntu 20.04 and 22.04
+- Server and desktop images for Ubuntu 22.04
+- GitHub runner for Ubuntu 22.04
 
 ## - name: Build Docker images
 This workflow builds Docker images for CICD usage.

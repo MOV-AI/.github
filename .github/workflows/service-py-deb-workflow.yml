@@ -631,6 +631,9 @@ jobs:
       matrix:
         distro: ${{ fromJSON(inputs.distributions) }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download deb artifacts
         uses: actions/download-artifact@v4
         with:
@@ -641,6 +644,9 @@ jobs:
       - name: Update Github Release
         shell: bash
         run: |
+          git config --global user.name ${{ secrets.auto_commit_user }}
+          git config --global user.email ${{ secrets.auto_commit_mail }}
+          git config --global --add safe.directory $(pwd)
           for asset in artifacts/*; do
             # do nothing if folder is empty
             if [[ $asset != "artifacts/*" ]]; then
