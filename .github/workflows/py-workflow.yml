@@ -265,14 +265,17 @@ jobs:
     if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') && inputs.test_on_host }}
     runs-on: ubuntu-22.04
     # needs: [ Linting-38 ]
-    env:
-      PYTHON_MAJOR_MINOR: ${{ inputs.PYTHON_VERSION.split('.')[0] }}.${{ inputs.PYTHON_VERSION.split('.')[1] }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
         submodules: recursive
+
+    - name: Calculate python version
+      id: python_version
+      run: |
+        echo "PYTHON_MAJOR_MINOR=$(echo ${{ inputs.PYTHON_VERSION }} | cut -d. -f1,2)" >> $GITHUB_ENV
 
     - uses: deadsnakes/action@v3.2.0
       with:
