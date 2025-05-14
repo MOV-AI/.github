@@ -269,6 +269,9 @@ jobs:
     #     echo "trusted-host =" >> ~/.config/pip/pip.conf
     #     echo "  artifacts.cloud.mov.ai" >> ~/.config/pip/pip.conf
     #     echo "  pypi.org" >> ~/.config/pip/pip.conf
+  
+    - name: Set up Docker Compose
+      uses: docker/setup-compose-action@v1
 
     - name: Install build-requirements
       run: python -m pip install -r build-requirements.txt
@@ -278,8 +281,6 @@ jobs:
 
     - name: Run tests
       run: |
-        sudo apt update
-        sudo apt install docker-compose-plugin -y
         docker version
         docker compose version 
         if [ -f tox.ini ]; then
