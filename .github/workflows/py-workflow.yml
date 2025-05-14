@@ -264,7 +264,7 @@ jobs:
   Test-on-host-38:
     if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') && inputs.test_on_host }}
     runs-on: ubuntu-22.04
-    # needs: [ Linting-38 ]
+    needs: [ Linting-38 ]
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -280,20 +280,6 @@ jobs:
     - uses: deadsnakes/action@v3.2.0
       with:
         python-version: ${{ env.PYTHON_MAJOR_MINOR }}
-  
-    - run: python --version --version && which python
-
-    # - name: Add deadsnakes PPA
-    #   run: |
-    #     sudo apt update
-    #     sudo apt install -y software-properties-common
-    #     sudo add-apt-repository -y ppa:deadsnakes/ppa
-
-    # - name: Install python
-    #   run: |
-    #     sudo apt update
-    #     sudo apt install -y python3.8 python3.8-distutils
-    #     curl -sS https://bootstrap.pypa.io/pip/3.8/get-pip.py | python3.8
 
     - name: Configure pip with custom index
       run: |
