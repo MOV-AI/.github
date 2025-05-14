@@ -36,6 +36,11 @@ on:
         required: false
         type: string
         default: "3.8.10"
+      test_on_host:
+        required: false
+        type: boolean
+        default: false
+        description: When true the tests are run on the host machine, otherwise they are run inside a container
     secrets:
       auto_commit_user:
         required: false # only when deploy true
@@ -98,19 +103,14 @@ jobs:
           git config --global --add safe.directory $(pwd)
           python3 -m pre_commit run --show-diff-on-failure --color=always --all-files
 
-  Build:
+  Linting:
     if: ${{ ! inputs.release }}
     runs-on: ubuntu-22.04
     container:
-      # image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
-      # credentials:
-      #   username: ${{secrets.registry_user}}
-      #   password: ${{secrets.registry_password}}
-    outputs:
-      package_name: ${{ steps.bump.outputs.py_pkg_name }}
-      package_version: ${{ steps.bump.outputs.py_pkg_version }}
-      raise_commit : ${{steps.commit_id.outputs.commit_id}}
-
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -118,13 +118,6 @@ jobs:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
         submodules: recursive
-    
-    - name: Login to ${{ env.REGISTRY }} Registry
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.registry_user }}
-        password: ${{ secrets.registry_password }}
-        registry: ${{ env.REGISTRY }}
 
     - uses: actions/setup-python@v5
       with:
@@ -133,22 +126,8 @@ jobs:
     - name: Upgrade pip
       run: python -m pip install pip --upgrade
 
-    - name: Configure pip with custom index
-      run: |
-        mkdir -p ~/.config/pip
-        echo "[global]" > ~/.config/pip/pip.conf
-        echo "index-url = https://artifacts.cloud.mov.ai/repository/pypi-experimental/simple" >> ~/.config/pip/pip.conf
-        echo "extra-index-url =" >> ~/.config/pip/pip.conf
-        echo "  https://pypi.org/simple" >> ~/.config/pip/pip.conf
-        echo "trusted-host =" >> ~/.config/pip/pip.conf
-        echo "  artifacts.cloud.mov.ai" >> ~/.config/pip/pip.conf
-        echo "  pypi.org" >> ~/.config/pip/pip.conf
-
     - name: Install build-requirements
       run: python -m pip install -r build-requirements.txt
-
-    - name: Install python package
-      run: python -m pip install .
 
     - name: Run Black
       if: ${{ inputs.run_black }}
@@ -181,6 +160,121 @@ jobs:
           --exit-zero \
           --output pylint-report.txt \
           .
+      
+    - name: Upload flake8 report
+      uses: actions/upload-artifact@v4
+      with:
+        name: flake8-report
+        path: flake8-report.txt
+        retention-days: 5
+
+    - name: Upload pylint report
+      uses: actions/upload-artifact@v4
+      with:
+        name: pylint-report
+        path: pylint-report.txt
+        retention-days: 5
+
+  Test-on-container:
+    if: ${{ ! inputs.release && ! inputs.test_on_host }}
+    runs-on: ubuntu-22.04
+    needs: [Linting]
+    container:
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        # Disabling shallow clone is recommended for improving relevancy of reporting
+        fetch-depth: 0
+        submodules: recursive
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.PYTHON_VERSION }}
+
+    - name: Upgrade pip
+      run: python -m pip install pip --upgrade
+
+    - name: Configure pip with custom index
+      run: |
+        mkdir -p ~/.config/pip
+        echo "[global]" > ~/.config/pip/pip.conf
+        echo "index-url = https://artifacts.cloud.mov.ai/repository/pypi-experimental/simple" >> ~/.config/pip/pip.conf
+        echo "extra-index-url =" >> ~/.config/pip/pip.conf
+        echo "  https://pypi.org/simple" >> ~/.config/pip/pip.conf
+        echo "trusted-host =" >> ~/.config/pip/pip.conf
+        echo "  artifacts.cloud.mov.ai" >> ~/.config/pip/pip.conf
+        echo "  pypi.org" >> ~/.config/pip/pip.conf
+
+    - name: Install build-requirements
+      run: python -m pip install -r build-requirements.txt
+
+    - name: Install python package
+      run: python -m pip install .
+
+    - name: Run tests
+      run: |
+        if [ -f tox.ini ]; then
+            # run tests and generates coverage.xml
+            tox
+        else
+            # run tests
+            python -m pytest tests/
+        fi
+    
+    - name: Upload coverage
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage
+        path: coverage.xml
+        retention-days: 5
+  
+  Test-on-host:
+    if: ${{ ! inputs.release && inputs.test_on_host }}
+    runs-on: ubuntu-22.04
+    needs: [Linting]
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        # Disabling shallow clone is recommended for improving relevancy of reporting
+        fetch-depth: 0
+        submodules: recursive
+    
+    - name: Login to ${{ env.REGISTRY }} Registry
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.registry_user }}
+        password: ${{ secrets.registry_password }}
+        registry: ${{ env.REGISTRY }}
+  
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.PYTHON_VERSION }}
+
+    - name: Upgrade pip
+      run: python -m pip install pip --upgrade
+
+    - name: Configure pip with custom index
+      run: |
+        mkdir -p ~/.config/pip
+        echo "[global]" > ~/.config/pip/pip.conf
+        echo "index-url = https://artifacts.cloud.mov.ai/repository/pypi-experimental/simple" >> ~/.config/pip/pip.conf
+        echo "extra-index-url =" >> ~/.config/pip/pip.conf
+        echo "  https://pypi.org/simple" >> ~/.config/pip/pip.conf
+        echo "trusted-host =" >> ~/.config/pip/pip.conf
+        echo "  artifacts.cloud.mov.ai" >> ~/.config/pip/pip.conf
+        echo "  pypi.org" >> ~/.config/pip/pip.conf
+
+    - name: Install build-requirements
+      run: python -m pip install -r build-requirements.txt
+
+    - name: Install python package
+      run: python -m pip install .
 
     - name: Run tests
       run: |
@@ -195,6 +289,49 @@ jobs:
             # run tests
             python -m pytest tests/
         fi
+    
+    - name: Upload coverage
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage
+        path: coverage.xml
+        retention-days: 5
+  
+  SonarCloud:
+    if: ${{ ! inputs.release }}
+    runs-on: ubuntu-22.04
+    # needs either test-on-host or test-on-container
+    needs: [Test-on-container, Test-on-host]
+    container:
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        # Disabling shallow clone is recommended for improving relevancy of reporting
+        fetch-depth: 0
+        submodules: recursive
+
+    - name: Download coverage
+      uses: actions/download-artifact@v4
+      with:
+        name: coverage
+        path: coverage.xml
+
+    - name: Download flake8 report
+      uses: actions/download-artifact@v4
+      with:
+        name: flake8-report
+        path: flake8-report.txt
+    
+    - name: Download pylint report
+      uses: actions/download-artifact@v4
+      with:
+        name: pylint-report
+        path: pylint-report.txt
 
     - name: Create SonarCloud project and disable autoscan
       uses: MOV-AI/action-sonarcloud-proj-config@v1
@@ -222,11 +359,57 @@ jobs:
           -Dsonar.python.flake8.reportPaths=flake8-report.txt
           -Dsonar.python.pylint.reportPaths=pylint-report.txt
           -Dsonar.python.coverage.reportPaths=coverage.xml
-
+      
     - name: Link to SonarCloud dashboard
       shell: bash
       run: |
         echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
+
+  Build:
+    if: ${{ ! inputs.release }}
+    needs: [SonarCloud]
+    runs-on: ubuntu-22.04
+    container:
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    outputs:
+      package_name: ${{ steps.bump.outputs.py_pkg_name }}
+      package_version: ${{ steps.bump.outputs.py_pkg_version }}
+      raise_commit : ${{steps.commit_id.outputs.commit_id}}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        # Disabling shallow clone is recommended for improving relevancy of reporting
+        fetch-depth: 0
+        submodules: recursive
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.PYTHON_VERSION }}
+
+    - name: Upgrade pip
+      run: python -m pip install pip --upgrade
+
+    - name: Configure pip with custom index
+      run: |
+        mkdir -p ~/.config/pip
+        echo "[global]" > ~/.config/pip/pip.conf
+        echo "index-url = https://artifacts.cloud.mov.ai/repository/pypi-experimental/simple" >> ~/.config/pip/pip.conf
+        echo "extra-index-url =" >> ~/.config/pip/pip.conf
+        echo "  https://pypi.org/simple" >> ~/.config/pip/pip.conf
+        echo "trusted-host =" >> ~/.config/pip/pip.conf
+        echo "  artifacts.cloud.mov.ai" >> ~/.config/pip/pip.conf
+        echo "  pypi.org" >> ~/.config/pip/pip.conf
+
+    - name: Install build-requirements
+      run: python -m pip install -r build-requirements.txt
+
+    - name: Install python package
+      run: python -m pip install .
 
     - name: Raise version
       id: bump
