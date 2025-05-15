@@ -237,8 +237,8 @@ jobs:
         path: coverage.xml
         retention-days: 5
 
-  Test-on-host-38:
-    if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') && inputs.test_on_host }}
+  Test-on-host:
+    if: ${{ !inputs.release && inputs.test_on_host }}
     runs-on: ubuntu-22.04
     needs: [ Linting ]
     steps:
@@ -249,13 +249,22 @@ jobs:
         submodules: recursive
 
     - name: Calculate python version
+      if: ${{ startsWith(inputs.PYTHON_VERSION, '3.8') }}
       id: python_version
       run: |
         echo "PYTHON_MAJOR_MINOR=$(echo ${{ inputs.PYTHON_VERSION }} | cut -d. -f1,2)" >> $GITHUB_ENV
 
-    - uses: deadsnakes/action@v3.2.0
+    - name: Setup python3.8
+      if: ${{ startsWith(inputs.PYTHON_VERSION, '3.8') }}
+      uses: deadsnakes/action@v3.2.0
       with:
         python-version: ${{ env.PYTHON_MAJOR_MINOR }}
+
+    - name: Setup python3.10
+      if: ${{ !startsWith(inputs.PYTHON_VERSION, '3.8') }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.PYTHON_VERSION }}
 
     - name: Configure pip with custom index
       run: |
@@ -301,9 +310,9 @@ jobs:
         retention-days: 5
 
   Build-38:
-    if: ${{ always() && !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') && (needs.Test-on-container.result == 'success' || needs.Test-on-host-38.result == 'success') }}
+    if: ${{ always() && !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') && (needs.Test-on-container.result == 'success' || needs.Test-on-host.result == 'success') }}
     runs-on: ubuntu-22.04
-    needs: [ Test-on-container , Test-on-host-38 ]
+    needs: [ Test-on-container , Test-on-host ]
     container:
       image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
       credentials:
@@ -401,9 +410,9 @@ jobs:
           dist/*
 
   Build-other:
-    if: ${{ !inputs.release && !startsWith(inputs.PYTHON_VERSION, '3.8') }}
+    if: ${{ always() && !inputs.release && !startsWith(inputs.PYTHON_VERSION, '3.8') && (needs.Test-on-container.result == 'success' || needs.Test-on-host.result == 'success') }}
     runs-on: ubuntu-22.04
-    needs: [ Test-on-container ]
+    needs: [ Test-on-container , Test-on-host ]
     container:
       image: python:${{ inputs.PYTHON_VERSION }}
 
