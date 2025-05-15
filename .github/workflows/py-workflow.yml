@@ -145,12 +145,12 @@ jobs:
           git config --global --add safe.directory $(pwd)
           python -m pre_commit run --show-diff-on-failure --color=always --all-files
 
-  Linting-38:
-    if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') }}
+  Linting:
+    if: ${{ !inputs.release }}
     runs-on: ubuntu-22.04
     needs: [ Pre-build ]
     container:
-      image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      image: ${{ startsWith(inputs.PYTHON_VERSION, '3.8') && 'registry.cloud.mov.ai/qa/py-buildserver:v3.0.4' || format('python:{0}', inputs.PYTHON_VERSION) }}
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -207,12 +207,12 @@ jobs:
           pylint-report.txt
         retention-days: 5
 
-  Test-on-container-38:
-    if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') && !inputs.test_on_host }}
+  Test-on-container:
+    if: ${{ !inputs.release && !inputs.test_on_host }}
     runs-on: ubuntu-22.04
-    needs: [ Linting-38 ]
+    needs: [ Linting ]
     container:
-      image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      image: ${{ startsWith(inputs.PYTHON_VERSION, '3.8') && 'registry.cloud.mov.ai/qa/py-buildserver:v3.0.4' || format('python:{0}', inputs.PYTHON_VERSION) }}
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -264,7 +264,7 @@ jobs:
   Test-on-host-38:
     if: ${{ !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') && inputs.test_on_host }}
     runs-on: ubuntu-22.04
-    needs: [ Linting-38 ]
+    needs: [ Linting ]
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -324,11 +324,10 @@ jobs:
         path: coverage.xml
         retention-days: 5
 
-
   Build-38:
-    if: ${{ always() && !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') && (needs.Test-on-container-38.result == 'success' || needs.Test-on-host-38.result == 'success') }}
+    if: ${{ always() && !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') && (needs.Test-on-container.result == 'success' || needs.Test-on-host-38.result == 'success') }}
     runs-on: ubuntu-22.04
-    needs: [ Test-on-container-38 , Test-on-host-38 ]
+    needs: [ Test-on-container , Test-on-host-38 ]
     container:
       image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
       credentials:
@@ -428,7 +427,7 @@ jobs:
   Build-other:
     if: ${{ !inputs.release && !startsWith(inputs.PYTHON_VERSION, '3.8') }}
     runs-on: ubuntu-22.04
-    needs: [ Pre-build]
+    needs: [ Test-on-container ]
     container:
       image: python:${{ inputs.PYTHON_VERSION }}
 
@@ -468,53 +467,11 @@ jobs:
     - name: Install python package
       run: python -m pip install .
 
-    - name: Run Black
-      if: ${{ inputs.run_black }}
-      run: |
-        python -m black \
-          --line-length 100 \
-          --diff \
-          --check \
-          .
-
-    - name: Python Linters
-      run: |
-        python -m flake8 \
-          --isolated \
-          --exclude dist,.*\.egg-info,.git,__pycache__,.tox,venv \
-          --max-complexity 10 \
-          --max-line-length 100 \
-          --exit-zero \
-          --output-file flake8-report.txt
-
-        touch dummy-pylint-config
-
-        python -m pylint \
-          --rcfile dummy-pylint-config \
-          --ignore-patterns dist,.*\.egg-info,.git,__pycache__,.tox,venv \
-          --max-line-length 100 \
-          --exit-zero \
-          --output pylint-report.txt \
-          .
-
-    - name: Run tests
-      run: |
-        if [ -f tox.ini ]; then
-            # run tests and generates coverage.xml
-            tox
-        else
-            # run tests
-            python -m pytest tests/
-        fi
-
     - name: Upload tests report
       uses: actions/upload-artifact@v4
       with:
-        name: tests-report
-        path: |
-          coverage.xml
-          flake8-report.txt
-          pylint-report.txt
+        name: coverage
+        path: coverage.xml
         retention-days: 5
 
     - name: Build
@@ -595,7 +552,6 @@ jobs:
         path: ./
     
     - name: Download coverage
-      if: ${{ startsWith(inputs.PYTHON_VERSION, '3.8')}}
       uses: actions/download-artifact@v4
       with:
         name: coverage
