@@ -161,6 +161,17 @@ jobs:
 
     - name: Upgrade pip
       run: python3 -m pip install pip --upgrade
+    
+    - name: Configure pip with custom index
+      run: |
+        mkdir -p ~/.config/pip
+        echo "[global]" > ~/.config/pip/pip.conf
+        echo "index-url = https://artifacts.cloud.mov.ai/repository/pypi-experimental/simple" >> ~/.config/pip/pip.conf
+        echo "extra-index-url =" >> ~/.config/pip/pip.conf
+        echo "  https://pypi.org/simple" >> ~/.config/pip/pip.conf
+        echo "trusted-host =" >> ~/.config/pip/pip.conf
+        echo "  artifacts.cloud.mov.ai" >> ~/.config/pip/pip.conf
+        echo "  pypi.org" >> ~/.config/pip/pip.conf
 
     - name: Install build-requirements
       run: |
