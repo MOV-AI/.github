@@ -74,10 +74,7 @@ jobs:
     if: ${{ !inputs.release }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
+      image: python:${{ inputs.PYTHON_VERSION }}
     outputs:
       branch: ${{ steps.var_branch.outputs.branch }}
     steps:
@@ -94,35 +91,8 @@ jobs:
         echo "Branch name is: ${GITHUB_REF#refs/heads/}"
         echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
-  Pre-commit-38:
-    if: ${{ !inputs.release  && inputs.pre_commit && startsWith(inputs.PYTHON_VERSION, '3.8') }}
-    runs-on: ubuntu-22.04
-    needs: [ Pre-build ]
-    container:
-      image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: recursive
-
-      - name: Install dependencies and package
-        run: |
-          python3 -m pip install pip pre-commit --upgrade
-          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r build-requirements.txt
-          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple .
-
-      - name: Run pre-commit
-        run: |
-          git config --global --add safe.directory $(pwd)
-          python3 -m pre_commit run --show-diff-on-failure --color=always --all-files
-
-  Pre-commit-other:
-    if: ${{ !inputs.release && inputs.pre_commit && !startsWith(inputs.PYTHON_VERSION, '3.8') }}
+  Pre-commit:
+    if: ${{ !inputs.release && inputs.pre_commit }}
     needs: [ Pre-build ]
     runs-on: ubuntu-22.04
     container:
@@ -221,10 +191,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: [ Linting ]
     container:
-      image: ${{ startsWith(inputs.PYTHON_VERSION, '3.8') && 'registry.cloud.mov.ai/qa/py-buildserver:v3.0.4' || format('python:{0}', inputs.PYTHON_VERSION) }}
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
+      image: python:${{ inputs.PYTHON_VERSION }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
