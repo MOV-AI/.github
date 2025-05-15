@@ -152,8 +152,8 @@ jobs:
     container:
       image: ${{ startsWith(inputs.PYTHON_VERSION, '3.8') && 'registry.cloud.mov.ai/qa/py-buildserver:v3.0.4' || format('python:{0}', inputs.PYTHON_VERSION) }}
       credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
+        username: ${{ startsWith(inputs.PYTHON_VERSION, '3.8') && secrets.registry_user || '' }}
+        password: ${{ startsWith(inputs.PYTHON_VERSION, '3.8') && secrets.registry_password || ''}}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
