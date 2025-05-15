@@ -148,6 +148,9 @@ jobs:
         python3 -m pip install -r build-requirements.txt
         python3 -m pip install build twine
 
+    - name: Install python package
+      run: python3 -m pip install .
+
     - name: Run Black
       if: ${{ inputs.run_black }}
       run: |
