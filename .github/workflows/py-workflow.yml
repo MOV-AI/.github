@@ -310,7 +310,7 @@ jobs:
         retention-days: 5
 
   Build:
-    if: ${{ always() && !inputs.release && startsWith(inputs.PYTHON_VERSION, '3.8') && (needs.Test-on-container.result == 'success' || needs.Test-on-host.result == 'success') }}
+    if: ${{ always() && (needs.Test-on-container.result == 'success' || needs.Test-on-host.result == 'success') }}
     runs-on: ubuntu-22.04
     needs: [ Test-on-container , Test-on-host ]
     container:
