@@ -84,7 +84,7 @@ env:
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISIONING_ENV_CONF_VERSION: "0.1.0-8"
+  PROVISIONING_ENV_CONF_VERSION: "0.1.0-15"
   PROVISION_ENV_CONF_DIR: "infra_env_configs"
 
 jobs:
