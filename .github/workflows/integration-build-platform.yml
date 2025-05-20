@@ -40,6 +40,10 @@ on:
         #default: "C02U028NMB7" # rnd-platform
         # development slack channel
         #default: "C05K2KF1UP8"
+      simulation_qa_key:
+        required: false
+        type: string
+        default: "simulator_tests"
     secrets:
       auto_commit_user:
         required: true
@@ -991,6 +995,7 @@ jobs:
       cluster: ${{ inputs.cluster }}
       debug_simulation_tests_keep_alive: ${{ inputs.debug_simulation_tests_keep_alive }}
       backend_name: ${{ needs.Build-Simulator.outputs.backend_image }}
+      simulation_qa_key: ${{ inputs.simulation_qa_key }}
 
   publish:
     needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]

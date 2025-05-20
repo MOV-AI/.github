@@ -24,6 +24,10 @@ on:
         required: false
         type: string
         default: 'C02U028NMB7' # rnd-platform
+      simulation_qa_key:
+        required: false
+        type: string
+        default: "simulator_tests"
 
     secrets:
       auto_commit_user:
@@ -366,7 +370,7 @@ jobs:
               --gh_api_pwd ${{ secrets.auto_commit_pwd }}
           '
 
-      - name: Remote - Setup Integration tests
+      - name: Remote - Setup Integration tests ${{ inputs.simulation_qa_key }}
         id: simulator_tests_setup
         shell: bash
         run: |
@@ -374,7 +378,7 @@ jobs:
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            qa_key=simulator_tests
+            qa_key=${{ inputs.simulation_qa_key }}
 
             docker run -u root \
               -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
