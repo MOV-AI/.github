@@ -452,42 +452,9 @@ jobs:
       run: |
         echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
-  PublishPypi:
+  PublishDebToDev:
     needs: [Raise, Debian-Pack, Debian-Test, SonarCloud]
     if: ${{ inputs.release == 'false' }}
-    runs-on: ubuntu-22.04
-    container:
-      image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
-    steps:
-      - name: Download packages
-        uses: actions/download-artifact@v4
-        with:
-          name: packages
-          path: dist/
-
-      - name: Publish package to TestPyPI Experimental (dev branches or PRs)
-        uses: pypa/gh-action-pypi-publish@v1.11.0
-        with:
-          user: ${{ secrets.nexus_publisher_user }}
-          password: ${{ secrets.nexus_publisher_password }}
-          repository-url: https://artifacts.cloud.mov.ai/repository/pypi-experimental/
-          packages-dir: dist/
-
-      - name: Publish package to TestPyPI Testing
-        if: ${{ inputs.deploy == 'true' }}
-        uses: pypa/gh-action-pypi-publish@v1.11.0
-        with:
-          user: ${{ secrets.nexus_publisher_user }}
-          password: ${{ secrets.nexus_publisher_password }}
-          repository-url: https://artifacts.cloud.mov.ai/repository/pypi-integration/
-          packages-dir: dist/
-
-  PublishDebian:
-    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud]
-    if: ${{ inputs.deploy == 'true' }}
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.distributions) }}
@@ -510,7 +477,6 @@ jobs:
         run: |
             NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
             NEXUS_REPO="ppa-devel-${{ matrix.distro }}"
-
             for file in artifacts/*.deb
             do
               RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
@@ -535,6 +501,74 @@ jobs:
                 exit 1
               fi
             done
+
+  PublishPyPiToExperimental:
+    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud]
+    if: ${{ inputs.release == 'false' }}
+    runs-on: ubuntu-22.04
+    container:
+      image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: dist/
+
+      - name: Publish package to TestPyPI Experimental (dev branches or PRs)
+        uses: pypa/gh-action-pypi-publish@v1.11.0
+        with:
+          user: ${{ secrets.nexus_publisher_user }}
+          password: ${{ secrets.nexus_publisher_password }}
+          repository-url: https://artifacts.cloud.mov.ai/repository/pypi-experimental/
+          packages-dir: dist/
+
+  PublishPyPiToIntegration:
+    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud]
+    if: ${{ inputs.deploy == 'true' }}
+    runs-on: ubuntu-22.04
+    container:
+      image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: dist/
+
+      - name: Publish package to TestPyPI Integration
+        uses: pypa/gh-action-pypi-publish@v1.11.0
+        with:
+          user: ${{ secrets.nexus_publisher_user }}
+          password: ${{ secrets.nexus_publisher_password }}
+          repository-url: https://artifacts.cloud.mov.ai/repository/pypi-integration/
+          packages-dir: dist/
+
+  PublishDebToStaging:
+    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud]
+    if: ${{ inputs.deploy == 'true' }}
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(inputs.distributions) }}
+    runs-on: ubuntu-22.04
+    container:
+      image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+      - name: Download deb artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: deb_artifacts_${{ matrix.distro }}
+          path: artifacts
+          merge-multiple: true
 
       - name: Publish to Nexus ppa-testing
         shell: bash
@@ -568,7 +602,7 @@ jobs:
             done
 
   Github-Release:
-    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud, PublishPypi, PublishDebian]
+    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud, PublishPyPiToIntegration, PublishDebToStaging]
     runs-on: ubuntu-22.04
     if: ${{ inputs.deploy == 'true' }}
     container:
