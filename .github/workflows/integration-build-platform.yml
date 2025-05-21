@@ -403,7 +403,7 @@ jobs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 30
-      pytest_args: '-s -ra --movai-user $movai_user --movai-pw $movai_pwd -m "$test_set" --tb=short --junit-xml=junit.xml'
+      pytest_args: '-ra --movai-user $movai_user --movai-pw $movai_pwd -m "$test_set" --tb=short --junit-xml=junit.xml'
       slack_channel: ${{ inputs.slack_channel }}
 
   Validations-Finish:
@@ -981,7 +981,7 @@ jobs:
       slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-Simulator.outputs.backend_image }}
       test_timeout: 30
-      pytest_args: '-s -ra --movai-user $movai_user --movai-pw $movai_pwd -m "$test_set" --tb=short --junit-xml=junit.xml'
+      pytest_args: '-ra --movai-user $movai_user --movai-pw $movai_pwd -m "$test_set" --tb=short --junit-xml=junit.xml'
       slack_channel: ${{ inputs.slack_channel }}
       robot_config: 'basic-standalone-ignition-noetic.json'
 
