@@ -2,6 +2,9 @@ name: Robotic Component pipeline
 on:
   workflow_call:
     inputs:
+      component_name:
+        required: true
+        type: string
       vs_product_name:
         required: true
         type: string
@@ -14,6 +17,14 @@ on:
       test_name:
         required: true
         type: string
+      cluster:
+        required: false
+        default: "mary"
+        type: string
+      debug_component_tests_keep_alive:
+        required: false
+        default: false
+        type: boolean
 
     secrets:
       auto_commit_user:
@@ -34,187 +45,433 @@ env:
   GITHUB_API_USR: "OttoMation-Movai"
   USERSPACE_FOLDER_PATH: userspace
   REMOTE_WORKSPACE_PATH: workspace
+  CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.0.0.31"
+  CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
+  CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
+  # AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
+  # AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
+  # AWS_DEFAULT_REGION: "us-east-1"
+  REGISTRY: registry.cloud.mov.ai
+  # MID_REGISTRY: registry.hel.mov.ai
+  # SIMULATION_ID: CI
+  # XRAY_CLIENTID: ${{ secrets.xray_clientid}}
+  # XRAY_SECRET: ${{ secrets.xray_secret}}
+  # JIRA_USERNAME: ${{ secrets.jira_username}}
+  # JIRA_PASSWORD: ${{ secrets.jira_password}}
+  # SLACK_CHANNEL: ${{ inputs.slack_channel }}
+  PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
+  PROVISION_INFRA_VERSION: "2.0.0-3"
+  PROVISION_INFRA_DIR: "provision_scripts"
+  # MINIO_S3_URL: "https://s3.mov.ai"
+  # MINIO_PUBLIC_URL: "https://minio.mov.ai"
+  PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
+  PROVISIONING_ENV_CONF_VERSION: "0.1.0-15"
+  PROVISION_ENV_CONF_DIR: "infra_env_configs"
 
 jobs:
   Platform-tests:
-    runs-on: integration-pipeline-hel0
+    runs-on: simul-${{ inputs.cluster }}-queuer
 
     steps:
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install CI Scripts in container
-        shell: bash
-        run: |
-          python3 -m venv ci_scripts --clear
-          source ci_scripts/bin/activate
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-          deactivate
 
-      - name: Download component artifacts for patching
-        if: inputs.download_artifact
-        uses: actions/download-artifact@v4
+
+      - name: Login to Private Registry
+        uses: docker/login-action@v2
         with:
-          name: component_artifacts
-          path: component_artifacts
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.REGISTRY }}
 
-      - name: fetch platform version
+      - name: Create execution folder
         shell: bash
         run: |
-          source ci_scripts/bin/activate
+          sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+          mkdir  -p ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+          sudo chmod -R 777 ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
-          rm -rf product
-          mkdir -p product
-          integration-pipeline fetch_product_by_version \
-                --product_version_search ${{ inputs.vs_product_version_pattern}} \
-                --repo ${{ inputs.vs_product_name }} \
-                --gh_api_user ${{ secrets.auto_commit_user }} \
-                --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
-                --target_dir product
-
-
-      - name: calculate robot.json to use
+      - name: Setup infra environment configs
+        id: infra_env_configs_setup
         shell: bash
         run: |
-          PRODUCT=${{ inputs.vs_product_name }}
-          QUICKSTART_VERSION=$(cat product/quickstart_version.txt)
-          if [[ "$PRODUCT" == *"ee-project-platform"* ]]; then
-            CONFIG_FILE_NAME=basic-standalone-noetic.json
-          else
-            CONFIG_FILE_NAME=spawner-${{ inputs.vs_product_name }}-noetic.json
-          fi
-          echo "product/$CONFIG_FILE_NAME" > product/robot.json
+          env_configs_dir=${{ env.PROVISION_ENV_CONF_DIR }}
+          env_configs_version=${{ env.PROVISIONING_ENV_CONF_VERSION }}
+          env_configs_repo_name=${{ env.PROVISIONING_ENV_CONF_REPO }}
 
-      - name: pre-install patch
+          rm -rf $env_configs_dir
+          docker run \
+            -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
+            -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+            fetch_by_tag --repo $env_configs_repo_name \
+            --version $env_configs_version \
+            --gh_api_user $GITHUB_API_USR \
+            --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
+            --target_dir $env_configs_dir
+          cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/$env_configs_dir ./$env_configs_dir
+          
+          ls -la $env_configs_dir
+          echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
+
+      - name: Setup terraform proxmox provisioner
+        id: provision_infra_setup
         shell: bash
         run: |
-          export CONFIG_FILE_NAME="$(cat product/robot.json)"
-          export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
-          timeout 30 movai-cli remove --all || true
-          if test -f .github/workflows/pre_install_platform.bash; then
-            echo "Running pre-install patch"
-            . .github/workflows/pre_install_platform.bash
-          fi
+          provision_infra_dir=${{ env.PROVISION_INFRA_DIR }}
+          provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
+          provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
 
-      - name: Upload robot configs (after pre-patch)
-        uses: actions/upload-artifact@v4
+          rm -rf $provision_infra_dir
+          docker run \
+            -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
+            -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+            fetch_by_tag --repo $provision_infra_repo_name \
+            --version $provision_infra_version \
+            --gh_api_user $GITHUB_API_USR \
+            --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
+            --target_dir $provision_infra_dir
+          cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/$provision_infra_dir ./$provision_infra_dir
+
+          ls -la $provision_infra_dir
+          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+
+      - name: Define Instance names
+        id: infra_names
+        shell: bash
+        run: |
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          branch=$(echo ${BRANCH_NAME} | sed "s;\.;-;g" )
+
+          run_type="ci"
+
+          local_manager_prefix="ip-$run_type-${{ inputs.cluster }}-${{ inputs.component_name }}-$branch"
+
+          tf_state="${{ inputs.cluster }}-sim-$local_manager_prefix"
+          echo "simul_prefix=${local_manager_prefix}" | tee >> $GITHUB_OUTPUT
+          echo "tfstate_name=${tf_state}" | tee >> $GITHUB_OUTPUT
+
+
+      - name: Provision remote vms (Proxmox)
+        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        shell: bash
+        run: |
+          multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..1})
+          node_list_str=${multiply_node::-1}
+
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
+
+          echo "proxmox_host_list=[$node_list_str]">>input.tfvars
+          echo "fleet_peer_nr=0">>input.tfvars
+          echo 'fleet_password="${{ secrets.provision_infra_pwd }}"'>>input.tfvars
+          echo 'fleet_manager_name="${{ steps.infra_names.outputs.simul_prefix }}"'>>input.tfvars
+          echo 'ip_list=["dhcp"]'>>input.tfvars
+          echo 'tags=["ip-simul-ci"]'>>input.tfvars
+          echo 'pool="IP-Temp-VMs"'>>input.tfvars
+          echo 'proxmox_ve_username="${{ secrets.proxmox_ve_sim_username }}"'>>input.tfvars
+          echo 'proxmox_ve_password="${{ secrets.proxmox_ve_sim_password }}"'>>input.tfvars
+          echo "\n">>input
+
+          echo "File args: $var_file_arg"
+          echo "Input File args: $(cat input.tfvars)"
+          terraform init -backend-config="key=${{ inputs.cluster }}-ci-simul-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
+          terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
+          terraform refresh $var_file_arg -var-file=input.tfvars
+
+          echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
+          sudo chmod 600 ~/.ssh/ci_priv_key.pem
+
+      - name: Gather Terraform outputs
+        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        id: infra_outputs
+        shell: bash
+        run: |
+          ip=$(terraform output manager_ip_address)
+          user=$(terraform output user)
+          echo "host_ip=$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
+          echo "host_user=$(echo $user | sed "s;\";;g")" >> $GITHUB_OUTPUT
+          echo "ssh_connect_string=$(echo $user | sed "s;\";;g")@$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
+
+      - name: Configure SSH
+        id: remote_ssh_setup
+        shell: bash
+        run: |
+          ssh-keygen -f ~/.ssh/known_hosts -R ${{ steps.infra_outputs.outputs.host_ip }} || true
+          ssh-keyscan -H ${{ steps.infra_outputs.outputs.host_ip }} >> ~/.ssh/known_hosts || true
+
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cloud-init status --wait; rm -rf ./${{ env.REMOTE_WORKSPACE_PATH }}; mkdir -p ./${{ env.REMOTE_WORKSPACE_PATH }}
+          '
+
+      - name: Prepare Devops provisioning slack message
+        if: ${{ github.event_name != 'pull_request' }}
+        id: pre_slack_infra
+        run: |
+          MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is being impacted by an infrastructural issue. \
+          Provisioning of fleet infrastructure failed. Please take a look! \
+          Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+
+      - name: Slack message failure
+        if: ${{ failure() && github.event_name != 'pull_request' }}
+        uses: slackapi/slack-github-action@v1.23.0
         with:
-          name: robot_configs_after_pre_patch
-          path: product
-          retention-days: 5
+          channel-id: "G0102LEV1CL"
+          slack-message: ${{ steps.pre_slack_infra.outputs.msg_error }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
-      - name: Install platform
-        id: install
+      - name: Remote - Agent info
+        id: agent_info_remote
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            ip=$(hostname -I | cut -d " " -f1)
+            echo $ip '
+
+      - name: Nvidia slack message
+        id: nvidia_err_msg
+        run: |
+          echo "msg_error=Nvidia container error detected.\
+          Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
+
+      - name: Remote - Detect Nvidia mismatch
+        shell: bash
+        id: nvidia_check
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -t '
+              set -e
+              Architecture="$(uname -m)"
+              distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+              curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg --yes
+              curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | sed "s#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g" | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+              max_retries=12  # Maximum number of retries (12 retries with 5 seconds sleep = 1 minute)
+              retries=0
+              while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do
+                if [ $retries -ge $max_retries ]; then
+                  echo "Reached maximum retry limit, exiting."
+                  exit 1
+                fi
+                echo "Waiting for other software managers to finish... (retry: $retries)"
+                retries=$((retries + 1))
+                sleep 5
+              done
+              sudo apt-get update -q > /dev/null && sudo apt-get install -yq nvidia-docker2 nvidia-container-toolkit
+          '
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+              sudo systemctl restart docker
+              sleep 3
+              docker run --gpus=all --rm nvcr.io/nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi 2>&1
+              '
+
+      - name: Slack message failure
+        if: ${{ failure() && github.event_name != 'pull_request' }}
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          channel-id: "G0102LEV1CL"
+          slack-message: ${{ steps.nvidia_err_msg.outputs.msg_error }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+
+
+      # - name: Install CI Scripts in container
+      #   shell: bash
+      #   run: |
+      #     python3 -m venv ci_scripts --clear
+      #     source ci_scripts/bin/activate
+      #     python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+      #     deactivate
+
+      # - name: Download component artifacts for patching
+      #   if: inputs.download_artifact
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: component_artifacts
+      #     path: component_artifacts
+
+      # - name: fetch platform version
+      #   shell: bash
+      #   run: |
+      #     source ci_scripts/bin/activate
+
+      #     rm -rf product
+      #     mkdir -p product
+      #     integration-pipeline fetch_product_by_version \
+      #           --product_version_search ${{ inputs.vs_product_version_pattern}} \
+      #           --repo ${{ inputs.vs_product_name }} \
+      #           --gh_api_user ${{ secrets.auto_commit_user }} \
+      #           --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
+      #           --target_dir product
+
+
+      # - name: calculate robot.json to use
+      #   shell: bash
+      #   run: |
+      #     PRODUCT=${{ inputs.vs_product_name }}
+      #     QUICKSTART_VERSION=$(cat product/quickstart_version.txt)
+      #     if [[ "$PRODUCT" == *"ee-project-platform"* ]]; then
+      #       CONFIG_FILE_NAME=basic-standalone-noetic.json
+      #     else
+      #       CONFIG_FILE_NAME=spawner-${{ inputs.vs_product_name }}-noetic.json
+      #     fi
+      #     echo "product/$CONFIG_FILE_NAME" > product/robot.json
+
+      # - name: pre-install patch
+      #   shell: bash
+      #   run: |
+      #     export CONFIG_FILE_NAME="$(cat product/robot.json)"
+      #     export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
+      #     timeout 30 movai-cli remove --all || true
+      #     if test -f .github/workflows/pre_install_platform.bash; then
+      #       echo "Running pre-install patch"
+      #       . .github/workflows/pre_install_platform.bash
+      #     fi
+
+      # - name: Upload robot configs (after pre-patch)
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: robot_configs_after_pre_patch
+      #     path: product
+      #     retention-days: 5
+
+      # - name: Install platform
+      #   id: install
+      #   shell: bash
+      #   run: |
+      #     timeout 30 movai-cli remove --all || true
+
+      #     QUICKSTART_VERSION=$(cat product/quickstart_version.txt)
+      #     export CONFIG_FILE_NAME=$(cat product/robot.json)
+
+      #     export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
+      #     export ROBOTNAME="ci_robot"
+      #     export PUBLIC_IP=$(hostname -I | awk '{print $1}')
+      #     wget https://movai-scripts.s3.amazonaws.com/QuickStart_$QUICKSTART_VERSION.bash
+      #     chmod +x ./QuickStart_$QUICKSTART_VERSION.bash
+      #     ./QuickStart_$QUICKSTART_VERSION.bash --apps $(cat product/service_version.txt) $CONFIG_FILE_NAME
+
+      #     MOVAI_USER="ci"
+      #     MOVAI_PWD="4Iva6UHAQq9DGITj"
+      #     for robot in $(movai-cli robots list); do
+      #       movai-cli robots user "$robot" "$MOVAI_USER" "$MOVAI_PWD"
+      #     done
+
+      #     echo "movai_user=${MOVAI_USER}" >> $GITHUB_OUTPUT
+      #     echo "movai_pwd=${MOVAI_PWD}" >> $GITHUB_OUTPUT
+
+      # - name: post-install patch
+      #   shell: bash
+      #   id: post_install
+      #   run: |
+      #     export CONFIG_FILE_NAME=$(cat product/robot.json)
+      #     export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
+      #     export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
+      #     export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
+      #     if test -f .github/workflows/post_install_platform.bash; then
+      #       echo "Running post-install patch"
+      #       . .github/workflows/post_install_platform.bash
+      #     fi
+
+      # - name: Upload robot configs (after post-patch)
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: robot_configs_after_post_patch
+      #     path: product
+      #     retention-days: 5
+
+      # - name: test setup
+      #   shell: bash
+      #   run: |
+      #     export CONFIG_FILE_NAME=$(cat product/robot.json)
+      #     export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
+      #     export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
+      #     export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
+      #     mkdir -p test_artifacts
+      #     if test -f .github/workflows/test_setup.bash; then
+      #       echo "Running tests setup"
+      #       . .github/workflows/test_setup.bash
+      #     fi
+
+      # - name: Run tests
+      #   shell: bash
+      #   run: |
+      #     export CONFIG_FILE_NAME=$(cat product/robot.json)
+      #     export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
+      #     export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
+      #     export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
+      #     if test -f .github/workflows/run_tests.bash; then
+      #       echo "Running tests"
+      #       . .github/workflows/run_tests.bash
+      #     fi
+
+      # - name: Collect tests artifacts
+      #   if: always()
+      #   shell: bash
+      #   run: |
+      #     export CONFIG_FILE_NAME=$(cat product/robot.json)
+      #     export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
+      #     export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
+      #     export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
+      #     if test -f .github/workflows/collect_tests_artifacts.bash; then
+      #       echo "Collecting tests artifacts"
+      #       . .github/workflows/collect_tests_artifacts.bash
+      #     fi
+
+      # - name: Collect platform artifacts
+      #   if: always()
+      #   working-directory: test_artifacts
+      #   shell: bash
+      #   run: |
+      #     # for sanity
+      #     docker ps -a
+
+      #     for container in backend spawner messager-server monitoring redis-master redis-local influxdb haproxy; do
+      #        CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
+      #        docker logs "${CONTAINER_ID}" &> "${container}.log" || true
+      #     done || true
+
+      #     # movai-service
+      #     journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
+
+      #     # spawner (mobros firmware)
+      #     journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
+
+      # - name: Upload test_artifacts
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: test_artifacts
+      #     path: test_artifacts
+
+      # - name: Docker cleanups
+      #   if: always()
+      #   shell: bash
+      #   run: |
+      #     docker system prune -f
+      #     docker image prune --all -f
+
+      - name: Teardown remote vms (Proxmox)
+        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        if: ${{ inputs.debug_component_tests_keep_alive == false && always() }}
         shell: bash
         run: |
-          timeout 30 movai-cli remove --all || true
-
-          QUICKSTART_VERSION=$(cat product/quickstart_version.txt)
-          export CONFIG_FILE_NAME=$(cat product/robot.json)
-
-          export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
-          export ROBOTNAME="ci_robot"
-          export PUBLIC_IP=$(hostname -I | awk '{print $1}')
-          wget https://movai-scripts.s3.amazonaws.com/QuickStart_$QUICKSTART_VERSION.bash
-          chmod +x ./QuickStart_$QUICKSTART_VERSION.bash
-          ./QuickStart_$QUICKSTART_VERSION.bash --apps $(cat product/service_version.txt) $CONFIG_FILE_NAME
-
-          MOVAI_USER="ci"
-          MOVAI_PWD="4Iva6UHAQq9DGITj"
-          for robot in $(movai-cli robots list); do
-            movai-cli robots user "$robot" "$MOVAI_USER" "$MOVAI_PWD"
+          attempts=3
+          count=0
+          while [ $count -lt $attempts ]; do
+            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars -var "fleet_peer_nr=0"
+            exit_status=$?
+            if [ $exit_status -eq 0 ]; then
+              break
+            elif [ $exit_status -eq 1 ]; then
+              ((count++))
+              echo "Retrying Terraform destroy (attempt $count)..."
+            else
+                  echo "Terraform destroy failed with exit status ${exit_status:-unknown}. Exiting..."
+                  exit ${exit_status:-1}
+            fi
           done
-
-          echo "movai_user=${MOVAI_USER}" >> $GITHUB_OUTPUT
-          echo "movai_pwd=${MOVAI_PWD}" >> $GITHUB_OUTPUT
-
-      - name: post-install patch
-        shell: bash
-        id: post_install
-        run: |
-          export CONFIG_FILE_NAME=$(cat product/robot.json)
-          export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
-          export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
-          export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
-          if test -f .github/workflows/post_install_platform.bash; then
-            echo "Running post-install patch"
-            . .github/workflows/post_install_platform.bash
-          fi
-
-      - name: Upload robot configs (after post-patch)
-        uses: actions/upload-artifact@v4
-        with:
-          name: robot_configs_after_post_patch
-          path: product
-          retention-days: 5
-
-      - name: test setup
-        shell: bash
-        run: |
-          export CONFIG_FILE_NAME=$(cat product/robot.json)
-          export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
-          export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
-          export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
-          mkdir -p test_artifacts
-          if test -f .github/workflows/test_setup.bash; then
-            echo "Running tests setup"
-            . .github/workflows/test_setup.bash
-          fi
-
-      - name: Run tests
-        shell: bash
-        run: |
-          export CONFIG_FILE_NAME=$(cat product/robot.json)
-          export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
-          export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
-          export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
-          if test -f .github/workflows/run_tests.bash; then
-            echo "Running tests"
-            . .github/workflows/run_tests.bash
-          fi
-
-      - name: Collect tests artifacts
-        if: always()
-        shell: bash
-        run: |
-          export CONFIG_FILE_NAME=$(cat product/robot.json)
-          export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
-          export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
-          export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
-          if test -f .github/workflows/collect_tests_artifacts.bash; then
-            echo "Collecting tests artifacts"
-            . .github/workflows/collect_tests_artifacts.bash
-          fi
-
-      - name: Collect platform artifacts
-        if: always()
-        working-directory: test_artifacts
-        shell: bash
-        run: |
-          # for sanity
-          docker ps -a
-
-          for container in backend spawner messager-server monitoring redis-master redis-local influxdb haproxy; do
-             CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
-             docker logs "${CONTAINER_ID}" &> "${container}.log" || true
-          done || true
-
-          # movai-service
-          journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
-
-          # spawner (mobros firmware)
-          journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
-
-      - name: Upload test_artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test_artifacts
-          path: test_artifacts
-
-      - name: Docker cleanups
-        if: always()
-        shell: bash
-        run: |
-          docker system prune -f
-          docker image prune --all -f
