@@ -48,9 +48,9 @@ env:
   CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.0.0.31"
   CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
   CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
-  # AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
-  # AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
-  # AWS_DEFAULT_REGION: "us-east-1"
+  AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
+  AWS_DEFAULT_REGION: "us-east-1"
   REGISTRY: registry.cloud.mov.ai
   # MID_REGISTRY: registry.hel.mov.ai
   # SIMULATION_ID: CI
