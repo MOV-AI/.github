@@ -43,6 +43,12 @@ on:
         required: true
       aws_secret_key_id:
         required: true
+      proxmox_ve_sim_username:
+        required: true
+      proxmox_ve_sim_password:
+        required: true
+      ssh_priv_key:
+        required: true
 
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.13"
