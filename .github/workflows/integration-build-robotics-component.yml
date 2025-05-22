@@ -39,6 +39,10 @@ on:
         required: true
       gh_token:
         required: true
+      aws_key_id:
+        required: true
+      aws_secret_key_id:
+        required: true
 
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.13"
