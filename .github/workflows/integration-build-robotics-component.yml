@@ -409,20 +409,7 @@ jobs:
 
             export PATH="$HOME/.local/bin:$PATH"
 
-            CONFIG_FILE_NAME="standalone-spawner-${{ inputs.vs_product_name }}-simulator-noetic.json"
-
-            docker run \
-              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
-              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
-              get_json_value --file product/$CONFIG_FILE_NAME.ci \
-              --key services_version \
-              --output_file movai_service_version
-            docker run \
-              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
-              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
-              get_json_value --file product/$CONFIG_FILE_NAME.ci \
-              --key quickstart_version \
-              --output_file quickstart_version
+            CONFIG_FILE_NAME="product/standalone-spawner-${{ inputs.vs_product_name }}-simulator-noetic.json"
 
             cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/* ./ && sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
@@ -438,9 +425,9 @@ jobs:
             sudo sh -c "echo MOVAI_SERVICE_LOGGER_LEVEL=DEBUG >> /etc/movai/config.env"
             sudo chmod -R +r /etc/movai
 
-            wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
-            chmod +x ./QuickStart_$(cat quickstart_version).bash
-            ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) product/$CONFIG_FILE_NAME
+            wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat product/quickstart_version.txt).bash
+            chmod +x ./QuickStart_$(cat product/quickstart_version.txt).bash
+            ./QuickStart_$(cat product/quickstart_version.txt).bash --apps $(cat product/service_version.txt) $CONFIG_FILE_NAME
             MOVAI_USER="ci"
             MOVAI_PWD="4Iva6UHAQq9DGITj"
             for robot in $(movai-cli robots list); do
@@ -449,13 +436,14 @@ jobs:
 
             execution_status=$?
             exit $execution_status
-            rm movai_service_version
+            rm service_version.txt
           '
           echo "movai_user=ci" >> $GITHUB_OUTPUT
           echo "movai_pwd=4Iva6UHAQq9DGITj" >> $GITHUB_OUTPUT
 
 
         # - name: Remote - Post install patch
+        # ros-noetic-${{ inputs.component_name }}=${{ steps.extract_component_version.outputs.component_version }}
 
       # - name: Run tests
       #   timeout-minutes: ${{ inputs.test_timeout }}
