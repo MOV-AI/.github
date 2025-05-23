@@ -409,7 +409,7 @@ jobs:
             if [[ "$PRODUCT_NAME" == "studio" ]]; then
               PRODUCT_NAME="solution"
             fi
-            CONFIG_FILE_NAME="product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
+            export CONFIG_FILE_NAME="product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
 
             cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/* ./ && sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
@@ -420,7 +420,7 @@ jobs:
             export ROBOTNAME="ci_${{ inputs.component_name }}"
             sudo apt install jq -y
             jq --version
-            jq '.robot.name = "$ROBOTNAME"' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
+            jq '\''.robot.name = "$ROBOTNAME"'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
 
             # Enable debug logs of movai-service
             sudo mkdir -p /etc/movai/
@@ -457,44 +457,6 @@ jobs:
             docker cp ${{ env.REMOTE_WORKSPACE_PATH }}/artifacts/ spawner-${{ steps.install.outputs.robot_name }}-movai:/tmp/artifacts
             docker exec -u root spawner-${{ steps.install.outputs.robot_name }}-movai bash -c "mobros install /tmp/artifacts/*.deb -y"
           '
-
-      # - name: Run tests
-      #   timeout-minutes: ${{ inputs.test_timeout }}
-      #   working-directory: ${{ steps.infra_tests_setup.outputs.target_dir }}
-      #   shell: bash
-      #   env:
-      #     BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
-      #     selenoid_url: "http://selenoid-ui.hel.mov.ai"
-      #     host_ip: ${{ steps.agent_info.outputs.ip }}
-      #     movai_user: ${{ steps.install.outputs.movai_user }}
-      #     movai_pwd: ${{ steps.install.outputs.movai_pwd }}
-      #     test_set: ${{ inputs.test_set }}
-      #   run: |
-      #     . test-venv/bin/activate
-      #     pip install buildkite-test-collector
-      #     echo "python3 -m pytest ${{ inputs.pytest_args}}" 
-      #     python3 -m pytest ${{ inputs.pytest_args}} | tee pytest-output.log
-      #     deactivate
-
-      # - name: post-install patch
-      #   shell: bash
-      #   id: post_install
-      #   run: |
-      #     export CONFIG_FILE_NAME=$(cat product/robot.json)
-      #     export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
-      #     export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
-      #     export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
-      #     if test -f .github/workflows/post_install_platform.bash; then
-      #       echo "Running post-install patch"
-      #       . .github/workflows/post_install_platform.bash
-      #     fi
-
-      # - name: Upload robot configs (after post-patch)
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: robot_configs_after_post_patch
-      #     path: product
-      #     retention-days: 5
 
       # - name: test setup
       #   shell: bash
@@ -559,13 +521,6 @@ jobs:
       #   with:
       #     name: test_artifacts
       #     path: test_artifacts
-
-      # - name: Docker cleanups
-      #   if: always()
-      #   shell: bash
-      #   run: |
-      #     docker system prune -f
-      #     docker image prune --all -f
 
       - name: Teardown remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
