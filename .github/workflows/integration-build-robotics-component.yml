@@ -344,7 +344,7 @@ jobs:
             mkdir -p $tests_dir
             sudo chmod -R 777 $tests_dir
 
-            docker run \
+            docker run -u root \
               -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               fetch_by_tag \
@@ -374,7 +374,7 @@ jobs:
             mkdir -p $product_dir
             sudo chmod -R 777 $product_dir
 
-            docker run \
+            docker run -u root \
               -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               fetch_product_by_version \
