@@ -5,6 +5,9 @@ on:
       component_name:
         required: true
         type: string
+      product_name:
+        required: true
+        type: string
       vs_product_name:
         required: true
         type: string
@@ -14,7 +17,13 @@ on:
       download_artifact:
         required: false
         type: boolean
-      test_name:
+      test_repo_name:
+        required: true
+        type: string
+      test_version:
+        required: true
+        type: string
+      test_set:
         required: true
         type: string
       cluster:
@@ -77,6 +86,7 @@ env:
   PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
   PROVISIONING_ENV_CONF_VERSION: "0.1.0-15"
   PROVISION_ENV_CONF_DIR: "infra_env_configs"
+  SIMULATION_ID: CI
 
 jobs:
   Platform-tests:
@@ -296,6 +306,13 @@ jobs:
           name: component_artifacts
           path: component_artifacts
 
+      - name: Extract component version
+        id: extract_component_version
+        shell: bash
+        run: |
+          export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
+          echo "component_version=${COMPONENT_VERSION}" >> $GITHUB_OUTPUT
+
       - name: Remote - create execution folder
         shell: bash
         run: |
@@ -315,27 +332,35 @@ jobs:
             set -e
             docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
           '
-      
+
       - name: Remote - fetch stack tests
+        id: infra_tests_setup
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/stack_tests
-            mkdir -p ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/stack_tests
+            tests_dir=${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/tests
 
-            docker run -u root \
+            rm -rf $tests_dir
+            mkdir -p $tests_dir
+
+            docker run \
               -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
-              download_from_tag \
-              --repo ${{ inputs.component_name }} \
-              --version ${{ inputs.test_name }} \
+              fetch_by_tag \
+              --repo ${{ inputs.test_repo_name }} \
+              --version ${{ inputs.test_version }} \
               --gh_api_user ${{ secrets.auto_commit_user }} \
               --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-              --target_dir ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/stack_tests
+              --target_dir ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/stack_tests
 
+            # setup tests venv in a step that is always executed
+            python3 -m venv "${tests_dir}"/test-venv --clear
+            . "${tests_dir}"/test-venv/bin/activate
+            pip install -r "${tests_dir}"/requirements.txt
+            deactivate
           '
 
       - name: Remote - fetch product version
@@ -348,7 +373,7 @@ jobs:
             rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product
             mkdir -p ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product
 
-            docker run -u root \
+            docker run \
               -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               fetch_product_by_version \
@@ -356,65 +381,91 @@ jobs:
               --repo ${{ inputs.vs_product_name }} \
               --gh_api_user ${{ secrets.auto_commit_user }} \
               --gh_api_pwd ${{ secrets.auto_commit_pwd }}
-              --target_dir ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product
+              --target_dir ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/product
 
           '
 
+      - name: Remote - Install
+        id: install
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
 
-      # - name: calculate robot.json to use
+            export DISPLAY="$(w -oush | grep -Eo " :[0-9]+" | uniq | cut -d \  -f 2)"
+            echo "Display detected (dinamic) is $DISPLAY"
+            export DISPLAY=":0"
+            echo "Display detected is $DISPLAY"
+
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
+            export PATH="$HOME/.local/bin:$PATH"
+
+            CONFIG_FILE_NAME="standalone-spawner-${{ inputs.vs_product_name }}-simulator-noetic.json"
+
+            docker run \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
+              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              get_json_value --file product/$CONFIG_FILE_NAME.ci \
+              --key services_version \
+              --output_file movai_service_version
+            docker run \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
+              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              get_json_value --file product/$CONFIG_FILE_NAME.ci \
+              --key quickstart_version \
+              --output_file quickstart_version
+
+            cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/* ./ && sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
+            export USERSPACE_FOLDER_PATH="${{ env.USERSPACE_FOLDER_PATH }}"
+            sudo mkdir -p $USERSPACE_FOLDER_PATH/.git;sudo chown 1000:1000 $USERSPACE_FOLDER_PATH/ -Rf
+            export PUBLIC_IP="$(hostname -I | cut -d " " -f1)"
+            export SIMULATION_ID="${{ env.SIMULATION_ID }}"
+            export ROBOTNAME="ci_${{ inputs.product_name }}"
+            rm -rf userspace
+
+            # Enable debug logs of movai-service
+            sudo mkdir -p /etc/movai/
+            sudo sh -c "echo MOVAI_SERVICE_LOGGER_LEVEL=DEBUG >> /etc/movai/config.env"
+            sudo chmod -R +r /etc/movai
+
+            wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
+            chmod +x ./QuickStart_$(cat quickstart_version).bash
+            ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
+            MOVAI_USER="ci"
+            MOVAI_PWD="4Iva6UHAQq9DGITj"
+            for robot in $(movai-cli robots list); do
+              movai-cli robots user "$robot" "$MOVAI_USER" "$MOVAI_PWD"
+            done
+
+            execution_status=$?
+            exit $execution_status
+            rm movai_service_version
+          '
+          echo "movai_user=ci" >> $GITHUB_OUTPUT
+          echo "movai_pwd=4Iva6UHAQq9DGITj" >> $GITHUB_OUTPUT
+
+
+        # - name: Remote - Post install patch
+
+      # - name: Run tests
+      #   timeout-minutes: ${{ inputs.test_timeout }}
+      #   working-directory: ${{ steps.infra_tests_setup.outputs.target_dir }}
       #   shell: bash
+      #   env:
+      #     BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
+      #     selenoid_url: "http://selenoid-ui.hel.mov.ai"
+      #     host_ip: ${{ steps.agent_info.outputs.ip }}
+      #     movai_user: ${{ steps.install.outputs.movai_user }}
+      #     movai_pwd: ${{ steps.install.outputs.movai_pwd }}
+      #     test_set: ${{ inputs.test_set }}
       #   run: |
-      #     PRODUCT=${{ inputs.vs_product_name }}
-      #     QUICKSTART_VERSION=$(cat product/quickstart_version.txt)
-      #     if [[ "$PRODUCT" == *"ee-project-platform"* ]]; then
-      #       CONFIG_FILE_NAME=basic-standalone-noetic.json
-      #     else
-      #       CONFIG_FILE_NAME=spawner-${{ inputs.vs_product_name }}-noetic.json
-      #     fi
-      #     echo "product/$CONFIG_FILE_NAME" > product/robot.json
-
-      # - name: pre-install patch
-      #   shell: bash
-      #   run: |
-      #     export CONFIG_FILE_NAME="$(cat product/robot.json)"
-      #     export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
-      #     timeout 30 movai-cli remove --all || true
-      #     if test -f .github/workflows/pre_install_platform.bash; then
-      #       echo "Running pre-install patch"
-      #       . .github/workflows/pre_install_platform.bash
-      #     fi
-
-      # - name: Upload robot configs (after pre-patch)
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: robot_configs_after_pre_patch
-      #     path: product
-      #     retention-days: 5
-
-      # - name: Install platform
-      #   id: install
-      #   shell: bash
-      #   run: |
-      #     timeout 30 movai-cli remove --all || true
-
-      #     QUICKSTART_VERSION=$(cat product/quickstart_version.txt)
-      #     export CONFIG_FILE_NAME=$(cat product/robot.json)
-
-      #     export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
-      #     export ROBOTNAME="ci_robot"
-      #     export PUBLIC_IP=$(hostname -I | awk '{print $1}')
-      #     wget https://movai-scripts.s3.amazonaws.com/QuickStart_$QUICKSTART_VERSION.bash
-      #     chmod +x ./QuickStart_$QUICKSTART_VERSION.bash
-      #     ./QuickStart_$QUICKSTART_VERSION.bash --apps $(cat product/service_version.txt) $CONFIG_FILE_NAME
-
-      #     MOVAI_USER="ci"
-      #     MOVAI_PWD="4Iva6UHAQq9DGITj"
-      #     for robot in $(movai-cli robots list); do
-      #       movai-cli robots user "$robot" "$MOVAI_USER" "$MOVAI_PWD"
-      #     done
-
-      #     echo "movai_user=${MOVAI_USER}" >> $GITHUB_OUTPUT
-      #     echo "movai_pwd=${MOVAI_PWD}" >> $GITHUB_OUTPUT
+      #     . test-venv/bin/activate
+      #     pip install buildkite-test-collector
+      #     echo "python3 -m pytest ${{ inputs.pytest_args}}" 
+      #     python3 -m pytest ${{ inputs.pytest_args}} | tee pytest-output.log
+      #     deactivate
 
       # - name: post-install patch
       #   shell: bash
