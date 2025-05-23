@@ -68,18 +68,9 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   AWS_DEFAULT_REGION: "us-east-1"
   REGISTRY: registry.cloud.mov.ai
-  # MID_REGISTRY: registry.hel.mov.ai
-  # SIMULATION_ID: CI
-  # XRAY_CLIENTID: ${{ secrets.xray_clientid}}
-  # XRAY_SECRET: ${{ secrets.xray_secret}}
-  # JIRA_USERNAME: ${{ secrets.jira_username}}
-  # JIRA_PASSWORD: ${{ secrets.jira_password}}
-  # SLACK_CHANNEL: ${{ inputs.slack_channel }}
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.0.0-3"
   PROVISION_INFRA_DIR: "provision_scripts"
-  # MINIO_S3_URL: "https://s3.mov.ai"
-  # MINIO_PUBLIC_URL: "https://minio.mov.ai"
   PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
   PROVISIONING_ENV_CONF_VERSION: "0.1.0-15"
   PROVISION_ENV_CONF_DIR: "infra_env_configs"
@@ -473,31 +464,41 @@ jobs:
       #   run: |
 
 
-      # - name: Collect platform artifacts
-      #   if: always()
-      #   working-directory: test_artifacts
-      #   shell: bash
-      #   run: |
-      #     # for sanity
-      #     docker ps -a
+      - name: Remote - Collect platform artifacts
+        if: always()
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+            mkdir -p test_artifacts
 
-      #     for container in backend spawner messager-server monitoring redis-master redis-local influxdb haproxy; do
-      #        CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
-      #        docker logs "${CONTAINER_ID}" &> "${container}.log" || true
-      #     done || true
+            # for sanity
+            docker ps -a
 
-      #     # movai-service
-      #     journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
+            for container in backend spawner messager-server monitoring redis-master redis-local influxdb haproxy; do
+              CONTAINER_ID=$(docker ps -a --format '\''{{.Names}}'\'' --filter "name=^${container}-.*")
+              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
+            done || true
 
-      #     # spawner (mobros firmware)
-      #     journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
+            # movai-service
+            journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
 
-      # - name: Upload test_artifacts
-      #   if: always()
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: test_artifacts
-      #     path: test_artifacts
+            # spawner (mobros firmware)
+            journalctl -u movai-service -t mobros --since '\''1hour ago'\'' &> spawner-firmware.log || true
+          '
+
+      - name: Remote - Move test artifacts
+        if: always()
+        shell: bash
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/test_artifacts test_artifacts
+
+      - name: Upload test_artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test_artifacts
+          path: test_artifacts
 
       - name: Teardown remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
