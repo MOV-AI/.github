@@ -360,7 +360,8 @@ jobs:
             # setup tests venv in a step that is always executed
             python3 -m venv "${tests_dir}"/test-venv --clear
             . "${tests_dir}"/test-venv/bin/activate
-            pip install -r "${tests_dir}"/requirements.txt
+            # Temporary comment due to incomplete repo
+            # pip install -r "${tests_dir}"/requirements.txt
             deactivate
           '
 
