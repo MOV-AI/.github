@@ -155,23 +155,6 @@ jobs:
 
     - name: Raise version and validate Ros repository
       run: mobros raise --workspace="$(pwd)"
-    
-    - name: Find package details
-      id: vars-after-raise
-      run: |
-        main_package=$(cat /tmp/main-package.mobrosinfo)
-        build_version_section=$(cat $main_package | grep build_version)
-        version_section=$(cat $main_package | grep "<version")
-        main_version=$(echo $version_section | sed 's/ //g' | sed -e 's/<\w*>'//g | sed -e 's/<\/\w*>'//g)
-        buildid=$(echo $build_version_section | sed 's/ //g' | sed -e 's/<\w*>'//g | sed -e 's/<\/\w*>'//g)
-        VERSION="$main_version-$buildid"
-        echo "ros_pkg_version=$VERSION" >> $GITHUB_OUTPUT
-    
-    - name: Create component version artifact
-      shell: bash
-      run: |
-        mkdir -p component_artifacts
-        echo "${{ steps.vars-after-raise.outputs.ros_pkg_version }}" > component_artifacts/component_version.txt
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
