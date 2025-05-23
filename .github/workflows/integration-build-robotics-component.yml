@@ -289,35 +289,67 @@ jobs:
         env:
           SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
+      - name: Download component artifacts for patching
+        if: inputs.download_artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: component_artifacts
+          path: component_artifacts
 
-      # - name: Install CI Scripts in container
-      #   shell: bash
-      #   run: |
-      #     python3 -m venv ci_scripts --clear
-      #     source ci_scripts/bin/activate
-      #     python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-      #     deactivate
+      - name: Remote - create execution folder
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-      # - name: Download component artifacts for patching
-      #   if: inputs.download_artifact
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: component_artifacts
-      #     path: component_artifacts
+            sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+            sudo chmod -R 777 ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+          '
+      
+      - name: Remote - fetch stack tests
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-      # - name: fetch platform version
-      #   shell: bash
-      #   run: |
-      #     source ci_scripts/bin/activate
+            rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/stack_tests
+            mkdir -p ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/stack_tests
 
-      #     rm -rf product
-      #     mkdir -p product
-      #     integration-pipeline fetch_product_by_version \
-      #           --product_version_search ${{ inputs.vs_product_version_pattern}} \
-      #           --repo ${{ inputs.vs_product_name }} \
-      #           --gh_api_user ${{ secrets.auto_commit_user }} \
-      #           --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
-      #           --target_dir product
+            docker run -u root \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
+              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              download_from_tag \
+              --repo ${{ inputs.component_name }} \
+              --version ${{ inputs.test_name }} \
+              --gh_api_user ${{ secrets.auto_commit_user }} \
+              --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
+              --target_dir ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/stack_tests
+
+          '
+
+      - name: Remote - fetch product version
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
+            rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product
+            mkdir -p ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product
+
+            docker run -u root \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
+              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              fetch_product_by_version \
+              --product_version_search ${{ inputs.vs_product_version_pattern}} \
+              --repo ${{ inputs.vs_product_name }} \
+              --gh_api_user ${{ secrets.auto_commit_user }} \
+              --gh_api_pwd ${{ secrets.auto_commit_pwd }}
+              --target_dir ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product
+
+          '
 
 
       # - name: calculate robot.json to use
