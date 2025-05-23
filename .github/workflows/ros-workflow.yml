@@ -156,13 +156,6 @@ jobs:
     - name: Raise version and validate Ros repository
       run: mobros raise --workspace="$(pwd)"
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: component_artifacts
-        path: component_artifacts/*
-        retention-days: 5
-
     - name: Install build Requirements
       run: |
         sudo apt update
