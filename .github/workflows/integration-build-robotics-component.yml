@@ -409,7 +409,8 @@ jobs:
 
             export PATH="$HOME/.local/bin:$PATH"
 
-            CONFIG_FILE_NAME="product/standalone-spawner-${{ inputs.vs_product_name }}-simulator-noetic.json"
+            PRODUCT_NAME=$(echo ${{ inputs.vs_product_name }} | sed 's/^project-\(movai-\)\?//')
+            CONFIG_FILE_NAME="product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
 
             cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/* ./ && sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
@@ -443,7 +444,9 @@ jobs:
 
 
         # - name: Remote - Post install patch
+        echo "COMPONENT_VERSION $COMPONENT_VERSION"
         # ros-noetic-${{ inputs.component_name }}=${{ steps.extract_component_version.outputs.component_version }}
+        docker exec -u root spawner-basic-movai bash -c "pip install -i https://artifacts.cloud.mov.ai/repository/pypi-experimental/simple --extra-index-url https://pypi.org/simple gd_node==$COMPONENT_VERSION"
 
       # - name: Run tests
       #   timeout-minutes: ${{ inputs.test_timeout }}
