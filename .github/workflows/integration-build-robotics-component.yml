@@ -342,6 +342,7 @@ jobs:
 
             rm -rf $tests_dir
             mkdir -p $tests_dir
+            sudo chmod -R 777 $tests_dir
 
             docker run \
               -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
@@ -371,6 +372,7 @@ jobs:
 
             rm -rf $product_dir
             mkdir -p $product_dir
+            sudo chmod -R 777 $product_dir
 
             docker run \
               -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
