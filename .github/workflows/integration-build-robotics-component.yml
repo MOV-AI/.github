@@ -304,6 +304,7 @@ jobs:
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
             sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+            mkdir  -p ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
             sudo chmod -R 777 ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
           '
       
