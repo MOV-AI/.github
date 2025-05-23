@@ -422,7 +422,6 @@ jobs:
             export PUBLIC_IP="$(hostname -I | cut -d " " -f1)"
             export SIMULATION_ID="${{ env.SIMULATION_ID }}"
             export ROBOTNAME="ci_${{ inputs.component_name }}"
-            rm -rf userspace
 
             # Enable debug logs of movai-service
             sudo mkdir -p /etc/movai/
@@ -444,12 +443,17 @@ jobs:
           '
           echo "movai_user=ci" >> $GITHUB_OUTPUT
           echo "movai_pwd=4Iva6UHAQq9DGITj" >> $GITHUB_OUTPUT
+          echo "robot_name=ci_${{ inputs.component_name }}" >> $GITHUB_OUTPUT
 
 
-        # - name: Remote - Post install patch
-        # echo "COMPONENT_VERSION $COMPONENT_VERSION"
-        # ros-noetic-${{ inputs.component_name }}=${{ steps.extract_component_version.outputs.component_version }}
-        # docker exec -u root spawner-basic-movai bash -c "pip install -i https://artifacts.cloud.mov.ai/repository/pypi-experimental/simple --extra-index-url https://pypi.org/simple gd_node==$COMPONENT_VERSION"
+      - name: Remote - Post install patch
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            echo "Installing component ${{ inputs.component_name }} version ${{ steps.extract_component_version.outputs.component_version }} in spawner-${{ steps.install.outputs.robot_name }}-movai"
+            docker exec -u root spawner-${{ steps.install.outputs.robot_name }}-movai bash -c "mobros install ros-noetic-${{ inputs.component_name }}=${{ steps.extract_component_version.outputs.component_version }}"
+          '
 
       # - name: Run tests
       #   timeout-minutes: ${{ inputs.test_timeout }}
