@@ -355,7 +355,7 @@ jobs:
               --target_dir ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/stack_tests
 
             ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }} 
-            sudo chmod 777 $tests_dir
+            sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }} 
 
             # setup tests venv in a step that is always executed
             python3 -m venv "${tests_dir}"/test-venv --clear
@@ -389,7 +389,7 @@ jobs:
               --target_dir ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/product
 
             ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }} 
-            sudo chmod 777 $product_dir
+            sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
           '
 
@@ -440,7 +440,7 @@ jobs:
 
             wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
             chmod +x ./QuickStart_$(cat quickstart_version).bash
-            ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
+            ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) product/$CONFIG_FILE_NAME
             MOVAI_USER="ci"
             MOVAI_PWD="4Iva6UHAQq9DGITj"
             for robot in $(movai-cli robots list); do
