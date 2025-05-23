@@ -442,7 +442,7 @@ jobs:
             set -e
             echo "Installing component ${{ inputs.component_name }} in spawner-${{ steps.install.outputs.robot_name }}-movai"
             docker cp ${{ env.REMOTE_WORKSPACE_PATH }}/artifacts/ spawner-${{ steps.install.outputs.robot_name }}-movai:/tmp/artifacts
-            docker exec -u root spawner-${{ steps.install.outputs.robot_name }}-movai bash -c "dpkg -i /tmp/artifacts/*.deb -y"
+            docker exec -u root spawner-${{ steps.install.outputs.robot_name }}-movai bash -c "dpkg -i /tmp/artifacts/*.deb"
           '
 
       # - name: test setup
