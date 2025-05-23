@@ -11,9 +11,6 @@ on:
       vs_product_version_pattern:
         required: true
         type: string
-      download_artifact:
-        required: false
-        type: boolean
       test_repo_name:
         required: true
         type: string
@@ -42,8 +39,6 @@ on:
       registry_user:
         required: true
       registry_password:
-        required: true
-      gh_token:
         required: true
       aws_key_id:
         required: true
