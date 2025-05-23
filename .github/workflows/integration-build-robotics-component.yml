@@ -297,19 +297,15 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Download component artifacts for patching
-        if: inputs.download_artifact
         uses: actions/download-artifact@v4
         with:
-          name: component_artifacts
-          path: component_artifacts
+          name: packages
+          path: artifacts/
 
-      - name: Extract component version
-        id: extract_component_version
+      - name: Remote - Move component artifacts
         shell: bash
-        run: |
-          export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
-          echo "component_version=${COMPONENT_VERSION}" >> $GITHUB_OUTPUT
-
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ./artifacts ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
+          
       - name: Remote - create execution folder
         shell: bash
         run: |
@@ -423,7 +419,7 @@ jobs:
             export SIMULATION_ID="${{ env.SIMULATION_ID }}"
             export ROBOTNAME="ci_${{ inputs.component_name }}"
             sudo apt install jq -y
-            jq version
+            jq --version
             jq '.robot.name = "$ROBOTNAME"' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
 
             # Enable debug logs of movai-service
@@ -456,8 +452,10 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
-            echo "Installing component ${{ inputs.component_name }} version ${{ steps.extract_component_version.outputs.component_version }} in spawner-${{ steps.install.outputs.robot_name }}-movai"
-            docker exec -u root spawner-${{ steps.install.outputs.robot_name }}-movai bash -c "mobros install ros-noetic-${{ inputs.component_name }}=${{ steps.extract_component_version.outputs.component_version }}"
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+            echo "Installing component ${{ inputs.component_name }} in spawner-${{ steps.install.outputs.robot_name }}-movai"
+            docker cp ${{ env.REMOTE_WORKSPACE_PATH }}/artifacts/ spawner-${{ steps.install.outputs.robot_name }}-movai:/tmp/artifacts
+            docker exec -u root spawner-${{ steps.install.outputs.robot_name }}-movai bash -c "mobros install /tmp/artifacts/*.deb -y"
           '
 
       # - name: Run tests
