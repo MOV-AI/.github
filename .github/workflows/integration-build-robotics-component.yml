@@ -59,7 +59,7 @@ on:
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.13"
   GITHUB_API_USR: "OttoMation-Movai"
-  USERSPACE_FOLDER_PATH: userspace
+  USERSPACE_FOLDER_PATH: "$(pwd)/userspace"
   REMOTE_WORKSPACE_PATH: workspace
   CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.0.0.31"
   CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
@@ -427,6 +427,8 @@ jobs:
             sudo mkdir -p /etc/movai/
             sudo sh -c "echo MOVAI_SERVICE_LOGGER_LEVEL=DEBUG >> /etc/movai/config.env"
             sudo chmod -R +r /etc/movai
+
+            ls -la ${{ env.USERSPACE_FOLDER_PATH }}
 
             wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat product/quickstart_version.txt).bash
             chmod +x ./QuickStart_$(cat product/quickstart_version.txt).bash
