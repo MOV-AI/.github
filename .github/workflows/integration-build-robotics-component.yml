@@ -338,7 +338,7 @@ jobs:
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            tests_dir=${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/tests
+            tests_dir=${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/stack_tests
 
             rm -rf $tests_dir
             mkdir -p $tests_dir
@@ -367,8 +367,10 @@ jobs:
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product
-            mkdir -p ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product
+            product_dir=${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product
+
+            rm -rf $product_dir
+            mkdir -p $product_dir
 
             docker run \
               -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
