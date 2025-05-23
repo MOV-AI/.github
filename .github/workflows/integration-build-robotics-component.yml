@@ -5,9 +5,6 @@ on:
       component_name:
         required: true
         type: string
-      product_name:
-        required: true
-        type: string
       vs_product_name:
         required: true
         type: string
@@ -422,7 +419,7 @@ jobs:
             sudo mkdir -p $USERSPACE_FOLDER_PATH/.git;sudo chown 1000:1000 $USERSPACE_FOLDER_PATH/ -Rf
             export PUBLIC_IP="$(hostname -I | cut -d " " -f1)"
             export SIMULATION_ID="${{ env.SIMULATION_ID }}"
-            export ROBOTNAME="ci_${{ inputs.product_name }}"
+            export ROBOTNAME="ci_${{ inputs.component_name }}"
             rm -rf userspace
 
             # Enable debug logs of movai-service
