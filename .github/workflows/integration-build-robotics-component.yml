@@ -156,6 +156,7 @@ jobs:
           BRANCH=${{ github.base_ref }}
           # Remove branch prefix 
           branch=${BRANCH#*/}
+          branch=$(echo ${branch} | sed "s;\.;-;g" )
 
           run_type="ci"
 
