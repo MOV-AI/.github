@@ -50,6 +50,8 @@ on:
         required: true
       ssh_priv_key:
         required: true
+      slack_token_id:
+        required: true
 
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.13"
