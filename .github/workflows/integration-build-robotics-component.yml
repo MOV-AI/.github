@@ -410,6 +410,9 @@ jobs:
             export PATH="$HOME/.local/bin:$PATH"
 
             PRODUCT_NAME="$(echo ${{ inputs.vs_product_name }} | sed '\''s/^project-\(movai-\)\?//'\'' )"
+            if [[ "$PRODUCT_NAME" == "studio" ]]; then
+              PRODUCT_NAME="solution"
+            fi
             CONFIG_FILE_NAME="product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
 
             cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/* ./ && sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
