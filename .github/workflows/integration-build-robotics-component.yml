@@ -488,7 +488,10 @@ jobs:
       - name: Remote - Move test artifacts
         if: always()
         shell: bash
-        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/test_artifacts test_artifacts
+        run: |
+          pwd
+          scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/test_artifacts test_artifacts
+          ls -la
 
       - name: Upload test_artifacts
         if: always()
