@@ -498,7 +498,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test_artifacts
-          path: test_artifacts
+          path: test_artifacts/
 
       - name: Teardown remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
