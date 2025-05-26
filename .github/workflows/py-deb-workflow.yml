@@ -68,10 +68,14 @@ jobs:
     uses: MOV-AI/.github/.github/workflows/py-workflow.yml@feature/dp-1843
     secrets: inherit
     with:
-      pre_commit: true
-      deploy: false
+      pre_commit: ${{ inputs.pre_commit }}
+      deploy: ${{ inputs.deploy }}
+      release: ${{ inputs.release }}
+      run_black: ${{ inputs.run_black }}
       with_docs: true
+      prod_publish_repos: ${{ inputs.prod_publish_pypi }}
       PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
+      test_on_host: false
 
   Debian-Pack:
     if: ${{ always() && ! inputs.release && needs.Build.result == 'success' }}
@@ -225,25 +229,12 @@ jobs:
 
             done
 
-      - name: Create Github Release
+      - name: Complete Github Release
         if: ${{ inputs.deploy }}
         shell: bash
         run: |
-          title="Release of ${{ needs.Debian-Pack.outputs.package_version }}"
-          git config --global --add safe.directory $(pwd)
-          gh release create -p -t "$title" -n "Release notes for ${{ needs.Debian-Pack.outputs.package_name }}" \
-          --target ${{ needs.Debian-Pack.outputs.raise_commit }} \
-          --generate-notes \
-          ${{ needs.Debian-Pack.outputs.package_version }}
-
           # add all files in the artifacts folder
           assets=()
-          for asset in dist/*; do
-            # do nothing if folder is empty
-            if [[ $asset != "dist/*" ]]; then
-              gh release upload ${{ needs.Debian-Pack.outputs.package_version }} $asset
-            fi
-          done
           for asset in artifacts/*; do
             # do nothing if folder is empty
             if [[ $asset != "artifacts/*" ]]; then
@@ -253,42 +244,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
-  Release-Pypi:
-    if: ${{ inputs.release }}
-    runs-on: ubuntu-22.04
-    container:
-      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set tag output
-        id: vars
-        run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
-
-      - name: Fetch python artifact from github release
-        run: |
-          mkdir dist
-          git config --global --add safe.directory $(pwd)
-          cd dist
-          gh release download ${{ steps.vars.outputs.tag}} -p *.whl
-          gh release download ${{ steps.vars.outputs.tag}} -p *.tar.gz
-        env:
-          GITHUB_TOKEN: ${{ secrets.gh_token }}
-
-      - name: Publish package to prod PyPI
-        uses: pypa/gh-action-pypi-publish@v1.12.4
-        with:
-          user: ${{ secrets.nexus_publisher_user }}
-          password: ${{ secrets.nexus_publisher_password }}
-          repository-url: https://artifacts.cloud.mov.ai/repository/${{ inputs.prod_publish_pypi }}/
-
   Release-Deb:
-    needs: [Release-Pypi]
+    needs: [Publish]
     strategy:
       matrix:
         publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
