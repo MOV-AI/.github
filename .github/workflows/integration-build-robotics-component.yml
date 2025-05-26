@@ -483,6 +483,9 @@ jobs:
 
             # spawner (mobros firmware)
             journalctl -u movai-service -t mobros --since '\''1hour ago'\'' &> spawner-firmware.log || true
+
+            pwd
+            ls -la test_artifacts
           '
 
       - name: Remote - Move test artifacts
@@ -491,14 +494,14 @@ jobs:
         run: |
           pwd
           scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/test_artifacts test_artifacts
-          ls -la
+          ls -la test_artifacts
 
       - name: Upload test_artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test_artifacts
-          path: test_artifacts/
+          path: test_artifacts
 
       - name: Teardown remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
