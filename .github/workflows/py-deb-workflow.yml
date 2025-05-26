@@ -65,7 +65,7 @@ env:
 
 jobs:
   Build:
-    uses: MOV-AI/.github/.github/workflows/py-workflow.yml@v2.3
+    uses: MOV-AI/.github/.github/workflows/py-workflow.yml@feature/dp-1843
     secrets: inherit
     with:
       pre_commit: true
@@ -85,8 +85,8 @@ jobs:
         password: ${{secrets.registry_password}}
     outputs:
       package_name: ${{ steps.bump.outputs.py_pkg_name }}
-      package_version: ${{ steps.bump.outputs.py_pkg_version }}
-      raise_commit: ${{needs.Build.outputs.raise_commit}}
+      package_version: ${{ needs.Build.outputs.package_version }}
+      raise_commit: ${{ needs.Build.outputs.raise_commit }}
     steps:
 
     - name: Checkout
@@ -103,15 +103,8 @@ jobs:
     - name: Get package name
       id: bump
       run: |
-        python -m venv venv --clear
-        . venv/bin/activate
-        pip install bump-my-version==0.29.0
-
         pkg_name=$(cat pyproject.toml | grep '^name = "' | cut -d '"' -f2)
-        current_version=$(bump-my-version show current_version)
-
         echo "py_pkg_name=${pkg_name}" >> $GITHUB_OUTPUT
-        echo "py_pkg_version=${current_version}" >> $GITHUB_OUTPUT
 
     - name: Raise & Pack
       run: |
