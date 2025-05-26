@@ -14,7 +14,7 @@ on:
         required: false
         type: string
         description: Selenoid server to use
-        default: http://selenoid-ui.hel0.mov.ai
+        default: http://selenoid-ui.hel.mov.ai
     secrets:
       gh_token:
         required: true
@@ -125,7 +125,8 @@ jobs:
           pytest \
             --hub_url ${{ inputs.selenoid_server_url }} \
             --base_url https://${{ steps.agent_info.outputs.ip }}/ \
-            --install-platform
+            --install-platform \
+            | tee pytest-output.log
 
       - name: Save docker container logs
         if: always()

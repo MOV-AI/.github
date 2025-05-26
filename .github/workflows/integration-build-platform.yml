@@ -104,7 +104,7 @@ env:
   SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
   # development slack channel
   #SLACK_CHANNEL: "C05K2KF1UP8"
-  PROVISIONING_ENV_VERSION: 0.1.0-12
+  PROVISIONING_ENV_VERSION: 0.1.0-15
   PROVISIONING_ENV_REPO: devops-tf-env-conf
   ARTIFACTS_RETENTION_DAYS: 15
 
@@ -236,6 +236,7 @@ jobs:
           python3 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install --upgrade pyOpenSSL cryptography
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash raised_meta
@@ -541,7 +542,7 @@ jobs:
           pip install buildkite-test-collector
           python3 -m pytest \
             -ra \
-            --hub_url http://selenoid-ui.hel0.mov.ai \
+            --hub_url http://selenoid-ui.hel.mov.ai \
             --base_url https://${{ steps.agent_info.outputs.ip }}/ \
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
@@ -1558,6 +1559,7 @@ jobs:
           python3 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install --upgrade pyOpenSSL cryptography
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash robot_configs
@@ -1959,6 +1961,7 @@ jobs:
           python3 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install --upgrade pyOpenSSL cryptography
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash sim_configs
@@ -2496,6 +2499,7 @@ jobs:
           python3 -m venv .ci-venv --clear --system-site-packages
           . .ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install --upgrade pyOpenSSL cryptography
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
           python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
@@ -2582,6 +2586,8 @@ jobs:
       - name: Update release notes
         shell: bash
         run: |
+          sudo apt update
+          sudo apt install jq -y
           # release version
           product_version=$(cat product.version)
 

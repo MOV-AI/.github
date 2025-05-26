@@ -5,12 +5,6 @@ on:
       OS_NAME:
         type: string
         required: true
-      OS_VERSION:
-        type: string
-        required: true
-      OS_FULL_VERSION:
-        type: string
-        required: true
       PRODUCT_TYPE:
         type: string
         required: true
@@ -102,19 +96,24 @@ jobs:
 
       - name: Create config file
         run: |
+          UBUNTU_NAME=${{ inputs.OS_NAME }}
+          if [ "${UBUNTU_NAME}" == "jammy" ]; then
+            CONFIG_FILE=config.cfg
+          elif [ "${UBUNTU_NAME}" == "noble" ]; then
+            CONFIG_FILE=config-noble.cfg
+          else
+            exit 1
+          fi
           # overwrite the config file with the new values with sed
-          sed -i 's/UBUNTU_NAME=.*/UBUNTU_NAME=${{ inputs.OS_NAME }}/' config.cfg
-          sed -i 's/UBUNTU_VERSION=.*/UBUNTU_VERSION=${{ inputs.OS_VERSION }}/' config.cfg
-          sed -i 's/UBUNTU_VERSION_BUILD=.*/UBUNTU_VERSION_BUILD=${{ inputs.OS_FULL_VERSION }}/' config.cfg
-          sed -i 's/PRODUCT_TYPE=.*/PRODUCT_TYPE=${{ inputs.PRODUCT_TYPE }}/' config.cfg
-          sed -i 's/PRODUCT_NAME=.*/PRODUCT_NAME=${{ inputs.PRODUCT_NAME }}/' config.cfg
-          sed -i 's/PRODUCT_VERSION=.*/PRODUCT_VERSION=${{ inputs.PRODUCT_VERSION }}/' config.cfg
-          sed -i 's/PRODUCT_JSON_NAME=.*/PRODUCT_JSON_NAME=${{ inputs.PRODUCT_JSON_NAME }}/' config.cfg
+          sed -i 's/PRODUCT_TYPE=.*/PRODUCT_TYPE=${{ inputs.PRODUCT_TYPE }}/' "${CONFIG_FILE}"
+          sed -i 's/PRODUCT_NAME=.*/PRODUCT_NAME=${{ inputs.PRODUCT_NAME }}/' "${CONFIG_FILE}"
+          sed -i 's/PRODUCT_VERSION=.*/PRODUCT_VERSION=${{ inputs.PRODUCT_VERSION }}/' "${CONFIG_FILE}"
+          sed -i 's/PRODUCT_JSON_NAME=.*/PRODUCT_JSON_NAME=${{ inputs.PRODUCT_JSON_NAME }}/' "${CONFIG_FILE}"
           # test if PRODUCT_PACKAGES is set
           if [ -z "${{ inputs.PRODUCT_PACKAGES }}" ]; then
-            sed -i 's/PRODUCT_PACKAGES=.*/PRODUCT_PACKAGES=none/' config.cfg
+            sed -i 's/PRODUCT_PACKAGES=.*/PRODUCT_PACKAGES=none/' "${CONFIG_FILE}"
           else
-            sed -i 's/PRODUCT_PACKAGES=.*/PRODUCT_PACKAGES=${{ inputs.PRODUCT_PACKAGES }}/' config.cfg
+            sed -i 's/PRODUCT_PACKAGES=.*/PRODUCT_PACKAGES=${{ inputs.PRODUCT_PACKAGES }}/' "${CONFIG_FILE}"
           fi
 
       - name: Fetch release configuration files
@@ -143,6 +142,15 @@ jobs:
 
       - name: Run the script
         run: |
+          UBUNTU_NAME=${{ inputs.OS_NAME }}
+          if [ "${UBUNTU_NAME}" == "jammy" ]; then
+            CONFIG_FILE=config.cfg
+          elif [ "${UBUNTU_NAME}" == "noble" ]; then
+            CONFIG_FILE=config-noble.cfg
+          else
+            exit 1
+          fi
+          export CONFIG_FILE
           mv offline_install_artifacts/* .
           make
 
@@ -153,7 +161,7 @@ jobs:
           generated_file_name=${{ inputs.PRODUCT_NAME }}_${{ steps.raise.outputs.raised_version }}_offline_install.iso
           echo "::group::Artifact local copy to staging area $RUN_STAGING_DIR"
           mkdir -p $RUN_STAGING_DIR
-          mv "staging/${{ inputs.OS_NAME }}-${{ inputs.OS_VERSION }}/movai-os-${{ steps.raise.outputs.raised_version }}-${{ inputs.OS_NAME }}-${{ inputs.OS_FULL_VERSION }}.iso" "$RUN_STAGING_DIR/$generated_file_name"
+          mv "staging/${{ inputs.OS_NAME }}/movai-os-${{ steps.raise.outputs.raised_version }}-${{ inputs.OS_NAME }}.iso" "$RUN_STAGING_DIR/$generated_file_name"
           echo "file_name=$generated_file_name" >> $GITHUB_OUTPUT
 
       - name: Clean up
