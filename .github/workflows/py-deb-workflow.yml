@@ -86,8 +86,13 @@ jobs:
     outputs:
       package_name: ${{ steps.bump.outputs.py_pkg_name }}
       package_version: ${{ needs.Build.outputs.package_version }}
-      raise_commit: ${{ needs.Build.outputs.raise_commit }}
+      raise_commit: ${{ needs.Build.outputs.commit_id }}
     steps:
+
+    - name: Debug needs outputs
+      run: |
+        echo "Package version: ${{ needs.Build.outputs.package_version }}"
+        echo "Raise commit: ${{ needs.Build.outputs.commit_id }}"
 
     - name: Checkout
       uses: actions/checkout@v4
@@ -108,14 +113,14 @@ jobs:
 
     - name: Raise & Pack
       run: |
-        dch -b -v "${{ steps.bump.outputs.package_version }}" "Auto created package version ${{ steps.bump.outputs.package_version }}"
+        dch -b -v "${{ needs.Build.outputs.package_version }}" "Auto created package version ${{ needs.Build.outputs.package_version }}"
         PKG_VERSION_ANCHOR='$PKG_VERSION'
         if test -f "./debian/postinst"; then
-          sed -i "s/$PKG_VERSION_ANCHOR/${{ steps.bump.outputs.package_version }}/g" ./debian/postinst
+          sed -i "s/$PKG_VERSION_ANCHOR/${{ needs.Build.outputs.package_version }}/g" ./debian/postinst
         fi
 
         if test -f "./debian/prerm"; then
-          sed -i "s/$PKG_VERSION_ANCHOR/${{ steps.bump.outputs.package_version }}/g" ./debian/prerm
+          sed -i "s/$PKG_VERSION_ANCHOR/${{ needs.Build.outputs.package_version }}/g" ./debian/prerm
         fi
 
         dpkg-buildpackage -nc -d -b -rfakeroot -us -uc -tc
