@@ -469,6 +469,7 @@ jobs:
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
             mkdir -p test_artifacts
+            cd test_artifacts
 
             # for sanity
             docker ps -a
@@ -485,16 +486,13 @@ jobs:
             journalctl -u movai-service -t mobros --since '\''1hour ago'\'' &> spawner-firmware.log || true
 
             pwd
-            ls -la test_artifacts
+            ls -la
           '
 
       - name: Remote - Move test artifacts
         if: always()
         shell: bash
-        run: |
-          pwd
-          scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/test_artifacts test_artifacts
-          ls -la test_artifacts
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/test_artifacts test_artifacts
 
       - name: Upload test_artifacts
         if: always()
