@@ -71,8 +71,6 @@ jobs:
       pre_commit: true
       deploy: false
       with_docs: true
-    outputs:
-      raise_commit: ${{ steps.Build.outputs.raise_commit }}
 
   Debian-Pack:
     if: ${{ always() && ! inputs.release && needs.Build.result == 'success' }}
