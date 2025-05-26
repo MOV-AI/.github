@@ -33,14 +33,14 @@ on:
         type: string
         default: 'pypi-edge'
       PYTHON_VERSION:
-        required: false
+        required: true
         type: string
         default: "3.8.10"
       test_on_host:
         required: false
         type: boolean
         default: false
-        description: When true the tests are run on the host machine, otherwise they are run inside a container
+        description: When true the tests are run on the host machine, otherwise they are run inside a container. Useful when running tests using docker compose
     secrets:
       auto_commit_user:
         required: false # only when deploy true
@@ -74,74 +74,99 @@ jobs:
           GITHUB_TOKEN: '${{ secrets.auto_commit_password }}'
           MERGE_MSG: "Branch was auto-updated."
 
-  Pre-commit:
-    if: ${{ inputs.pre_commit }}
+  Pre-build:
+    if: ${{ !inputs.release }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ inputs.PYTHON_VERSION }}
-
-      - name: Install dependencies and package
-        run: |
-          python3 -m pip install pip --upgrade
-          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r build-requirements.txt
-          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple .
-
-          python3 -m pip install pre-commit
-
-      - name: Run pre-commit
-        run: |
-          git config --global --add safe.directory $(pwd)
-          python3 -m pre_commit run --show-diff-on-failure --color=always --all-files
-
-  Linting:
-    if: ${{ ! inputs.release }}
-    runs-on: ubuntu-22.04
-    container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
+      image: python:${{ inputs.PYTHON_VERSION }}
+    outputs:
+      branch: ${{ steps.var_branch.outputs.branch }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
-        # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
         submodules: recursive
 
-    - uses: actions/setup-python@v5
+    - name: Set branch output
+      if: ${{ inputs.deploy }}
+      id: var_branch
+      run: |
+        echo "Branch name is: ${GITHUB_REF#refs/heads/}"
+        echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+
+  Pre-commit:
+    if: ${{ !inputs.release && inputs.pre_commit }}
+    needs: [ Pre-build ]
+    runs-on: ubuntu-22.04
+    container:
+      image: python:${{ inputs.PYTHON_VERSION }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install dependencies and package
+        run: |
+          python3 -m pip install pip pre-commit --upgrade
+          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r build-requirements.txt
+          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple .
+
+      - name: Run pre-commit
+        run: |
+          git config --global --add safe.directory $(pwd)
+          python -m pre_commit run --show-diff-on-failure --color=always --all-files
+
+  Linting:
+    if: ${{ !inputs.release }}
+    runs-on: ubuntu-22.04
+    needs: [ Pre-build ]
+    container:
+      image: python:${{ inputs.PYTHON_VERSION }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
       with:
-        python-version: ${{ inputs.PYTHON_VERSION }}
+        fetch-depth: 0
+        submodules: recursive
 
     - name: Upgrade pip
-      run: python -m pip install pip --upgrade
+      run: python3 -m pip install pip --upgrade
+    
+    - name: Configure pip with custom index
+      run: |
+        mkdir -p ~/.config/pip
+        echo "[global]" > ~/.config/pip/pip.conf
+        echo "index-url = https://artifacts.cloud.mov.ai/repository/pypi-experimental/simple" >> ~/.config/pip/pip.conf
+        echo "extra-index-url =" >> ~/.config/pip/pip.conf
+        echo "  https://pypi.org/simple" >> ~/.config/pip/pip.conf
+        echo "trusted-host =" >> ~/.config/pip/pip.conf
+        echo "  artifacts.cloud.mov.ai" >> ~/.config/pip/pip.conf
+        echo "  pypi.org" >> ~/.config/pip/pip.conf
 
     - name: Install build-requirements
-      run: python -m pip install -r build-requirements.txt
+      run: |
+        python3 -m pip install -r build-requirements.txt
+        python3 -m pip install build twine
+
+    - name: Install python package
+      run: python3 -m pip install .
 
     - name: Run Black
       if: ${{ inputs.run_black }}
       run: |
-        python -m black \
+        python3 -m black \
           --line-length 100 \
           --diff \
           --check \
           .
 
     - name: Python Linters
-      # run linters isolated so no issues are masked from SonarCloud
       run: |
-        python -m flake8 \
+        python3 -m flake8 \
           --isolated \
           --exclude dist,.*\.egg-info,.git,__pycache__,.tox,venv \
           --max-complexity 10 \
@@ -149,55 +174,40 @@ jobs:
           --exit-zero \
           --output-file flake8-report.txt
 
-        # pylint seems to not have a way to ignore configuration files
-        # so we need to provide it a dummy one
         touch dummy-pylint-config
 
-        python -m pylint \
+        python3 -m pylint \
           --rcfile dummy-pylint-config \
           --ignore-patterns dist,.*\.egg-info,.git,__pycache__,.tox,venv \
           --max-line-length 100 \
           --exit-zero \
           --output pylint-report.txt \
           .
-      
-    - name: Upload flake8 report
-      uses: actions/upload-artifact@v4
-      with:
-        name: flake8-report
-        path: flake8-report.txt
-        retention-days: 5
 
-    - name: Upload pylint report
+    - name: Upload tests report
       uses: actions/upload-artifact@v4
       with:
-        name: pylint-report
-        path: pylint-report.txt
+        name: tests-report
+        path: |
+          flake8-report.txt
+          pylint-report.txt
         retention-days: 5
 
   Test-on-container:
-    if: ${{ ! inputs.release && ! inputs.test_on_host }}
+    if: ${{ !inputs.release && !inputs.test_on_host }}
     runs-on: ubuntu-22.04
-    needs: [Linting]
+    needs: [ Linting ]
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
+      image: python:${{ inputs.PYTHON_VERSION }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
-        # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
         submodules: recursive
-
-    - uses: actions/setup-python@v5
-      with:
-        python-version: ${{ inputs.PYTHON_VERSION }}
-
+    
     - name: Upgrade pip
-      run: python -m pip install pip --upgrade
+      run: python3 -m pip install pip --upgrade
 
     - name: Configure pip with custom index
       run: |
@@ -211,11 +221,12 @@ jobs:
         echo "  pypi.org" >> ~/.config/pip/pip.conf
 
     - name: Install build-requirements
-      run: python -m pip install -r build-requirements.txt
+      run: |
+        python3 -m pip install -r build-requirements.txt
 
     - name: Install python package
-      run: python -m pip install .
-
+      run: python3 -m pip install .
+    
     - name: Run tests
       run: |
         if [ -f tox.ini ]; then
@@ -223,40 +234,44 @@ jobs:
             tox
         else
             # run tests
-            python -m pytest tests/
+            python3 -m pytest tests/
         fi
-    
-    - name: Upload coverage
+
+    - name: Upload tests report
       uses: actions/upload-artifact@v4
       with:
         name: coverage
         path: coverage.xml
         retention-days: 5
-  
+
   Test-on-host:
-    if: ${{ ! inputs.release && inputs.test_on_host }}
+    if: ${{ !inputs.release && inputs.test_on_host }}
     runs-on: ubuntu-22.04
-    needs: [Linting]
+    needs: [ Linting ]
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
-        # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
         submodules: recursive
-    
-    - name: Add deadsnakes PPA
-      run: |
-        sudo apt update
-        sudo apt install -y software-properties-common
-        sudo add-apt-repository -y ppa:deadsnakes/ppa
 
-    - name: Install python
+    - name: Calculate python version
+      if: ${{ startsWith(inputs.PYTHON_VERSION, '3.8') }}
+      id: python_version
       run: |
-        PYTHON_MAJOR_MINOR=$(echo ${{ inputs.PYTHON_VERSION }} | cut -d. -f1,2)
-        sudo apt update
-        sudo apt install -y python${PYTHON_MAJOR_MINOR} python${PYTHON_MAJOR_MINOR}-distutils
-        curl -sS https://bootstrap.pypa.io/pip/${PYTHON_MAJOR_MINOR}/get-pip.py | python${PYTHON_MAJOR_MINOR}
+        echo "PYTHON_MAJOR_MINOR=$(echo ${{ inputs.PYTHON_VERSION }} | cut -d. -f1,2)" >> $GITHUB_ENV
+
+    - name: Setup python3.8
+      if: ${{ startsWith(inputs.PYTHON_VERSION, '3.8') }}
+      uses: deadsnakes/action@v3.2.0
+      with:
+        python-version: ${{ env.PYTHON_MAJOR_MINOR }}
+
+    - name: Setup python3.10
+      if: ${{ !startsWith(inputs.PYTHON_VERSION, '3.8') }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.PYTHON_VERSION }}
 
     - name: Configure pip with custom index
       run: |
@@ -277,21 +292,19 @@ jobs:
         registry: ${{ env.REGISTRY }}
 
     - name: Install build-requirements
-      run: python${PYTHON_MAJOR_MINOR} -m pip install -r build-requirements.txt
+      run: python3 -m pip install -r build-requirements.txt
 
     - name: Install python package
-      run: python${PYTHON_MAJOR_MINOR} -m pip install .
+      run: python3 -m pip install .
 
     - name: Run tests
       run: |
-        docker version
-        docker compose version 
         if [ -f tox.ini ]; then
             # run tests and generates coverage.xml
             tox
         else
             # run tests
-            python${PYTHON_MAJOR_MINOR} -m pytest tests/
+            python3 -m pytest tests/
         fi
     
     - name: Upload coverage
@@ -300,95 +313,19 @@ jobs:
         name: coverage
         path: coverage.xml
         retention-days: 5
-  
-  # Not necessary to run on containers
-  SonarCloud:
-    if: ${{ always() && ! inputs.release && (needs.Test-on-container.result == 'success' || needs.Test-on-host.result == 'success') }}
-    runs-on: ubuntu-22.04
-    needs: [Test-on-container, Test-on-host]
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        # Disabling shallow clone is recommended for improving relevancy of reporting
-        fetch-depth: 0
-        submodules: recursive
-
-    - name: Download coverage
-      uses: actions/download-artifact@v4
-      with:
-        name: coverage
-        path: coverage.xml
-
-    - name: Download flake8 report
-      uses: actions/download-artifact@v4
-      with:
-        name: flake8-report
-        path: flake8-report.txt
-    
-    - name: Download pylint report
-      uses: actions/download-artifact@v4
-      with:
-        name: pylint-report
-        path: pylint-report.txt
-
-    - name: Create SonarCloud project and disable autoscan
-      uses: MOV-AI/action-sonarcloud-proj-config@v1
-      with:
-        sonar_org: 'mov-ai'
-        sonar_token: ${{ secrets.sonar_token }}
-
-    - name: SonarCloud Scan
-      uses: SonarSource/sonarqube-scan-action@v4.2.1
-      env:
-        GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
-        SONAR_TOKEN: ${{ secrets.sonar_token }}
-      with:
-        projectBaseDir: ./
-        args: >
-          -Dsonar.organization=mov-ai
-          -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
-          -Dsonar.sources=.
-          -Dsonar.scm.provider=git
-          -Dsonar.qualitygate.wait=true
-          -Dsonar.qualitygate.timeout=300
-          -Dsonar.coverage.exclusions=tests/**,docs/**
-          -Dsonar.cpd.exclusions=tests/**,docs/**
-          -Dsonar.python.version=3
-          -Dsonar.python.flake8.reportPaths=flake8-report.txt
-          -Dsonar.python.pylint.reportPaths=pylint-report.txt
-          -Dsonar.python.coverage.reportPaths=coverage.xml
-      
-    - name: Link to SonarCloud dashboard
-      shell: bash
-      run: |
-        echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
   Build:
-    if: ${{ always() && ! inputs.release && needs.SonarCloud.result == 'success' }}
-    needs: [SonarCloud]
+    if: ${{ always() && (needs.Test-on-container.result == 'success' || needs.Test-on-host.result == 'success') }}
     runs-on: ubuntu-22.04
+    needs: [ Test-on-container , Test-on-host ]
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
-    outputs:
-      package_name: ${{ steps.bump.outputs.py_pkg_name }}
-      package_version: ${{ steps.bump.outputs.py_pkg_version }}
-      raise_commit : ${{steps.commit_id.outputs.commit_id}}
-
+      image: python:${{ inputs.PYTHON_VERSION }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
-        # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
         submodules: recursive
-
-    - uses: actions/setup-python@v5
-      with:
-        python-version: ${{ inputs.PYTHON_VERSION }}
 
     - name: Upgrade pip
       run: python -m pip install pip --upgrade
@@ -513,6 +450,63 @@ jobs:
         user: ${{ secrets.nexus_publisher_user }}
         password: ${{ secrets.nexus_publisher_password }}
         repository-url: https://artifacts.cloud.mov.ai/repository/pypi-integration/
+
+  # Not necessary to run on containers
+  SonarCloud:
+    if: ${{ always() && ! inputs.release && (needs.Test-on-container.result == 'success' || needs.Test-on-host.result == 'success') }}
+    runs-on: ubuntu-22.04
+    needs: [Test-on-container, Test-on-host]
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        # Disabling shallow clone is recommended for improving relevancy of reporting
+        fetch-depth: 0
+        submodules: recursive
+
+    - name: Download tests-report
+      uses: actions/download-artifact@v4
+      with:
+        name: tests-report
+        path: ./
+    
+    - name: Download coverage
+      uses: actions/download-artifact@v4
+      with:
+        name: coverage
+        path: coverage.xml
+
+    - name: Create SonarCloud project and disable autoscan
+      uses: MOV-AI/action-sonarcloud-proj-config@v1
+      with:
+        sonar_org: 'mov-ai'
+        sonar_token: ${{ secrets.sonar_token }}
+
+    - name: SonarCloud Scan
+      uses: SonarSource/sonarqube-scan-action@v4.2.1
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        SONAR_TOKEN: ${{ secrets.sonar_token }}
+      with:
+        projectBaseDir: ./
+        args: >
+          -Dsonar.organization=mov-ai
+          -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
+          -Dsonar.sources=.
+          -Dsonar.scm.provider=git
+          -Dsonar.qualitygate.wait=true
+          -Dsonar.qualitygate.timeout=300
+          -Dsonar.coverage.exclusions=tests/**,docs/**
+          -Dsonar.cpd.exclusions=tests/**,docs/**
+          -Dsonar.python.version=3
+          -Dsonar.python.flake8.reportPaths=flake8-report.txt
+          -Dsonar.python.pylint.reportPaths=pylint-report.txt
+          -Dsonar.python.coverage.reportPaths=coverage.xml
+
+    - name: Link to SonarCloud dashboard
+      shell: bash
+      run: |
+        echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
   Debian-Pack:
     if: ${{ always() && ! inputs.release && needs.Build.result == 'success' }}
