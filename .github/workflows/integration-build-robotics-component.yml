@@ -40,9 +40,9 @@ on:
         required: true
       registry_password:
         required: true
-      aws_key_id:
+      aws_access_key_id:
         required: true
-      aws_secret_key_id:
+      aws_secret_access_key:
         required: true
       proxmox_ve_sim_username:
         required: true
@@ -61,8 +61,8 @@ env:
   CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.0.0.31"
   CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
   CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
-  AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.aws_access_key_id }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_access_key }}
   AWS_DEFAULT_REGION: "us-east-1"
   REGISTRY: registry.cloud.mov.ai
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"

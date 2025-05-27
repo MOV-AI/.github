@@ -49,6 +49,32 @@ on:
         required: false
         type: string
         default: ""
+      component_name:
+        required: true
+        type: string
+      vs_product_name:
+        required: true
+        type: string
+      vs_product_version_pattern:
+        required: true
+        type: string
+      test_repo_name:
+        required: true
+        type: string
+      test_version:
+        required: true
+        type: string
+      test_set:
+        required: true
+        type: string
+      cluster:
+        required: false
+        default: "mary"
+        type: string
+      debug_component_tests_keep_alive:
+        required: false
+        default: false
+        type: boolean
 
     secrets:
       auto_commit_user:
@@ -77,6 +103,14 @@ on:
         required: false
       aws_secret_access_key:
         required: false
+      proxmox_ve_sim_username:
+        required: true
+      proxmox_ve_sim_password:
+        required: true
+      ssh_priv_key:
+        required: true
+      slack_token_id:
+        required: true
 
 
 env:
@@ -304,6 +338,20 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ inputs.MOBTEST_VERSION }} --ignore-installed
           mobtest proj /opt/ros/${{ matrix.distro }}/share/
+
+  Package-Stack-Tests:
+    if: ${{ inputs.release == 'false' }}
+    uses: MOV-AI/.github/.github/workflows/integration-build-robotics-component.yml@feature/dp-1844
+    with:
+      vs_product_name: ${{ inputs.vs_product_name }}
+      vs_product_version_pattern: ${{ inputs.vs_product_version_pattern }}
+      component_name: ${{ inputs.component_name }}
+      test_repo_name: ${{ inputs.test_repo_name }}
+      test_set: ${{ inputs.test_set }}
+      test_version: ${{ inputs.test_version }}
+      cluster: ${{ inputs.cluster }}
+      debug_component_tests_keep_alive: ${{ inputs.debug_component_tests_keep_alive }}
+    secrets: inherit
 
   Publish:
     if: ${{ inputs.deploy == 'true' }}
