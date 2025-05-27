@@ -169,7 +169,7 @@ jobs:
           echo "jobtimeout=$calc_jobtimeout" >> $GITHUB_OUTPUT
 
   Validate-boostrap-configs:
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
       credentials:
@@ -355,7 +355,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     outputs:
       raised_version: ${{ steps.pre_build.outputs.raised_version }}
       slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
@@ -407,7 +407,6 @@ jobs:
         shell: bash
         run: |
           . .ci-venv/bin/activate
-          sudo apt install jq -y
           # iterate over .json files and update images to use ci image
           for file in $(find . -maxdepth 1 -name "*.json"); do
             echo $file
@@ -559,7 +558,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     steps:
       - uses: rtCamp/action-cleanup@master
 
@@ -855,7 +854,7 @@ jobs:
 
   Build-Simulator:
     needs: [Validate-boostrap-configs, Build-Spawner]
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     env:
       DISTRO: noetic
     outputs:
@@ -1043,7 +1042,7 @@ jobs:
           then
             echo "simul_tests_infra=simul-${{ inputs.cluster }}-queuer" >> $GITHUB_OUTPUT
           else
-            echo "simul_tests_infra=integration-pipeline" >> $GITHUB_OUTPUT
+            echo "simul_tests_infra=integration-pipeline-${{ inputs.proxmox_cluster_name }}" >> $GITHUB_OUTPUT
           fi
 
   Install-Simulator-Robot:
@@ -1051,7 +1050,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     outputs:
       slack_thread_id: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
       skip_simulator: ${{ needs.Build-Simulator.outputs.skip_simulator }}
@@ -1494,6 +1493,7 @@ jobs:
           echo "host_ip=$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
           echo "host_user=$(echo $user | sed "s;\";;g")" >> $GITHUB_OUTPUT
           echo "ssh_connect_string=$(echo $user | sed "s;\";;g")@$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
+
       - name: Configure SSH
         if: ${{ inputs.with_simulation_tests }}
         id: remote_ssh_setup
@@ -1506,6 +1506,7 @@ jobs:
             set -e
             cloud-init status --wait; rm -rf ./${{ env.REMOTE_WORKSPACE_PATH }}; mkdir -p ./${{ env.REMOTE_WORKSPACE_PATH }}
           '
+
       - name: Prepare Devops provisioning slack message
         if: ${{ inputs.with_simulation_tests && github.event_name != 'pull_request' }}
         id: pre_slack_infra
@@ -2049,7 +2050,7 @@ jobs:
 
   publish:
     needs: [Validate-boostrap-configs, Install-Robot, Install-Simulator-Robot, Validation-Simulator-Tests]
-    runs-on: integration-pipeline
+    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
@@ -2328,6 +2329,7 @@ jobs:
         id: pre_slack
         shell: bash
         run: |
+          
           if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
             MESSAGE=":white_check_mark: LONG RUN: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is stable (Cluster: ${{ inputs.cluster }}) :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           else
