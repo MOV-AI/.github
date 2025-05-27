@@ -434,17 +434,6 @@ jobs:
           echo "movai_pwd=4Iva6UHAQq9DGITj" >> $GITHUB_OUTPUT
           echo "robot_name=ci_${{ inputs.component_name }}" >> $GITHUB_OUTPUT
 
-
-      - name: Remote - Post install patch
-        shell: bash
-        run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
-            set -e
-            echo "Installing component ${{ inputs.component_name }} in spawner-${{ steps.install.outputs.robot_name }}-movai"
-            docker cp ${{ env.REMOTE_WORKSPACE_PATH }}/artifacts/ spawner-${{ steps.install.outputs.robot_name }}-movai:/tmp/artifacts
-            docker exec -u root spawner-${{ steps.install.outputs.robot_name }}-movai bash -c "dpkg -i /tmp/artifacts/*.deb"
-          '
-
       # - name: test setup
       #   shell: bash
       #   run: |
