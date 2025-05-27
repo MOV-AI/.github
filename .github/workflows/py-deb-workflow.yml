@@ -102,6 +102,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         submodules: recursive
+        ref: ${{ needs.Build.outputs.commit_id }}
 
     - name: Get package name
       id: bump

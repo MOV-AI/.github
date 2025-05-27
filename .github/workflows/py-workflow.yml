@@ -500,7 +500,6 @@ jobs:
         unprotect_reviews: true
 
     - name: Commit of version
-      if: ${{ inputs.deploy }}
       id: commit_id
       run: |
         commit_hash=$(git log --format="%H" -n 1)
