@@ -341,6 +341,7 @@ jobs:
 
   Package-Stack-Tests:
     if: ${{ inputs.release == 'false' }}
+    needs: [Package-Install-Test]
     uses: MOV-AI/.github/.github/workflows/integration-build-robotics-component.yml@feature/dp-1844
     with:
       vs_product_name: ${{ inputs.vs_product_name }}
