@@ -20,6 +20,14 @@ on:
         required: false
         type: string
         default: ''
+      slack_channel:
+        required: false
+        type: string
+        default: 'C02U028NMB7' # rnd-platform
+      simulation_qa_key:
+        required: false
+        type: string
+        default: "simulator_tests"
 
     secrets:
       auto_commit_user:
@@ -73,14 +81,14 @@ env:
   XRAY_SECRET: ${{ secrets.xray_secret}}
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
-  SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
+  SLACK_CHANNEL: ${{ inputs.slack_channel }}
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.0.0-3"
   PROVISION_INFRA_DIR: "provision_scripts"
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISIONING_ENV_CONF_VERSION: "0.1.0-8"
+  PROVISIONING_ENV_CONF_VERSION: "0.1.0-15"
   PROVISION_ENV_CONF_DIR: "infra_env_configs"
 
 jobs:
@@ -362,7 +370,7 @@ jobs:
               --gh_api_pwd ${{ secrets.auto_commit_pwd }}
           '
 
-      - name: Remote - Setup Integration tests
+      - name: Remote - Setup Integration tests ${{ inputs.simulation_qa_key }}
         id: simulator_tests_setup
         shell: bash
         run: |
@@ -370,7 +378,7 @@ jobs:
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            qa_key=simulator_tests
+            qa_key=${{ inputs.simulation_qa_key }}
 
             docker run -u root \
               -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
@@ -703,7 +711,7 @@ jobs:
           count=0
           while [ $count -lt $attempts ]; do
             var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
-            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars -var "fleet_peer_nr=0"
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
               break
