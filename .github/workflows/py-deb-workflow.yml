@@ -75,7 +75,7 @@ jobs:
       with_docs: true
       prod_publish_repos: ${{ inputs.prod_publish_pypi }}
       PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
-      test_on_host: false
+      test_on_host: ${{ inputs.test_on_host }}
 
   Debian-Pack:
     if: ${{ always() && ! inputs.release && needs.Build.result == 'success' }}
