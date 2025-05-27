@@ -357,7 +357,7 @@ jobs:
   Publish:
     if: ${{ inputs.deploy == 'true' }}
     runs-on: ubuntu-22.04
-    needs:  [Package-Install-Test,Test]
+    needs:  [Package-Install-Test,Test,Package-Stack-Tests]
     container:
       image: registry.cloud.mov.ai/qa/ros-buildtools-noetic:${{ inputs.ROS_BUILDTOOLS_TAG }}
       options: --user root

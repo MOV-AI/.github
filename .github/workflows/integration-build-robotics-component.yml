@@ -74,7 +74,7 @@ env:
   SIMULATION_ID: CI
 
 jobs:
-  Platform-tests:
+  Stack-tests:
     runs-on: simul-${{ inputs.cluster }}-queuer
 
     steps:
