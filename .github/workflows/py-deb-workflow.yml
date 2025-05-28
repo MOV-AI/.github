@@ -63,7 +63,7 @@ on:
 
 jobs:
   Build:
-    uses: MOV-AI/.github/.github/workflows/py-workflow.yml@feature/dp-1843-only-docker-tests
+    uses: MOV-AI/.github/.github/workflows/py-workflow.yml@v2.3
     secrets: inherit
     with:
       pre_commit: ${{ inputs.pre_commit }}
