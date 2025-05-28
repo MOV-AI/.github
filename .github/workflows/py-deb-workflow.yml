@@ -78,7 +78,7 @@ jobs:
       test_on_host: ${{ inputs.test_on_host }}
 
   Debian-Pack:
-    if: ${{ always() && ! inputs.release && needs.Build.result == 'success' }}
+    if: ${{ ! inputs.release }}
     needs: [Build]
     runs-on: ubuntu-22.04
     container:
@@ -139,7 +139,7 @@ jobs:
 
   Publish:
     needs: [Debian-Pack]
-    if: ${{ always() && inputs.deploy && needs.Debian-Pack.result == 'success' }}
+    if: ${{ inputs.deploy }}
     runs-on: ubuntu-22.04
     container:
       image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
