@@ -60,8 +60,6 @@ on:
         required: true
       sonar_token:
         required: true
-env:
-  REGISTRY: "registry.hel.mov.ai"
 
 jobs:
   Build:
