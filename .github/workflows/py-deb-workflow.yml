@@ -80,7 +80,11 @@ jobs:
     needs: [Build]
     runs-on: ubuntu-22.04
     container:
-      image: python:${{ inputs.PYTHON_VERSION }}
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.14
+      options: --user root
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
     outputs:
       package_name: ${{ steps.bump.outputs.py_pkg_name }}
       package_version: ${{ needs.Build.outputs.package_version }}
