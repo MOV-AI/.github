@@ -434,17 +434,24 @@ jobs:
           echo "movai_pwd=4Iva6UHAQq9DGITj" >> $GITHUB_OUTPUT
           echo "robot_name=ci_${{ inputs.component_name }}" >> $GITHUB_OUTPUT
 
-      # - name: test setup
-      #   shell: bash
-      #   run: |
+
+      - name: Remote - Run tests
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}/stack_tests
+
+            . test-venv/bin/activate
+
+            echo "python3 -m pytest ${{ inputs.test_set }}/" 
+            # python3 -m pytest ${{ inputs.test_set }}/ 
+            deactivate
+          '
 
 
-      # - name: Run tests
-      #   shell: bash
-      #   run: |
-
-
-      # - name: Collect tests artifacts
+      # - name: Remote - Collect tests artifacts
       #   if: always()
       #   shell: bash
       #   run: |
