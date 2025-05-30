@@ -112,7 +112,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         submodules: recursive
 
@@ -142,6 +142,29 @@ jobs:
             echo "\e[31mPlease add \033[0;36m$expected_url \e[31mto all the package.xmls mentioned above!"
             exit 1
         fi
+
+    - name: Clean repository from invalid package.xml files
+      run: |
+        python3 -m venv /tmp/catkin_lint_venv
+        source /tmp/catkin_lint_venv/bin/activate
+        pip install --upgrade pip
+        pip install catkin_lint
+
+        echo "Identifying and removing package.xml files that cause internal errors in catkin_lint..."
+        pkg_xml_files=$(find -L ./ -type f -name 'package.xml' ! -path '*/.git/*' ! -path '*/.github/*' 2>/dev/null)
+        for file in $pkg_xml_files; do
+          pkg_dir=$(dirname "$file")
+          output=$(catkin_lint --quiet $pkg_dir 2>&1) || true
+          if [[ "$output" == *"internal error"* ]]; then
+            echo "Removing package.xml that causes internal errors: $file"
+            rm "$file"
+          fi
+        done
+
+        # Deactivate and remove the virtual environment
+        deactivate
+        echo "Cleaning up temporary virtual environment..."
+        rm -rf /tmp/catkin_lint_venv
 
     - name: Install Mobros
       run: |
@@ -207,7 +230,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           # Disabling shallow clone is recommended for improving relevancy of reporting
           fetch-depth: 0
@@ -318,7 +341,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         submodules: recursive
 
@@ -460,7 +483,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         submodules: recursive
 
