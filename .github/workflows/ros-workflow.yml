@@ -155,7 +155,10 @@ jobs:
 
         if [ -f $VALIDATION_FILE ];
         then
-            echo "::error file=$VALIDATION_FILE::Please add $expected_url to all the package.xmls:\n $(cat $VALIDATION_FILE)"
+            echo "::error Validation failed::The following package.xml files are missing the URL tag"
+            for file in $(cat $VALIDATION_FILE); do
+                echo "::error file=$file::Please add $expected_url to the package.xml"
+            done
             exit 1
         fi
 
