@@ -444,7 +444,7 @@ jobs:
 
             . test-venv/bin/activate
 
-            python3 -m pytest ${{ inputs.test_set }}/ --component-pkgs ../artifacts
+            python3 -m pytest ${{ inputs.test_set }} --component-pkgs ../artifacts
             deactivate
           '
 
