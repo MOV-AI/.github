@@ -20,6 +20,10 @@ on:
       environment:
         required: true
         type: string
+      overwrite_slack_channel:
+        required: false
+        type: string
+        default: "C050L85R6VC"
 
     secrets:
       auto_commit_pwd:
@@ -30,6 +34,10 @@ on:
         required: true
       host_pwd:
         required: true
+      aws_key_id:
+        required: false
+      aws_secret_key_id:
+        required: false
 
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "3.0.0.2"
@@ -44,7 +52,7 @@ env:
   USERSPACE_FOLDER_PATH: userspace
   REMOTE_WORKSPACE_PATH: deploy_workspace
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-3"
+  PROVISION_INFRA_VERSION: "2.0.0-10"
   # slack channel movai-projects
   SLACK_CHANNEL: ${{ inputs.overwrite_slack_channel }}
   # development slack channel
