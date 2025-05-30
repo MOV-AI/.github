@@ -156,7 +156,7 @@ jobs:
             echo "\e[31mPlease add \033[0;36m$expected_url \e[31mto all the package.xmls mentioned above!"
             # add a comment to the PR if it exists
             if [ -n "$GITHUB_EVENT_PATH" ]; then
-                pr_number=$(jq -r '.pull_request.number' "$GITHUB_EVENT_PATH")
+                pr_number=$(grep -o '"number":[^,}]*' "$GITHUB_EVENT_PATH" | grep -o '[0-9]\+' | head -1)
                 if [ -n "$pr_number" ]; then
                     bad_files=$(cat $VALIDATION_FILE)
                     gh pr comment "$pr_number" --body "The following package.xml files are missing the required URL tag:\n\n$bad_files\n\nPlease add the URL tag to these files." || true
