@@ -161,9 +161,7 @@ jobs:
           fi
         done
 
-        # Deactivate and remove the virtual environment
         deactivate
-        echo "Cleaning up temporary virtual environment..."
         rm -rf /tmp/catkin_lint_venv
 
     - name: Install Mobros
