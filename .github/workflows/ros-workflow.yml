@@ -145,11 +145,7 @@ jobs:
 
     - name: Clean repository from invalid package.xml files
       run: |
-        python3 -m venv /tmp/catkin_lint_venv
-        source /tmp/catkin_lint_venv/bin/activate
-        pip install --upgrade pip
-        pip install catkin_lint
-
+        python3 -m pip install catkin_lint --quiet --no-cache-dir
         echo "Identifying and removing package.xml files that cause internal errors in catkin_lint..."
         pkg_xml_files=$(find -L ./ -type f -name 'package.xml' ! -path '*/.git/*' ! -path '*/.github/*' 2>/dev/null)
         for file in $pkg_xml_files; do
@@ -160,9 +156,6 @@ jobs:
             rm "$file"
           fi
         done
-
-        deactivate
-        rm -rf /tmp/catkin_lint_venv
 
     - name: Install Mobros
       run: |
