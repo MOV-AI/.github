@@ -31,6 +31,12 @@ jobs:
         echo "Malicious content" > malicious.txt
         ls -l
 
+    - name: Attempt to upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: malicious-artifact
+        path: malicious.txt
+
     - name: Attempt to create a release
       run: |
         echo "Trying to create a GitHub release..."
