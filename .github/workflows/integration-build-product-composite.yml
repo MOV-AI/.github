@@ -95,9 +95,11 @@ on:
         required: false
       minio_secret_key_id:
         required: false
+      provision_infra_pwd:
+        required: true
 
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "4.0.1.1" 
+  CI_INTEGRATION_SCRIPTS_VERSION: "4.0.1.1"
   MOBTEST_VERSION: "0.0.4.3"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.26"
   GITHUB_API_USR: "OttoMation-Movai"
@@ -109,7 +111,7 @@ env:
   USERSPACE_FOLDER_PATH: /opt/movai/userspace
   REMOTE_WORKSPACE_PATH: workspace
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-9"
+  PROVISION_INFRA_VERSION: "2.0.0-10"
   # slack channel movai-projects
   SLACK_CHANNEL: ${{ inputs.overwrite_slack_channel }}
   # development slack channel
@@ -286,21 +288,21 @@ jobs:
           docker run --rm -i -e HADOLINT_FAILURE_THRESHOLD=error hadolint/hadolint < docker/${{ matrix.distro }}/Dockerfile
 
       - name: Login to ${{ env.REGISTRY }} Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
           registry: ${{ env.REGISTRY }}
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
           registry: ${{ env.PUSH_REGISTRY }}
 
       - name: Login to ${{ env.MID_REGISTRY }} Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -326,7 +328,7 @@ jobs:
           echo "raised_version=$(cat product.version)" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Docker build
         shell: bash
@@ -439,21 +441,21 @@ jobs:
           path: .
 
       - name: Login to ${{ env.REGISTRY }} Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
           registry: ${{ env.REGISTRY }}
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
           registry: ${{ env.PUSH_REGISTRY }}
 
       - name: Login to ${{ env.MID_REGISTRY }} Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -478,7 +480,7 @@ jobs:
 
           CONFIG_FILE_NAME="standalone-manager-${{ matrix.distro }}-template.json"
           sudo rm -rf $USERSPACE_FOLDER_PATH || true
-          sudo mkdir -p $USERSPACE_FOLDER_PATH $USERSPACE_FOLDER_PATH/models_database $USERSPACE_FOLDER_PATH/tugbot_ignition 
+          sudo mkdir -p $USERSPACE_FOLDER_PATH $USERSPACE_FOLDER_PATH/models_database $USERSPACE_FOLDER_PATH/tugbot_ignition
           sudo chmod 777 -R $USERSPACE_FOLDER_PATH
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
 
@@ -696,7 +698,7 @@ jobs:
 
       - name: Login to ${{ env.REGISTRY }} Registry
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation }}
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -704,7 +706,7 @@ jobs:
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation }}
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -712,7 +714,7 @@ jobs:
 
       - name: Login to ${{ env.MID_REGISTRY }} Registry
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation }}
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -727,7 +729,7 @@ jobs:
           echo "push_name=$push_name_tmp" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Docker build
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation}}
@@ -856,7 +858,7 @@ jobs:
 
       - name: Login to ${{ env.REGISTRY }} Registry
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation }}
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -864,14 +866,14 @@ jobs:
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation }}
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
           registry: ${{ env.PUSH_REGISTRY }}
 
       - name: Login to ${{ env.MID_REGISTRY }} Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -910,7 +912,7 @@ jobs:
           cp *.json artifacts/
           CONFIG_FILE_NAME="standalone-manager-${{ matrix.distro }}-simulator-template.json"
           sudo rm -rf $USERSPACE_FOLDER_PATH || true
-          sudo mkdir -p $USERSPACE_FOLDER_PATH $USERSPACE_FOLDER_PATH/models_database $USERSPACE_FOLDER_PATH/tugbot_ignition 
+          sudo mkdir -p $USERSPACE_FOLDER_PATH $USERSPACE_FOLDER_PATH/models_database $USERSPACE_FOLDER_PATH/tugbot_ignition
           sudo chmod 777 -R $USERSPACE_FOLDER_PATH
 
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
@@ -1106,7 +1108,7 @@ jobs:
           ls -la $env_configs_dir
           echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
           deactivate
-  
+
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
         shell: bash
@@ -1293,7 +1295,7 @@ jobs:
         env:
           GITHUB_USER: ${{ env.GITHUB_API_USR }}
           GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
-          
+
 
       - name: Collect Fleet QA artifacts
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
@@ -1499,7 +1501,7 @@ jobs:
           ls -la $env_configs_dir
           echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
           deactivate
-  
+
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
         shell: bash
@@ -1565,13 +1567,13 @@ jobs:
 
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
           chmod 600 ~/.ssh/ci_priv_key.pem
-      
+
       - name: Check tf data fetch output
         if: failure()
         shell: bash
         continue-on-error: true
         run: cat /tmp/terraform-external-debug.log
-      
+
       - name: Gather Terraform outputs
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         id: infra_outputs
@@ -1866,14 +1868,14 @@ jobs:
           python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: Login to ${{ env.MID_REGISTRY }} Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
           registry: ${{ env.MID_REGISTRY }}
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}

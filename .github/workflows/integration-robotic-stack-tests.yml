@@ -52,6 +52,8 @@ on:
         required: true
       minio_secret_key_id:
         required: true
+      provision_infra_pwd:
+        required: true
 env:
   CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.0.0.31"
   CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
@@ -70,7 +72,7 @@ env:
   JIRA_PASSWORD: ${{ secrets.jira_password}}
   SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-3"
+  PROVISION_INFRA_VERSION: "2.0.0-10"
   PROVISION_INFRA_DIR: "provision_scripts"
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
@@ -94,7 +96,7 @@ jobs:
           echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
 
       - name: Login to Private Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -125,7 +127,7 @@ jobs:
             --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
             --target_dir $env_configs_dir
           cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/$env_configs_dir ./$env_configs_dir
-          
+
           ls -la $env_configs_dir
           echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
 
@@ -701,4 +703,3 @@ jobs:
         run: |
           summary_message=":x: Failed \n Artifacts url: ${{ steps.minio_publish.outputs.publish_url }}"
           echo -e "## ${{ github.job }} Summary\n${summary_message}" >> $GITHUB_STEP_SUMMARY
-
