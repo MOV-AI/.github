@@ -1,0 +1,54 @@
+name: Fork PR Abuse Test
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - v2.3
+
+jobs:
+  fork-pr-test:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.fork == true
+
+    steps:
+    - name: Show PR Info
+      run: |
+        echo "PR from fork: ${{ github.event.pull_request.head.repo.full_name }}"
+        echo "Base repo: ${{ github.repository }}"
+
+    - name: Attempt to access secrets
+      run: |
+        echo "Trying to access secrets..."
+        echo "MY_SECRET=${{ secrets.MY_SECRET }}"  # Expected to be blank
+
+    - name: Dump Environment Variables
+      run: env
+
+    - name: Attempt to write to file system
+      run: |
+        echo "Trying to write a file"
+        echo "Malicious content" > malicious.txt
+        ls -l
+
+    - name: Attempt to upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: malicious-artifact
+        path: malicious.txt
+
+    - name: Attempt to create a release
+      run: |
+        echo "Trying to create a GitHub release..."
+        curl -X POST \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Accept: application/vnd.github+json" \
+          https://api.github.com/repos/${{ github.repository }}/releases \
+          -d '{
+            "tag_name": "v999.0-malicious",
+            "target_commitish": "main",
+            "name": "Malicious Release",
+            "body": "This should never be allowed.",
+            "draft": false,
+            "prerelease": true
+          }' || echo "Expected to fail due to permissions"
