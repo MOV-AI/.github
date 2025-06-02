@@ -40,7 +40,7 @@ on:
       ROS_BUILDTOOLS_TAG:
         required: false
         type: string
-        default: "v2.0.13"
+        default: "v2.0.15"
       MOBROS_VERSION:
         required: false
         type: string
