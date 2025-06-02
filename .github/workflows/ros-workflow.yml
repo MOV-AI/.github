@@ -40,11 +40,11 @@ on:
       ROS_BUILDTOOLS_TAG:
         required: false
         type: string
-        default: "v2.0.13"
+        default: "v2.0.16"
       MOBROS_VERSION:
         required: false
         type: string
-        default: "2.1.0.3"
+        default: "2.1.1.2"
       INSTALL_CONFLICT_HANDLING:
         required: false
         type: string
