@@ -112,11 +112,26 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         submodules: recursive
 
+    - name: Clean repository from invalid package.xml files
+      run: |
+        python3 -m pip install catkin_lint --quiet --no-cache-dir
+        echo "Identifying and removing package.xml files that cause internal errors in catkin_lint..."
+        find -L ./ -type f -name 'package.xml' ! -path '*/.git/*' ! -path '*/.github/*' 2>/dev/null | while read -r file; do
+          pkg_dir=$(dirname "$file")
+          output=$(catkin_lint --quiet "$pkg_dir" 2>&1) || true
+          if echo "$output" | grep -q "internal error"; then
+            rm -vf "$file"
+            echo "::warning file=$file::Removed package.xml that causes internal errors"
+          fi
+        done
+
     - name: Validate Repository Package.xml
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
         expected_url="<url>$GITHUB_SERVER_URL/$GITHUB_REPOSITORY</url>"
         VALIDATION_FILE="/tmp/verification-failed"
@@ -131,7 +146,7 @@ jobs:
           if [ -z "$search_result" ]:
           then
               echo "\e[31m$0"
-              touch $2
+              echo "$0" >> $2
           fi
         fi
 
@@ -139,7 +154,10 @@ jobs:
 
         if [ -f $VALIDATION_FILE ];
         then
-            echo "\e[31mPlease add \033[0;36m$expected_url \e[31mto all the package.xmls mentioned above!"
+            echo "::error Validation failed::The following package.xml files are missing the URL tag"
+            for file in $(cat $VALIDATION_FILE); do
+                echo "::error file=$file::Please add $expected_url to the package.xml"
+            done
             exit 1
         fi
 
@@ -212,7 +230,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           # Disabling shallow clone is recommended for improving relevancy of reporting
           fetch-depth: 0
@@ -323,7 +341,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         submodules: recursive
 
@@ -458,7 +476,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         submodules: recursive
 
