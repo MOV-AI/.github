@@ -120,10 +120,9 @@ jobs:
       run: |
         python3 -m pip install catkin_lint --quiet --no-cache-dir
         echo "Identifying and removing package.xml files that cause internal errors in catkin_lint..."
-        pkg_xml_files=$(find -L ./ -type f -name 'package.xml' ! -path '*/.git/*' ! -path '*/.github/*' 2>/dev/null)
-        for file in $pkg_xml_files; do
+        find -L ./ -type f -name 'package.xml' ! -path '*/.git/*' ! -path '*/.github/*' 2>/dev/null | while read -r file; do
           pkg_dir=$(dirname "$file")
-          output=$(catkin_lint --quiet $pkg_dir 2>&1) || true
+          output=$(catkin_lint --quiet "$pkg_dir" 2>&1) || true
           if echo "$output" | grep -q "internal error"; then
             rm -vf "$file"
             echo "::warning file=$file::Removed package.xml that causes internal errors"
