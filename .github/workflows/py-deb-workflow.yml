@@ -226,6 +226,7 @@ jobs:
         if: ${{ inputs.deploy }}
         shell: bash
         run: |
+          git config --global --add safe.directory $(pwd)
           # add all files in the artifacts folder
           assets=()
           for asset in artifacts/*; do
