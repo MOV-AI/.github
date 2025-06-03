@@ -72,7 +72,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: [pre_check]
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.13
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.16
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -183,7 +183,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs:  [Build]
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.13
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.16
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -282,7 +282,7 @@ jobs:
     if: ${{ inputs.deploy == 'true' }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.13
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.16
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -388,7 +388,7 @@ jobs:
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.13
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.16
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
