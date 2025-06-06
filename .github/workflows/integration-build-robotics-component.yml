@@ -447,7 +447,11 @@ jobs:
             . test-venv/bin/activate
             python3 -m pip install -r requirements.txt
 
-            pytest ${{ inputs.test_set }} --component-pkgs ../artifacts
+            pytest ${{ inputs.test_set }} \
+              --component-pkgs ../artifacts \
+              --movai-user ${{ steps.install.outputs.movai_user }} \
+              --movai-pwd ${{ steps.install.outputs.movai_pwd }}
+
             deactivate
           '
 
