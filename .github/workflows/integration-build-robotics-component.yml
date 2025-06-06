@@ -450,7 +450,7 @@ jobs:
             pytest ${{ inputs.test_set }} \
               --component-pkgs ../artifacts \
               --movai-user ${{ steps.install.outputs.movai_user }} \
-              --movai-pwd ${{ steps.install.outputs.movai_pwd }}
+              --movai-pw ${{ steps.install.outputs.movai_pwd }}
 
             deactivate
           '
