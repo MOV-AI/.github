@@ -442,7 +442,10 @@ jobs:
 
             cd ${{ env.REMOTE_WORKSPACE_PATH }}/stack_tests
 
+            # setup tests venv in a step that is always executed
+            python3 -m venv test-venv --clear
             . test-venv/bin/activate
+            python3 -m pip install -r requirements.txt
 
             pytest ${{ inputs.test_set }} --component-pkgs ../artifacts
             deactivate
