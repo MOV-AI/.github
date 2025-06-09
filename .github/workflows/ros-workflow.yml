@@ -340,7 +340,7 @@ jobs:
           mobtest proj /opt/ros/${{ matrix.distro }}/share/
 
   Package-Stack-Tests:
-    if: ${{ inputs.release == 'false' }}
+    if: ${{ inputs.release == 'false' && inputs.deploy == 'true' }}
     needs: [Build]
     uses: MOV-AI/.github/.github/workflows/integration-build-robotics-component.yml@feature/dp-1844
     with:
