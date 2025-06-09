@@ -35,7 +35,7 @@ env:
   PROVISION_INFRA_REPO: "devops-tf-bpg-runners"
   PROVISION_INFRA_VERSION: "dev"
   PROVISION_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISION_ENV_CONF_VERSION: "0.1.0-14"
+  PROVISION_ENV_CONF_VERSION: "0.1.0-17"
   SLACK_CHANNEL: "G0102LEV1CL"
   #INFRA_NODES: '["hel0", "hel1"]'
   #INFRA_IP_CONFIGURATION: '{"hel0": 0,"hel1": 4}'
@@ -72,7 +72,7 @@ jobs:
         node: ${{ fromJSON( inputs.INFRA_NODES ) }}
     outputs:
       slack_thread_id: ${{ needs.Slack-thread.outputs.slack_thread_id }}
-      
+
     steps:
 
       - name: Setup CI Scripts in .ci-venv
@@ -91,7 +91,7 @@ jobs:
           python3 -m pip install pyOpenSSL --upgrade pip
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-  
+
       - name: Setup env conf
         id: provision_infra_env_conf
         shell: bash
@@ -100,17 +100,17 @@ jobs:
           provision_infra_dir=${{ env.PROVISION_ENV_CONF_REPO }}
           provision_infra_version=${{ env.PROVISION_ENV_CONF_VERSION }}
           provision_infra_repo_name=${{ env.PROVISION_ENV_CONF_REPO }}
-  
+
           rm -rf $provision_infra_dir
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
             --version $provision_infra_version \
             --gh_api_user ${{ secrets.auto_commit_user }} \
             --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
             --target_dir $provision_infra_dir
-          
+
           ls -la $provision_infra_dir
           echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-  
+
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
         shell: bash
@@ -119,24 +119,24 @@ jobs:
           provision_infra_dir=${{ env.PROVISION_INFRA_REPO }}
           provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
           provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
-  
+
           rm -rf $provision_infra_dir
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
             --version $provision_infra_version \
             --gh_api_user ${{ secrets.auto_commit_user }} \
             --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
             --target_dir $provision_infra_dir
-  
+
           ls -la $provision_infra_dir
           echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-  
+
       - name: Install terraform
         shell: bash
         run: |
           wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
           echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
           sudo apt update && sudo apt install terraform=1.5.2-1 --allow-downgrades -y
-  
+
       - name: Provision remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
@@ -146,10 +146,10 @@ jobs:
           multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }}})
           ip_list_str=${multiply_ips::-1}
           var_file_arg='-var-file=../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars'
-  
-  
+
+
           echo "proxmox_host_list=[$node_list_str]">>input.tfvars
-  
+
           echo 'gh_runner_nr="${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }}"'>>input.tfvars
           echo 'gh_runner_name_prefix="${{ matrix.node }}-ip-runner"'>>input.tfvars
           echo "ip_list=[$ip_list_str]">>input.tfvars
@@ -160,13 +160,13 @@ jobs:
           echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
           echo 'gh_runner_labels=["integration-pipeline-${{ matrix.node }}"]'>>input.tfvars
           echo "\n">>input
-  
+
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
           terraform init -backend-config="key=${{ matrix.node }}-ip-runners.tfstate"
           terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
           terraform refresh $var_file_arg -var-file=input.tfvars
-  
+
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
           sudo chmod 600 ~/.ssh/ci_priv_key.pem
 
@@ -226,7 +226,7 @@ jobs:
         node: ${{ fromJSON( inputs.INFRA_NODES ) }}
     outputs:
       slack_thread_id: ${{ needs.Destroy-IP-Runners.outputs.slack_thread_id }}
-      
+
     steps:
 
     - name: Setup CI Scripts in .ci-venv
@@ -261,7 +261,7 @@ jobs:
           --gh_api_user ${{ secrets.auto_commit_user }} \
           --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
           --target_dir $provision_infra_dir
-        
+
         ls -la $provision_infra_dir
         echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
 
@@ -379,7 +379,7 @@ jobs:
         node: ${{ fromJSON( inputs.INFRA_NODES ) }}
     outputs:
       slack_thread_id: ${{ needs.Slack-thread.outputs.slack_thread_id }}
-      
+
     steps:
 
       - name: Setup CI Scripts in .ci-venv
@@ -398,7 +398,7 @@ jobs:
           python3 -m pip install pyOpenSSL --upgrade pip
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-  
+
       - name: Setup env conf
         id: provision_infra_env_conf
         shell: bash
@@ -407,17 +407,17 @@ jobs:
           provision_infra_dir=${{ env.PROVISION_ENV_CONF_REPO }}
           provision_infra_version=${{ env.PROVISION_ENV_CONF_VERSION }}
           provision_infra_repo_name=${{ env.PROVISION_ENV_CONF_REPO }}
-  
+
           rm -rf $provision_infra_dir
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
             --version $provision_infra_version \
             --gh_api_user ${{ secrets.auto_commit_user }} \
             --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
             --target_dir $provision_infra_dir
-          
+
           ls -la $provision_infra_dir
           echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-  
+
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
         shell: bash
@@ -426,24 +426,24 @@ jobs:
           provision_infra_dir=${{ env.PROVISION_INFRA_REPO }}
           provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
           provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
-  
+
           rm -rf $provision_infra_dir
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
             --version $provision_infra_version \
             --gh_api_user ${{ secrets.auto_commit_user }} \
             --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
             --target_dir $provision_infra_dir
-  
+
           ls -la $provision_infra_dir
           echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-  
+
       - name: Install terraform
         shell: bash
         run: |
           wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
           echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
           sudo apt update && sudo apt install terraform=1.5.2-1 --allow-downgrades -y
-  
+
       - name: Provision remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
@@ -453,10 +453,10 @@ jobs:
           multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_QA_CONFIGURATION)[matrix.node] }}})
           ip_list_str=${multiply_ips::-1}
           var_file_arg='-var-file=../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars'
-  
-  
+
+
           echo "proxmox_host_list=[$node_list_str]">>input.tfvars
-  
+
           echo 'gh_runner_nr="${{ fromJson(inputs.INFRA_QA_CONFIGURATION)[matrix.node] }}"'>>input.tfvars
           echo 'gh_runner_name_prefix="${{ matrix.node }}-qa-runner"'>>input.tfvars
           echo "ip_list=[$ip_list_str]">>input.tfvars
@@ -467,13 +467,13 @@ jobs:
           echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
           echo 'gh_runner_labels=["qa-pipeline-${{ matrix.node }}"]'>>input.tfvars
           echo "\n">>input
-  
+
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
           terraform init -backend-config="key=${{ matrix.node }}-qa-runners.tfstate"
           terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
           terraform refresh $var_file_arg -var-file=input.tfvars
-  
+
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
           sudo chmod 600 ~/.ssh/ci_priv_key.pem
 
@@ -481,7 +481,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
           AWS_DEFAULT_REGION: "us-east-1"
-  
+
       - name: Get current job id
         if: always()
         shell: bash
@@ -566,7 +566,7 @@ jobs:
           --gh_api_user ${{ secrets.auto_commit_user }} \
           --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
           --target_dir $provision_infra_dir
-        
+
         ls -la $provision_infra_dir
         echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
 
