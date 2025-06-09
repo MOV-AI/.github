@@ -455,13 +455,6 @@ jobs:
             deactivate
           '
 
-
-      # - name: Remote - Collect tests artifacts
-      #   if: always()
-      #   shell: bash
-      #   run: |
-
-
       - name: Remote - Collect platform artifacts
         if: always()
         shell: bash
