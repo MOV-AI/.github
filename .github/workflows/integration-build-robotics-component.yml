@@ -470,7 +470,7 @@ jobs:
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
             mkdir -p tests_artifacts
-            cd test_artifacts
+            cd tests_artifacts
 
             # for sanity
             docker ps -a
