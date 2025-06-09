@@ -499,7 +499,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test_artifacts
+          name: tests_artifacts
           path: tests_artifacts
 
       - name: Teardown remote vms (Proxmox)
