@@ -104,13 +104,13 @@ on:
       aws_secret_access_key:
         required: false
       proxmox_ve_sim_username:
-        required: true
+        required: false
       proxmox_ve_sim_password:
-        required: true
+        required: false
       ssh_priv_key:
-        required: true
+        required: false
       slack_token_id:
-        required: true
+        required: false
 
 
 env:
