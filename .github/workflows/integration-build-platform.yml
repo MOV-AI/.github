@@ -104,7 +104,9 @@ env:
   SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
   # development slack channel
   #SLACK_CHANNEL: "C05K2KF1UP8"
-  PROVISIONING_ENV_VERSION: 0.1.0-15
+  PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
+  PROVISION_INFRA_VERSION: "2.0.0-14"
+  PROVISIONING_ENV_VERSION: 0.1.0-17
   PROVISIONING_ENV_REPO: devops-tf-env-conf
   ARTIFACTS_RETENTION_DAYS: 15
 
@@ -1588,8 +1590,8 @@ jobs:
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=1.0.0-3
-          provision_infra_repo_name=devops-tf-proxmox-bpg
+          provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
+          provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
 
           rm -rf $provision_infra_dir
           . .ci-venv/bin/activate
