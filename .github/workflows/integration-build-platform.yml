@@ -105,7 +105,7 @@ env:
   # development slack channel
   #SLACK_CHANNEL: "C05K2KF1UP8"
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-14"
+  PROVISION_INFRA_VERSION: "2.0.0-15"
   PROVISIONING_ENV_VERSION: 0.1.0-17
   PROVISIONING_ENV_REPO: devops-tf-env-conf
   ARTIFACTS_RETENTION_DAYS: 15
@@ -484,7 +484,7 @@ jobs:
           docker pull "${{ env.REGISTRY }}/ci/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
-          
+
 
       - name: Install
         id: install
@@ -503,7 +503,7 @@ jobs:
           sudo rm -rf $USERSPACE_FOLDER_PATH || true
           sudo mkdir -p $USERSPACE_FOLDER_PATH
           sudo chmod 777 $USERSPACE_FOLDER_PATH
-          
+
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
@@ -549,7 +549,7 @@ jobs:
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
             --cucumberjson=./results.json \
-            --junit-xml=junit.xml 
+            --junit-xml=junit.xml
           deactivate
         env:
           BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
@@ -815,7 +815,7 @@ jobs:
           docker pull "${{ env.REGISTRY }}/ci/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
-          
+
       - name: Install tests
         timeout-minutes: 45
         id: install
@@ -830,13 +830,13 @@ jobs:
           sudo mkdir -p $USERSPACE_FOLDER_PATH/automated_install
           sudo chmod 777 -R $USERSPACE_FOLDER_PATH
           if [ "${{ steps.install_tests_setup.outputs.jira_report }}" == "True" ] ; then
-          
+
           python3 -m pytest tests/ \
               -ra \
               -k '${{ steps.install_tests_setup.outputs.test_set }}' \
               --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" \
               --jira_report \
-              --junit-xml=junit.xml 
+              --junit-xml=junit.xml
 
           else
           python3 -m pytest tests/ \
@@ -845,7 +845,7 @@ jobs:
               --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --junit-xml=junit.xml
           fi
           deactivate
-          
+
           user=$(cat results/credentials.txt | awk -F: '{print $1}')
           pwd=$(cat results/credentials.txt | awk -F: '{print $2}')
 
@@ -1160,7 +1160,7 @@ jobs:
           deactivate
         env:
           BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
-      
+
       - name: Publish test results trunk
         if: always()
         working-directory: ${{ steps.api_tests_setup.outputs.target_dir }}
@@ -1356,7 +1356,7 @@ jobs:
           docker pull "${{ env.REGISTRY }}/ci/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
-       
+
       - name: Install
         id: install
         shell: bash
@@ -1764,7 +1764,7 @@ jobs:
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker tag $SOURCE_TAG $TARGET_TAG_REGISTRY"
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker tag $SOURCE_TAG $TARGET_TAG_MID_REGISTRY"
           done
-          
+
 
           ansible-playbook install.yml \
             -i ../staging/provisioned_inventory.yml \
@@ -2271,7 +2271,7 @@ jobs:
             -m 'simulator' \
             --tb=short \
             --junit-xml=junit.xml
-            
+
           ./trunk flakytests upload \
             --org-url-slug "movai" \
             --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
@@ -2487,7 +2487,7 @@ jobs:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
           registry: ${{ env.REGISTRY }}
-  
+
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
         uses: docker/login-action@v3
         with:
