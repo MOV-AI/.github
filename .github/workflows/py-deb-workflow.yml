@@ -80,7 +80,7 @@ jobs:
     needs: [Build]
     runs-on: ubuntu-22.04
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.16
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.18
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -109,7 +109,6 @@ jobs:
 
     - name: Raise & Pack
       run: |
-        pip install bump-my-version==0.29.0
         bump-my-version bump build --no-tag --no-commit --new-version "${{ needs.Build.outputs.package_version }}"
         dch -b -v "${{ needs.Build.outputs.package_version }}" "Auto created package version ${{ needs.Build.outputs.package_version }}"
         # Set the package version in the debian files for retro-compatibility (files not present if the package is virtualenved)
