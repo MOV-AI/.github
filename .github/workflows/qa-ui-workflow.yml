@@ -114,6 +114,37 @@ jobs:
           # install tests requirements in venv
           pip install -r requirements.txt
 
+          # setup playwright
+          if command -v playwright >/dev/null 2>&1 ; then
+            echo "Install Playwright dependencies"
+            playwright install --with-deps
+          fi
+
+      - name: Install platform
+        run: |
+          sudo apt-get install -y jq wget
+
+          QS_VERSION=$(jq -r .quickstart_version installation/config.json)
+          SERVICE_VERSION=$(jq -r .services_version installation/config.json)
+
+          export PUBLIC_IP="127.0.0.1"
+          export USERSPACE_FOLDER_PATH="$PWD/installation"
+          export DISPLAY=":1"
+          export SIMULATION_ID="qa_ui_tests"
+
+          cd installation
+          wget https://movai-scripts.s3.amazonaws.com/QuickStart_${QS_VERSION}.bash
+          bash ./QuickStart_${QS_VERSION}.bash --apps "${SERVICE_VERSION}" basic-standalone-noetic.json &> quickstart.log
+
+          MOVAI_USER="movai"
+          MOVAI_PWD="movai123"
+          for robot in $(movai-cli robots list); do
+            movai-cli robots user "$robot" "$MOVAI_USER" "$MOVAI_PWD"
+          done
+
+          echo "movai_user=${MOVAI_USER}" >> $GITHUB_OUTPUT
+          echo "movai_pwd=${MOVAI_PWD}" >> $GITHUB_OUTPUT
+
       - name: UI tests
         id: ui
         shell: bash
@@ -121,11 +152,11 @@ jobs:
           export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
           # activate venv
           . venv/bin/activate
+
           # tests execution
           pytest \
             --hub_url ${{ inputs.selenoid_server_url }} \
             --base_url https://${{ steps.agent_info.outputs.ip }}/ \
-            --install-platform \
             | tee pytest-output.log
 
       - name: Save docker container logs
