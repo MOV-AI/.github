@@ -1044,7 +1044,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: ip-hel0-queuer
+    runs-on: ip-${{ inputs.cluster }}-queuer
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
       credentials:
@@ -1167,7 +1167,7 @@ jobs:
 
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
-          terraform init -backend-config="key=hel0-fleet-composite-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
+          terraform init -backend-config="key=${{ inputs.cluster }}-fleet-composite-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
           terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
           terraform refresh $var_file_arg -var-file=input.tfvars
 
@@ -1442,7 +1442,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: ip-hel0-queuer
+    runs-on: ip-${{ inputs.cluster }}-queuer
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
       credentials:
@@ -1561,7 +1561,7 @@ jobs:
 
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
-          terraform init -backend-config="key=hel0-fleet-composite-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
+          terraform init -backend-config="key=${{ inputs.cluster }}-fleet-composite-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
           terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
           terraform refresh $var_file_arg -var-file=input.tfvars
 
