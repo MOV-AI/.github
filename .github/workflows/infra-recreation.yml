@@ -33,7 +33,7 @@ on:
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.31"
   PROVISION_INFRA_REPO: "devops-tf-bpg-runners"
-  PROVISION_INFRA_VERSION: "dev"
+  PROVISION_INFRA_VERSION: "0.0.1-9"
   PROVISION_ENV_CONF_REPO: "devops-tf-env-conf"
   PROVISION_ENV_CONF_VERSION: "0.1.0-17"
   SLACK_CHANNEL: "G0102LEV1CL"
@@ -137,7 +137,7 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
           sudo apt update && sudo apt install terraform=1.5.2-1 --allow-downgrades -y
 
-      - name: Provision remote vms (Proxmox)
+      - name: Destroy remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
         run: |
@@ -444,7 +444,7 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
           sudo apt update && sudo apt install terraform=1.5.2-1 --allow-downgrades -y
 
-      - name: Provision remote vms (Proxmox)
+      - name: Destroy remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
         run: |
