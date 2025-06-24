@@ -80,7 +80,7 @@ jobs:
     needs: [Build]
     runs-on: ubuntu-22.04
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.16
+      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.18
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -109,13 +109,13 @@ jobs:
 
     - name: Raise & Pack
       run: |
+        bump-my-version bump build --no-tag --no-commit --new-version "${{ needs.Build.outputs.package_version }}"
         dch -b -v "${{ needs.Build.outputs.package_version }}" "Auto created package version ${{ needs.Build.outputs.package_version }}"
-        # TO REMOVE ONCE THE PACKAGE IS VIRTUALENVED
+        # Set the package version in the debian files for retro-compatibility (files not present if the package is virtualenved)
         PKG_VERSION_ANCHOR='$PKG_VERSION'
         if test -f "./debian/postinst"; then
           sed -i "s/$PKG_VERSION_ANCHOR/${{ needs.Build.outputs.package_version }}/g" ./debian/postinst
         fi
-
         if test -f "./debian/prerm"; then
           sed -i "s/$PKG_VERSION_ANCHOR/${{ needs.Build.outputs.package_version }}/g" ./debian/prerm
         fi
