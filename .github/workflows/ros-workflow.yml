@@ -479,8 +479,8 @@ jobs:
         commit_hash=$(git log --format="%H" -n 1)
         product_version=${{ steps.vars-after-raise.outputs.ros_pkg_version }}
         previous_version_option=""
-        if gh release view ${{ steps.vars.outputs.pkg_version }} &>/dev/null; then
-          previous_version_option="--notes-start-tag ${{ steps.vars.outputs.pkg_version }}"
+        if gh release view ${{ steps.vars-after-raise.outputs.ros_pkg_version }} &>/dev/null; then
+          previous_version_option="--notes-start-tag ${{ steps.vars-after-raise.outputs.ros_pkg_version }}"
         fi
         gh release create -p --generate-notes $previous_version_option --target $commit_hash -t "Release of $product_version" $product_version
         # add all files in the artifacts folder
