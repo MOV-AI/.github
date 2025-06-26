@@ -167,10 +167,21 @@ jobs:
         cp ../*.deb artifacts
       working-directory: ${{ matrix.sub_component }}
 
+    - name: Calc_archive_name
+      id: calc_archive_name
+      shell: bash
+      run: |
+        artifact_name="${{ matrix.sub_component }}"
+        if [[ "${{ matrix.sub_component }}" == "." || "${{ matrix.sub_component }}" == "./" ]]; then
+          artifact_name="single"
+        fi
+        
+        echo "artifact_name=$artifact_name" >> $GITHUB_OUTPUT
+
     - name: Archive binary
       uses: actions/upload-artifact@v4
       with:
-        name: package_${{ matrix.sub_component }}
+        name: package_${{ steps.calc_archive_name.outputs.artifact_name }}
         path: ${{ matrix.sub_component }}/artifacts/*
         retention-days: 5
 
@@ -294,11 +305,21 @@ jobs:
           # Disabling shallow clone is recommended for improving relevancy of reporting
           fetch-depth: 0
           submodules: recursive
+      - name: Calc_archive_name
+        id: calc_archive_name
+        shell: bash
+        run: |
+          artifact_name="${{ matrix.sub_component }}"
+          if [[ "${{ matrix.sub_component }}" == "." || "${{ matrix.sub_component }}" == "./" ]]; then
+            artifact_name="single"
+          fi
+          
+          echo "artifact_name=$artifact_name" >> $GITHUB_OUTPUT
 
       - name: Download a single artifact
         uses: actions/download-artifact@v4
         with:
-          name: package_${{ matrix.sub_component }}
+          name: package_${{ steps.calc_archive_name.outputs.artifact_name }}
           path: artifacts
           merge-multiple: true
 
