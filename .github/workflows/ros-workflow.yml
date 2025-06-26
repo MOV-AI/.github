@@ -402,18 +402,6 @@ jobs:
     - name: Install Mobros
       run: python3 -m pip install mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
 
-    - name: Find package original details
-      id: vars
-      run: |
-            main_package=$(cat /tmp/main-package.mobrosinfo)
-            build_version_section=$(cat $main_package | grep build_version)
-            version_section=$(cat $main_package | grep "<version")
-            main_version=$(echo $version_section | sed 's/ //g' | sed -e 's/<\w*>'//g | sed -e 's/<\/\w*>'//g)
-            buildid=$(echo $build_version_section | sed 's/ //g' | sed -e 's/<\w*>'//g | sed -e 's/<\/\w*>'//g)
-            VERSION="$main_version-$buildid"
-
-            echo "pkg_version=$VERSION" >> $GITHUB_OUTPUT
-
     - name: Raise version and validate Ros repository
       run: mobros raise --workspace="$(pwd)"
 
