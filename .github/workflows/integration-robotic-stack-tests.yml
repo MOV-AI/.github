@@ -28,6 +28,10 @@ on:
         required: false
         type: string
         default: "simulator_tests"
+      robotics_test_version:
+        required: false
+        type: string
+        default: ""
 
     secrets:
       auto_commit_user:
@@ -65,7 +69,7 @@ on:
       minio_secret_key_id:
         required: true
 env:
-  CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.0.0.31"
+  CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.0.0.31" # to update
   CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
   CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
   GITHUB_API_USR: "OttoMation-Movai"
@@ -380,6 +384,12 @@ jobs:
 
             qa_key=${{ inputs.simulation_qa_key }}
 
+            # overwrite tests versions if version provided 
+            override_option=""
+            if [ -n "${{ inputs.robotics_test_version }}" ]; then
+              override_option="--override_test_version ${{ inputs.robotics_test_version }}"
+            fi
+
             docker run -u root \
               -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
@@ -387,7 +397,7 @@ jobs:
               --file product-manifest.yaml \
               --key product_components.qa.$qa_key \
               --gh_api_user ${{ secrets.auto_commit_user }} \
-              --gh_api_pwd ${{ secrets.auto_commit_pwd }}
+              --gh_api_pwd ${{ secrets.auto_commit_pwd }} $override_option
 
             # install test dependencies
             target_dir=$(cat ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/target_dir.txt)
