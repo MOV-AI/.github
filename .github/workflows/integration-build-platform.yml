@@ -44,6 +44,11 @@ on:
         required: false
         type: string
         default: "simulator_tests"
+      simulation_qa_version:
+        required: false
+        type: string
+        default: ""
+        description: Version of the simulator tests to run. If not provided, the version will be taken from the product manifest.
     secrets:
       auto_commit_user:
         required: true
@@ -996,6 +1001,7 @@ jobs:
       debug_simulation_tests_keep_alive: ${{ inputs.debug_simulation_tests_keep_alive }}
       backend_name: ${{ needs.Build-Simulator.outputs.backend_image }}
       simulation_qa_key: ${{ inputs.simulation_qa_key }}
+      simulation_qa_version: ${{ inputs.simulation_qa_version }}
 
   publish:
     needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
