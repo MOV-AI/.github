@@ -32,6 +32,7 @@ on:
         required: false
         type: string
         default: ""
+        description: Version of the simulator tests to run. If not provided, the version will be taken from the product manifest.
 
     secrets:
       auto_commit_user:
