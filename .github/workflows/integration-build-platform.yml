@@ -44,7 +44,7 @@ on:
         required: false
         type: string
         default: "simulator_tests"
-      robotics_test_version:
+      simulation_qa_version:
         required: false
         type: string
         default: ""
