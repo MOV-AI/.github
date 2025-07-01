@@ -471,7 +471,7 @@ jobs:
             # for sanity
             docker ps -a
 
-            for container in backend spawner messager-server monitoring redis-master redis-local influxdb haproxy; do
+            for container in backend spawner message-server monitoring redis-master redis-local influxdb haproxy; do
               CONTAINER_ID=$(docker ps -a --format '\''{{.Names}}'\'' --filter "name=^${container}-.*")
               docker logs "${CONTAINER_ID}" &> "${container}.log" || true
             done || true
