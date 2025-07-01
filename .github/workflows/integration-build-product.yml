@@ -1835,7 +1835,7 @@ jobs:
             # for sanity
             docker ps -a
 
-            for container in backend spawner messager-server; do
+            for container in backend spawner message-server; do
              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
             done || true
@@ -1849,8 +1849,28 @@ jobs:
             # docker logs
             journalctl -u docker --since "1hour ago" &> "docker-service.log"
           '
+      - name: Remote - Collect platform metrics
+        if: ${{ always() &&  inputs.with_simulation_tests }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.simulator_tests_setup.outputs.target_dir }}
 
-      - name: Remote - Stash QA artifacts
+            # collect platform metrics
+            container="influxdb"
+            CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
+
+            docker exec -t "$CONTAINER_ID" bash -c "
+              mkdir -p /tmp/backup
+              influxd backup -portable -database platform_metrics /tmp/backup/platform_metrics_backup
+            "
+            docker cp "$CONTAINER_ID":/tmp/backup/platform_metrics_backup ./platform_metrics || true
+            
+            
+          '
+      - name: Remote - Stash QA artifacts & platform metrics
         if: ${{ always() &&  inputs.with_simulation_tests }}
         shell: bash
         run: |
@@ -1865,6 +1885,7 @@ jobs:
             mkdir -p qa_artifacts
             cp -r "${{ steps.simulator_tests_setup.outputs.target_dir }}"/*.log ./qa_artifacts || true
             cp -r "${{ steps.simulator_tests_setup.outputs.target_dir }}"/tests_artifacts ./qa_artifacts || true
+            cp -r "${{ steps.simulator_tests_setup.outputs.target_dir }}"/platform_metrics ./qa_artifacts || true
           '
           scp -r -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/qa_artifacts .
 
