@@ -1508,7 +1508,7 @@ jobs:
           '
 
       - name: Prepare Devops provisioning slack message
-        if: ${{ inputs.with_simulation_tests && github.event_name != 'pull_request' }}
+        if: ${{ inputs.with_simulation_tests && failure() && github.event_name != 'pull_request' }}
         id: pre_slack_infra
         run: |
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is being impacted by an infrastructural issue. \
