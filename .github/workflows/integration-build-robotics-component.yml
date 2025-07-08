@@ -66,7 +66,7 @@ env:
   AWS_DEFAULT_REGION: "us-east-1"
   REGISTRY: registry.cloud.mov.ai
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-15"
+  PROVISION_INFRA_VERSION: "2.0.0-16"
   PROVISION_INFRA_DIR: "provision_scripts"
   PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
   PROVISIONING_ENV_CONF_VERSION: "0.1.0-17"
@@ -118,7 +118,7 @@ jobs:
             --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
             --target_dir $env_configs_dir
           cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/$env_configs_dir ./$env_configs_dir
-          
+
           ls -la $env_configs_dir
           echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
 
@@ -149,7 +149,7 @@ jobs:
         shell: bash
         run: |
           BRANCH=${GITHUB_REF#refs/heads/}
-          # Remove branch prefix 
+          # Remove branch prefix
           branch=${BRANCH#*/}
           branch=$(echo ${branch} | sed "s;\.;-;g" )
 
@@ -160,7 +160,7 @@ jobs:
           tf_state="${{ inputs.cluster }}-sim-$local_manager_prefix"
           echo "tf_state = $tf_state"
           echo "local_manager_prefix = $local_manager_prefix"
-          
+
           echo "simul_prefix=${local_manager_prefix}" | tee >> $GITHUB_OUTPUT
           echo "tfstate_name=${tf_state}" | tee >> $GITHUB_OUTPUT
 
@@ -296,7 +296,7 @@ jobs:
       - name: Remote - Move component artifacts
         shell: bash
         run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ./artifacts ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
-          
+
       - name: Remote - create execution folder
         shell: bash
         run: |
@@ -308,7 +308,7 @@ jobs:
             mkdir  -p ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
             sudo chmod -R 777 ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
           '
-      
+
       - name: Remote - Login to Registry
         shell: bash
         run: |
@@ -341,8 +341,8 @@ jobs:
               --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
               --target_dir ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/stack_tests
 
-            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }} 
-            sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }} 
+            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+            sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
             # setup tests venv in a step that is always executed
             python3 -m venv test-venv --clear
@@ -375,7 +375,7 @@ jobs:
               --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
               --target_dir ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/product
 
-            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }} 
+            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
             sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
           '
@@ -445,9 +445,9 @@ jobs:
             set -e
 
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
-            
+
             . test-venv/bin/activate
-            
+
             cd stack_tests
 
             pytest ${{ inputs.test_set }} \
