@@ -185,7 +185,7 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
 
       - name: Slack message failure
-        if: failure()
+        if: ${{ failure() && inputs.test_infra_key == 'ui_tests' }}
         uses: slackapi/slack-github-action@v1.23.0
         with:
           channel-id: "C02PB9A9F45"
@@ -215,7 +215,7 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
 
       - name: Slack message failure
-        if: failure()
+        if: ${{ failure() && inputs.test_infra_key == 'install_tests' }}
         uses: slackapi/slack-github-action@v1.23.0
         with:
           channel-id: "C02PB9A9F45"
