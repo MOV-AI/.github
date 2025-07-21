@@ -330,11 +330,6 @@ jobs:
           sudo apt update
           sudo apt install -y ./artifacts/movai-service*
 
-      - name: Install rpm artifacts
-        if: ${{ matrix.distro == 'rocky8' }}
-        run: |
-          sudo dnf install -y ./artifacts/movai-service*
-
       - name: Run tests on debian artifacts
         if: ${{ inputs.skip_testing != 'true' && matrix.distro != 'rocky8' }}
         run: |
