@@ -293,7 +293,8 @@ jobs:
         distro: ${{ fromJSON(inputs.distributions) }}
     needs: [Raise, Pack]
     if: ${{ inputs.release == 'false' && inputs.install_test == 'true' }}
-    runs-on: ${{ matrix.distro == 'focal' && 'ubuntu-20.04' || matrix.distro == 'jammy' && 'ubuntu-22.04' || matrix.distro == 'noble' && 'ubuntu-24.04' || matrix.distro == 'rocky8' && 'rocky-8' }}
+    # for rocky8 we use ubuntu-24.04 as we do not have a rocky8 runner
+    runs-on: ${{ matrix.distro == 'focal' && 'ubuntu-20.04' || matrix.distro == 'jammy' && 'ubuntu-22.04' || matrix.distro == 'noble' && 'ubuntu-24.04' || matrix.distro == 'rocky8' && 'ubuntu-24.04' }}
     timeout-minutes: 90
     steps:
       - name: Maximize build space
@@ -334,8 +335,8 @@ jobs:
         run: |
           sudo dnf install -y ./artifacts/movai-service*
 
-      - name: Run tests
-        if: ${{ inputs.skip_testing != 'true' }}
+      - name: Run tests on debian artifacts
+        if: ${{ inputs.skip_testing != 'true' && matrix.distro != 'rocky8' }}
         run: |
           source test_venv/bin/activate
           if [ -f tox.ini ]; then
@@ -346,6 +347,11 @@ jobs:
               python3 -m pytest tests/
           fi
           deactivate
+
+      - name: Run tests on rpm artifacts
+        if: ${{ inputs.skip_testing != 'true' && matrix.distro == 'rocky8' }}
+        run: |
+          make test_${{ matrix.distro }}
 
       - name: Store tests reports for SonarCloud
         uses: actions/upload-artifact@v4
