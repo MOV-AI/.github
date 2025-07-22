@@ -346,6 +346,8 @@ jobs:
       - name: Run tests on rpm artifacts
         if: ${{ inputs.skip_testing != 'true' && matrix.distro == 'rocky8' }}
         run: |
+          mkdir -p artifacts/${{ matrix.distro }}
+          mv artifacts/movai-service*.rpm artifacts/${{ matrix.distro }}
           make test_${{ matrix.distro }}
 
       - name: Store tests reports for SonarCloud
