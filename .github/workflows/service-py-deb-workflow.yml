@@ -293,7 +293,7 @@ jobs:
         distro: ${{ fromJSON(inputs.distributions) }}
     needs: [Raise, Pack]
     if: ${{ inputs.release == 'false' && inputs.install_test == 'true' }}
-    # for rocky8 we use ubuntu-24.04 as we do not have a rocky8 runner
+    # for rocky8 we use ubuntu-24.04 for simple install test
     runs-on: ${{ matrix.distro == 'focal' && 'ubuntu-20.04' || matrix.distro == 'jammy' && 'ubuntu-22.04' || matrix.distro == 'noble' && 'ubuntu-24.04' || matrix.distro == 'rocky8' && 'ubuntu-24.04' }}
     timeout-minutes: 90
     steps:
@@ -334,13 +334,7 @@ jobs:
         if: ${{ inputs.skip_testing != 'true' && matrix.distro != 'rocky8' }}
         run: |
           source test_venv/bin/activate
-          if [ -f tox.ini ]; then
-              # run tests and generates coverage.xml
-              tox
-          else
-              # run tests
-              python3 -m pytest tests/
-          fi
+          tox
           deactivate
 
       - name: Run tests on rpm artifacts
@@ -371,6 +365,65 @@ jobs:
           name: package_test_journal_${{ matrix.distro }}
           path: ./logs/*
           retention-days: 5
+
+  Package-Test-Rpm:
+    if: ${{ inputs.release == 'false' && inputs.install_test == 'true' && inputs.skip_testing != 'true' }}
+    needs: [Raise, Pack]
+    runs-on: oracle
+    timeout-minutes: 90
+    env:
+      RPM_DISTRO: rocky8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install test requirements
+        run: |
+          python3.11 -m venv test_venv
+          source test_venv/bin/activate
+          python3.11 -m pip install -r build-requirements.txt
+          deactivate
+
+      - name: Download pack artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pack_artifacts_${{ env.RPM_DISTRO }}
+          path: artifacts
+          merge-multiple: true
+
+      - name: Run tests on rpm artifacts
+        shell: bash
+        run: |
+          mkdir -p artifacts/${{ env.RPM_DISTRO }}
+          mv artifacts/movai-service*.rpm artifacts/${{ env.RPM_DISTRO }}
+          source test_venv/bin/activate
+          tox
+          deactivate
+
+      - name: Store logs of journalctl
+        shell: bash
+        if: always()
+        run: |
+          mkdir -p logs
+          journalctl -u movai-service > ./logs/movai-service-journal-${{ env.RPM_DISTRO }}.log || true
+
+      - name: Stash logs of journalctl
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package_rpm_test_journal_${{ env.RPM_DISTRO }}
+          path: ./logs/*
+          retention-days: 5
+
+      - name: Clean up
+        if: always()
+        shell: bash
+        run: |
+          sudo rm -rf artifacts
+          sudo rm -rf logs
+          sudo rm -rf test_venv
+          dnf remove movai-service* -y || true
+
 
   SonarCloud:
     if: ${{ inputs.release == 'false' }}
@@ -463,8 +516,8 @@ jobs:
       run: |
         echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
-  PublishDebToDev:
-    needs: [Raise, Pack, Package-Test, SonarCloud]
+  PublishPackagesToDev:
+    needs: [Raise, Pack, Package-Test, SonarCloud, Package-Test-Rpm]
     if: ${{ inputs.release == 'false' }}
     strategy:
       matrix:
@@ -484,6 +537,7 @@ jobs:
           merge-multiple: true
 
       - name: Publish to Nexus ppa-dev
+        if: ${{ matrix.distro != 'rocky8' }}
         shell: bash
         run: |
             NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
@@ -514,10 +568,11 @@ jobs:
             done
 
       - name: Publish to Nexus yum-dev
+        if: ${{ matrix.distro == 'rocky8' }}
         shell: bash
         run: |
             NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-            NEXUS_REPO="yum-dev-${{ matrix.distro }}"
+            NEXUS_REPO="yum-dev"
             for file in artifacts/*.rpm
             do
               RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
@@ -544,7 +599,7 @@ jobs:
             done
 
   PublishPyPiToExperimental:
-    needs: [Raise, Pack, Package-Test, SonarCloud]
+    needs: [Raise, Pack, Package-Test, SonarCloud, Package-Test-Rpm]
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-22.04
     container:
@@ -568,7 +623,7 @@ jobs:
           packages-dir: dist/
 
   PublishPyPiToIntegration:
-    needs: [Raise, Pack, Package-Test, SonarCloud]
+    needs: [Raise, Pack, Package-Test, SonarCloud, Package-Test-Rpm]
     if: ${{ inputs.deploy == 'true' }}
     runs-on: ubuntu-22.04
     container:
@@ -591,8 +646,8 @@ jobs:
           repository-url: https://artifacts.cloud.mov.ai/repository/pypi-integration/
           packages-dir: dist/
 
-  PublishDebToStaging:
-    needs: [Raise, Pack, Package-Test, SonarCloud]
+  PublishPackagesToStaging:
+    needs: [Raise, Pack, Package-Test, SonarCloud, Package-Test-Rpm]
     if: ${{ inputs.deploy == 'true' }}
     strategy:
       matrix:
@@ -612,6 +667,7 @@ jobs:
           merge-multiple: true
 
       - name: Publish to Nexus ppa-testing
+        if: ${{ matrix.distro != 'rocky8' }}
         shell: bash
         run: |
             NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
@@ -643,10 +699,11 @@ jobs:
             done
 
       - name: Publish to Nexus yum-integration
+        if: ${{ matrix.distro == 'rocky8' }}
         shell: bash
         run: |
             NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-            NEXUS_REPO="yum-integration-${{ matrix.distro }}"
+            NEXUS_REPO="yum-integration"
 
             for file in artifacts/*.rpm
             do
@@ -674,7 +731,7 @@ jobs:
             done
 
   Github-Release:
-    needs: [Raise, Pack, Package-Test, SonarCloud, PublishPyPiToIntegration, PublishDebToStaging]
+    needs: [Raise, Pack, Package-Test, Package-Test-Rpm, SonarCloud, PublishPyPiToIntegration, PublishPackagesToStaging]
     runs-on: ubuntu-22.04
     if: ${{ inputs.deploy == 'true' }}
     container:
