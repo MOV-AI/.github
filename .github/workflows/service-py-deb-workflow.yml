@@ -396,6 +396,7 @@ jobs:
         run: |
           mkdir -p artifacts/${{ env.RPM_DISTRO }}
           mv artifacts/movai-service*.rpm artifacts/${{ env.RPM_DISTRO }}
+          sudo rpm -i artifacts/${{ env.RPM_DISTRO }}/movai-service*.rpm --replacefiles || true
           source test_venv/bin/activate
           pytest tests/ --cov=movai_service --cov=movai_cli --cov=extra-plugins --cov=scripts --cov-report=term --cov-report=xml -o log_cli=true -x
           deactivate
