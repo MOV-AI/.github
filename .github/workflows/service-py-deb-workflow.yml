@@ -22,7 +22,7 @@ on:
       distributions:
         required: false
         type: string
-        default: '["jammy", "noble"]'
+        default: '["jammy", "noble", "rocky8"]'
       install_test:
         required: false
         type: string
@@ -246,7 +246,7 @@ jobs:
           commit_hash=$(git log --format="%H" -n 1)
           echo "commit_id=$commit_hash" | tee -a $GITHUB_OUTPUT
 
-  Debian-Pack:
+  Pack:
     if: ${{ inputs.release == 'false' }}
     strategy:
       matrix:
@@ -269,7 +269,7 @@ jobs:
         password: ${{ secrets.registry_password }}
         registry: registry.cloud.mov.ai
 
-    - name: Raise & Deb Pack in containers
+    - name: Raise & Pack in containers
       env:
         PACKAGE_VERSION: ${{ needs.Raise.outputs.package_version }}
       run: |
@@ -281,17 +281,20 @@ jobs:
     - name: Archive binary
       uses: actions/upload-artifact@v4
       with:
-        name: deb_artifacts_${{ matrix.distro }}
-        path: artifacts/${{ matrix.distro }}/*.deb
+        name: pack_artifacts_${{ matrix.distro }}
+        path: |
+          artifacts/${{ matrix.distro }}/*.deb
+          artifacts/${{ matrix.distro }}/*.rpm
         retention-days: 5
 
-  Debian-Test:
+  Package-Test:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.distributions) }}
-    needs: [Raise, Debian-Pack]
+    needs: [Raise, Pack]
     if: ${{ inputs.release == 'false' && inputs.install_test == 'true' }}
-    runs-on: ubuntu-${{ matrix.distro == 'focal' && '20.04' || matrix.distro == 'jammy' && '22.04' || matrix.distro == 'noble' && '24.04' }}
+    # for rocky8 we use ubuntu-24.04 for simple install test
+    runs-on: ${{ matrix.distro == 'focal' && 'ubuntu-20.04' || matrix.distro == 'jammy' && 'ubuntu-22.04' || matrix.distro == 'noble' && 'ubuntu-24.04' || matrix.distro == 'rocky8' && 'ubuntu-24.04' }}
     timeout-minutes: 90
     steps:
       - name: Maximize build space
@@ -314,30 +317,32 @@ jobs:
           python3 -m pip install -r build-requirements.txt
           deactivate
 
-      - name: Download deb artifacts
+      - name: Download pack artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: deb_artifacts_${{ matrix.distro }}
+          pattern: pack_artifacts_${{ matrix.distro }}
           path: artifacts
           merge-multiple: true
 
       - name: Install debian artifacts
+        if: ${{ matrix.distro != 'rocky8' }}
         run: |
           sudo apt update
           sudo apt install -y ./artifacts/movai-service*
 
-      - name: Run tests
-        if: ${{ inputs.skip_testing != 'true' }}
+      - name: Run tests on debian artifacts
+        if: ${{ inputs.skip_testing != 'true' && matrix.distro != 'rocky8' }}
         run: |
           source test_venv/bin/activate
-          if [ -f tox.ini ]; then
-              # run tests and generates coverage.xml
-              tox
-          else
-              # run tests
-              python3 -m pytest tests/
-          fi
+          tox
           deactivate
+
+      - name: Run tests on rpm artifacts
+        if: ${{ inputs.skip_testing != 'true' && matrix.distro == 'rocky8' }}
+        run: |
+          mkdir -p artifacts/${{ matrix.distro }}
+          mv artifacts/movai-service*.rpm artifacts/${{ matrix.distro }}
+          make test_${{ matrix.distro }}
 
       - name: Store tests reports for SonarCloud
         uses: actions/upload-artifact@v4
@@ -357,13 +362,73 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: debian_test_journal_${{ matrix.distro }}
+          name: package_test_journal_${{ matrix.distro }}
           path: ./logs/*
           retention-days: 5
 
+  Package-Test-Rpm:
+    if: ${{ inputs.release == 'false' && inputs.install_test == 'true' && inputs.skip_testing != 'true' }}
+    needs: [Raise, Pack]
+    runs-on: oracle
+    timeout-minutes: 90
+    env:
+      RPM_DISTRO: rocky8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install test requirements
+        run: |
+          python3.11 -m venv test_venv
+          source test_venv/bin/activate
+          python3.11 -m pip install -r build-requirements.txt -r requirements.txt
+          deactivate
+
+      - name: Download pack artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pack_artifacts_${{ env.RPM_DISTRO }}
+          path: artifacts
+          merge-multiple: true
+
+      - name: Run tests on rpm artifacts
+        shell: bash
+        run: |
+          mkdir -p artifacts/${{ env.RPM_DISTRO }}
+          mv artifacts/movai-service*.rpm artifacts/${{ env.RPM_DISTRO }}
+          sudo rpm -i artifacts/${{ env.RPM_DISTRO }}/movai-service*.rpm --replacefiles || true
+          source test_venv/bin/activate
+          pytest tests/ --cov=movai_service --cov=movai_cli --cov=extra-plugins --cov=scripts --cov-report=term --cov-report=xml -o log_cli=true -x
+          deactivate
+
+      - name: Store logs of journalctl
+        shell: bash
+        if: always()
+        run: |
+          mkdir -p logs
+          journalctl -u movai-service > ./logs/movai-service-journal-${{ env.RPM_DISTRO }}.log || true
+
+      - name: Stash logs of journalctl
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package_rpm_test_journal_${{ env.RPM_DISTRO }}
+          path: ./logs/*
+          retention-days: 5
+
+      - name: Clean up
+        if: always()
+        shell: bash
+        run: |
+          sudo rm -rf artifacts
+          sudo rm -rf logs
+          sudo rm -rf test_venv
+          sudo dnf remove movai-service* -y || true
+
+
   SonarCloud:
     if: ${{ inputs.release == 'false' }}
-    needs: [Debian-Test]
+    needs: [Package-Test]
     runs-on: ubuntu-22.04
     container:
       image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
@@ -452,8 +517,8 @@ jobs:
       run: |
         echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
-  PublishDebToDev:
-    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud]
+  PublishPackagesToDev:
+    needs: [Raise, Pack, Package-Test, SonarCloud, Package-Test-Rpm]
     if: ${{ inputs.release == 'false' }}
     strategy:
       matrix:
@@ -465,14 +530,15 @@ jobs:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     steps:
-      - name: Download deb artifacts
+      - name: Download pack artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: deb_artifacts_${{ matrix.distro }}
+          pattern: pack_artifacts_${{ matrix.distro }}
           path: artifacts
           merge-multiple: true
 
       - name: Publish to Nexus ppa-dev
+        if: ${{ matrix.distro != 'rocky8' }}
         shell: bash
         run: |
             NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
@@ -502,8 +568,50 @@ jobs:
               fi
             done
 
+      - name: Publish to Nexus yum-dev
+        if: ${{ matrix.distro == 'rocky8' }}
+        shell: bash
+        run: |
+          NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+          NEXUS_REPO="yum-dev"
+
+          cd artifacts
+          for file in $(find -name "*.rpm" -not -name "*src*" -printf '%f\n')
+          do
+            echo "Uploading $file"
+            RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+              "https://$NEXUS_ENDPOINT/service/rest/v1/components?repository=$NEXUS_REPO" \
+              -H 'accept: application/json' \
+              -H 'Content-Type: multipart/form-data' \
+              -w '%{http_code}' \
+              -F 'yum.directory=system' \
+              -F "yum.asset=@$file;type=application/x-rpm" \
+              -F "yum.asset.filename=$file"
+            )
+
+            #retry
+            if [[ ! "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
+              echo "Failed upload $file with $RETURN_CODE. Retrying"
+
+              RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+                "https://$NEXUS_ENDPOINT/service/rest/v1/components?repository=$NEXUS_REPO" \
+                -H 'accept: application/json' \
+                -H 'Content-Type: multipart/form-data' \
+                -w '%{http_code}' \
+                -F 'yum.directory=system' \
+                -F "yum.asset=@$file;type=application/x-rpm" \
+                -F "yum.asset.filename=$file"
+              )
+            fi
+
+            if [[ ! "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
+              echo "Failed upload $file with $RETURN_CODE. Exiting"
+              exit 1
+            fi
+          done
+
   PublishPyPiToExperimental:
-    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud]
+    needs: [Raise, Pack, Package-Test, SonarCloud, Package-Test-Rpm]
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-22.04
     container:
@@ -527,7 +635,7 @@ jobs:
           packages-dir: dist/
 
   PublishPyPiToIntegration:
-    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud]
+    needs: [Raise, Pack, Package-Test, SonarCloud, Package-Test-Rpm]
     if: ${{ inputs.deploy == 'true' }}
     runs-on: ubuntu-22.04
     container:
@@ -550,8 +658,8 @@ jobs:
           repository-url: https://artifacts.cloud.mov.ai/repository/pypi-integration/
           packages-dir: dist/
 
-  PublishDebToStaging:
-    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud]
+  PublishPackagesToStaging:
+    needs: [Raise, Pack, Package-Test, SonarCloud, Package-Test-Rpm]
     if: ${{ inputs.deploy == 'true' }}
     strategy:
       matrix:
@@ -563,14 +671,15 @@ jobs:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     steps:
-      - name: Download deb artifacts
+      - name: Download pack artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: deb_artifacts_${{ matrix.distro }}
+          pattern: pack_artifacts_${{ matrix.distro }}
           path: artifacts
           merge-multiple: true
 
       - name: Publish to Nexus ppa-testing
+        if: ${{ matrix.distro != 'rocky8' }}
         shell: bash
         run: |
             NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
@@ -601,8 +710,50 @@ jobs:
               fi
             done
 
+      - name: Publish to Nexus yum-integration
+        if: ${{ matrix.distro == 'rocky8' }}
+        shell: bash
+        run: |
+            NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+            NEXUS_REPO="yum-integration"
+
+            cd artifacts
+            for file in $(find -name "*.rpm" -not -name "*src*" -printf '%f\n')
+            do
+              echo "Uploading $file"
+              RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+                "https://$NEXUS_ENDPOINT/service/rest/v1/components?repository=$NEXUS_REPO" \
+                -H 'accept: application/json' \
+                -H 'Content-Type: multipart/form-data' \
+                -w '%{http_code}' \
+                -F 'yum.directory=system' \
+                -F "yum.asset=@$file;type=application/x-rpm" \
+                -F "yum.asset.filename=$file"
+              )
+
+              #retry
+              if [[ ! "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
+                echo "Failed upload $file with $RETURN_CODE. Retrying"
+
+                RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+                  "https://$NEXUS_ENDPOINT/service/rest/v1/components?repository=$NEXUS_REPO" \
+                  -H 'accept: application/json' \
+                  -H 'Content-Type: multipart/form-data' \
+                  -w '%{http_code}' \
+                  -F 'yum.directory=system' \
+                  -F "yum.asset=@$file;type=application/x-rpm" \
+                  -F "yum.asset.filename=$file"
+                )
+              fi
+
+              if [[ ! "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
+                echo "Failed upload $file with $RETURN_CODE. Exiting"
+                exit 1
+              fi
+            done
+
   Github-Release:
-    needs: [Raise, Debian-Pack, Debian-Test, SonarCloud, PublishPyPiToIntegration, PublishDebToStaging]
+    needs: [Raise, Pack, Package-Test, Package-Test-Rpm, SonarCloud, PublishPyPiToIntegration, PublishPackagesToStaging]
     runs-on: ubuntu-22.04
     if: ${{ inputs.deploy == 'true' }}
     container:
@@ -652,7 +803,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
-  Github-Release-Debian-Upload:
+  Github-Release-Packages-Upload:
     needs: [Raise, Github-Release]
     runs-on: ubuntu-22.04
     if: ${{ inputs.deploy == 'true' }}
@@ -668,24 +819,42 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download deb artifacts
+      - name: Download pack artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: deb_artifacts_${{ matrix.distro }}
+          pattern: pack_artifacts_${{ matrix.distro }}
           path: artifacts
           merge-multiple: true
 
-      - name: Update Github Release
+      - name: Update Github Release with debian artifacts
         shell: bash
         run: |
           git config --global user.name ${{ secrets.auto_commit_user }}
           git config --global user.email ${{ secrets.auto_commit_mail }}
           git config --global --add safe.directory $(pwd)
-          for asset in artifacts/*; do
+          for asset in artifacts/*.deb; do
             # do nothing if folder is empty
             if [[ $asset != "artifacts/*" ]]; then
               # Add sufix of distro to asset name
               asset_renamed=$(basename $asset .deb)_${{ matrix.distro }}.deb
+              cp $asset $asset_renamed
+              gh release upload ${{ needs.Raise.outputs.package_version }} $asset_renamed
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+      - name: Update Github Release with rpm artifacts
+        shell: bash
+        run: |
+          git config --global user.name ${{ secrets.auto_commit_user }}
+          git config --global user.email ${{ secrets.auto_commit_mail }}
+          git config --global --add safe.directory $(pwd)
+          for asset in artifacts/*.rpm; do
+            # do nothing if folder is empty
+            if [[ $asset != "artifacts/*" ]]; then
+              # Add sufix of distro to asset name
+              asset_renamed=$(basename $asset .rpm)_${{ matrix.distro }}.rpm
               cp $asset $asset_renamed
               gh release upload ${{ needs.Raise.outputs.package_version }} $asset_renamed
             fi
@@ -754,7 +923,7 @@ jobs:
       max-parallel: 1
 
     steps:
-    - name: Download deb artifacts
+    - name: Download pack artifacts
       uses: actions/download-artifact@v4
       with:
         name: released_deb_artifacts
@@ -763,33 +932,33 @@ jobs:
     - name: Publish to Nexus
       shell: bash
       run: |
-            NEXUS_REPO="${{ matrix.publish_repo }}-${{ matrix.distro }}"
-            NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+        NEXUS_REPO="${{ matrix.publish_repo }}-${{ matrix.distro }}"
+        NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
 
-            ls -la artifacts
+        ls -la artifacts
 
-            for file in artifacts/*_${{ matrix.distro }}.deb
-            do
-              RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+        for file in artifacts/*_${{ matrix.distro }}.deb
+        do
+          RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+          -H "Content-Type: multipart/form-data" \
+          --data-binary "@$file" \
+          -w '%{http_code}' \
+          "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
+
+          #retry
+          if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
+            echo "Failed upload with $RETURN_CODE. Retrying"
+
+            RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
               -H "Content-Type: multipart/form-data" \
               --data-binary "@$file" \
               -w '%{http_code}' \
               "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
+          fi
 
-              #retry
-              if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
-                echo "Failed upload with $RETURN_CODE. Retrying"
+          if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
+            echo "Failed upload with $RETURN_CODE. Exiting"
+            exit 1
+          fi
 
-                RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-                  -H "Content-Type: multipart/form-data" \
-                  --data-binary "@$file" \
-                  -w '%{http_code}' \
-                  "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
-              fi
-
-              if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
-                echo "Failed upload with $RETURN_CODE. Exiting"
-                exit 1
-              fi
-
-            done
+        done
