@@ -827,6 +827,7 @@ jobs:
           merge-multiple: true
 
       - name: Update Github Release with debian artifacts
+        if: ${{ matrix.distro != 'rocky8' }}
         shell: bash
         run: |
           git config --global user.name ${{ secrets.auto_commit_user }}
@@ -845,6 +846,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
       - name: Update Github Release with rpm artifacts
+        if: ${{ matrix.distro == 'rocky8' }}
         shell: bash
         run: |
           git config --global user.name ${{ secrets.auto_commit_user }}
