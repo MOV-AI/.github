@@ -440,7 +440,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: coverage
-        path: coverage.xml
+        path: coverage
 
     - name: Create SonarCloud project and disable autoscan
       uses: MOV-AI/action-sonarcloud-proj-config@v1
@@ -467,7 +467,7 @@ jobs:
           -Dsonar.python.version=3
           -Dsonar.python.flake8.reportPaths=flake8-report.txt
           -Dsonar.python.pylint.reportPaths=pylint-report.txt
-          -Dsonar.python.coverage.reportPaths=coverage.xml
+          -Dsonar.python.coverage.reportPaths=coverage/coverage.xml
 
     - name: Link to SonarCloud dashboard
       shell: bash
