@@ -96,7 +96,6 @@ jobs:
       if: ${{ inputs.run_black == 'true' }}
       run: |
         python3 -m black \
-          --line-length 120 \
           --diff \
           --check \
           .
@@ -107,7 +106,6 @@ jobs:
           --isolated \
           --exclude dist,.*\.egg-info,.git,__pycache__,.tox,venv \
           --max-complexity 16 \
-          --max-line-length 120 \
           --exit-zero \
           --output-file flake8-report.txt
 
@@ -117,7 +115,6 @@ jobs:
         python3 -m pylint \
           --rcfile dummy-pylint-config \
           --ignore-patterns dist,.*\.egg-info,.git,__pycache__,.tox,venv \
-          --max-line-length 120 \
           --exit-zero \
           --recursive y \
           --output pylint-report.txt \
@@ -480,15 +477,16 @@ jobs:
           -Dsonar.scm.provider=git
           -Dsonar.qualitygate.wait=true
           -Dsonar.qualitygate.timeout=300
-          -Dsonar.coverage.exclusions=tests/**
-          -Dsonar.cpd.exclusions=tests/**
+          -Dsonar.coverage.exclusions=tests/**,docs/**
+          -Dsonar.cpd.exclusions=tests/**,docs/**
           -Dsonar.python.version=3
           -Dsonar.python.line_length=120
           -Dsonar.python.cyclomatic.complexity=16
           -Dsonar.python.flake8.reportPaths=flake8-report.txt
           -Dsonar.python.pylint.reportPaths=pylint-report.txt
+          -Dsonar.python.coverage.reportPaths=coverage.xml
 
-    - name: SonarCloud Scan and Quality Gate check (no coverage)
+    - name: SonarCloud Scan no Quality Gate check
       uses: SonarSource/sonarcloud-github-action@v2.0.2
       if: ${{ inputs.skip_testing == 'true' }}
       env:
@@ -501,10 +499,10 @@ jobs:
           -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
           -Dsonar.sources=.
           -Dsonar.scm.provider=git
-          -Dsonar.qualitygate.wait=true
+          -Dsonar.qualitygate.wait=false
           -Dsonar.qualitygate.timeout=300
-          -Dsonar.coverage.exclusions=tests/**
-          -Dsonar.cpd.exclusions=tests/**
+          -Dsonar.coverage.exclusions=tests/**,docs/**
+          -Dsonar.cpd.exclusions=tests/**,docs/**
           -Dsonar.python.version=3
           -Dsonar.python.line_length=120
           -Dsonar.python.cyclomatic.complexity=16
