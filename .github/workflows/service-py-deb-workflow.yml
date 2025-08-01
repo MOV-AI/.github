@@ -138,6 +138,8 @@ jobs:
         password: ${{secrets.registry_password}}
     outputs:
       package_version: ${{ steps.releasevars.outputs.py_pkg_version }}
+    env:
+      PACKAGE_VERSION_BUMP: "build"
 
     steps:
     - name: Checkout
@@ -150,16 +152,13 @@ jobs:
       run: |
         git config --global --add safe.directory $(pwd)
         python3 -m pip install -r build-requirements.txt
-        apt-get update && apt-get install -yq make
-        make install_bump_requirements
 
     - name: Raise version locally
       id: releasevars
       run: |
-        export PACKAGE_BUMP=build
         make bump_version
         # read the version from the file after bumping
-        PACKAGE_VERSION=$(cat .bumpversion.cfg | sed s/' '/''/g | grep 'current_version=' | sed s/'current_version='/''/g)
+        PACKAGE_VERSION=$(bump-my-version show current_version 2> /dev/null)
         echo "py_pkg_version=$PACKAGE_VERSION" | tee -a $GITHUB_OUTPUT
 
     - name: Build
@@ -192,17 +191,13 @@ jobs:
         run: |
           git config --global --add safe.directory $(pwd)
           python3 -m pip install -r build-requirements.txt
-          apt-get update && apt-get install -yq make
-          make install_bump_requirements
 
       - name: Raise version
         id: raise_version
         env:
           PACKAGE_VERSION: ${{ needs.Build.outputs.package_version }}
         run: |
-          export PACKAGE_BUMP=build
           make bump_version
-          PACKAGE_VERSION=$(cat .bumpversion.cfg | sed s/' '/''/g | grep 'current_version=' | sed s/'current_version='/''/g)
           echo "py_pkg_version=$PACKAGE_VERSION" | tee -a $GITHUB_OUTPUT
 
       - name: Commit raise version
@@ -212,7 +207,7 @@ jobs:
         run: |
           git config --global user.name ${{ secrets.auto_commit_user }}
           git config --global user.email ${{ secrets.auto_commit_mail }}
-          git add .bumpversion.cfg
+          git add .bumpversion.toml
           git commit -m "[skip actions] Automatic Bump of build version to ${PACKAGE_VERSION}"
 
       - name: Set branch output
@@ -224,7 +219,6 @@ jobs:
           else
             BRANCH_NAME=${{ github.ref_name }}
           fi
-
           echo "Branch name is: $BRANCH_NAME"
           echo "branch=$BRANCH_NAME" | tee -a $GITHUB_OUTPUT
 
@@ -270,8 +264,6 @@ jobs:
       env:
         PACKAGE_VERSION: ${{ needs.Raise.outputs.package_version }}
       run: |
-        sudo make install_bump_requirements &> install_bump_requirements.log
-        export PACKAGE_BUMP=build
         make bump_version
         make pack_${{ matrix.distro }}
 
