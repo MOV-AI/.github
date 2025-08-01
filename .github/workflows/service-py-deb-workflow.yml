@@ -135,7 +135,7 @@ jobs:
       package_version: ${{ steps.raise_version.outputs.py_pkg_version }}
       commit_id: ${{ steps.raise_version.outputs.commit_id }}
     env:
-      PACKAGE_VERSION_BUMP: "build"
+      PACKAGE_VERSION_BUMP: "patch"
 
     steps:
     - name: Checkout
