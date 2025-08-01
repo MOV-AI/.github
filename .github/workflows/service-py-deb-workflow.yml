@@ -153,6 +153,7 @@ jobs:
       run: |
         git config --global --add safe.directory $(pwd)
         python3 -m pip install -r build-requirements.txt
+        apt-get update && apt-get install -yq make
 
     - name: Raise version locally
       id: raise_version
