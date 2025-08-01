@@ -153,10 +153,12 @@ jobs:
     - name: Raise version locally
       id: raise_version
       run: |
+        . venv/bin/activate
         make bump_version
         # read the version from the file after bumping
         PACKAGE_VERSION=$(bump-my-version show current_version 2> /dev/null)
         echo "py_pkg_version=$PACKAGE_VERSION" | tee -a $GITHUB_OUTPUT
+        deactivate
 
     - name: Build
       run: |
