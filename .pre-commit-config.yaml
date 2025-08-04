@@ -6,8 +6,13 @@ repos:
     - id: check-added-large-files   # checks if large files were added
     - id: check-merge-conflict      # checks if all merge conflicts were resolved
     - id: check-yaml                # checks if yaml files are valid
+      files: \.(yaml|yml)$
     - id: debug-statements          # checks if debug statements are to be commited
     - id: end-of-file-fixer         # fixes missing line ending in end of file
     - id: mixed-line-ending         # fixes line files line ending
       args: [--fix=lf]
     - id: trailing-whitespace       # removes trailing whitespaces from text files
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.7
+    hooks:
+    - id: actionlint

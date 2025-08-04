@@ -27,6 +27,10 @@ on:
         required: false
         type: string
         default: 'true'
+      publish_endpoint:
+        required: false
+        type: string
+        default: 'artifacts.cloud.mov.ai'
       prod_publish_repos:
         required: false
         type: string
@@ -88,7 +92,7 @@ jobs:
         if [ -f build-apt-requirements.txt ]; then
           apt update
           echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
-          apt install -y $(grep -vE "^\s*#" build-apt-requirements.txt  | tr "\n" " ")
+          apt install -y "$(grep -vE "^\s*#" build-apt-requirements.txt | tr "\n" " ")"
         fi
         python3 -m pip install -r build-requirements.txt
 
@@ -145,7 +149,7 @@ jobs:
 
     - name: Install build-requirements
       run: |
-        git config --global --add safe.directory $(pwd)
+        git config --global --add safe.directory "$(pwd)"
         sudo apt-get update && sudo apt-get install -yq make
         make venv
 
@@ -155,8 +159,8 @@ jobs:
         . venv/bin/activate
         make bump_version
         # read the version from the file after bumping
-        PACKAGE_VERSION=$(bump-my-version show current_version 2> /dev/null)
-        echo "py_pkg_version=$PACKAGE_VERSION" | tee -a $GITHUB_OUTPUT
+        PACKAGE_VERSION="$(bump-my-version show current_version 2> /dev/null)"
+        echo "py_pkg_version=$PACKAGE_VERSION" | tee -a "$GITHUB_OUTPUT"
         deactivate
 
     - name: Build
@@ -466,21 +470,21 @@ jobs:
         git config --global user.name ${{ secrets.auto_commit_user }}
         git config --global user.email ${{ secrets.auto_commit_mail }}
         make bump_version
-        git add -A
-        git commit -m "[skip actions] Automatic Bump of build version to ${PACKAGE_VERSION}"
         deactivate
 
     - name: Set branch output
       id: var_branch
+      env:
+        HEAD_REF: ${{ github.head_ref }}
+        REF_NAME: ${{ github.ref_name }}
       run: |
-        if [ "${{ github.event_name }}" = "pull_request" ];
-        then
-          BRANCH_NAME=${{ github.head_ref }}
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          BRANCH_NAME="$HEAD_REF"
         else
-          BRANCH_NAME=${{ github.ref_name }}
+          BRANCH_NAME="$REF_NAME"
         fi
         echo "Branch name is: $BRANCH_NAME"
-        echo "branch=$BRANCH_NAME" | tee -a $GITHUB_OUTPUT
+        echo "branch=$BRANCH_NAME" | tee -a "$GITHUB_OUTPUT"
 
     - name: Push raised version
       if: ${{ inputs.deploy == 'true' }}
@@ -495,7 +499,7 @@ jobs:
       id: commit_id
       run: |
         commit_hash=$(git log --format="%H" -n 1)
-        echo "commit_id=$commit_hash" | tee -a $GITHUB_OUTPUT
+        echo "commit_id=$commit_hash" | tee -a "$GITHUB_OUTPUT"
 
   PublishPackagesToDev:
     needs: [Post-Build]
@@ -519,76 +523,25 @@ jobs:
 
       - name: Publish to Nexus ppa-dev
         if: ${{ matrix.distro != 'rocky8' }}
-        shell: bash
-        run: |
-            NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-            NEXUS_REPO="ppa-devel-${{ matrix.distro }}"
-            for file in artifacts/*.deb
-            do
-              RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-              -H "Content-Type: multipart/form-data" \
-              --data-binary "@$file" \
-              -w '%{http_code}' \
-              "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
-
-              #retry
-              if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
-                echo "Failed upload with $RETURN_CODE. Retrying"
-
-                RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-                  -H "Content-Type: multipart/form-data" \
-                  --data-binary "@$file" \
-                  -w '%{http_code}' \
-                  "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
-              fi
-
-              if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
-                echo "Failed upload with $RETURN_CODE. Exiting"
-                exit 1
-              fi
-            done
+        uses: ./.github/actions/publish-to-nexus
+        with:
+          repo: ppa-devel-${{ matrix.distro }}
+          endpoint: ${{ inputs.publish_endpoint }}
+          file_pattern: "artifacts/*.deb"
+          file_type: "deb"
+          user: ${{ secrets.nexus_publisher_user }}
+          password: ${{ secrets.nexus_publisher_password }}
 
       - name: Publish to Nexus yum-dev
         if: ${{ matrix.distro == 'rocky8' }}
-        shell: bash
-        run: |
-          NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-          NEXUS_REPO="yum-dev"
-
-          cd artifacts
-          for file in $(find -name "*.rpm" -not -name "*src*" -printf '%f\n')
-          do
-            echo "Uploading $file"
-            RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-              "https://$NEXUS_ENDPOINT/service/rest/v1/components?repository=$NEXUS_REPO" \
-              -H 'accept: application/json' \
-              -H 'Content-Type: multipart/form-data' \
-              -w '%{http_code}' \
-              -F 'yum.directory=system' \
-              -F "yum.asset=@$file;type=application/x-rpm" \
-              -F "yum.asset.filename=$file"
-            )
-
-            #retry
-            if [[ ! "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
-              echo "Failed upload $file with $RETURN_CODE. Retrying"
-
-              RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-                "https://$NEXUS_ENDPOINT/service/rest/v1/components?repository=$NEXUS_REPO" \
-                -H 'accept: application/json' \
-                -H 'Content-Type: multipart/form-data' \
-                -w '%{http_code}' \
-                -F 'yum.directory=system' \
-                -F "yum.asset=@$file;type=application/x-rpm" \
-                -F "yum.asset.filename=$file"
-              )
-            fi
-
-            if [[ ! "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
-              echo "Failed upload $file with $RETURN_CODE. Exiting"
-              exit 1
-            fi
-          done
+        uses: ./.github/actions/publish-to-nexus
+        with:
+          repo: yum-dev
+          endpoint: ${{ inputs.publish_endpoint }}
+          file_pattern: "artifacts/*.rpm"
+          file_type: "rpm"
+          user: ${{ secrets.nexus_publisher_user }}
+          password: ${{ secrets.nexus_publisher_password }}
 
   PublishPyPiToExperimental:
     needs: [Post-Build]
@@ -660,77 +613,25 @@ jobs:
 
       - name: Publish to Nexus ppa-testing
         if: ${{ matrix.distro != 'rocky8' }}
-        shell: bash
-        run: |
-            NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-            NEXUS_REPO="ppa-testing-${{ matrix.distro }}"
-
-            for file in artifacts/*.deb
-            do
-              RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-              -H "Content-Type: multipart/form-data" \
-              --data-binary "@$file" \
-              -w '%{http_code}' \
-              "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
-
-              #retry
-              if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
-                echo "Failed upload with $RETURN_CODE. Retrying"
-
-                RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-                  -H "Content-Type: multipart/form-data" \
-                  --data-binary "@$file" \
-                  -w '%{http_code}' \
-                  "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
-              fi
-
-              if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
-                echo "Failed upload with $RETURN_CODE. Exiting"
-                exit 1
-              fi
-            done
+        uses: ./.github/actions/publish-to-nexus
+        with:
+          repo: ppa-testing-${{ matrix.distro }}
+          endpoint: ${{ inputs.publish_endpoint }}
+          file_pattern: "artifacts/*.deb"
+          file_type: "deb"
+          user: ${{ secrets.nexus_publisher_user }}
+          password: ${{ secrets.nexus_publisher_password }}
 
       - name: Publish to Nexus yum-testing
         if: ${{ matrix.distro == 'rocky8' }}
-        shell: bash
-        run: |
-            NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-            NEXUS_REPO="yum-testing"
-
-            cd artifacts
-            for file in $(find -name "*.rpm" -not -name "*src*" -printf '%f\n')
-            do
-              echo "Uploading $file"
-              RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-                "https://$NEXUS_ENDPOINT/service/rest/v1/components?repository=$NEXUS_REPO" \
-                -H 'accept: application/json' \
-                -H 'Content-Type: multipart/form-data' \
-                -w '%{http_code}' \
-                -F 'yum.directory=system' \
-                -F "yum.asset=@$file;type=application/x-rpm" \
-                -F "yum.asset.filename=$file"
-              )
-
-              #retry
-              if [[ ! "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
-                echo "Failed upload $file with $RETURN_CODE. Retrying"
-
-                RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-                  "https://$NEXUS_ENDPOINT/service/rest/v1/components?repository=$NEXUS_REPO" \
-                  -H 'accept: application/json' \
-                  -H 'Content-Type: multipart/form-data' \
-                  -w '%{http_code}' \
-                  -F 'yum.directory=system' \
-                  -F "yum.asset=@$file;type=application/x-rpm" \
-                  -F "yum.asset.filename=$file"
-                )
-              fi
-
-              if [[ ! "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
-                echo "Failed upload $file with $RETURN_CODE. Exiting"
-                exit 1
-              fi
-            done
+        uses: ./.github/actions/publish-to-nexus
+        with:
+          repo: yum-testing
+          endpoint: ${{ inputs.publish_endpoint }}
+          file_pattern: "artifacts/*.rpm"
+          file_type: "rpm"
+          user: ${{ secrets.nexus_publisher_user }}
+          password: ${{ secrets.nexus_publisher_password }}
 
   Github-Release:
     needs: [Post-Build, PublishPyPiToIntegration, PublishPackagesToStaging]
@@ -757,7 +658,7 @@ jobs:
         run: |
           git config --global user.name ${{ secrets.auto_commit_user }}
           git config --global user.email ${{ secrets.auto_commit_mail }}
-          git config --global --add safe.directory $(pwd)
+          git config --global --add safe.directory "$(pwd)"
           title="Release of ${{ needs.Post-Build.outputs.package_version }}"
           gh release create -p -t "$title" \
           -n "Release notes of version ${{ needs.Post-Build.outputs.package_version }}" \
@@ -765,19 +666,17 @@ jobs:
           --generate-notes \
            ${{ needs.Post-Build.outputs.package_version }}
 
-
           # add all files in the artifacts folder
-          assets=()
           for asset in dist/*; do
             # do nothing if folder is empty
             if [[ $asset != "dist/*" ]]; then
-              gh release upload ${{ needs.Post-Build.outputs.package_version }} $asset
+              gh release upload ${{ needs.Post-Build.outputs.package_version }} "$asset"
             fi
           done
           for asset in artifacts/*; do
             # do nothing if folder is empty
             if [[ $asset != "artifacts/*" ]]; then
-              gh release upload ${{ needs.Post-Build.outputs.package_version }} $asset
+              gh release upload ${{ needs.Post-Build.outputs.package_version }} "$asset"
             fi
           done
         env:
@@ -812,14 +711,14 @@ jobs:
         run: |
           git config --global user.name ${{ secrets.auto_commit_user }}
           git config --global user.email ${{ secrets.auto_commit_mail }}
-          git config --global --add safe.directory $(pwd)
+          git config --global --add safe.directory "$(pwd)"
           for asset in artifacts/*.deb; do
             # do nothing if folder is empty
             if [[ $asset != "artifacts/*" ]]; then
               # Add sufix of distro to asset name
-              asset_renamed=$(basename $asset .deb)_${{ matrix.distro }}.deb
-              cp $asset $asset_renamed
-              gh release upload ${{ needs.Post-Build.outputs.package_version }} $asset_renamed
+              asset_renamed=$(basename "$asset" .deb)_${{ matrix.distro }}.deb
+              cp "$asset" "$asset_renamed"
+              gh release upload ${{ needs.Post-Build.outputs.package_version }} "$asset_renamed"
             fi
           done
         env:
@@ -831,14 +730,14 @@ jobs:
         run: |
           git config --global user.name ${{ secrets.auto_commit_user }}
           git config --global user.email ${{ secrets.auto_commit_mail }}
-          git config --global --add safe.directory $(pwd)
+          git config --global --add safe.directory "$(pwd)"
           for asset in artifacts/*.rpm; do
             # do nothing if folder is empty
             if [[ $asset != "artifacts/*" ]]; then
               # Add sufix of distro to asset name
-              asset_renamed=$(basename $asset .rpm)_${{ matrix.distro }}.rpm
-              cp $asset $asset_renamed
-              gh release upload ${{ needs.Build.outputs.package_version }} $asset_renamed
+              asset_renamed=$(basename "$asset" .rpm)_${{ matrix.distro }}.rpm
+              cp "$asset" "$asset_renamed"
+              gh release upload ${{ needs.Post-Build.outputs.package_version }} "$asset_renamed"
             fi
           done
         env:
@@ -855,16 +754,17 @@ jobs:
     steps:
       - name: Set tag output
         id: vars
-        run: echo "tag=${GITHUB_REF#refs/*/}" | tee -a $GITHUB_OUTPUT
+        run: echo "tag=${GITHUB_REF#refs/*/}" | tee -a "$GITHUB_OUTPUT"
 
       - name: Fetch artifact from github release
         run: |
           mkdir dist artifacts
           cd dist
-          gh release download ${{ steps.vars.outputs.tag}} -p *.whl
-          gh release download ${{ steps.vars.outputs.tag}} -p *.tar.gz
+          gh release download ${{ steps.vars.outputs.tag}} -p ./*.whl
+          gh release download ${{ steps.vars.outputs.tag}} -p  ./*.tar.gz
           cd ../artifacts
-          gh release download ${{ steps.vars.outputs.tag}} -p *.deb
+          gh release download ${{ steps.vars.outputs.tag}} -p ./*.deb
+          gh release download ${{ steps.vars.outputs.tag}} -p ./*.rpm
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -916,77 +816,22 @@ jobs:
 
     - name: Publish debian packages to Nexus
       if: ${{ matrix.distro != 'rocky8' }}
-      shell: bash
-      run: |
-        NEXUS_REPO="${{ matrix.publish_repo }}-${{ matrix.distro }}"
-        NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-
-        ls -la artifacts
-
-        for file in artifacts/*_${{ matrix.distro }}.deb
-        do
-          RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-          -H "Content-Type: multipart/form-data" \
-          --data-binary "@$file" \
-          -w '%{http_code}' \
-          "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
-
-          #retry
-          if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
-            echo "Failed upload with $RETURN_CODE. Retrying"
-
-            RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-              -H "Content-Type: multipart/form-data" \
-              --data-binary "@$file" \
-              -w '%{http_code}' \
-              "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
-          fi
-
-          if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
-            echo "Failed upload with $RETURN_CODE. Exiting"
-            exit 1
-          fi
-
-        done
+      uses: ./.github/actions/publish-to-nexus
+      with:
+        repo: ${{ matrix.publish_repo }}-${{ matrix.distro }}
+        endpoint: ${{ inputs.publish_endpoint }}
+        file_pattern: "artifacts/*_${{ matrix.distro }}.deb"
+        file_type: "deb"
+        user: ${{ secrets.nexus_publisher_user }}
+        password: ${{ secrets.nexus_publisher_password }}
 
     - name: Publish to Nexus yum-integration
       if: ${{ matrix.distro == 'rocky8' }}
-      shell: bash
-      run: |
-        NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-        NEXUS_REPO="yum-integration"
-
-        cd artifacts
-        for file in $(find -name "*.rpm" -not -name "*src*" -printf '%f\n')
-        do
-          echo "Uploading $file"
-          RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-            "https://$NEXUS_ENDPOINT/service/rest/v1/components?repository=$NEXUS_REPO" \
-            -H 'accept: application/json' \
-            -H 'Content-Type: multipart/form-data' \
-            -w '%{http_code}' \
-            -F 'yum.directory=system' \
-            -F "yum.asset=@$file;type=application/x-rpm" \
-            -F "yum.asset.filename=$file"
-          )
-
-          #retry
-          if [[ ! "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
-            echo "Failed upload $file with $RETURN_CODE. Retrying"
-
-            RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
-              "https://$NEXUS_ENDPOINT/service/rest/v1/components?repository=$NEXUS_REPO" \
-              -H 'accept: application/json' \
-              -H 'Content-Type: multipart/form-data' \
-              -w '%{http_code}' \
-              -F 'yum.directory=system' \
-              -F "yum.asset=@$file;type=application/x-rpm" \
-              -F "yum.asset.filename=$file"
-            )
-          fi
-
-          if [[ ! "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
-            echo "Failed upload $file with $RETURN_CODE. Exiting"
-            exit 1
-          fi
-        done
+      uses: ./.github/actions/publish-to-nexus
+      with:
+        repo: yum-integration
+        endpoint: ${{ inputs.publish_endpoint }}
+        file_pattern: "artifacts/*.rpm"
+        file_type: "rpm"
+        user: ${{ secrets.nexus_publisher_user }}
+        password: ${{ secrets.nexus_publisher_password }}

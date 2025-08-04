@@ -1,0 +1,15 @@
+# Configuration related to self-hosted runner.
+self-hosted-runner:
+  labels:
+    - integration-pipeline-hel0
+    - integration-pipeline-hel1
+    - qa-pipeline-hel0
+    - qa-pipeline-hel1
+    - ip-hel0-queuer
+    - ip-hel1-queuer
+    - packer-runner
+    - simul-mary-queuer
+    - simul-marvin-queuer
+    - simul-bb-8-queuer
+    - simul-bb-9-queuer
+    - oracle
