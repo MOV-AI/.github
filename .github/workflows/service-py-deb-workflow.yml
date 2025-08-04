@@ -509,6 +509,7 @@ jobs:
       if: ${{ inputs.deploy == 'true' }}
       id: commit_id
       run: |
+        git config --global --add safe.directory "$(pwd)"
         commit_hash=$(git log --format="%H" -n 1)
         echo "commit_id=$commit_hash" | tee -a "$GITHUB_OUTPUT"
 
