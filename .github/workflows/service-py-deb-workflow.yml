@@ -84,7 +84,8 @@ jobs:
       - name: Detect version bump type from PR labels/title
         id: detect_bump
         run: |
-          BUMP=""
+          # Always set a default value for BUMP
+          BUMP="build"
           # Prefer explicit input if set
           if [ -n "${{ inputs.package_version_bump }}" ]; then
             BUMP="${{ inputs.package_version_bump }}"
@@ -99,17 +100,16 @@ jobs:
                 if [[ "$label" == "documentation" ]]; then BUMP="build"; fi
               done
               # Fallback to PR title if no label found
-              if [ -z "$BUMP" ]; then
+              if [ "$BUMP" == "build" ]; then
                 TITLE=$(gh pr view ${{ github.event.pull_request.number }} --json title --jq '.title')
                 if [[ "$TITLE" =~ "BREAKING CHANGE" ]]; then BUMP="major"; fi
                 if [[ "$TITLE" =~ "feat" ]]; then BUMP="minor"; fi
                 if [[ "$TITLE" =~ "fix" ]]; then BUMP="patch"; fi
-                # default to build if no other bump type is detected
-                if [ -z "$BUMP" ]; then BUMP="build"; fi
+                # BUMP remains 'build' if no other bump type is detected
               fi
             fi
           fi
-          echo "bump_type=$BUMP" >> "$GITHUB_OUTPUT"
+          echo "bump_type=$BUMP" | tee -a "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ secrets.gh_token }}
   StaticAnalysis:
