@@ -1,4 +1,22 @@
-# v2.3
+<!-- Keep a Changelog: https://keepachangelog.com/en/1.0.0/ -->
+# Changelog
 
-- py-workflow : added support for pre-commit, build, and test on different versions of python (excluding Python 3.8, and other versions)
-- service-py-deb-workflow : dedicated workflow for building, packaging and testing movai-service for Debian and RPM Linux distributions
+All notable changes to this repository will be documented in this file.
+
+## [v3] - 2025-08-04
+### Added
+- Initial version of shared workflows for MOV.AI projects.
+- `service-py-deb-workflow`: Build, package, and test movai-service for Debian and RPM.
+- `publish-to-nexus`: Composite action to publish artifacts to Nexus (Debian/RPM).
+
+### Changed
+- Documentation improvements in README.md.
+
+### Fixed
+- N/A
+
+### Removed
+- N/A
+
+---
+Older changes and details can be found in previous branches or releases.
