@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
+    rev: v5.0.0
     hooks:
     - id: check-json                # checks if json files are valid
     - id: check-added-large-files   # checks if large files were added
