@@ -39,7 +39,7 @@ runs:
 
         # Expand file pattern (globbing)
         shopt -s nullglob
-        files=( ${${{ inputs.file_pattern }}} )
+        files=( ${{ inputs.file_pattern }} )
         if [[ ${#files[@]} -eq 0 ]]; then
           echo "No files found matching pattern: ${{ inputs.file_pattern }}"
           exit 1
