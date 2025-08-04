@@ -1,0 +1,25 @@
+name: "Pre-commit Action"
+description: "Run pre-commit checks on code changes"
+inputs:
+  config_file:
+    description: "Path to the pre-commit configuration file"
+    required: false
+  args:
+    description: "Arguments to pass to pre-commit"
+    required: false
+    default: "--all-files"
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+    - name: Install pre-commit
+      shell: bash
+      run: pip install pre-commit
+    - name: Run pre-commit
+      shell: bash
+      run: pre-commit run  ${{ inputs.args }}
