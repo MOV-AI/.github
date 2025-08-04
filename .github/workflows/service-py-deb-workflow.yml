@@ -220,6 +220,8 @@ jobs:
     # for rocky8 we use ubuntu-24.04 for simple install test
     runs-on: ${{ matrix.distro == 'focal' && 'ubuntu-20.04' || matrix.distro == 'jammy' && 'ubuntu-22.04' || matrix.distro == 'noble' && 'ubuntu-24.04' || matrix.distro == 'rocky8' && 'ubuntu-24.04' }}
     timeout-minutes: 90
+    env:
+      TOX_MARKER: "coretest"
     steps:
       - name: Maximize build space
         uses: AdityaGarg8/remove-unwanted-software@v4.1
@@ -258,7 +260,11 @@ jobs:
         if: ${{ inputs.skip_testing != 'true' && matrix.distro != 'rocky8' }}
         run: |
           source test_venv/bin/activate
-          tox
+          if [ -z "${{ env.TOX_MARKER }}" ]; then
+            tox
+          else
+            tox -- -m ${{ env.TOX_MARKER }}
+          fi
           deactivate
 
       - name: Run tests on rpm artifacts
@@ -297,6 +303,7 @@ jobs:
     timeout-minutes: 90
     env:
       RPM_DISTRO: rocky8
+      TOX_MARKER: "coretest"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -322,7 +329,11 @@ jobs:
           mv artifacts/movai-service*.rpm artifacts/${{ env.RPM_DISTRO }}
           sudo rpm -i artifacts/${{ env.RPM_DISTRO }}/movai-service*.rpm --replacefiles || true
           source test_venv/bin/activate
-          pytest tests/ --cov=movai_service --cov=movai_cli --cov=extra-plugins --cov=scripts --cov-report=term --cov-report=xml -o log_cli=true -x
+          if [ -z "${{ env.TOX_MARKER }}" ]; then
+            pytest tests/ --cov=movai_service --cov=movai_cli --cov=extra-plugins --cov=scripts --cov-report=term --cov-report=xml -o log_cli=true -x
+          else
+            pytest tests/ --cov=movai_service --cov=movai_cli --cov=extra-plugins --cov=scripts --cov-report=term --cov-report=xml -o log_cli=true -x -m ${{ env.TOX_MARKER }}
+          fi
           deactivate
 
       - name: Store logs of journalctl
