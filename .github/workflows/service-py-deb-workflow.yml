@@ -462,9 +462,6 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-      with:
-        # Disabling shallow clone is recommended for improving relevancy of reporting
-        fetch-depth: 0
 
     - name: Install build-requirements
       run: |
@@ -536,7 +533,7 @@ jobs:
 
       - name: Publish to Nexus ppa-dev
         if: ${{ matrix.distro != 'rocky8' }}
-        uses: ./.github/actions/publish-to-nexus
+        uses: MOV-AI/.github/.github/actions/publish-to-nexus@v3
         with:
           repo: ppa-devel-${{ matrix.distro }}
           endpoint: ${{ inputs.publish_endpoint }}
@@ -547,7 +544,7 @@ jobs:
 
       - name: Publish to Nexus yum-dev
         if: ${{ matrix.distro == 'rocky8' }}
-        uses: ./.github/actions/publish-to-nexus
+        uses: MOV-AI/.github/.github/actions/publish-to-nexus@v3
         with:
           repo: yum-dev
           endpoint: ${{ inputs.publish_endpoint }}
@@ -626,7 +623,7 @@ jobs:
 
       - name: Publish to Nexus ppa-testing
         if: ${{ matrix.distro != 'rocky8' }}
-        uses: ./.github/actions/publish-to-nexus
+        uses: MOV-AI/.github/.github/actions/publish-to-nexus@v3
         with:
           repo: ppa-testing-${{ matrix.distro }}
           endpoint: ${{ inputs.publish_endpoint }}
@@ -637,7 +634,7 @@ jobs:
 
       - name: Publish to Nexus yum-testing
         if: ${{ matrix.distro == 'rocky8' }}
-        uses: ./.github/actions/publish-to-nexus
+        uses: MOV-AI/.github/.github/actions/publish-to-nexus@v3
         with:
           repo: yum-testing
           endpoint: ${{ inputs.publish_endpoint }}
@@ -829,7 +826,7 @@ jobs:
 
     - name: Publish debian packages to Nexus
       if: ${{ matrix.distro != 'rocky8' }}
-      uses: ./.github/actions/publish-to-nexus
+      uses: MOV-AI/.github/.github/actions/publish-to-nexus@v3
       with:
         repo: ${{ matrix.publish_repo }}-${{ matrix.distro }}
         endpoint: ${{ inputs.publish_endpoint }}
@@ -840,7 +837,7 @@ jobs:
 
     - name: Publish to Nexus yum-integration
       if: ${{ matrix.distro == 'rocky8' }}
-      uses: ./.github/actions/publish-to-nexus
+      uses: MOV-AI/.github/.github/actions/publish-to-nexus@v3
       with:
         repo: yum-integration
         endpoint: ${{ inputs.publish_endpoint }}
