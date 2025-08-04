@@ -4,7 +4,7 @@
 
 # MOV.AI .github Repository
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
 
 Centralized GitHub workflows, composite actions, and community files for MOV.AI projects.
 
