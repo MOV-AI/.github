@@ -1,4 +1,4 @@
-name: Build and pack py packages
+name: Build and pack movai-service distribution packages
 on:
   workflow_call:
     inputs:
@@ -39,6 +39,11 @@ on:
         required: false
         type: string
         default: 'pypi-edge'
+      package_version_bump:
+        required: false
+        type: string
+        default: ''
+        description: build, patch, minor, major. If empty, will be auto-detected from PR labels/title.
 
     secrets:
       auto_commit_user:
@@ -71,6 +76,42 @@ jobs:
           GITHUB_TOKEN: '${{ secrets.auto_commit_password }}'
           MERGE_MSG: "Branch was auto-updated."
 
+  DetectVersionBump:
+    runs-on: ubuntu-22.04
+    outputs:
+      bump_type: ${{ steps.detect_bump.outputs.bump_type }}
+    steps:
+      - name: Detect version bump type from PR labels/title
+        id: detect_bump
+        run: |
+          BUMP=""
+          # Prefer explicit input if set
+          if [ -n "${{ inputs.package_version_bump }}" ]; then
+            BUMP="${{ inputs.package_version_bump }}"
+          else
+            # Try to detect from PR labels (if available)
+            if [ -n "${{ github.event.pull_request.number }}" ]; then
+              LABELS=$(gh pr view ${{ github.event.pull_request.number }} --json labels --jq '.labels[].name')
+              for label in $LABELS; do
+                if [[ "$label" == "bug" ]]; then BUMP="patch"; fi
+                if [[ "$label" == "enhancement" ]]; then BUMP="minor"; fi
+                if [[ "$label" == "dependencies" ]]; then BUMP="patch"; fi
+                if [[ "$label" == "documentation" ]]; then BUMP="build"; fi
+              done
+              # Fallback to PR title if no label found
+              if [ -z "$BUMP" ]; then
+                TITLE=$(gh pr view ${{ github.event.pull_request.number }} --json title --jq '.title')
+                if [[ "$TITLE" =~ "BREAKING CHANGE" ]]; then BUMP="major"; fi
+                if [[ "$TITLE" =~ "feat" ]]; then BUMP="minor"; fi
+                if [[ "$TITLE" =~ "fix" ]]; then BUMP="patch"; fi
+                # default to build if no other bump type is detected
+                if [ -z "$BUMP" ]; then BUMP="build"; fi
+              fi
+            fi
+          fi
+          echo "bump_type=$BUMP" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.gh_token }}
   StaticAnalysis:
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-22.04
@@ -132,13 +173,11 @@ jobs:
         retention-days: 5
 
   Build:
-    needs: [StaticAnalysis]
+    needs: [StaticAnalysis, DetectVersionBump]
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-22.04
     outputs:
       package_version: ${{ steps.raise_version.outputs.py_pkg_version }}
-    env:
-      PACKAGE_VERSION_BUMP: "build"
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -154,6 +193,8 @@ jobs:
 
     - name: Raise version locally
       id: raise_version
+      env:
+        PACKAGE_VERSION_BUMP: ${{ needs.DetectVersionBump.outputs.bump_type }}
       run: |
         . venv/bin/activate
         make bump_version
@@ -179,7 +220,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.distributions) }}
-    needs: [Build]
+    needs: [Build, DetectVersionBump]
     runs-on: ubuntu-22.04
     outputs:
       package_version: ${{ needs.Build.outputs.package_version }}
@@ -197,6 +238,7 @@ jobs:
     - name: Raise & Pack in containers
       env:
         PACKAGE_VERSION: ${{ needs.Build.outputs.package_version }}
+        PACKAGE_VERSION_BUMP: ${{ needs.DetectVersionBump.outputs.bump_type }}
       run: |
         make bump_version
         make pack_${{ matrix.distro }}
@@ -449,7 +491,7 @@ jobs:
 
   Post-Build:
     if: ${{ inputs.release == 'false' }}
-    needs: [Build, Pack, Package-Test, Package-Test-Rpm, SonarCloud]
+    needs: [Build, Pack, Package-Test, Package-Test-Rpm, SonarCloud, DetectVersionBump]
     runs-on: ubuntu-22.04
     container:
       image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
@@ -472,12 +514,13 @@ jobs:
       if: ${{ inputs.deploy == 'true' }}
       env:
         PACKAGE_VERSION: ${{ needs.Build.outputs.package_version }}
-        PACKAGE_VERSION_BUMP: "build"
+        PACKAGE_VERSION_BUMP: ${{ needs.DetectVersionBump.outputs.bump_type }}
         PACKAGE_VERSION_COMMIT_AND_TAG: "True"
       run: |
-        . venv/bin/activate
+        git config --global --add safe.directory "$(pwd)"
         git config --global user.name ${{ secrets.auto_commit_user }}
         git config --global user.email ${{ secrets.auto_commit_mail }}
+        . venv/bin/activate
         make bump_version
         deactivate
 
