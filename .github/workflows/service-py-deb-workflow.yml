@@ -133,9 +133,8 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       package_version: ${{ steps.raise_version.outputs.py_pkg_version }}
-      commit_id: ${{ steps.raise_version.outputs.commit_id }}
     env:
-      PACKAGE_VERSION_BUMP: "patch"
+      PACKAGE_VERSION_BUMP: "build"
 
     steps:
     - name: Checkout
@@ -172,43 +171,6 @@ jobs:
         path: dist/*
         retention-days: 5
 
-    - name: Commit raise version
-      if: ${{ inputs.deploy == 'true' }}
-      env:
-        PACKAGE_VERSION: ${{ steps.raise_version.outputs.py_pkg_version }}
-      run: |
-        git config --global user.name ${{ secrets.auto_commit_user }}
-        git config --global user.email ${{ secrets.auto_commit_mail }}
-        git add .bumpversion.toml
-        git commit -m "[skip actions] Automatic Bump of build version to ${PACKAGE_VERSION}"
-
-    - name: Set branch output
-      id: var_branch
-      run: |
-        if [ "${{ github.event_name }}" = "pull_request" ];
-        then
-          BRANCH_NAME=${{ github.head_ref }}
-        else
-          BRANCH_NAME=${{ github.ref_name }}
-        fi
-        echo "Branch name is: $BRANCH_NAME"
-        echo "branch=$BRANCH_NAME" | tee -a $GITHUB_OUTPUT
-
-    - name: Push raised version
-      if: ${{ inputs.deploy == 'true' }}
-      uses: CasperWA/push-protected@v2.16.0
-      with:
-        token: ${{ secrets.auto_commit_password }}
-        branch: ${{ steps.var_branch.outputs.branch }}
-        unprotect_reviews: true
-
-    - name: Store commit id of version
-      if: ${{ inputs.deploy == 'true' }}
-      id: commit_id
-      run: |
-        commit_hash=$(git log --format="%H" -n 1)
-        echo "commit_id=$commit_hash" | tee -a $GITHUB_OUTPUT
-
   Pack:
     if: ${{ inputs.release == 'false' }}
     strategy:
@@ -218,12 +180,9 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       package_version: ${{ needs.Build.outputs.package_version }}
-      commit_id: ${{ needs.Build.outputs.commit_id }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-      with:
-        ref: ${{ needs.Build.outputs.commit_id }}
 
     - name: Login to registry.cloud.mov.ai Registry
       uses: docker/login-action@v3
@@ -386,10 +345,9 @@ jobs:
           sudo rm -rf test_venv
           sudo dnf remove movai-service* -y || true
 
-
   SonarCloud:
     if: ${{ inputs.release == 'false' }}
-    needs: [Package-Test]
+    needs: [Build, Pack, Package-Test, Package-Test-Rpm]
     runs-on: ubuntu-22.04
     container:
       image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
@@ -405,7 +363,8 @@ jobs:
 
     - name: Install build-requirements
       run: |
-        python3 -m pip install -r build-requirements.txt
+        apt-get update && apt-get install -yq make
+        make venv
 
     - name: Download coverage reports
       uses: actions/download-artifact@v4
@@ -479,8 +438,112 @@ jobs:
       run: |
         echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
+    - name: Commit raise version
+      if: ${{ inputs.deploy == 'true' }}
+      env:
+        PACKAGE_VERSION: ${{ needs.Build.outputs.package_version }}
+      run: |
+        . venv/bin/activate
+        git config --global user.name ${{ secrets.auto_commit_user }}
+        git config --global user.email ${{ secrets.auto_commit_mail }}
+        make bump_version
+        git add -A
+        git commit -m "[skip actions] Automatic Bump of build version to ${PACKAGE_VERSION}"
+        deactivate
+
+    - name: Set branch output
+      id: var_branch
+      run: |
+        if [ "${{ github.event_name }}" = "pull_request" ];
+        then
+          BRANCH_NAME=${{ github.head_ref }}
+        else
+          BRANCH_NAME=${{ github.ref_name }}
+        fi
+        echo "Branch name is: $BRANCH_NAME"
+        echo "branch=$BRANCH_NAME" | tee -a $GITHUB_OUTPUT
+
+    - name: Push raised version
+      if: ${{ inputs.deploy == 'true' }}
+      uses: CasperWA/push-protected@v2.16.0
+      with:
+        token: ${{ secrets.auto_commit_password }}
+        branch: ${{ steps.var_branch.outputs.branch }}
+        unprotect_reviews: true
+
+    - name: Store commit id of version
+      if: ${{ inputs.deploy == 'true' }}
+      id: commit_id
+      run: |
+        commit_hash=$(git log --format="%H" -n 1)
+        echo "commit_id=$commit_hash" | tee -a $GITHUB_OUTPUT
+
+  Post-Build:
+    if: ${{ inputs.release == 'false' }}
+    needs: [Build, Pack, Package-Test, Package-Test-Rpm, SonarCloud]
+    runs-on: ubuntu-22.04
+    container:
+      image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    outputs:
+      package_version: ${{ needs.Build.outputs.package_version }}
+      commit_id: ${{ steps.commit_id.outputs.commit_id }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        # Disabling shallow clone is recommended for improving relevancy of reporting
+        fetch-depth: 0
+
+    - name: Install build-requirements
+      run: |
+        apt-get update && apt-get install -yq make
+        make venv
+
+    - name: Commit raise version
+      if: ${{ inputs.deploy == 'true' }}
+      env:
+        PACKAGE_VERSION: ${{ needs.Build.outputs.package_version }}
+      run: |
+        . venv/bin/activate
+        git config --global user.name ${{ secrets.auto_commit_user }}
+        git config --global user.email ${{ secrets.auto_commit_mail }}
+        make bump_version
+        git add -A
+        git commit -m "[skip actions] Automatic Bump of build version to ${PACKAGE_VERSION}"
+        deactivate
+
+    - name: Set branch output
+      id: var_branch
+      run: |
+        if [ "${{ github.event_name }}" = "pull_request" ];
+        then
+          BRANCH_NAME=${{ github.head_ref }}
+        else
+          BRANCH_NAME=${{ github.ref_name }}
+        fi
+        echo "Branch name is: $BRANCH_NAME"
+        echo "branch=$BRANCH_NAME" | tee -a $GITHUB_OUTPUT
+
+    - name: Push raised version
+      if: ${{ inputs.deploy == 'true' }}
+      uses: CasperWA/push-protected@v2.16.0
+      with:
+        token: ${{ secrets.auto_commit_password }}
+        branch: ${{ steps.var_branch.outputs.branch }}
+        unprotect_reviews: true
+
+    - name: Store commit id of version
+      if: ${{ inputs.deploy == 'true' }}
+      id: commit_id
+      run: |
+        commit_hash=$(git log --format="%H" -n 1)
+        echo "commit_id=$commit_hash" | tee -a $GITHUB_OUTPUT
+
   PublishPackagesToDev:
-    needs: [Build, Pack, Package-Test, SonarCloud, Package-Test-Rpm]
+    needs: [Post-Build]
     if: ${{ inputs.release == 'false' }}
     strategy:
       matrix:
@@ -573,7 +636,7 @@ jobs:
           done
 
   PublishPyPiToExperimental:
-    needs: [Build, Pack, Package-Test, SonarCloud, Package-Test-Rpm]
+    needs: [Post-Build]
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-22.04
     container:
@@ -597,7 +660,7 @@ jobs:
           packages-dir: dist/
 
   PublishPyPiToIntegration:
-    needs: [Build, Pack, Package-Test, SonarCloud, Package-Test-Rpm]
+    needs: [Post-Build]
     if: ${{ inputs.deploy == 'true' }}
     runs-on: ubuntu-22.04
     container:
@@ -621,7 +684,7 @@ jobs:
           packages-dir: dist/
 
   PublishPackagesToStaging:
-    needs: [Build, Pack, Package-Test, SonarCloud, Package-Test-Rpm]
+    needs: [Post-Build]
     if: ${{ inputs.deploy == 'true' }}
     strategy:
       matrix:
@@ -672,12 +735,12 @@ jobs:
               fi
             done
 
-      - name: Publish to Nexus yum-integration
+      - name: Publish to Nexus yum-testing
         if: ${{ matrix.distro == 'rocky8' }}
         shell: bash
         run: |
             NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
-            NEXUS_REPO="yum-integration"
+            NEXUS_REPO="yum-testing"
 
             cd artifacts
             for file in $(find -name "*.rpm" -not -name "*src*" -printf '%f\n')
@@ -715,7 +778,7 @@ jobs:
             done
 
   Github-Release:
-    needs: [Build, Pack, Package-Test, Package-Test-Rpm, SonarCloud, PublishPyPiToIntegration, PublishPackagesToStaging]
+    needs: [Post-Build, PublishPyPiToIntegration, PublishPackagesToStaging]
     runs-on: ubuntu-22.04
     if: ${{ inputs.deploy == 'true' }}
     container:
@@ -740,12 +803,12 @@ jobs:
           git config --global user.name ${{ secrets.auto_commit_user }}
           git config --global user.email ${{ secrets.auto_commit_mail }}
           git config --global --add safe.directory $(pwd)
-          title="Release of ${{ needs.Build.outputs.package_version }}"
+          title="Release of ${{ needs.Post-Build.outputs.package_version }}"
           gh release create -p -t "$title" \
-          -n "Release notes of version ${{ needs.Build.outputs.package_version }}" \
-          --target "${{ needs.Build.outputs.commit_id }}" \
+          -n "Release notes of version ${{ needs.Post-Build.outputs.package_version }}" \
+          --target "${{ needs.Post-Build.outputs.commit_id }}" \
           --generate-notes \
-           ${{ needs.Build.outputs.package_version }}
+           ${{ needs.Post-Build.outputs.package_version }}
 
 
           # add all files in the artifacts folder
@@ -753,20 +816,20 @@ jobs:
           for asset in dist/*; do
             # do nothing if folder is empty
             if [[ $asset != "dist/*" ]]; then
-              gh release upload ${{ needs.Build.outputs.package_version }} $asset
+              gh release upload ${{ needs.Post-Build.outputs.package_version }} $asset
             fi
           done
           for asset in artifacts/*; do
             # do nothing if folder is empty
             if [[ $asset != "artifacts/*" ]]; then
-              gh release upload ${{ needs.Build.outputs.package_version }} $asset
+              gh release upload ${{ needs.Post-Build.outputs.package_version }} $asset
             fi
           done
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
   Github-Release-Packages-Upload:
-    needs: [Build, Github-Release]
+    needs: [Post-Build, Github-Release]
     runs-on: ubuntu-22.04
     if: ${{ inputs.deploy == 'true' }}
     container:
@@ -801,7 +864,7 @@ jobs:
               # Add sufix of distro to asset name
               asset_renamed=$(basename $asset .deb)_${{ matrix.distro }}.deb
               cp $asset $asset_renamed
-              gh release upload ${{ needs.Build.outputs.package_version }} $asset_renamed
+              gh release upload ${{ needs.Post-Build.outputs.package_version }} $asset_renamed
             fi
           done
         env:
@@ -860,8 +923,11 @@ jobs:
       - name: Archive binary
         uses: actions/upload-artifact@v4
         with:
-          name: released_deb_artifacts
-          path: artifacts/*.deb
+          name: released_artifacts
+          path: |
+            artifacts/*.deb
+            artifacts/*.rpm
+
           retention-days: 5
 
       - name: Publish package to prod PyPI
@@ -871,7 +937,7 @@ jobs:
           password: ${{ secrets.nexus_publisher_password }}
           repository-url: https://artifacts.cloud.mov.ai/repository/${{ inputs.prod_publish_pypi }}/
 
-  ReleasePpa:
+  ReleasePackagesToProd:
     needs: [ReleasePypi]
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-22.04
@@ -890,10 +956,11 @@ jobs:
     - name: Download pack artifacts
       uses: actions/download-artifact@v4
       with:
-        name: released_deb_artifacts
+        name: released_artifacts
         path: artifacts/
 
-    - name: Publish to Nexus
+    - name: Publish debian packages to Nexus
+      if: ${{ matrix.distro != 'rocky8' }}
       shell: bash
       run: |
         NEXUS_REPO="${{ matrix.publish_repo }}-${{ matrix.distro }}"
@@ -925,4 +992,46 @@ jobs:
             exit 1
           fi
 
+        done
+
+    - name: Publish to Nexus yum-integration
+      if: ${{ matrix.distro == 'rocky8' }}
+      shell: bash
+      run: |
+        NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+        NEXUS_REPO="yum-integration"
+
+        cd artifacts
+        for file in $(find -name "*.rpm" -not -name "*src*" -printf '%f\n')
+        do
+          echo "Uploading $file"
+          RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+            "https://$NEXUS_ENDPOINT/service/rest/v1/components?repository=$NEXUS_REPO" \
+            -H 'accept: application/json' \
+            -H 'Content-Type: multipart/form-data' \
+            -w '%{http_code}' \
+            -F 'yum.directory=system' \
+            -F "yum.asset=@$file;type=application/x-rpm" \
+            -F "yum.asset.filename=$file"
+          )
+
+          #retry
+          if [[ ! "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
+            echo "Failed upload $file with $RETURN_CODE. Retrying"
+
+            RETURN_CODE=$(curl -X 'POST' -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+              "https://$NEXUS_ENDPOINT/service/rest/v1/components?repository=$NEXUS_REPO" \
+              -H 'accept: application/json' \
+              -H 'Content-Type: multipart/form-data' \
+              -w '%{http_code}' \
+              -F 'yum.directory=system' \
+              -F "yum.asset=@$file;type=application/x-rpm" \
+              -F "yum.asset.filename=$file"
+            )
+          fi
+
+          if [[ ! "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
+            echo "Failed upload $file with $RETURN_CODE. Exiting"
+            exit 1
+          fi
         done
