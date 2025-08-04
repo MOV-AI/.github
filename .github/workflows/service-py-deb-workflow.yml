@@ -139,7 +139,6 @@ jobs:
       package_version: ${{ steps.raise_version.outputs.py_pkg_version }}
     env:
       PACKAGE_VERSION_BUMP: "build"
-
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -476,6 +475,8 @@ jobs:
       if: ${{ inputs.deploy == 'true' }}
       env:
         PACKAGE_VERSION: ${{ needs.Build.outputs.package_version }}
+        PACKAGE_VERSION_BUMP: "build"
+        PACKAGE_VERSION_COMMIT_AND_TAG: "True"
       run: |
         . venv/bin/activate
         git config --global user.name ${{ secrets.auto_commit_user }}
