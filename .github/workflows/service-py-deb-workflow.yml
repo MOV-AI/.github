@@ -591,9 +591,9 @@ jobs:
           user: ${{ secrets.nexus_publisher_user }}
           password: ${{ secrets.nexus_publisher_password }}
 
-  PublishPyPiToExperimental:
+  PublishPyPi:
     needs: [Post-Build]
-    if: ${{ inputs.release == 'false' }}
+
     runs-on: ubuntu-22.04
     container:
       image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
@@ -608,36 +608,23 @@ jobs:
           path: dist/
 
       - name: Publish package to TestPyPI Experimental (dev branches or PRs)
-        uses: pypa/gh-action-pypi-publish@v1.11.0
-        with:
-          user: ${{ secrets.nexus_publisher_user }}
-          password: ${{ secrets.nexus_publisher_password }}
-          repository-url: https://artifacts.cloud.mov.ai/repository/pypi-experimental/
-          packages-dir: dist/
+        if: ${{ inputs.release == 'false' }}
+        run: |
+          python -m twine upload --repository-url https://artifacts.aws.cloud.mov.ai/repository/pypi-experimental/ \
+            --username ${{ secrets.nexus_publisher_user }} \
+            --password ${{ secrets.nexus_publisher_password }} \
+            dist/*
+          echo "Published to TestPyPI Experimental"
 
-  PublishPyPiToIntegration:
-    needs: [Post-Build]
-    if: ${{ inputs.deploy == 'true' }}
-    runs-on: ubuntu-22.04
-    container:
-      image: registry.cloud.mov.ai/qa/py-buildserver:v3.0.4
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
-    steps:
-      - name: Download packages
-        uses: actions/download-artifact@v4
-        with:
-          name: packages
-          path: dist/
 
       - name: Publish package to TestPyPI Integration
-        uses: pypa/gh-action-pypi-publish@v1.11.0
-        with:
-          user: ${{ secrets.nexus_publisher_user }}
-          password: ${{ secrets.nexus_publisher_password }}
-          repository-url: https://artifacts.cloud.mov.ai/repository/pypi-integration/
-          packages-dir: dist/
+        if: ${{ inputs.deploy == 'true' }}
+        run: |
+          python -m twine upload --repository-url https://artifacts.cloud.mov.ai/repository/${{ inputs.publish_endpoint }}/ \
+            --username ${{ secrets.nexus_publisher_user }} \
+            --password ${{ secrets.nexus_publisher_password }} \
+            dist/*
+          echo "Published to TestPyPI Integration"
 
   PublishPackagesToStaging:
     needs: [Post-Build]
@@ -682,7 +669,7 @@ jobs:
           password: ${{ secrets.nexus_publisher_password }}
 
   Github-Release:
-    needs: [Post-Build, PublishPyPiToIntegration, PublishPackagesToStaging]
+    needs: [Post-Build, PublishPyPi, PublishPackagesToStaging]
     runs-on: ubuntu-22.04
     if: ${{ inputs.deploy == 'true' }}
     container:
