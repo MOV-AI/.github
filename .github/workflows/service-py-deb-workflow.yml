@@ -270,7 +270,7 @@ jobs:
     runs-on: ${{ matrix.distro == 'focal' && 'ubuntu-20.04' || matrix.distro == 'jammy' && 'ubuntu-22.04' || matrix.distro == 'noble' && 'ubuntu-24.04' || matrix.distro == 'rocky8' && 'ubuntu-24.04' }}
     timeout-minutes: 90
     env:
-      TOX_MARKER: "coretest"
+      TOX_MARKER: ""
     steps:
       - name: Maximize build space
         uses: AdityaGarg8/remove-unwanted-software@v4.1
@@ -352,7 +352,7 @@ jobs:
     timeout-minutes: 90
     env:
       RPM_DISTRO: rocky8
-      TOX_MARKER: "coretest"
+      TOX_MARKER: ""
     steps:
       - name: Checkout
         uses: actions/checkout@v4
