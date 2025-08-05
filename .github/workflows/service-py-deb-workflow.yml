@@ -607,10 +607,14 @@ jobs:
           name: packages
           path: dist/
 
+      - name: Install build-requirements
+        run: |
+          python3 -m pip install -r build-requirements.txt
+
       - name: Publish package to TestPyPI Experimental (dev branches or PRs)
         if: ${{ inputs.release == 'false' }}
         run: |
-          python -m twine upload --repository-url https://artifacts.aws.cloud.mov.ai/repository/pypi-experimental/ \
+          python3 -m twine upload --repository-url https://artifacts.aws.cloud.mov.ai/repository/pypi-experimental/ \
             --username ${{ secrets.nexus_publisher_user }} \
             --password ${{ secrets.nexus_publisher_password }} \
             dist/*
@@ -620,7 +624,7 @@ jobs:
       - name: Publish package to TestPyPI Integration
         if: ${{ inputs.deploy == 'true' }}
         run: |
-          python -m twine upload --repository-url https://artifacts.cloud.mov.ai/repository/${{ inputs.publish_endpoint }}/ \
+          python3 -m twine upload --repository-url https://artifacts.cloud.mov.ai/repository/${{ inputs.publish_endpoint }}/ \
             --username ${{ secrets.nexus_publisher_user }} \
             --password ${{ secrets.nexus_publisher_password }} \
             dist/*
