@@ -77,6 +77,7 @@ jobs:
           MERGE_MSG: "Branch was auto-updated."
 
   DetectVersionBump:
+    if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-22.04
     outputs:
       bump_type: ${{ steps.detect_bump.outputs.bump_type }}
@@ -118,6 +119,7 @@ jobs:
           echo "bump_type=$BUMP" | tee -a "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ secrets.gh_token }}
+
   StaticAnalysis:
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-22.04
@@ -800,6 +802,9 @@ jobs:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Set tag output
         id: vars
         run: echo "tag=${GITHUB_REF#refs/*/}" | tee -a "$GITHUB_OUTPUT"
