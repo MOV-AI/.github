@@ -812,22 +812,11 @@ jobs:
       - name: Fetch artifact from github release
         run: |
           git config --global --add safe.directory "$(pwd)"
-          mkdir dist artifacts
-          cd dist
-          gh release download ${{ steps.vars.outputs.tag}} -p ./*.whl
-          gh release download ${{ steps.vars.outputs.tag}} -p  ./*.tar.gz
-          cd ../artifacts
+          mkdir artifacts && cd artifacts
           gh release download ${{ steps.vars.outputs.tag}} -p ./*.deb
           gh release download ${{ steps.vars.outputs.tag}} -p ./*.rpm
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
-
-      - name: Archive binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: released_packages
-          path: dist/*
-          retention-days: 5
 
       - name: Archive binary
         uses: actions/upload-artifact@v4
@@ -884,7 +873,7 @@ jobs:
       with:
         repo: yum-integration
         endpoint: ${{ inputs.publish_endpoint }}
-        file_pattern: "artifacts/*.rpm"
+        file_pattern: "artifacts/*_${{ matrix.distro }}.rpm"
         file_type: "rpm"
         user: ${{ secrets.nexus_publisher_user }}
         password: ${{ secrets.nexus_publisher_password }}
