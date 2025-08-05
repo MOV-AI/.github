@@ -51,18 +51,19 @@ runs:
           for ((i=0; i<${{ inputs.retry_count }}; i++)); do
             echo "Attempt $((i+1)) to upload $file"
             if [[ "${{ inputs.file_type }}" == "deb" ]]; then
-              # .deb upload
+              echo "Uploading deb to https://${{ inputs.endpoint }}/repository/${{ inputs.repo }}/"
               RETURN_CODE=$(curl -s -o /dev/null -w '%{http_code}' \
                 -u "${{ inputs.user }}:${{ inputs.password }}" \
-                -H 'accept: application/json' \
+                -H "Content-Type: multipart/form-data" \
                 --data-binary "@$file" \
                 ${{ inputs.extra_curl_args }} \
                 "https://${{ inputs.endpoint }}/repository/${{ inputs.repo }}/")
             elif [[ "${{ inputs.file_type }}" == "rpm" ]]; then
-              # .rpm upload (yum repo)
+              echo "Uploading rpm to https://${{ inputs.endpoint }}/repository/${{ inputs.repo }}/"
               RETURN_CODE=$(curl -s -o /dev/null -w '%{http_code}' \
                 -u "${{ inputs.user }}:${{ inputs.password }}" \
                 -H 'accept: application/json' \
+                -H 'Content-Type: multipart/form-data' \
                 -F "yum.directory=system" \
                 -F "yum.asset=@$file;type=application/x-rpm" \
                 -F "yum.asset.filename=$(basename $file)" \

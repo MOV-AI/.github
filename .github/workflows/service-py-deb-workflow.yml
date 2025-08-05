@@ -81,12 +81,13 @@ jobs:
     outputs:
       bump_type: ${{ steps.detect_bump.outputs.bump_type }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Detect version bump type from PR labels/title
         id: detect_bump
         run: |
-          # Always set a default value for BUMP
+          git config --global --add safe.directory "$(pwd)"
           BUMP="build"
-          # Prefer explicit input if set
           if [ -n "${{ inputs.package_version_bump }}" ]; then
             BUMP="${{ inputs.package_version_bump }}"
           else
@@ -94,18 +95,23 @@ jobs:
             if [ -n "${{ github.event.pull_request.number }}" ]; then
               LABELS=$(gh pr view ${{ github.event.pull_request.number }} --json labels --jq '.labels[].name')
               for label in $LABELS; do
-                if [[ "$label" == "bug" ]]; then BUMP="patch"; fi
-                if [[ "$label" == "enhancement" ]]; then BUMP="minor"; fi
-                if [[ "$label" == "dependencies" ]]; then BUMP="patch"; fi
-                if [[ "$label" == "documentation" ]]; then BUMP="build"; fi
+                if [[ "$label" == "enhancement" ]]; then BUMP="minor"; break; fi
+                if [[ "$label" == "bug" ]] || [[ "$label" == "dependencies" ]]; then BUMP="patch"; fi
               done
               # Fallback to PR title if no label found
               if [ "$BUMP" == "build" ]; then
                 TITLE=$(gh pr view ${{ github.event.pull_request.number }} --json title --jq '.title')
-                if [[ "$TITLE" =~ "BREAKING CHANGE" ]]; then BUMP="major"; fi
-                if [[ "$TITLE" =~ "feat" ]]; then BUMP="minor"; fi
-                if [[ "$TITLE" =~ "fix" ]]; then BUMP="patch"; fi
-                # BUMP remains 'build' if no other bump type is detected
+                if [[ "$TITLE" =~ "BREAKING CHANGE" ]]; then
+                  BUMP="major"
+                else
+                  if [[ "$TITLE" =~ "feat" ]]; then
+                    BUMP="minor"
+                  else
+                    if [[ "$TITLE" =~ "fix" ]]; then
+                      BUMP="patch"
+                    fi
+                  fi
+                fi
               fi
             fi
           fi
