@@ -623,7 +623,7 @@ jobs:
       - name: Publish package to TestPyPI Experimental (dev branches or PRs)
         if: ${{ inputs.release == 'false' }}
         run: |
-          python3 -m twine upload --repository-url https://artifacts.aws.cloud.mov.ai/repository/pypi-experimental/ \
+          python3 -m twine upload --repository-url https://${{ inputs.publish_endpoint }}/repository/pypi-experimental/ \
             --username ${{ secrets.nexus_publisher_user }} \
             --password ${{ secrets.nexus_publisher_password }} \
             dist/*
@@ -633,7 +633,7 @@ jobs:
       - name: Publish package to TestPyPI Integration
         if: ${{ inputs.deploy == 'true' }}
         run: |
-          python3 -m twine upload --repository-url https://artifacts.cloud.mov.ai/repository/${{ inputs.publish_endpoint }}/ \
+          python3 -m twine upload --repository-url https://${{ inputs.publish_endpoint }}/repository/pypi-integration/ \
             --username ${{ secrets.nexus_publisher_user }} \
             --password ${{ secrets.nexus_publisher_password }} \
             dist/*
@@ -838,7 +838,7 @@ jobs:
         with:
           user: ${{ secrets.nexus_publisher_user }}
           password: ${{ secrets.nexus_publisher_password }}
-          repository-url: https://artifacts.cloud.mov.ai/repository/${{ inputs.prod_publish_pypi }}/
+          repository-url: https://${{ inputs.publish_endpoint }}/repository/${{ inputs.prod_publish_pypi }}/
 
   ReleasePackagesToProd:
     needs: [ReleasePypi]
