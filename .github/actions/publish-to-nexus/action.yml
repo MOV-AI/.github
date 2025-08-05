@@ -47,6 +47,7 @@ runs:
 
         for file in "${files[@]}"; do
           echo "Uploading $file (retry count: ${{ inputs.retry_count }})"
+          success=0
           for ((i=0; i<${{ inputs.retry_count }}; i++)); do
             echo "Attempt $((i+1)) to upload $file"
             if [[ "${{ inputs.file_type }}" == "deb" ]]; then
@@ -68,12 +69,17 @@ runs:
                 ${{ inputs.extra_curl_args }} \
                 "https://${{ inputs.endpoint }}/repository/${{ inputs.repo }}/")
             fi
-            if [[ ! "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
-              echo "Failed upload $file with $RETURN_CODE. Retrying..."
-            else
+            if [[ "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
               echo "Successfully uploaded $file with HTTP status $RETURN_CODE"
+              success=1
               break
+            else
+              echo "Failed upload $file with $RETURN_CODE. Retrying..."
             fi
           done
+          if [[ $success -ne 1 ]]; then
+            echo "ERROR: All attempts to upload $file failed."
+            exit 1
+          fi
         done
       shell: bash
