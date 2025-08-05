@@ -793,7 +793,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
-  ReleasePypi:
+  GetReleasedPackages:
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-22.04
     container:
@@ -827,15 +827,8 @@ jobs:
             artifacts/*.rpm
           retention-days: 5
 
-      - name: Publish package to prod PyPI
-        uses: pypa/gh-action-pypi-publish@v1.12.4
-        with:
-          user: ${{ secrets.nexus_publisher_user }}
-          password: ${{ secrets.nexus_publisher_password }}
-          repository-url: https://${{ inputs.publish_endpoint }}/repository/${{ inputs.prod_publish_pypi }}/
-
   ReleasePackagesToProd:
-    needs: [ReleasePypi]
+    needs: [GetReleasedPackages]
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-22.04
     container:
