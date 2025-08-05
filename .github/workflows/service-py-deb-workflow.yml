@@ -806,6 +806,7 @@ jobs:
 
       - name: Fetch artifact from github release
         run: |
+          git config --global --add safe.directory "$(pwd)"
           mkdir dist artifacts
           cd dist
           gh release download ${{ steps.vars.outputs.tag}} -p ./*.whl
@@ -830,7 +831,6 @@ jobs:
           path: |
             artifacts/*.deb
             artifacts/*.rpm
-
           retention-days: 5
 
       - name: Publish package to prod PyPI
