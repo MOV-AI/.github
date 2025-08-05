@@ -63,7 +63,7 @@ runs:
                 ${{ inputs.extra_curl_args }} \
                 "https://${{ inputs.endpoint }}/repository/${{ inputs.repo }}/")
             elif [[ "${{ inputs.file_type }}" == "rpm" ]]; then
-              echo "Uploading rpm to https://${{ inputs.endpoint }}/service/rest/v1/components?repository=${{ inputs.repo }}/"
+              echo "Uploading rpm to https://${{ inputs.endpoint }}/service/rest/v1/components?repository=${{ inputs.repo }}"
               RETURN_CODE=$(curl -X 'POST' -s -o /dev/null -w '%{http_code}' \
                 -u "${{ inputs.user }}:${{ inputs.password }}" \
                 -H 'accept: application/json' \
@@ -72,7 +72,7 @@ runs:
                 -F "yum.asset=@$file;type=application/x-rpm" \
                 -F "yum.asset.filename=$(basename $file)" \
                 ${{ inputs.extra_curl_args }} \
-                "https://${{ inputs.endpoint }}/service/rest/v1/components?repository=${{ inputs.repo }}/")
+                "https://${{ inputs.endpoint }}/service/rest/v1/components?repository=${{ inputs.repo }}")
             fi
             if [[ "$RETURN_CODE" =~ ^(200|201|202|204)$ ]]; then
               echo "Successfully uploaded $file with HTTP status $RETURN_CODE"
