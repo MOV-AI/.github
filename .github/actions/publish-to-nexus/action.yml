@@ -30,7 +30,11 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - run: |
+    - name: "Upload Packages"
+      shell: bash
+      run: |
+        #!/bin/bash
+        set -euo pipefail
         # Check file_type
         if [[ "${{ inputs.file_type }}" != "deb" && "${{ inputs.file_type }}" != "rpm" ]]; then
           echo "Unsupported file type: ${{ inputs.file_type }}"
@@ -59,7 +63,7 @@ runs:
                 ${{ inputs.extra_curl_args }} \
                 "https://${{ inputs.endpoint }}/repository/${{ inputs.repo }}/")
             elif [[ "${{ inputs.file_type }}" == "rpm" ]]; then
-              echo "Uploading rpm to "https://${{ inputs.endpoint }}/service/rest/v1/components?repository=${{ inputs.repo }}/"
+              echo "Uploading rpm to https://${{ inputs.endpoint }}/service/rest/v1/components?repository=${{ inputs.repo }}/"
               RETURN_CODE=$(curl -X 'POST' -s -o /dev/null -w '%{http_code}' \
                 -u "${{ inputs.user }}:${{ inputs.password }}" \
                 -H 'accept: application/json' \
@@ -83,4 +87,3 @@ runs:
             exit 1
           fi
         done
-      shell: bash
