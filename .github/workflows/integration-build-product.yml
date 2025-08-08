@@ -1369,6 +1369,14 @@ jobs:
           python3 -m pip install --upgrade pyOpenSSL cryptography
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
+      - name: Check AWS Cli
+        shell: bash
+        run: |
+          if ! command -v aws &> /dev/null; then
+            echo "AWS CLI could not be found, please install it."
+            exit 1
+          fi
+
       - name: unstash raised_meta
         if: ${{ inputs.with_simulation_tests }}
         uses: actions/download-artifact@v4
@@ -1935,9 +1943,6 @@ jobs:
         if: ${{ always() &&  inputs.with_simulation_tests }}
         shell: bash
         run: |
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-2.22.35.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
-          sudo ./aws/install --update
           zip -r qa_artifacts.zip qa_artifacts/
 
       - name: Stash QA artifacts (Minio)
