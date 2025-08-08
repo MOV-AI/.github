@@ -111,6 +111,14 @@ jobs:
         run: |
           echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
 
+      - name: Check AWS Cli
+        shell: bash
+        run: |
+          if ! command -v aws &> /dev/null; then
+            echo "AWS CLI could not be found, please install it."
+            exit 1
+          fi
+
       - name: Login to Private Registry
         uses: docker/login-action@v2
         with:
@@ -664,9 +672,6 @@ jobs:
         shell: bash
         id: minio_publish
         run: |
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
-          sudo ./aws/install --update
           URI_OBJ_PATH=ci-artifacts/${{ github.repository }}/$(date '+%Y_%m_%d')/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}
 
           MAX_RETRIES=5
