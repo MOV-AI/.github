@@ -68,6 +68,11 @@ on:
         type: boolean
         default: false
         description: boolean to enable download of 'packages' artifacts to be included in build
+      download_artifact_name:
+        required: false
+        type: string
+        default: "artifacts"
+        description: artifact name to download
       download_artifact_path:
         required: false
         type: string
@@ -214,7 +219,7 @@ jobs:
         if: inputs.download_artifact
         uses: actions/download-artifact@v4
         with:
-          name: artifacts
+          name: ${{ inputs.download_artifact_name }}
           path: ${{ inputs.download_artifact_path }}
 
       - name: Set up QEMU for multi platform
