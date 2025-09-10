@@ -230,11 +230,6 @@ jobs:
           name: raised_meta
           path: platform_configs/*
           retention-days: 5
-      
-      - name: Cleanup of workspace
-        shell: bash
-        run: |
-          rm -rf simulator_artifacts ci_artifacts platform_configs ci-venv
 
   Build-Spawner:
     needs: [Validate-boostrap-configs]
