@@ -231,6 +231,15 @@ jobs:
           path: platform_configs/*
           retention-days: 5
 
+      - name: Cleanup CI workspace
+        if: always()
+        shell: bash
+        run: |
+          rm -rf ci-venv
+          rm -rf ci_artifacts
+          rm -rf simulator_artifacts
+          rm -rf platform_configs
+
   Build-Spawner:
     needs: [Validate-boostrap-configs]
     strategy:
@@ -828,6 +837,7 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: Setup CI Scripts in ci-venv
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation }}
         shell: bash
         run: |
           python3 -m venv ci-venv --clear
