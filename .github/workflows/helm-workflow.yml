@@ -72,7 +72,7 @@ jobs:
           echo '${{ secrets.chart_secrets }}'>secrets.json
           python3 -m pip install jinja-cli
           find . -type f -name '*.yaml' -exec jinja -d secrets.json {} -o {} \;
-          find . -type f -name '*.json' -exec jinja -d secrets.json {} -o {} \;
+          find . -type f -name '*.json' ! -name 'secrets.json' -exec jinja -d secrets.json {} -o {} \;
 
       - name: Deploy Helm Chart
         id: deploy
