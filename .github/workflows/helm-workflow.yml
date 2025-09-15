@@ -39,6 +39,8 @@ on:
         required: true
       chart_secrets:
         required: false
+      nexus_encryption_key_json:
+        required: false
 
 
 env:
@@ -65,6 +67,13 @@ jobs:
         run: |
           aws eks --region ${{ env.AWS_DEFAULT_REGION }} update-kubeconfig --name ${{ inputs.aws_cluster_name }}
           kubectl get svc,po
+
+      - name: Replace Secrets
+        shell: bash
+        run: |
+          echo '${{ secrets.nexus_encryption_key_json }}'>nexus_encryption_key.json
+          python3 -m pip install jinja-cli
+          find . -type f -name '*.yaml' -exec jinja -d nexus_encryption_key.json {} -o {} \;
 
       - name: Replace Secrets
         shell: bash
