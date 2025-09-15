@@ -39,8 +39,6 @@ on:
         required: true
       chart_secrets:
         required: false
-      nexus_encryption_key_json:
-        required: false
 
 
 env:
@@ -71,16 +69,10 @@ jobs:
       - name: Replace Secrets
         shell: bash
         run: |
-          echo '${{ secrets.nexus_encryption_key_json }}'>nexus_encryption_key.json
-          python3 -m pip install jinja-cli
-          find . -type f -name '*.yaml' -exec jinja -d nexus_encryption_key.json {} -o {} \;
-
-      - name: Replace Secrets
-        shell: bash
-        run: |
           echo '${{ secrets.chart_secrets }}'>secrets.json
           python3 -m pip install jinja-cli
           find . -type f -name '*.yaml' -exec jinja -d secrets.json {} -o {} \;
+          find . -type f -name '*.json' -exec jinja -d secrets.json {} -o {} \;
 
       - name: Deploy Helm Chart
         id: deploy
