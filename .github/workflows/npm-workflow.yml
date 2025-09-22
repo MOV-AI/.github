@@ -187,6 +187,7 @@ jobs:
           "-Dsonar.qualitygate.timeout=300"
           "-Dsonar.coverage.exclusions=**/*.test.js,**/*.test.jsx"
           "-Dsonar.cpd.exclusions=**/*.test.js,**/*.test.jsx"
+          "-Dsonar.javascript.lcov.reportPaths=./coverage/lcov.info"
           "-Dsonar.nodejs.executable=${{ steps.build_step.outputs.node_path }}"
 
     - name: Link to SonarCloud dashboard
