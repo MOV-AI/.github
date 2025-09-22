@@ -151,7 +151,11 @@ jobs:
         ${{ inputs.pm }} version prerelease --no-git-tag-version
 
     - name: Build
-      run: ${{ inputs.pm }} run build
+      id: build_step
+      run: |
+        node_path=$(which node)
+        echo "node_path=$node_path" >> $GITHUB_OUTPUT
+        ${{ inputs.pm }} run build
 
     - name: Check NPM log on failure
       if: ${{ failure() }}
@@ -183,8 +187,7 @@ jobs:
           -Dsonar.qualitygate.timeout=300
           -Dsonar.coverage.exclusions=**/*.test.js,**/*.test.jsx
           -Dsonar.cpd.exclusions=**/*.test.js,**/*.test.jsx
-          -Dsonar.javascript.lcov.reportPaths=./coverage/lcov.info
-          -Dsonar.nodejs.executable=$(which node)
+          -Dsonar.nodejs.executable=${{ steps.build_step.outputs.node_path }}
 
     - name: Link to SonarCloud dashboard
       shell: bash
