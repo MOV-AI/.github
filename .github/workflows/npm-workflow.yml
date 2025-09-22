@@ -151,7 +151,11 @@ jobs:
         ${{ inputs.pm }} version prerelease --no-git-tag-version
 
     - name: Build
-      run: ${{ inputs.pm }} run build
+      id: build_step
+      run: |
+        node_path=$(which node)
+        echo "node_path=$node_path" >> $GITHUB_OUTPUT
+        ${{ inputs.pm }} run build
 
     - name: Check NPM log on failure
       if: ${{ failure() }}
@@ -168,22 +172,23 @@ jobs:
         sonar_token: ${{ secrets.sonar_token }}
 
     - name: SonarCloud Scan
-      uses: SonarSource/sonarcloud-github-action@v2.0.2
+      uses: SonarSource/sonarqube-scan-action@v6
       env:
         GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
         SONAR_TOKEN: ${{ secrets.sonar_token }}
       with:
         projectBaseDir: ./
         args: >
-          -Dsonar.organization=mov-ai
-          -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
-          -Dsonar.sources=.
-          -Dsonar.scm.provider=git
-          -Dsonar.qualitygate.wait=true
-          -Dsonar.qualitygate.timeout=300
-          -Dsonar.coverage.exclusions=**/*.test.js,**/*.test.jsx
-          -Dsonar.cpd.exclusions=**/*.test.js,**/*.test.jsx
-          -Dsonar.javascript.lcov.reportPaths=./coverage/lcov.info
+          "-Dsonar.organization=mov-ai"
+          "-Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}"
+          "-Dsonar.sources=."
+          "-Dsonar.scm.provider=git"
+          "-Dsonar.qualitygate.wait=true"
+          "-Dsonar.qualitygate.timeout=300"
+          "-Dsonar.coverage.exclusions=**/*.test.js,**/*.test.jsx"
+          "-Dsonar.cpd.exclusions=**/*.test.js,**/*.test.jsx"
+          "-Dsonar.javascript.lcov.reportPaths=./coverage/lcov.info"
+          "-Dsonar.nodejs.executable=${{ steps.build_step.outputs.node_path }}"
 
     - name: Link to SonarCloud dashboard
       shell: bash
