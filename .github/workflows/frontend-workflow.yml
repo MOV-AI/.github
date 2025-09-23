@@ -186,7 +186,11 @@ jobs:
           }
 
     - name: Build
-      run: ${{ inputs.pm }} run build
+      id: build_step
+      run: |
+        node_path=$(which node)
+        echo "node_path=$node_path" >> $GITHUB_OUTPUT
+        ${{ inputs.pm }} run build
 
     - name: Check NPM log on failure
       if: ${{ failure() }}
