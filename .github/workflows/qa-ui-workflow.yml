@@ -186,6 +186,6 @@ jobs:
         if: always()
         shell: bash
         run: |
-          docker rm -f $(docker ps -q)
+          docker ps -aq | xargs docker rm -f
           docker system prune -f
           docker image prune --all -f
