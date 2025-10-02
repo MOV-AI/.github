@@ -186,7 +186,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          if [ "$(docker ps -q)" ]; then
+          if [ "$(docker ps -aq)" ]; then
             docker rm -f $(docker ps -q)
           fi
           docker system prune -f
