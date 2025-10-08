@@ -376,7 +376,8 @@ jobs:
         run: |
           mkdir -p artifacts/${{ env.RPM_DISTRO }}
           mv artifacts/movai-service*.rpm artifacts/${{ env.RPM_DISTRO }}
-          sudo rpm -i artifacts/${{ env.RPM_DISTRO }}/movai-service*.rpm --replacefiles || true
+          sudo rpm -U --force artifacts/${{ env.RPM_DISTRO }}/movai-service*.rpm
+          sudo systemctl reload movai-service
           source test_venv/bin/activate
           if [ -z "${{ env.TOX_MARKER }}" ]; then
             pytest tests/ --cov=movai_service --cov=movai_cli --cov=extra-plugins --cov=scripts --cov-report=term --cov-report=xml -o log_cli=true -x
