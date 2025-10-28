@@ -138,7 +138,7 @@ jobs:
         fi
 
     - name: Run lint-staged
-      if: ${{ inputs.run_lint_staged == 'true' }}
+      if: ${{ inputs.run_lint_staged == 'true' && github.event_name == 'pull_request' }}
       run: |
         echo "The following files were changed from origin/${GITHUB_BASE_REF}...origin/${GITHUB_HEAD_REF} and will be validated:"
         git --no-pager diff "origin/${GITHUB_BASE_REF}...origin/${GITHUB_HEAD_REF}" --name-only
