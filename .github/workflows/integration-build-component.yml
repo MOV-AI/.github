@@ -14,7 +14,7 @@ on:
       test_infra_key:
         required: false
         type: string
-        default: "local"
+        default: 'local'
       pytest_args:
         required: true
         type: string
@@ -161,7 +161,7 @@ jobs:
           retention-days: 5
 
       - name: Local Generic Tests - Setup
-        if: ${{ inputs.test_infra_key == "local" }}
+        if: ${{ inputs.test_infra_key == 'local' }}
         shell: bash
         run: |
           export CONFIG_FILE_NAME=$(cat product/robot.json)
@@ -175,7 +175,7 @@ jobs:
 
 
       - name: Fetched Tests - Setup ${{ inputs.test_infra_key }}
-        if: ${{ inputs.test_infra_key != "local" }}
+        if: ${{ inputs.test_infra_key != 'local' }}
         id: infra_tests_setup
         shell: bash
         env:
@@ -216,7 +216,7 @@ jobs:
           deactivate
 
       - name: Local Generic Tests - Run tests
-        if: ${{ inputs.test_infra_key == "local" }}
+        if: ${{ inputs.test_infra_key == 'local' }}
         shell: bash
         run: |
           export CONFIG_FILE_NAME=$(cat product/robot.json)
@@ -228,7 +228,7 @@ jobs:
           fi
 
       - name: Fetched Tests - Run tests
-        if: ${{ inputs.test_infra_key != "local" }}
+        if: ${{ inputs.test_infra_key != 'local' }}
         timeout-minutes: ${{ inputs.test_timeout }}
         working-directory: ${{ steps.infra_tests_setup.outputs.target_dir }}
         shell: bash
@@ -246,7 +246,7 @@ jobs:
           deactivate
 
       - name: Local Generic Tests - Collect tests artifacts
-        if: ${{ inputs.test_infra_key == "local" && always() }}
+        if: ${{ inputs.test_infra_key == 'local' && always() }}
         shell: bash
         run: |
           export CONFIG_FILE_NAME=$(cat product/robot.json)
@@ -258,7 +258,7 @@ jobs:
           fi
 
       - name: Fetched Tests - Collect tests artifacts
-        if: ${{ inputs.test_infra_key != "local" && always() }}
+        if: ${{ inputs.test_infra_key != 'local' && always() }}
         shell: bash
         env:
           TEST_INFRA_DIR: ${{ steps.infra_tests_setup.outputs.target_dir }}
@@ -293,14 +293,14 @@ jobs:
           journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
 
       - name: Generic Tests - Publish test artifacts
-        if: ${{ inputs.test_infra_key == "local" && always() }}
+        if: ${{ inputs.test_infra_key == 'local' && always() }}
         uses: actions/upload-artifact@v4
         with:
           name: test_artifacts
           path: test_artifacts
 
       - name: Fetched Tests - Publish test artifacts
-        if: ${{ inputs.test_infra_key != "local" && always() }}
+        if: ${{ inputs.test_infra_key != 'local' && always() }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.run_number }}_${{ github.run_attempt }}_${{inputs.test_infra_key}}_artifacts_${{ github.run_id }}
