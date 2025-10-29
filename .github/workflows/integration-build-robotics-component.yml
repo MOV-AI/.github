@@ -66,7 +66,7 @@ env:
   AWS_DEFAULT_REGION: "us-east-1"
   REGISTRY: registry.cloud.mov.ai
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-16"
+  PROVISION_INFRA_VERSION: "2.0.0-17"
   PROVISION_INFRA_DIR: "provision_scripts"
   PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
   PROVISIONING_ENV_CONF_VERSION: "0.1.0-17"
