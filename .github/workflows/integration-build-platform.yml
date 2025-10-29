@@ -1315,7 +1315,7 @@ jobs:
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=1.0.0-3
+          provision_infra_version=2.0.0-17
           provision_infra_repo_name=devops-tf-proxmox-bpg
 
           rm -rf $provision_infra_dir
