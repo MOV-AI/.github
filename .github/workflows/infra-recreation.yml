@@ -35,7 +35,8 @@ env:
   PROVISION_INFRA_REPO: "devops-tf-bpg-runners"
   PROVISION_INFRA_VERSION: "0.0.1-9"
   PROVISION_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISION_ENV_CONF_VERSION: "0.1.0-17"
+  PROVISION_ENV_CONF_VERSION: "0.2.0-1"
+  PROVISION_POOL: "GithubRunners"
   SLACK_CHANNEL: "G0102LEV1CL"
   #INFRA_NODES: '["hel0", "hel1"]'
   #INFRA_IP_CONFIGURATION: '{"hel0": 0,"hel1": 4}'
@@ -74,7 +75,6 @@ jobs:
       slack_thread_id: ${{ needs.Slack-thread.outputs.slack_thread_id }}
 
     steps:
-
       - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
@@ -130,13 +130,6 @@ jobs:
           ls -la $provision_infra_dir
           echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
 
-      - name: Install terraform
-        shell: bash
-        run: |
-          wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-          sudo apt update && sudo apt install terraform=1.5.2-1 --allow-downgrades -y
-
       - name: Destroy remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
@@ -154,7 +147,7 @@ jobs:
           echo 'gh_runner_name_prefix="${{ matrix.node }}-ip-runner"'>>input.tfvars
           echo "ip_list=[$ip_list_str]">>input.tfvars
           echo 'tags=["ip-runner"]'>>input.tfvars
-          echo 'pool="IP-Temp-VMs"'>>input.tfvars
+          echo 'pool="${{ env.PROVISION_POOL }}"'>>input.tfvars
           echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
           echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
           echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
@@ -180,8 +173,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt update
-          sudo apt install gh jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
@@ -284,13 +275,6 @@ jobs:
         ls -la $provision_infra_dir
         echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
 
-    - name: Install terraform
-      shell: bash
-      run: |
-        wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-        echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-        sudo apt update && sudo apt install terraform=1.5.2-1 --allow-downgrades -y
-
     - name: Provision remote vms (Proxmox)
       working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
       shell: bash
@@ -308,7 +292,7 @@ jobs:
         echo 'gh_runner_name_prefix="${{ matrix.node }}-ip-runner"'>>input.tfvars
         echo "ip_list=[$ip_list_str]">>input.tfvars
         echo 'tags=["ip-runner"]'>>input.tfvars
-        echo 'pool="IP-Temp-VMs"'>>input.tfvars
+        echo 'pool="${{ env.PROVISION_POOL }}"'>>input.tfvars
         echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
         echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
         echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
@@ -334,8 +318,6 @@ jobs:
       shell: bash
       id: job_info
       run: |
-        sudo apt update
-        sudo apt install gh jq -y
         job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
         job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
         echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
@@ -437,13 +419,6 @@ jobs:
           ls -la $provision_infra_dir
           echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
 
-      - name: Install terraform
-        shell: bash
-        run: |
-          wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-          sudo apt update && sudo apt install terraform=1.5.2-1 --allow-downgrades -y
-
       - name: Destroy remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
@@ -461,7 +436,7 @@ jobs:
           echo 'gh_runner_name_prefix="${{ matrix.node }}-qa-runner"'>>input.tfvars
           echo "ip_list=[$ip_list_str]">>input.tfvars
           echo 'tags=["ip-runner"]'>>input.tfvars
-          echo 'pool="IP-Temp-VMs"'>>input.tfvars
+          echo 'pool="${{ env.PROVISION_POOL }}"'>>input.tfvars
           echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
           echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
           echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
@@ -487,8 +462,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt update
-          sudo apt install gh jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
@@ -589,13 +562,6 @@ jobs:
         ls -la $provision_infra_dir
         echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
 
-    - name: Install terraform
-      shell: bash
-      run: |
-        wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-        echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-        sudo apt update && sudo apt install terraform=1.5.2-1 --allow-downgrades -y
-
     - name: Provision remote vms (Proxmox)
       working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
       shell: bash
@@ -613,7 +579,7 @@ jobs:
         echo 'gh_runner_name_prefix="${{ matrix.node }}-qa-runner"'>>input.tfvars
         echo "ip_list=[$ip_list_str]">>input.tfvars
         echo 'tags=["ip-runner"]'>>input.tfvars
-        echo 'pool="IP-Temp-VMs"'>>input.tfvars
+        echo 'pool="${{ env.PROVISION_POOL }}"'>>input.tfvars
         echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
         echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
         echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
@@ -639,8 +605,6 @@ jobs:
       shell: bash
       id: job_info
       run: |
-        sudo apt update
-        sudo apt install gh jq -y
         job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
         job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
         echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT

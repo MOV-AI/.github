@@ -66,10 +66,10 @@ env:
   AWS_DEFAULT_REGION: "us-east-1"
   REGISTRY: registry.cloud.mov.ai
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-16"
+  PROVISION_INFRA_VERSION: "2.0.0-17"
   PROVISION_INFRA_DIR: "provision_scripts"
   PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISIONING_ENV_CONF_VERSION: "0.1.0-17"
+  PROVISIONING_ENV_CONF_VERSION: "0.2.0-1"
   PROVISION_ENV_CONF_DIR: "infra_env_configs"
   SIMULATION_ID: CI
 
@@ -409,7 +409,6 @@ jobs:
             export PUBLIC_IP="$(hostname -I | cut -d " " -f1)"
             export SIMULATION_ID="${{ env.SIMULATION_ID }}"
             export ROBOTNAME="ci_${{ inputs.component_name }}"
-            sudo apt install jq -y
             jq --version
             jq '\''.robot.name = "$ROBOTNAME"'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
 
