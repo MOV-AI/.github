@@ -36,6 +36,7 @@ env:
   PROVISION_INFRA_VERSION: "0.0.1-9"
   PROVISION_ENV_CONF_REPO: "devops-tf-env-conf"
   PROVISION_ENV_CONF_VERSION: "0.2.0-1"
+  PROVISION_POOL: "GithubRunners"
   SLACK_CHANNEL: "G0102LEV1CL"
   #INFRA_NODES: '["hel0", "hel1"]'
   #INFRA_IP_CONFIGURATION: '{"hel0": 0,"hel1": 4}'
@@ -146,7 +147,7 @@ jobs:
           echo 'gh_runner_name_prefix="${{ matrix.node }}-ip-runner"'>>input.tfvars
           echo "ip_list=[$ip_list_str]">>input.tfvars
           echo 'tags=["ip-runner"]'>>input.tfvars
-          echo 'pool="IP-Temp-VMs"'>>input.tfvars
+          echo 'pool="${{ env.PROVISION_POOL }}"'>>input.tfvars
           echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
           echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
           echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
@@ -171,7 +172,7 @@ jobs:
         if: always()
         shell: bash
         id: job_info
-        run: |          
+        run: |
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
@@ -291,7 +292,7 @@ jobs:
         echo 'gh_runner_name_prefix="${{ matrix.node }}-ip-runner"'>>input.tfvars
         echo "ip_list=[$ip_list_str]">>input.tfvars
         echo 'tags=["ip-runner"]'>>input.tfvars
-        echo 'pool="IP-Temp-VMs"'>>input.tfvars
+        echo 'pool="${{ env.PROVISION_POOL }}"'>>input.tfvars
         echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
         echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
         echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
@@ -435,7 +436,7 @@ jobs:
           echo 'gh_runner_name_prefix="${{ matrix.node }}-qa-runner"'>>input.tfvars
           echo "ip_list=[$ip_list_str]">>input.tfvars
           echo 'tags=["ip-runner"]'>>input.tfvars
-          echo 'pool="IP-Temp-VMs"'>>input.tfvars
+          echo 'pool="${{ env.PROVISION_POOL }}"'>>input.tfvars
           echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
           echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
           echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
@@ -578,7 +579,7 @@ jobs:
         echo 'gh_runner_name_prefix="${{ matrix.node }}-qa-runner"'>>input.tfvars
         echo "ip_list=[$ip_list_str]">>input.tfvars
         echo 'tags=["ip-runner"]'>>input.tfvars
-        echo 'pool="IP-Temp-VMs"'>>input.tfvars
+        echo 'pool="${{ env.PROVISION_POOL }}"'>>input.tfvars
         echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
         echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
         echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
