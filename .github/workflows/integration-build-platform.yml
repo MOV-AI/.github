@@ -236,6 +236,13 @@ jobs:
     steps:
       - uses: rtCamp/action-cleanup@master
 
+      - name: Install dependencies
+        run: |
+          if ! command -v jq &> /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y jq
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -269,7 +276,6 @@ jobs:
         run: |
           cp ./platform_configs/product.version product.version
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
-
 
       - name: Lint docker image
         shell: bash
