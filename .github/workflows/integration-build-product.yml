@@ -1686,6 +1686,9 @@ jobs:
             integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user ${{ env.GITHUB_API_USR }} --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
             ls -la $tests_dir
 
+            # install test dependencies on host
+            sudo apt install -y --allow-downgrades python3-venv python3-rosnode python3-rosparam python3-rostopic
+
             # setup venv in a step that is always executed
             pushd "${tests_dir}"
             python3 -m venv venv --clear
@@ -1694,9 +1697,6 @@ jobs:
             deactivate
 
             popd
-
-            # install test dependencies on host
-            sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
           '
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt /tmp/test_exec_dir.txt
           scp -r -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:/tmp/*.txt /tmp/
