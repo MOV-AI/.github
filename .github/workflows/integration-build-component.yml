@@ -85,7 +85,7 @@ jobs:
                 --gh_api_user ${{ secrets.auto_commit_user }} \
                 --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
                 --target_dir product
-          ls -la product/
+
           cp product/product-manifest.yaml product-manifest.yaml
 
       - name: calculate robot.json to use
