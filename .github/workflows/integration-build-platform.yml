@@ -1020,6 +1020,7 @@ jobs:
     with:
       product_name: ${{ inputs.product_name }}
       slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
+      slack_channel: ${{ inputs.slack_channel }}
       cluster: ${{ inputs.cluster }}
       debug_simulation_tests_keep_alive: ${{ inputs.debug_simulation_tests_keep_alive }}
       backend_name: ${{ needs.Build-Simulator.outputs.backend_image }}
