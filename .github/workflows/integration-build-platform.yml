@@ -336,23 +336,31 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
       - name: Slack message success
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v1.23.0
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ inputs.slack_channel }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
-
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg }}",
+              "thread_ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+          
       - name: Slack message failure
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v1.23.0
         if: failure()
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ inputs.slack_channel }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
+              "thread_ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Docker cleanups
         if: always()
@@ -733,23 +741,31 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
       - name: Slack message success
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v1.23.0
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ inputs.slack_channel }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Build-backend.outputs.slack_thread_id }}
-
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg }}",
+              "thread_ts": "${{ needs.Build-backend.outputs.slack_thread_id }}"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+          
       - name: Slack message failure
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v1.23.0
         if: failure()
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ inputs.slack_channel }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Build-backend.outputs.slack_thread_id }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
+              "thread_ts": "${{ needs.Build-backend.outputs.slack_thread_id }}"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Collect Fleet QA artifacts
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
