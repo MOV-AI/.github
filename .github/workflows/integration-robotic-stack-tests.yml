@@ -658,7 +658,7 @@ jobs:
             {
               "channel": "${{ env.SLACK_CHANNEL }}",
               "text": "${{ steps.pre_slack_result.outputs.msg }}",
-              "ts": "${{ inputs.slack_thread_id }}"
+              "thread_ts": "${{ inputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
 
@@ -671,7 +671,7 @@ jobs:
             {
               "channel": "${{ env.SLACK_CHANNEL }}",
               "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
-              "ts": "${{ inputs.slack_thread_id }}"
+              "thread_ts": "${{ inputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
 
@@ -724,8 +724,8 @@ jobs:
           payload: |
             {
               "channel": "${{ env.SLACK_CHANNEL }}",
-              "text": ":information_source: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) Job artifacts url: ${{ steps.minio_publish.outputs.publish_url }}"
-              "ts": "${{ inputs.slack_thread_id }}"
+              "text": ":information_source: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) Job artifacts url: ${{ steps.minio_publish.outputs.publish_url }}",
+              "thread_ts": "${{ inputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
 

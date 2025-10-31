@@ -356,7 +356,7 @@ jobs:
             {
               "channel": "${{ inputs.slack_channel }}",
               "text": ":warning: @qa ${{ github.job }} (Attempt: #${{ github.run_attempt }}) failed to create Xray test execution ticket",
-              "ts": "${{ inputs.slack_thread_id }}"
+              "thread_ts": "${{ inputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
 
@@ -390,7 +390,7 @@ jobs:
             {
               "channel": "${{ inputs.slack_channel }}",
               "text": "${{ steps.pre_slack_result.outputs.msg }}",
-              "ts": "${{ inputs.slack_thread_id }}"
+              "thread_ts": "${{ inputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
 
@@ -403,7 +403,7 @@ jobs:
             {
               "channel": "${{ inputs.slack_channel }}",
               "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
-              "ts": "${{ inputs.slack_thread_id }}"
+              "thread_ts": "${{ inputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
 
