@@ -131,7 +131,7 @@ jobs:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     outputs:
-      slack_thread_id: ${{ fromJson(steps.send-message.outputs.slack-result).response.message.ts }}
+      slack_thread_id: ${{ steps.send-message.outputs.ts }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -211,14 +211,16 @@ jobs:
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
 
       - name: Send Slack Message
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2
         id: send-message
-
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ inputs.slack_channel }}
-          slack-text: ${{ steps.pre_slack.outputs.msg }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack.outputs.msg }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
       - name: Stash raised_meta
         uses: actions/upload-artifact@v4
@@ -955,23 +957,29 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
       - name: Slack message success
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ inputs.slack_channel }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Build-backend.outputs.slack_thread_id }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg }}",
+              "thread_ts": "${{ needs.Build-backend.outputs.slack_thread_id  }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
       - name: Slack message failure
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2
         if: failure()
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ inputs.slack_channel }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Build-backend.outputs.slack_thread_id }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
+              "thread_ts": "${{ needs.Build-backend.outputs.slack_thread_id  }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
       - name: pre-stash
         shell: bash
@@ -1224,15 +1232,18 @@ jobs:
         run: |
           MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-
+      
       - name: Slack message
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2
         with:
-          slack-function: update-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ inputs.slack_channel }}
-          slack-update-message-text: ${{ steps.pre_slack.outputs.msg }}
-          slack-update-message-ts: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
+          method: chat.update
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack.outputs.msg }}",
+              "thread_ts": "${{ needs.Validations-Finish.outputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
   Run-Status:
     runs-on: ubuntu-22.04
@@ -1257,11 +1268,15 @@ jobs:
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is unstable (or cancelled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
 
+
       - name: Slack message
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2
         with:
-          slack-function: update-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ inputs.slack_channel }}
-          slack-update-message-text: ${{ steps.pre_slack.outputs.msg_error }}
-          slack-update-message-ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          method: chat.update
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack.outputs.msg_error }}",
+              "thread_ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}

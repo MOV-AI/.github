@@ -348,14 +348,17 @@ jobs:
           echo "status=${status}" >> $GITHUB_OUTPUT
 
       - name: Slack message Xray failure
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2
         if: ${{ steps.tests_xray.outputs.status == 'failure' }}
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ":warning: @qa ${{ github.job }} (Attempt: #${{ github.run_attempt }}) failed to create Xray test execution ticket"
-          slack-optional-thread_ts: ${{ inputs.slack_thread_id }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": ":warning: @qa ${{ github.job }} (Attempt: #${{ github.run_attempt }}) failed to create Xray test execution ticket"
+              "ts": "${{ inputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
       - name: Get current job id
         if: always()
@@ -380,23 +383,29 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
       - name: Slack message success
-        uses: archive/github-actions-slack@master
-        with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ inputs.slack_thread_id }}
+        uses: slackapi/slack-github-action@v2
+         with:
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg }}"
+              "ts": "${{ inputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
       - name: Slack message failure
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2
         if: failure()
-        with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ inputs.slack_thread_id }}
+         with:
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg_error }}"
+              "ts": "${{ inputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
       - name: Save docker container logs
         if: always()
