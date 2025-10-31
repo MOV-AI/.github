@@ -1242,7 +1242,7 @@ jobs:
             {
               "channel": "${{ inputs.slack_channel }}",
               "text": "${{ steps.pre_slack.outputs.msg }}",
-              "thread_ts": "${{ needs.Validations-Finish.outputs.slack_thread_id }}"
+              "ts": "${{ needs.Validations-Finish.outputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
 
@@ -1278,6 +1278,6 @@ jobs:
             {
               "channel": "${{ inputs.slack_channel }}",
               "text": "${{ steps.pre_slack.outputs.msg_error }}",
-              "thread_ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
+              "ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
