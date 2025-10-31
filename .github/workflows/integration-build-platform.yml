@@ -345,8 +345,7 @@ jobs:
               "text": "${{ steps.pre_slack_result.outputs.msg }}",
               "thread_ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
             }
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+          token: ${{ secrets.slack_token_id }}
           
       - name: Slack message failure
         uses: slackapi/slack-github-action@v2
@@ -359,8 +358,7 @@ jobs:
               "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
               "thread_ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
             }
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+          token: ${{ secrets.slack_token_id }}
 
       - name: Docker cleanups
         if: always()
@@ -573,8 +571,7 @@ jobs:
               "channel": "G0102LEV1CL",
               "text": "${{ steps.pre_slack_infra.outputs.msg_error }}"
             }
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+          token: ${{ secrets.slack_token_id }}
 
       - name: Apply ansible inventory
         shell: bash
@@ -754,8 +751,7 @@ jobs:
               "text": "${{ steps.pre_slack_result.outputs.msg }}",
               "thread_ts": "${{ needs.Build-backend.outputs.slack_thread_id }}"
             }
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+          token: ${{ secrets.slack_token_id }}
           
       - name: Slack message failure
         uses: slackapi/slack-github-action@v2
@@ -768,8 +764,7 @@ jobs:
               "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
               "thread_ts": "${{ needs.Build-backend.outputs.slack_thread_id }}"
             }
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+          token: ${{ secrets.slack_token_id }}
 
       - name: Collect Fleet QA artifacts
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
