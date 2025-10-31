@@ -657,7 +657,7 @@ jobs:
           payload: |
             {
               "channel": "${{ env.SLACK_CHANNEL }}",
-              "text": "${{ steps.pre_slack_result.outputs.msg }}"
+              "text": "${{ steps.pre_slack_result.outputs.msg }}",
               "ts": "${{ inputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
@@ -670,7 +670,7 @@ jobs:
           payload: |
             {
               "channel": "${{ env.SLACK_CHANNEL }}",
-              "text": "${{ steps.pre_slack_result.outputs.msg_error }}"
+              "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
               "ts": "${{ inputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
