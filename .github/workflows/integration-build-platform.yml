@@ -116,10 +116,10 @@ env:
   XRAY_SECRET: ${{ secrets.xray_secret}}
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
-  PROVISIONING_ENV_VERSION: 0.1.0-17
   PROVISIONING_ENV_REPO: devops-tf-env-conf
+  PROVISIONING_ENV_VERSION: 0.2.0-1
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-16"
+  PROVISION_INFRA_VERSION: "2.0.0-17"
   ARTIFACTS_RETENTION_DAYS: 15
 
 jobs:
@@ -236,6 +236,13 @@ jobs:
     steps:
       - uses: rtCamp/action-cleanup@master
 
+      - name: Install dependencies
+        run: |
+          if ! command -v jq &> /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y jq
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -269,7 +276,6 @@ jobs:
         run: |
           cp ./platform_configs/product.version product.version
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
-
 
       - name: Lint docker image
         shell: bash
@@ -318,8 +324,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt update
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
@@ -512,7 +516,6 @@ jobs:
         run: |
           echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
           sudo chmod 600 ~/.ssh/aws_slave.pem
-          sudo apt install jq -y
 
           multiply_node=$(printf '"${{ inputs.proxmox_cluster_name }}",%.0s' {1..${{ steps.infra_names.outputs.total_resources }}})
           node_list_str=${multiply_node::-1}
@@ -616,7 +619,6 @@ jobs:
         run: |
           echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
           sudo chmod 600 ~/.ssh/aws_slave.pem
-          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
           python3.9 -m venv ansible-venv
           source ansible-venv/bin/activate
           python3 -m pip install -r requirements.txt
@@ -721,8 +723,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt update
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -936,8 +936,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt update
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -1167,8 +1165,6 @@ jobs:
       - name: Update release notes
         shell: bash
         run: |
-          sudo apt update
-          sudo apt install jq -y
           # release version
           product_version=$(cat product.version)
 
