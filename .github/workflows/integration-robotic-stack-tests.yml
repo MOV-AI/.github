@@ -651,23 +651,29 @@ jobs:
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ inputs.slack_thread_id }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg }}"
+              "ts": "${{ inputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
       - name: Slack message failure
-        uses: archive/github-actions-slack@master
         if: ${{ failure() && github.event_name != 'pull_request' }}
+        uses: slackapi/slack-github-action@v2
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ inputs.slack_thread_id }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg_error }}"
+              "ts": "${{ inputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
       - name: Stash QA artifacts (Minio)
         if: ${{ always() }}
@@ -711,14 +717,17 @@ jobs:
           AWS_DEFAULT_OUTPUT: "none"
 
       - name: Slack message Artifact info
-        uses: archive/github-actions-slack@master
         if: ${{ always() && github.event_name != 'pull_request' }}
+        uses: slackapi/slack-github-action@v2
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ":information_source: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) Job artifacts url: ${{ steps.minio_publish.outputs.publish_url }}"
-          slack-optional-thread_ts: ${{ inputs.slack_thread_id }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": ":information_source: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) Job artifacts url: ${{ steps.minio_publish.outputs.publish_url }}"
+              "ts": "${{ inputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
       - name: Teardown remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
