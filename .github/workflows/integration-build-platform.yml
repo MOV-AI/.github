@@ -98,8 +98,10 @@ env:
   SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
   # development slack channel
   #SLACK_CHANNEL: "C05K2KF1UP8"
-  PROVISIONING_ENV_VERSION: 0.1.0-17
+  PROVISIONING_ENV_VERSION: 0.2.0-2
   PROVISIONING_ENV_REPO: devops-tf-env-conf
+  PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
+  PROVISION_INFRA_VERSION: "2.0.0-17"
   ARTIFACTS_RETENTION_DAYS: 15
 
 jobs:
@@ -368,7 +370,7 @@ jobs:
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
             --cucumberjson=./results.json \
-            --junit-xml=junit.xml 
+            --junit-xml=junit.xml
 
           curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
           ./trunk flakytests upload \
@@ -622,13 +624,13 @@ jobs:
           pip install buildkite-test-collector
           curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
           if [ "${{ steps.install_tests_setup.outputs.jira_report }}" == "True" ] ; then
-          
+
           python3 -m pytest tests/ \
               -ra \
               -k '${{ steps.install_tests_setup.outputs.test_set }}' \
               --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci" \
               --jira_report \
-              --junit-xml=junit.xml 
+              --junit-xml=junit.xml
 
           else
           python3 -m pytest tests/ \
@@ -641,7 +643,7 @@ jobs:
               --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
               --junit-paths "junit.xml" # replace this with the path to your junit files
           deactivate
-          
+
           user=$(cat results/credentials.txt | awk -F: '{print $1}')
           pwd=$(cat results/credentials.txt | awk -F: '{print $2}')
 
@@ -920,7 +922,7 @@ jobs:
             -m "not fleet" \
             --junit-xml=junit.xml
 
-            
+
           ./trunk flakytests upload \
               --org-url-slug "movai" \
               --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
@@ -1315,8 +1317,8 @@ jobs:
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=2.0.0-17
-          provision_infra_repo_name=devops-tf-proxmox-bpg
+          provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
+          provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
 
           rm -rf $provision_infra_dir
           . .ci-venv/bin/activate
@@ -1932,7 +1934,7 @@ jobs:
             -m 'simulator' \
             --tb=short \
             --junit-xml=junit.xml
-            
+
           ./trunk flakytests upload \
             --org-url-slug "movai" \
             --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \

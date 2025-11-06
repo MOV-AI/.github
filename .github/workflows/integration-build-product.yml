@@ -121,7 +121,7 @@ env:
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   TIMEOUT: 720
-  PROVISIONING_ENV_VERSION: 0.1.0-17
+  PROVISIONING_ENV_VERSION: 0.2.0-2
   PROVISIONING_ENV_REPO: devops-tf-env-conf
 
 jobs:
@@ -613,7 +613,8 @@ jobs:
         shell: bash
         run: |
           set -e
-          movai-cli apt_cache stop
+          movai-cli apt_cache stop || true
+          movai-cli apt_cache disable || true
 
           robots_str=$(movai-cli robots list)
           readarray -t robots <<< "$robots_str"
