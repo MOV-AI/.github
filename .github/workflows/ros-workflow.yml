@@ -377,7 +377,7 @@ jobs:
     secrets: inherit
 
   Publish:
-    if: ${{ inputs.deploy == 'true' }}
+    if: ${{ always() && (needs.Package-Stack-Tests.result == 'success' || needs.Package-Stack-Tests.result == 'skipped') && inputs.deploy == 'true' }}
     runs-on: ubuntu-22.04
     needs:  [Package-Install-Test,Test,Package-Stack-Tests]
     container:
