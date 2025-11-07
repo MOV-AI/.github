@@ -75,6 +75,10 @@ on:
         required: false
         default: false
         type: boolean
+      run_stack_tests:
+        required: false
+        type: boolean
+        default: true
 
     secrets:
       auto_commit_user:
@@ -358,7 +362,7 @@ jobs:
           mobtest proj /opt/ros/${{ matrix.distro }}/share/
 
   Package-Stack-Tests:
-    if: ${{ inputs.release == 'false' && inputs.deploy == 'true' }}
+    if: ${{ inputs.release == 'false' && inputs.deploy == 'true' && inputs.run_stack_tests == 'true' }}
     needs: [Build]
     uses: MOV-AI/.github/.github/workflows/integration-build-robotics-component.yml@v2.3
     with:
