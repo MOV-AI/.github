@@ -78,7 +78,7 @@ jobs:
           source ci_scripts/bin/activate
 
           rm -rf product
-          mkdir -p product
+          mkdir -p product platform_artifacts
           integration-pipeline fetch_product_by_version \
                 --product_version_search ${{ inputs.vs_product_version_pattern}} \
                 --repo ${{ inputs.vs_product_name }} \
@@ -276,7 +276,7 @@ jobs:
 
       - name: Collect platform artifacts
         if: always()
-        working-directory: test_artifacts
+        working-directory: platform_artifacts
         shell: bash
         run: |
           # for sanity
@@ -292,6 +292,13 @@ jobs:
 
           # spawner (mobros firmware)
           journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
+
+      - name: Publish Platform artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform_artifacts
+          path: platform_artifacts
 
       - name: Generic Tests - Publish test artifacts
         if: ${{ inputs.test_infra_key == 'local' && always() }}
