@@ -649,7 +649,7 @@ jobs:
       - name: Remote - Setup QA ${{ inputs.fleet_tests_qa_key}} tests
         if: ${{ inputs.with_fleet_tests }}
         shell: bash
-        id: simulator_tests_setup
+        id: tests_setup
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
             set -e
@@ -708,6 +708,8 @@ jobs:
 
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
             set -e
+
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.target_dir }}
             export selenoid_url="http://selenoid-ui.hel.mov.ai"
             export host_ip=${{ steps.agent_info.outputs.ip }}
             export movai_user=movai
