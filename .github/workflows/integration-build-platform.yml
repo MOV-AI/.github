@@ -628,6 +628,7 @@ jobs:
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
             set -e
             cloud-init status --wait; rm -rf ./${{ env.REMOTE_WORKSPACE_PATH }}; mkdir -p ./${{ env.REMOTE_WORKSPACE_PATH }}
+          '
 
       - name: Remote - Agent info
         if: ${{ inputs.with_fleet_tests }}
@@ -725,7 +726,6 @@ jobs:
             echo "python3 -m pytest ${{ inputs.pytest_args}}" 
             python3 -m pytest tests/cucumber/test_fleet_board.py -ra --hub_url $selenoid_url --base_url https://$host_ip/ --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json --junit-xml=junit.xml | tee pytest-output.log
             deactivate
-
           '
         
 

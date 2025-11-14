@@ -1,0 +1,511 @@
+name: Generic Fleet Tests
+on:
+  workflow_call:
+    inputs:
+      collect_deployable_artifacts:
+        required: false
+        type: boolean
+        default: false
+      test_infra_key:
+        required: true
+        type: string
+      robot_config:
+        required: false
+        type: string
+        default: 'basic-standalone-noetic.json'
+      slack_thread_id:
+        required: true
+        type: string
+      backend_image_name_and_tag:
+        required: false
+        type: string
+        default: ''
+      test_timeout:
+        required: false
+        type: number
+        default: 60
+      pytest_args:
+        required: true
+        type: string
+      xray_label:
+        required: false
+        type: string
+        default: 'label'
+      slack_channel:
+        required: false
+        type: string
+        default: 'C02PB9A9F45' # rnd-platform
+
+    secrets:
+      auto_commit_user:
+        required: true
+      auto_commit_pwd:
+        required: true
+      registry_user:
+        required: true
+      registry_password:
+        required: true
+      gh_token:
+        required: true
+      aws_key_id:
+        required: true
+      aws_secret_key_id:
+        required: true
+      slack_token_id:
+        required: true
+      jira_username:
+        required: true
+      jira_password:
+        required: true
+      xray_clientid:
+        required: true
+      xray_secret:
+        required: true
+
+env:
+  CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.0.0.31"
+  CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.32"
+  MOBTEST_VERSION: "0.0.6.1"
+  PACKAGE_DEPLOYER_VERSION: "1.0.0.25"
+  CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
+  CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
+  GITHUB_API_USR: "OttoMation-Movai"
+  AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
+  AWS_DEFAULT_REGION: "us-east-1"
+  REGISTRY: registry.cloud.mov.ai
+  MID_REGISTRY: registry.hel.mov.ai
+  USERSPACE_FOLDER_PATH: /opt/userspace
+  REMOTE_WORKSPACE_PATH: workspace
+  SIMULATION_ID: CI
+  XRAY_CLIENTID: ${{ secrets.xray_clientid}}
+  XRAY_SECRET: ${{ secrets.xray_secret}}
+  JIRA_USERNAME: ${{ secrets.jira_username}}
+  JIRA_PASSWORD: ${{ secrets.jira_password}}
+  SLACK_CHANNEL: ${{ inputs.slack_channel }}
+  ARTIFACTS_RETENTION_DAYS: 15
+
+jobs:
+  Validation-Tests:
+    name: "Validation: ${{ inputs.test_infra_key }}"
+    runs-on: integration-pipeline
+    steps:
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Agent info
+        id: agent_info
+        run: |
+          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
+
+      - name: Setup CI Scripts in .ci-venv
+        shell: bash
+        run: |
+          python3 -m venv .ci-venv --clear --system-site-packages # needed for apt dependencies
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install --upgrade pyOpenSSL cryptography
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
+
+      - name: unstash robot_configs
+        uses: actions/download-artifact@v4
+        with:
+          name: robot_configs
+          path: .
+
+      - name: Patch robot_configs *.ci with the right full path
+        shell: bash
+        run: |
+          find -L . -type f -name '*.json.ci' -exec \
+            sed -i "s;/__w;$(pwd)/../..;g" {} \
+           \;
+
+      - name: Setup ${{ inputs.test_infra_key }}
+        id: infra_tests_setup
+        shell: bash
+        env:
+          qa_key: ${{ inputs.test_infra_key }}
+        run: |
+          rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/jira_report.txt /tmp/test_set.txt
+          . .ci-venv/bin/activate
+          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
+          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
+          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
+          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.jira_report --output_file /tmp/jira_report.txt
+          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.test_set --output_file /tmp/test_set.txt
+          integration-pipeline get_yml_value --file product-manifest.yaml --key version --output_file /tmp/platform_version.txt
+
+          tests_dir=$(cat /tmp/target_dir.txt)
+          tests_version=$(cat /tmp/version.txt)
+          tests_repo_name=$(cat /tmp/repo_name.txt)
+          jira_report=$(cat /tmp/jira_report.txt)
+          test_set=$(cat /tmp/test_set.txt)
+          platform_version=$(cat /tmp/platform_version.txt)
+
+          rm -rf $tests_repo_name
+
+          integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
+          ls -la $tests_dir
+
+          echo "target_dir=${tests_dir}" >> $GITHUB_OUTPUT
+          echo "jira_report=${jira_report}" >> $GITHUB_OUTPUT
+          echo "test_set=${test_set}" >> $GITHUB_OUTPUT
+          echo "platform_version=${platform_version}" >> $GITHUB_OUTPUT
+          deactivate
+
+          # setup tests venv in a step that is always executed
+          python3 -m venv "${tests_dir}"/test-venv --clear
+          . "${tests_dir}"/test-venv/bin/activate
+          pip install -r "${tests_dir}"/requirements.txt
+          deactivate
+
+      - name: Feature File Validation
+        id: feature_file
+        working-directory: ${{ steps.infra_tests_setup.outputs.target_dir }}
+        shell: bash
+        if: ${{ inputs.test_infra_key == 'ui_tests' }}
+        run: |
+          . test-venv/bin/activate
+          export PATH="$HOME/.local/bin:$PATH" # needed for reformat-gherkin
+          xray download ${{ steps.infra_tests_setup.outputs.test_set }}
+          xray compare ./tests/feature/
+          deactivate
+
+      - name: Prepare QA Feature File Validation slack message
+        if: always()
+        id: pre_slack
+        run: |
+          MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is unstable :rain_cloud: \
+          ${{ github.job }} feature file validation: ${{ steps.feature_file.outcome }} \
+          Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+
+      - name: Slack message failure
+        if: ${{ failure() && inputs.test_infra_key == 'ui_tests' }}
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          channel-id: "C02PB9A9F45"
+          slack-message: ${{ steps.pre_slack.outputs.msg_error }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+
+      - name: Feature File Validation
+        id: feature_file_install
+        working-directory: ${{ steps.infra_tests_setup.outputs.target_dir }}
+        shell: bash
+        if: ${{ inputs.test_infra_key == 'install_tests' }}
+        run: |
+          . test-venv/bin/activate
+          export PATH="$HOME/.local/bin:$PATH" # needed for reformat-gherkin
+          python3 testcasemanagement/testcase_importer.py --target "${{ steps.infra_tests_setup.outputs.test_set }}"
+          python3 testcasemanagement/feature_file_processor.py --validate
+          deactivate
+
+      - name: Prepare QA Feature File Validation slack message
+        if: always()
+        id: pre_slack_install
+        run: |
+          MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is unstable :rain_cloud: \
+          ${{ github.job }} feature file validation: ${{ steps.feature_file_install.outcome }} \
+          Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+
+      - name: Slack message failure
+        if: ${{ failure() && inputs.test_infra_key == 'install_tests' }}
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          channel-id: "C02PB9A9F45"
+          slack-message: ${{ steps.pre_slack_install.outputs.msg_error }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+
+      - name: Login to ${{ env.REGISTRY }} Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.REGISTRY }}
+
+      - name: Docker load built images
+        shell: bash
+        run: |
+          backend_image=${{ inputs.backend_image_name_and_tag }}
+          docker rmi "${{ env.REGISTRY }}/ci/$backend_image" -f || true
+          docker pull "${{ env.REGISTRY }}/ci/$backend_image"
+          docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
+          docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
+          
+
+      - name: Install
+        if: ${{ inputs.test_infra_key != 'install_tests' }}
+        id: install
+        shell: bash
+        env:
+          DISPLAY: ":0"
+          SIMULATION_ID: "CI"
+        run: |
+          timeout 30 movai-cli remove --all || true
+
+          rm -rf artifacts ; mkdir -p artifacts
+          cp *.json artifacts/
+
+          . .ci-venv/bin/activate
+          CONFIG_FILE_NAME="${{ inputs.robot_config}}"
+          integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
+          integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
+          deactivate
+          sudo rm -rf $USERSPACE_FOLDER_PATH || true
+          sudo mkdir -p $USERSPACE_FOLDER_PATH $USERSPACE_FOLDER_PATH/models_shared
+          sudo chmod 777 $USERSPACE_FOLDER_PATH
+          sudo chmod 777 $USERSPACE_FOLDER_PATH/models_shared
+          
+          export PUBLIC_IP=$(hostname -I | awk '{print $1}')
+          wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
+          chmod +x ./QuickStart_$(cat quickstart_version).bash
+          ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
+
+          MOVAI_USER="ci"
+          MOVAI_PWD="4Iva6UHAQq9DGITj"
+          for robot in $(movai-cli robots list); do
+            movai-cli robots user "$robot" "$MOVAI_USER" "$MOVAI_PWD"
+          done
+
+          echo "movai_user=${MOVAI_USER}" >> $GITHUB_OUTPUT
+          echo "movai_pwd=${MOVAI_PWD}" >> $GITHUB_OUTPUT
+
+      - name: Run mobtest
+        shell: bash
+        if: ${{ inputs.test_infra_key != 'install_tests' }}
+        run: |
+          container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
+          docker exec -t "$container_id" bash -c '
+            set -e
+            export PATH="$HOME/.local/bin:$PATH"
+            python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
+            mobtest proj /opt/ros/noetic/share/
+            '
+
+      - name: Pre-Run-Install-Tests
+        if: ${{ inputs.test_infra_key == 'install_tests' }}
+        shell: bash
+        run: |
+          sudo rm -rf $USERSPACE_FOLDER_PATH || true
+          sudo mkdir -p $USERSPACE_FOLDER_PATH/automated_install
+          sudo chmod 777 -R $USERSPACE_FOLDER_PATH
+
+      - name: Run tests
+        timeout-minutes: ${{ inputs.test_timeout }}
+        working-directory: ${{ steps.infra_tests_setup.outputs.target_dir }}
+        shell: bash
+        env:
+          BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.buildkite_token }}
+          selenoid_url: "http://selenoid-ui.hel.mov.ai"
+          host_ip: ${{ steps.agent_info.outputs.ip }}
+          movai_user: ${{ steps.install.outputs.movai_user }}
+          movai_pwd: ${{ steps.install.outputs.movai_pwd }}
+          test_set: ${{ steps.infra_tests_setup.outputs.test_set }}
+        run: |
+          . test-venv/bin/activate
+          pip install buildkite-test-collector
+          echo "python3 -m pytest ${{ inputs.pytest_args}}" 
+          python3 -m pytest ${{ inputs.pytest_args}} | tee pytest-output.log
+          deactivate
+          
+      - name: Publish test results trunk
+        if: always()
+        working-directory: ${{ steps.infra_tests_setup.outputs.target_dir }}
+        shell: bash
+        run: |
+          curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
+          ./trunk flakytests upload \
+              --org-url-slug "movai" \
+              --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
+              --junit-paths "junit.xml" # replace this with the path to your junit files
+
+      - name: Create Xray test execution
+        id: tests_xray
+        if: ${{ always() && inputs.test_infra_key == 'ui_tests' }}
+        working-directory: ${{ steps.infra_tests_setup.outputs.target_dir }}
+        run: |
+          status="success"
+
+          # create test execution
+          if [ "${{ steps.infra_tests_setup.outputs.jira_report }}" == "True" ] ; then
+            . test-venv/bin/activate
+            export PATH="$HOME/.local/bin:$PATH"
+
+            if ! xray create ./results.json --version "EE ${{ steps.infra_tests_setup.outputs.platform_version }}" --label ${{ inputs.xray_label}} ; then
+                status="failure"
+            fi
+
+            deactivate
+          fi
+
+          echo "status=${status}" >> $GITHUB_OUTPUT
+
+      - name: Slack message Xray failure
+        uses: slackapi/slack-github-action@v2
+        if: ${{ steps.tests_xray.outputs.status == 'failure' }}
+        with:
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": ":warning: @qa ${{ github.job }} (Attempt: #${{ github.run_attempt }}) failed to create Xray test execution ticket",
+              "thread_ts": "${{ inputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
+
+      - name: Get current job id
+        if: always()
+        shell: bash
+        id: job_info
+        run: |
+          job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
+          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
+          echo "$job_id"
+          echo "$job_html_url"
+          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+      - name: Prepare slack variables
+        if: always()
+        id: pre_slack_result
+        run: |
+          MESSAGE=":white_check_mark:${{ github.job }}/${{inputs.test_infra_key}} (Attempt: #${{ github.run_attempt }}) job passed"
+          MESSAGE_ERR=":x: ${{ github.job }}/${{inputs.test_infra_key}} (Attempt: #${{ github.run_attempt }}) job failed"
+          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+
+      - name: Slack message success
+        uses: slackapi/slack-github-action@v2
+        with:
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg }}",
+              "thread_ts": "${{ inputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
+
+      - name: Slack message failure
+        uses: slackapi/slack-github-action@v2
+        if: failure()
+        with:
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
+              "thread_ts": "${{ inputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
+
+      - name: Save docker container logs
+        if: always()
+        working-directory: ${{ steps.infra_tests_setup.outputs.target_dir }}
+        shell: bash
+        run: |
+          # for sanity
+          docker ps -a
+
+          for container in backend spawner message-server; do
+             CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
+             docker logs "${CONTAINER_ID}" &> "${container}.log" || true
+          done || true
+
+          # movai-service
+          journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
+
+          # spawner (mobros firmware)
+          journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
+
+      - name: Collect Installed components
+        if: ${{ inputs.collect_deployable_artifacts}}
+        shell: bash
+        run: |
+          mkdir -p artifacts
+
+          used_images=($(docker images --format "{{.Repository}}:{{.Tag}}" | tr ' ' "\n"))
+          for image in "${used_images[@]}"
+          do
+            image_short_name=$(grep -oP "(?<=/$ENV/).*?(?=:)" <<< "$image" || grep -oP "(?<=/devops/).*?(?=:)" <<< "$image" || true)
+            if [[ "$image_short_name" =~ .*"backend".* || "$image_short_name" =~ .*"spawner".* || "$image_short_name" =~ .*"health-node".* || "" =~ .*"message-server*.*" ]];
+            then
+              echo "scanning $image"
+              container_ids=($(docker ps -q -f "ancestor=$image" | tr ' ' "\n"))
+              for container_id in "${container_ids[@]}"
+              do
+                container_name=$(docker inspect --format="{{.Name}}" $container_id)
+                docker exec -t "$container_id" bash -c '
+                  set -e
+
+                  sudo apt update || apt update
+                  export PATH="$HOME/.local/bin:$PATH"
+                  python3 -m pip install --upgrade pip || wget https://bootstrap.pypa.io/get-pip.py -O - | python3
+                  python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple movai-package-deployer==${{ env.PACKAGE_DEPLOYER_VERSION }}
+                  package-deployer scan
+                  ls -la /tmp
+                ' || true
+                  docker cp $container_id:/tmp/deployable.dploy artifacts/$container_name-noetic-deployable.dploy
+                  docker cp $container_id:/tmp/undeployable.dploy artifacts/$container_name-noetic-3rdParty.dploy
+              done
+            else
+              echo "Skipping scan of $image"
+            fi
+          done
+          . .ci-venv/bin/activate
+          package-deployer scan
+          deactivate
+          cp /tmp/deployable.dploy artifacts/host-noetic-deployable.dploy
+          cp /tmp/undeployable.dploy artifacts/host-noetic-3rdParty.dploy
+  
+      - name: Stash deploy_artifacts_noetic
+        if: ${{ inputs.collect_deployable_artifacts }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy_artifacts_noetic
+          path: artifacts/*.dploy
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
+
+      - name: Stash QA artifacts
+        if: always()
+        shell: bash
+        env:
+          TEST_INFRA_DIR: ${{ steps.infra_tests_setup.outputs.target_dir }}
+        run: |
+          # cleanup
+          rm -rf qa_artifacts
+
+          # tests artifacts
+          # *.log and *.zip might not exist if the test fails early
+          mkdir -p qa_artifacts
+          cp -r "${TEST_INFRA_DIR}"/*.{log,tar,json,html} ./qa_artifacts 2>/dev/null || true
+          cp -r "${TEST_INFRA_DIR}"/tests_artifacts ./qa_artifacts || true
+
+      - name: Upload QA artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.run_number }}_${{ github.run_attempt }}_${{inputs.test_infra_key}}_artifacts_${{ github.run_id }}
+          path: qa_artifacts/*
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
+
+      - name: Remove robots
+        if: always()
+        shell: bash
+        run: |
+          timeout 30 movai-cli remove --all || true
+
+      - name: Docker cleanups
+        if: always()
+        shell: bash
+        run: |
+          docker system prune -f
+          docker image prune --all -f
