@@ -673,11 +673,6 @@ jobs:
             tests_repo_name=$(cat /tmp/repo_name.txt)
             test_set=$(cat /tmp/test_set.txt)
 
-            test_exec_dir="."
-            if [ -f /tmp/test_dir.txt ]; then
-              test_exec_dir="$test_exec_dir/$(cat /tmp/test_dir.txt)"
-            fi
-            echo "$test_exec_dir">/tmp/test_exec_dir.txt
             rm -rf $tests_repo_name
             integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user ${{ env.GITHUB_API_USR }} --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
             ls -la $tests_dir
@@ -688,7 +683,7 @@ jobs:
             # setup venv in a step that is always executed
             pushd "${tests_dir}"
             python3 -m venv venv --clear
-            . venv/bin/activate
+            . test-venv/bin/activate
             pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r requirements.txt
             deactivate
 
