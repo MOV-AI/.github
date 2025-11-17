@@ -558,6 +558,7 @@ jobs:
 
       - name: Ansible install platform
         id: ansible_install_platform
+        if: false
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
         shell: bash
         run: |
@@ -719,7 +720,10 @@ jobs:
             . test-venv/bin/activate
             echo "python3 -m pytest ${{ inputs.pytest_args}}" 
             python3 -m pytest tests/cucumber/test_fleet_board.py -ra --hub_url $selenoid_url --base_url https://$host_ip/ --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json --junit-xml=junit.xml | tee pytest-output.log
+            execution_status=$?
             deactivate
+            echo "$execution_status"
+            exit $execution_status
           '
         
 
