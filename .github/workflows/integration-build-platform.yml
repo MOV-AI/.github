@@ -682,7 +682,7 @@ jobs:
 
             # setup venv in a step that is always executed
             pushd "${tests_dir}"
-            python3 -m venv venv --clear
+            python3 -m venv test-venv --clear
             . test-venv/bin/activate
             pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r requirements.txt
             deactivate
