@@ -1,68 +1,71 @@
-name: Build and Validate Platform
+name: Generic Remote Fleet Tests
 on:
   workflow_call:
     inputs:
-      product_name:
+      collect_deployable_artifacts:
+        required: false
+        type: boolean
+        default: false
+      test_infra_key:
         required: true
         type: string
-      ros_distro:
+      robot_config:
+        required: false
+        type: string
+        default: 'basic-standalone-noetic.json'
+      slack_thread_id:
         required: true
         type: string
-      backend_name:
+      backend_image_name_and_tag:
         required: false
         type: string
         default: ''
+      test_timeout:
+        required: false
+        type: number
+        default: 60
+      pytest_args:
+        required: true
+        type: string
+      xray_label:
+        required: false
+        type: string
+        default: 'label'
+      provision_tf_env_repo:
+        required: true
+        type: string
+      provision_tf_env_version:
+        required: true
+        type: string
+      provision_infra_repo:
+        required: true
+        type: string
+      provision_infra_version:
+        required: true
+        type: string
+      fleet_number_members:
+        required: true
+        type: string
       debug_fleet_keep_alive:
         required: false
         type: boolean
       fleet_ips:
         required: true
         type: string
-      fleet_number_members:
+      proxmox_cluster_name:
         required: true
-        type: number
-      cluster:
-        required: false
-        default: "mary"
         type: string
-      debug_simulation_tests_keep_alive:
+      with_fleet_tests:
         required: false
         type: boolean
         default: false
-      proxmox_cluster_name:
-        required: false
-        type: string
-        default: hel0
       slack_channel:
         required: false
         type: string
-        default: "C02U028NMB7"
-        #default: "C02U028NMB7" # rnd-platform
-        # development slack channel
-        #default: "C05K2KF1UP8"
-      simulation_qa_key:
-        required: false
-        type: string
-        default: "simulator_tests"
-      simulation_qa_version:
-        required: false
-        type: string
-        default: ""
-        description: Version of the simulator tests to run. If not provided, the version will be taken from the product manifest.
-      with_fleet_tests:
-        required: false
-        type: string
-        default: false
-        description: Flag if we want the fleet job to run platform UI Fleet tests
-      fleet_tests_qa_key:
-        required: false
-        type: string
-        default: "ui_tests"
+        default: 'C02PB9A9F45' # rnd-platform
 
     secrets:
       auto_commit_user:
-        required: true
-      auto_commit_mail:
         required: true
       auto_commit_pwd:
         required: true
@@ -70,29 +73,15 @@ on:
         required: true
       registry_password:
         required: true
-      nexus_publisher_user:
-        required: true
-      nexus_publisher_password:
-        required: true
       gh_token:
         required: true
       aws_key_id:
         required: true
       aws_secret_key_id:
         required: true
-      slack_token_id:
-        required: true
       ssh_pem_fleet_aws_vm:
-        required: true
-      proxmox_ve_username:
-        required: true
-      proxmox_ve_password:
-        required: true
-      proxmox_ve_sim_username:
-        required: true
-      proxmox_ve_sim_password:
-        required: true
-      ssh_priv_key:
+          required: true
+      slack_token_id:
         required: true
       jira_username:
         required: true
@@ -102,300 +91,37 @@ on:
         required: true
       xray_secret:
         required: true
-      minio_key_id:
-        required: true
-      minio_secret_key_id:
-        required: true
-      buildkite_token:
-        required: false
+
 env:
+  CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.0.0.31"
   CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.32"
   MOBTEST_VERSION: "0.0.6.1"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.25"
+  CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
+  CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   AWS_DEFAULT_REGION: "us-east-1"
   REGISTRY: registry.cloud.mov.ai
   MID_REGISTRY: registry.hel.mov.ai
-  PUSH_REGISTRY: registry.cloud.mov.ai
-  ENV: qa
-  USERSPACE_FOLDER_PATH: /opt/movai/userspace
+  USERSPACE_FOLDER_PATH: /opt/userspace
   REMOTE_WORKSPACE_PATH: workspace
-  SIMULATION_ID: ci_simulation
+  SIMULATION_ID: CI
   XRAY_CLIENTID: ${{ secrets.xray_clientid}}
   XRAY_SECRET: ${{ secrets.xray_secret}}
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
-  PROVISIONING_ENV_VERSION: 0.1.0-17
-  PROVISIONING_ENV_REPO: devops-tf-env-conf
-  PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-16"
+  SLACK_CHANNEL: ${{ inputs.slack_channel }}
   ARTIFACTS_RETENTION_DAYS: 15
+  PROVISIONING_ENV_VERSION: ${{ inputs.provision_tf_env_version }}
+  PROVISIONING_ENV_REPO: ${{ inputs.provision_tf_env_repo }}
+  PROVISION_INFRA_REPO: ${{ inputs.provision_infra_repo }}
+  PROVISION_INFRA_VERSION: ${{ inputs.provision_infra_version }}
 
 jobs:
-  Validate-boostrap-configs:
-    runs-on: integration-pipeline
-    container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
-    outputs:
-      slack_thread_id: ${{ steps.send-message.outputs.ts }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Validate Manifest
-        shell: bash
-        run: |
-          yamllint product-manifest.yaml
-
-      - name: Install CI Scripts in container
-        shell: bash
-        run: |
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-
-      - name: raise version
-        run: |
-          git config --global --add safe.directory $(pwd)
-          git fetch
-          git checkout origin/${GITHUB_REF#refs/heads/} -- product.version
-          integration-pipeline raise
-          cat product.version
-
-      - name: Bootstraping simulator metadata
-        run: |
-          cat product.version
-          rm -rf simulator_artifacts ci_artifacts
-          integration-pipeline generate_meta_simulator_artifacts \
-                --manifest_platform_base_key product_components \
-                --product_name ${{ inputs.product_name }} \
-                --branch ${GITHUB_REF#refs/heads/}
-
-          mkdir simulator_artifacts
-          cp ci_artifacts/* ./simulator_artifacts
-
-      - name: Bootstraping platform metadata
-        run: |
-          rm -rf ci_artifacts
-          integration-pipeline generate_meta_artifacts \
-                --manifest_platform_base_key product_components \
-                --override_backend ${{ inputs.backend_name }}
-          mkdir component_artifacts
-          cp ci_artifacts/* ./component_artifacts
-
-      - name: Stash component_artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: component_artifacts
-          path: component_artifacts/*
-          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
-
-      - name: Stash robot_configs
-        uses: actions/upload-artifact@v4
-        with:
-          name: robot_configs
-          path: "*.json*"
-          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
-
-      - name: Stash sim_configs
-        uses: actions/upload-artifact@v4
-        with:
-          name: sim_configs
-          path: simulator_artifacts/*
-          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
-
-      - name: Pre-stash organization configs
-        run: |
-          rm -rf simulator_artifacts ci_artifacts platform_configs
-          mkdir platform_configs
-          cp product.version ./platform_configs/product.version
-          cp product-manifest.yaml ./platform_configs/product-manifest.yaml
-
-      - name: Prepare slack variables
-        if: always()
-        id: pre_slack
-        run: |
-          MESSAGE=":loading: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is starting to be validated :mag_right: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-
-      - name: Send Slack Message
-        uses: slackapi/slack-github-action@v2
-        id: send-message
-        with:
-          method: chat.postMessage
-          payload: |
-            {
-              "channel": "${{ inputs.slack_channel }}",
-              "text": "${{ steps.pre_slack.outputs.msg }}"
-            }
-          token: ${{ secrets.slack_token_id }}
-
-      - name: Stash raised_meta
-        uses: actions/upload-artifact@v4
-        with:
-          name: raised_meta
-          path: platform_configs/*
-          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
-
-  Build-backend:
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
-    needs: [Validate-boostrap-configs]
-    outputs:
-      slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
-      backend_image: ${{ steps.store_image_name.outputs.backend_image }}
-    steps:
-      - uses: rtCamp/action-cleanup@master
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Agent info
-        run: |
-          echo "public ip: $(curl ipinfo.io/ip)"
-          echo "private ip: $(hostname -I | awk '{print $1}')"
-
-      - name: Setup CI Scripts in .ci-venv
-        shell: bash
-        run: |
-          python3 -m venv .ci-venv --clear
-          . .ci-venv/bin/activate
-          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install --upgrade pyOpenSSL cryptography
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-
-      - name: unstash raised_meta
-        uses: actions/download-artifact@v4
-        with:
-          name: raised_meta
-          path: platform_configs
-
-      - name: unstash component_artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: component_artifacts
-
-      - name: extract product configs, manifest to main folder
-        shell: bash
-        run: |
-          cp ./platform_configs/product.version product.version
-          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
-
-
-      - name: Lint docker image
-        shell: bash
-        run: |
-          docker run --rm -i -e HADOLINT_FAILURE_THRESHOLD=error hadolint/hadolint < docker/backend/Dockerfile
-
-      - name: Login to ${{ env.REGISTRY }} Registry
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.registry_user }}
-          password: ${{ secrets.registry_password }}
-          registry: ${{ env.REGISTRY }}
-
-      - name: Prepare docker build variables
-        id: pre_build
-        shell: bash
-        run: |
-          echo "base_name=$(cat backend_base_name.ci)" >> $GITHUB_OUTPUT
-          echo "base_version=$(cat backend_base_version.ci)" >> $GITHUB_OUTPUT
-          echo "raised_version=$(cat product.version)" >> $GITHUB_OUTPUT
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Docker build
-        shell: bash
-        run: |
-          docker build --add-host ${{ env.REGISTRY }}:172.22.0.106 \
-            --build-arg DOCKER_REGISTRY=${{ env.REGISTRY }} \
-            --build-arg BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} \
-            --build-arg TAG=${{ steps.pre_build.outputs.base_version }} \
-            --build-arg CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }} \
-            --file docker/backend/Dockerfile \
-            --platform linux/amd64 \
-            --tag ${{ env.REGISTRY }}/ci/${{ inputs.backend_name }}:${{ steps.pre_build.outputs.raised_version }} \
-            --pull \
-            --push .
-
-      - name: store image name
-        id: store_image_name
-        shell: bash
-        run: |
-          echo "backend_image=${{ inputs.backend_name }}:${{ steps.pre_build.outputs.raised_version }}" >> $GITHUB_OUTPUT
-
-      - name: Get current job id
-        if: always()
-        shell: bash
-        id: job_info
-        run: |
-          sudo apt update
-          sudo apt install jq -y
-          job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
-          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.gh_token }}
-
-      - name: Prepare slack variables
-        if: always()
-        id: pre_slack_result
-        run: |
-          MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
-          MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
-
-      - name: Slack message success
-        uses: slackapi/slack-github-action@v2
-        with:
-          method: chat.postMessage
-          payload: |
-            {
-              "channel": "${{ inputs.slack_channel }}",
-              "text": "${{ steps.pre_slack_result.outputs.msg }}",
-              "thread_ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
-            }
-          token: ${{ secrets.slack_token_id }}
-          
-      - name: Slack message failure
-        uses: slackapi/slack-github-action@v2
-        if: failure()
-        with:
-          method: chat.postMessage
-          payload: |
-            {
-              "channel": "${{ inputs.slack_channel }}",
-              "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
-              "thread_ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
-            }
-          token: ${{ secrets.slack_token_id }}
-
-      - name: Docker cleanups
-        if: always()
-        shell: bash
-        run: |
-          docker system prune -f
-          docker image prune --all -f
-
-  Fleet-Validations:
-    needs: [Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feature/fleet-ui-tests
-    secrets: inherit
-    with:
-      collect_deployable_artifacts: true
-      test_infra_key: "ui_tests"
-      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-      test_timeout: 120
-      pytest_args: 'pytest tests/cucumber/test_fleet_board.py -ra --hub_url $selenoid_url --base_url https://$host_ip/ --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json --junit-xml=junit.xml'
-      slack_channel: ${{ inputs.slack_channel }}
-
-  Fleet-Validations:
-    needs: [Build-backend]
-    if: false
+  Validation-Fleet-Tests:
+    name: "Fleet Validation: ${{ inputs.test_infra_key }}"
     runs-on: ip-${{ inputs.proxmox_cluster_name }}-queuer
     steps:
       - name: Cleanup Workspace
