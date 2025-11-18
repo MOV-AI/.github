@@ -388,7 +388,7 @@ jobs:
         shell: bash
         run: scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no *.json* ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
 
-      - name: Remote - Setup QA ${{ inputs.fleet_tests_qa_key}} tests
+      - name: Remote - Setup QA ${{ inputs.test_infra_key}} tests
         if: ${{ inputs.with_fleet_tests }}
         shell: bash
         id: tests_setup
@@ -397,7 +397,7 @@ jobs:
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            qa_key=${{ inputs.fleet_tests_qa_key}}
+            qa_key=${{ inputs.test_infra_key}}
 
             rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt
             export PATH="$HOME/.local/bin:$PATH"
@@ -437,7 +437,7 @@ jobs:
           echo "test_set=$(cat /tmp/test_set.txt)" >> $GITHUB_OUTPUT
           echo "test_exec_dir=$(cat /tmp/test_exec_dir.txt)" >> $GITHUB_OUTPUT
 
-      - name: Remote - Run Fleet [${{ inputs.fleet_tests_qa_key}}]
+      - name: Remote - Run Fleet [${{ inputs.test_infra_key}}]
         if: ${{ inputs.with_fleet_tests }}
         id: run_tests
         shell: bash
