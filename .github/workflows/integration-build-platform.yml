@@ -392,6 +392,15 @@ jobs:
       test_timeout: 120
       pytest_args: 'pytest tests/cucumber/test_fleet_board.py -ra --hub_url $selenoid_url --base_url https://$host_ip/ --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json --junit-xml=junit.xml'
       slack_channel: ${{ inputs.slack_channel }}
+      provision_tf_env_repo: ${{ env.PROVISIONING_ENV_REPO }}
+      provision_tf_env_version: ${{ env.PROVISIONING_ENV_VERSION }}
+      provision_infra_repo: ${{ ENV.PROVISION_INFRA_REPO}}
+      provision_infra_version: ${{ env.PROVISION_INFRA_VERSION}}
+      fleet_number_members: ${{ inputs.fleet_number_members }}
+      debug_fleet_keep_alive: ${{ inputs.debug_fleet_keep_alive }}
+      fleet_ips: ${{ inputs.fleet_ips }}
+      proxmox_cluster_name: ${{ inputs.proxmox_cluster_name }}
+      with_fleet_tests: true
 
   Fleet-Validationss:
     needs: [Build-backend]
