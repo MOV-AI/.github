@@ -320,7 +320,7 @@ jobs:
           done
 
           REGISTRY=${{ env.REGISTRY }}
-          BACKEND_IMAGE=${{ needs.Build-backend.outputs.backend_image }}
+          BACKEND_IMAGE=${{ inputs.backend_image_name_and_tag }}
           MID_REGISTRY=${{ env.MID_REGISTRY }}
           REGISTRY_USER=${{ secrets.registry_user }}
           REGISTRY_PASS=${{ secrets.registry_password }}
@@ -490,7 +490,7 @@ jobs:
             {
               "channel": "${{ inputs.slack_channel }}",
               "text": "${{ steps.pre_slack_result.outputs.msg }}",
-              "thread_ts": "${{ needs.Build-backend.outputs.slack_thread_id }}"
+              "thread_ts": "${{ inputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
           
@@ -503,7 +503,7 @@ jobs:
             {
               "channel": "${{ inputs.slack_channel }}",
               "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
-              "thread_ts": "${{ needs.Build-backend.outputs.slack_thread_id }}"
+              "thread_ts": "${{ inputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
 
