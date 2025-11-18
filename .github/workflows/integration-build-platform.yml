@@ -58,6 +58,22 @@ on:
         required: false
         type: string
         default: "ui_tests"
+      provision_tf_env_repo:
+        required: false
+        type: string
+        default: "devops-tf-env-conf"
+      provision_tf_env_version:
+        required: false
+        type: string
+        default: "0.1.0-17"
+      provision_infra_repo:
+        required: false
+        type: string
+        default: "devops-tf-proxmox-bpg"
+      provision_infra_version:
+        required: false
+        type: string
+        default: "2.0.0-16"
 
     secrets:
       auto_commit_user:
@@ -127,10 +143,10 @@ env:
   XRAY_SECRET: ${{ secrets.xray_secret}}
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
-  PROVISIONING_ENV_VERSION: 0.1.0-17
-  PROVISIONING_ENV_REPO: devops-tf-env-conf
-  PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-16"
+  PROVISIONING_ENV_VERSION: ${{ inputs.provision_tf_env_version }}
+  PROVISIONING_ENV_REPO: ${{ inputs.provision_tf_env_repo }}
+  PROVISION_INFRA_REPO: ${{ inputs.provision_infra_repo }}
+  PROVISION_INFRA_VERSION: ${{ inputs.provision_infra_version }}
   ARTIFACTS_RETENTION_DAYS: 15
 
 jobs:
@@ -392,10 +408,10 @@ jobs:
       test_timeout: 120
       pytest_args: 'pytest tests/cucumber/test_fleet_board.py -ra --hub_url $selenoid_url --base_url https://$host_ip/ --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json --junit-xml=junit.xml'
       slack_channel: ${{ inputs.slack_channel }}
-      provision_tf_env_repo: ${{ env.PROVISIONING_ENV_REPO }}
-      provision_tf_env_version: ${{ env.PROVISIONING_ENV_VERSION }}
-      provision_infra_repo: ${{ ENV.PROVISION_INFRA_REPO}}
-      provision_infra_version: ${{ env.PROVISION_INFRA_VERSION}}
+      provision_tf_env_repo: ${{ inputs.provision_tf_env_repo }}
+      provision_tf_env_version: ${{ inputs.provision_tf_env_version }}
+      provision_infra_repo: ${{ inputs.provision_infra_repo }}
+      provision_infra_version: ${{ inputs.provision_infra_version }}
       fleet_number_members: ${{ inputs.fleet_number_members }}
       debug_fleet_keep_alive: ${{ inputs.debug_fleet_keep_alive }}
       fleet_ips: ${{ inputs.fleet_ips }}
