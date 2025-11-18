@@ -393,7 +393,7 @@ jobs:
       pytest_args: 'pytest tests/cucumber/test_fleet_board.py -ra --hub_url $selenoid_url --base_url https://$host_ip/ --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json --junit-xml=junit.xml'
       slack_channel: ${{ inputs.slack_channel }}
 
-  Fleet-Validations:
+  Fleet-Validationss:
     needs: [Build-backend]
     if: false
     runs-on: ip-${{ inputs.proxmox_cluster_name }}-queuer
