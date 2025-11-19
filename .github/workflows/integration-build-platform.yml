@@ -413,5 +413,3 @@ jobs:
       fleet_ips: ${{ inputs.fleet_ips }}
       proxmox_cluster_name: ${{ inputs.proxmox_cluster_name }}
       with_fleet_tests: ${{ inputs.with_fleet_tests }}
-
-      
