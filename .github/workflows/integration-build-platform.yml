@@ -51,7 +51,7 @@ on:
         description: Version of the simulator tests to run. If not provided, the version will be taken from the product manifest.
       with_fleet_tests:
         required: false
-        type: string
+        type: boolean
         default: false
         description: Flag if we want the fleet job to run platform UI Fleet tests
       provision_tf_env_repo:
