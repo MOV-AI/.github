@@ -417,7 +417,7 @@ jobs:
             ls -la $tests_dir
 
             # install test dependencies on host
-            sudo apt install -y --allow-downgrades python3-venv python3-rosnode python3-rosparam python3-rostopic
+            
 
             # setup venv in a step that is always executed
             pushd "${tests_dir}"
