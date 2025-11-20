@@ -69,7 +69,7 @@ on:
       provision_infra_version:
         required: false
         type: string
-        default: "2.0.0-16"
+        default: "2.0.0-17"
 
     secrets:
       auto_commit_user:
