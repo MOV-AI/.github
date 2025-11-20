@@ -121,9 +121,9 @@ on:
       buildkite_token:
         required: false
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.32"
-  MOBTEST_VERSION: "0.0.6.1"
-  PACKAGE_DEPLOYER_VERSION: "1.0.0.25"
+  CI_INTEGRATION_SCRIPTS_VERSION: "4.0.2.3"
+  MOBTEST_VERSION: "0.0.7.2"
+  PACKAGE_DEPLOYER_VERSION: "1.0.0.40"
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
@@ -138,10 +138,6 @@ env:
   XRAY_SECRET: ${{ secrets.xray_secret}}
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
-  PROVISIONING_ENV_VERSION: 0.1.0-17
-  PROVISIONING_ENV_REPO: devops-tf-env-conf
-  PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-16"
   ARTIFACTS_RETENTION_DAYS: 15
 
 jobs:
