@@ -397,11 +397,11 @@ jobs:
     secrets: inherit
     with:
       collect_deployable_artifacts: true
-      test_infra_key: "ui_tests"
+      test_infra_key: "backend"
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 120
-      pytest_args: 'pytest tests/cucumber/test_fleet_board.py -ra --hub_url $selenoid_url --base_url https://$host_ip/ --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json --junit-xml=junit.xml'
+      pytest_args: 'pytest tests/regression -m fleet'
       slack_channel: ${{ inputs.slack_channel }}
       provision_tf_env_repo: ${{ inputs.provision_tf_env_repo }}
       provision_tf_env_version: ${{ inputs.provision_tf_env_version }}
