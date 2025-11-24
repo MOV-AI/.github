@@ -401,7 +401,7 @@ jobs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 120
-      pytest_args: 'pytest tests/regression -m fleet'
+      pytest_args: 'tests/regression -m fleet'
       slack_channel: ${{ inputs.slack_channel }}
       provision_tf_env_repo: ${{ inputs.provision_tf_env_repo }}
       provision_tf_env_version: ${{ inputs.provision_tf_env_version }}
