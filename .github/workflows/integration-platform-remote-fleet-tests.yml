@@ -446,7 +446,6 @@ jobs:
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.target_dir }}
-            export selenoid_url="http://selenoid-ui.hel.mov.ai"
             export host_ip=${{ steps.agent_info.outputs.ip }}
             export movai_user=movai
             export movai_pwd=movai123
@@ -454,7 +453,7 @@ jobs:
             movai-cli user manager $movai_user $movai_pwd || true
             . test-venv/bin/activate
             echo "python3 -m pytest ${{ inputs.pytest_args}}" 
-            python3 -m pytest tests/cucumber/test_fleet_board.py -ra --hub_url $selenoid_url --base_url https://$host_ip/ --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json --junit-xml=junit.xml
+            python3 -m pytest tests/cucumber/test_fleet_board.py --movai-user $movai_user --movai-pw $movai_pwd ${{ inputs.pytest_args}}
             deactivate
           '
 
