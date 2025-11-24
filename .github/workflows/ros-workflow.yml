@@ -213,6 +213,7 @@ jobs:
         mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
 
     - name: Run pylint
+      if: ${{ inputs.pre_commit }}
       run: |
         python3 -m pip install pre-commit pylint
         python3 -m pre_commit run pylint-postbuild --show-diff-on-failure --color=always --all-files
