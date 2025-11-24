@@ -128,8 +128,10 @@ jobs:
 
       - name: Install dependencies and package
         run: |
+          sudo apt-get update
+          sudo apt-get install yamllint 
           python3 -m pip install pip --upgrade
-          python3 -m pip install pre-commit
+          python3 -m pip install pre-commit catkin_lint pylint
 
       - name: Run pre-commit
         run: |
