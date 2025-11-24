@@ -149,6 +149,7 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
+    needs: [Pre-commit]
 
     steps:
     - name: Checkout
