@@ -104,24 +104,19 @@ jobs:
     if: ${{ inputs.pre_commit }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ inputs.PYTHON_VERSION }}
+          submodules: recursive
 
       - name: Install dependencies and package
         run: |
           python3 -m pip install pip --upgrade
-          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r build-requirements.txt
-          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple .
-
           python3 -m pip install pre-commit
 
       - name: Run pre-commit
