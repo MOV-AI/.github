@@ -126,7 +126,7 @@ jobs:
         with:
           python-version: ${{ inputs.PYTHON_VERSION }}
 
-      - name: Install dependencies and package
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install yamllint -y
