@@ -217,13 +217,8 @@ jobs:
       if: ${{ inputs.pre_commit }}
       run: |
         python3 -m pip install pre-commit pylint
-        # debug logs
-        echo Running pwd
-        pwd
-        echo Running ls
-        ls -la
         git config --global --add safe.directory $(pwd)
-        python3 -m pre_commit run pylint-postbuild --show-diff-on-failure --color=always --all-files
+        python3 -m pre_commit run pylint-postbuild --hook-stage manual --show-diff-on-failure --color=always --all-files
 
     - name: Run Catkin tests
       if: ${{ inputs.run_catkin_tests }}
