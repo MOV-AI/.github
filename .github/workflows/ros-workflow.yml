@@ -212,6 +212,10 @@ jobs:
         export MOVAI_OUTPUT_DIR="$(pwd)/artifacts"
         mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
 
+    - name: Run pylint
+      run: |
+        python -m pre_commit run pylint --show-diff-on-failure --color=always --all-files
+
     - name: Run Catkin tests
       if: ${{ inputs.run_catkin_tests }}
       shell: bash
