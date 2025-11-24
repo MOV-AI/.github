@@ -101,6 +101,9 @@ jobs:
           MERGE_MSG: "Branch was auto-updated."
 
   Pre-commit:
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(inputs.ros_distro) }}
     if: ${{ inputs.pre_commit }}
     runs-on: ubuntu-22.04
     container:
