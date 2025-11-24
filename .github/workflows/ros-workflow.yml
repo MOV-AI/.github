@@ -143,7 +143,7 @@ jobs:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
         build_mode: ${{ fromJSON(inputs.build_modes) }}
-    if: ${{ inputs.release == 'false' }}
+    if: ${{ always() && inputs.release == 'false' && (needs.Pre-commit.result == 'success' || needs.Pre-commit.result == 'skipped') }}
     runs-on: ubuntu-22.04
     container:
       image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
