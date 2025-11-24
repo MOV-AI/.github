@@ -129,7 +129,7 @@ jobs:
       - name: Install dependencies and package
         run: |
           sudo apt-get update
-          sudo apt-get install yamllint 
+          sudo apt-get install yamllint -y
           python3 -m pip install pip --upgrade
           python3 -m pip install pre-commit catkin_lint pylint
 
