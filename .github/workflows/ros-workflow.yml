@@ -217,6 +217,7 @@ jobs:
       if: ${{ inputs.pre_commit }}
       run: |
         python3 -m pip install pre-commit pylint
+        source /opt/ros/noetic/setup.bash
         git config --global --add safe.directory $(pwd)
         python3 -m pre_commit run pylint-postbuild --hook-stage manual --show-diff-on-failure --color=always --all-files
 
