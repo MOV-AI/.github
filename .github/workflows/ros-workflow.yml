@@ -215,6 +215,7 @@ jobs:
 
     - name: Run pylint
       if: ${{ inputs.pre_commit }}
+      shell: bash
       run: |
         python3 -m pip install pre-commit pylint
         source /opt/ros/noetic/setup.bash
