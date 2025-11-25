@@ -104,11 +104,33 @@ jobs:
           GITHUB_TOKEN: '${{ secrets.auto_commit_pwd }}'
           MERGE_MSG: "Branch was auto-updated."
 
+  Check-pre-commit:
+    if: ${{ inputs.pre_commit }}
+    outputs:
+      pre_commit_exists: ${{ steps.check.outputs.exists }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Check if pre-commit config exists
+        id: check
+        run: |
+          if [ -f ".pre-commit-config.yaml" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
   Pre-commit:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    if: ${{ inputs.pre_commit && hashFiles('.pre-commit-config.yaml') != '' }}
+    needs: [Check-pre-commit]
+    outputs:
+      pre_commit_exists: ${{ needs.Check-pre-commit.outputs.pre_commit_exists }}
+    if: ${{ inputs.pre_commit && needs.Check-pre-commit.outputs.pre_commit_exists == 'true' }}
     runs-on: ubuntu-22.04
     container:
       image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
@@ -214,7 +236,7 @@ jobs:
         mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
 
     - name: Run pylint
-      if: ${{ inputs.pre_commit && hashFiles('.pre-commit-config.yaml') != '' }}
+      if: ${{ inputs.pre_commit && needs.Pre-commit.outputs.pre_commit_exists == 'true' }}
       shell: bash
       run: |
         python3 -m pip install pre-commit pylint
