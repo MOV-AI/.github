@@ -28,7 +28,7 @@ on:
       pre_commit:
         required: false
         type: boolean
-        default: false
+        default: true
       PYTHON_VERSION:
         required: false
         type: string
@@ -108,7 +108,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    if: ${{ inputs.pre_commit }}
+    if: ${{ inputs.pre_commit && hashFiles('.pre-commit-config.yaml') != '' }}
     runs-on: ubuntu-22.04
     container:
       image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
@@ -214,7 +214,7 @@ jobs:
         mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
 
     - name: Run pylint
-      if: ${{ inputs.pre_commit }}
+      if: ${{ inputs.pre_commit && hashFiles('.pre-commit-config.yaml') != '' }}
       shell: bash
       run: |
         python3 -m pip install pre-commit pylint
