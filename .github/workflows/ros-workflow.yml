@@ -239,10 +239,13 @@ jobs:
       if: ${{ inputs.pre_commit && needs.Pre-commit.outputs.pre_commit_exists == 'true' }}
       shell: bash
       run: |
-        python3 -m pip install pre-commit pylint
-        source /opt/mov.ai/workspaces/USER_ROS1/setup.bash
-        git config --global --add safe.directory $(pwd)
-        python3 -m pre_commit run pylint-postbuild --hook-stage manual --show-diff-on-failure --color=always --all-files
+        HOOK_ID="pylint-postbuild"
+        if grep -q "id: $HOOK_ID" .pre-commit-config.yaml; then
+          python3 -m pip install pre-commit pylint
+          source /opt/mov.ai/workspaces/USER_ROS1/setup.bash
+          git config --global --add safe.directory $(pwd)
+          python3 -m pre_commit run pylint-postbuild --hook-stage manual --show-diff-on-failure --color=always --all-files
+        fi
 
     - name: Run Catkin tests
       if: ${{ inputs.run_catkin_tests }}
