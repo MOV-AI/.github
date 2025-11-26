@@ -202,6 +202,7 @@ jobs:
         run: |
           echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
           sudo chmod 600 ~/.ssh/aws_slave.pem
+          sudo apt install jq -y
 
           multiply_node=$(printf '"${{ inputs.proxmox_cluster_name }}",%.0s' {1..${{ steps.infra_names.outputs.total_resources }}})
           node_list_str=${multiply_node::-1}
@@ -416,21 +417,18 @@ jobs:
             integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user ${{ env.GITHUB_API_USR }} --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
             ls -la $tests_dir
 
-            # install test dependencies on host
-            
-
             # setup venv in a step that is always executed
             pushd "${tests_dir}"
             python3 -m venv test-venv --clear
             . test-venv/bin/activate
-            pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r requirements.txt
+            pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r test-requirements.txt
             deactivate
 
             popd
           '
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt /tmp/test_exec_dir.txt
           scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:/tmp/*.txt /tmp/
-          
+
           echo "target_dir=$(cat /tmp/target_dir.txt)" >> $GITHUB_OUTPUT
           echo "version=$(cat /tmp/version.txt)" >> $GITHUB_OUTPUT
           echo "test_set=$(cat /tmp/test_set.txt)" >> $GITHUB_OUTPUT
@@ -445,15 +443,13 @@ jobs:
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.target_dir }}
-            export selenoid_url="http://selenoid-ui.hel.mov.ai"
             export host_ip=${{ steps.agent_info.outputs.ip }}
             export movai_user=movai
             export movai_pwd=movai123
-            export test_set=${{ steps.infra_tests_setup.outputs.test_set }}
+            export test_set=${{ steps.tests_setup.outputs.test_set }}
             movai-cli user manager $movai_user $movai_pwd || true
             . test-venv/bin/activate
-            echo "python3 -m pytest ${{ inputs.pytest_args}}" 
-            python3 -m pytest tests/cucumber/test_fleet_board.py -ra --hub_url $selenoid_url --base_url https://$host_ip/ --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json --junit-xml=junit.xml
+            python3 -m pytest ${{ inputs.pytest_args}} --movai-user $movai_user --movai-pw $movai_pwd -m "$test_set"
             deactivate
           '
 
@@ -462,6 +458,8 @@ jobs:
         shell: bash
         id: job_info
         run: |
+          sudo apt update
+          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -490,7 +488,7 @@ jobs:
               "thread_ts": "${{ inputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
-          
+
       - name: Slack message failure
         uses: slackapi/slack-github-action@v2
         if: failure()
@@ -563,4 +561,3 @@ jobs:
           set -e
           echo "Terraform destroy returned with exit status ${exit_status}. Attempted $count times."
           exit ${exit_status}
-
