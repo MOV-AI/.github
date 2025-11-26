@@ -431,7 +431,7 @@ jobs:
           '
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt /tmp/test_exec_dir.txt
           scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:/tmp/*.txt /tmp/
-          
+
           echo "target_dir=$(cat /tmp/target_dir.txt)" >> $GITHUB_OUTPUT
           echo "version=$(cat /tmp/version.txt)" >> $GITHUB_OUTPUT
           echo "test_set=$(cat /tmp/test_set.txt)" >> $GITHUB_OUTPUT
@@ -491,7 +491,7 @@ jobs:
               "thread_ts": "${{ inputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
-          
+
       - name: Slack message failure
         uses: slackapi/slack-github-action@v2
         if: failure()
@@ -534,7 +534,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.run_number }}_${{ github.run_attempt }}_fleet_qa_artifacts_${{ github.run_id }}
+          name: ${{ github.run_number }}_${{ github.run_attempt }}_${{ inputs.test_infra_key }}_qa_artifacts_${{ github.run_id }}
           path: ${{ steps.ansible_install_setup.outputs.target_dir }}/fleet_qa_artifacts/*
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
@@ -561,4 +561,3 @@ jobs:
           set -e
           echo "Terraform destroy returned with exit status ${exit_status}. Attempted $count times."
           exit ${exit_status}
-
