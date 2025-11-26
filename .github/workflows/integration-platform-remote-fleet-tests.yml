@@ -202,7 +202,6 @@ jobs:
         run: |
           echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
           sudo chmod 600 ~/.ssh/aws_slave.pem
-          sudo apt install jq -y
 
           multiply_node=$(printf '"${{ inputs.proxmox_cluster_name }}",%.0s' {1..${{ steps.infra_names.outputs.total_resources }}})
           node_list_str=${multiply_node::-1}
@@ -458,8 +457,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt update
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
