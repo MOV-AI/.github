@@ -506,12 +506,11 @@ jobs:
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
         if: always()
         shell: bash
-        env:
-          API_DIR: ${{ steps.api_tests_setup.outputs.target_dir }}
         run: |
           rm -rf fleet_qa_artifacts
           mkdir -p fleet_qa_artifacts/install
           source ansible-venv/bin/activate
+
           # install fleet_tests artifacts
           for fleet_host in "manager" "member0" "member1"; do
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u movai-service --since "1hour ago"' > fleet_qa_artifacts/install/$fleet_host.log || true
@@ -525,10 +524,8 @@ jobs:
 
           deactivate
 
-          # qa api tests artifacts
-          # *.log and *.zip might not exist if the test fails early
-          mkdir -p fleet_qa_artifacts/api
-          cp -r "${API_DIR}"/*.{log,tar} "${API_DIR}"/results/*.zip fleet_qa_artifacts/api 2>/dev/null || true
+          # test artifacts
+          scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.target_dir }}/tests_artifacts fleet_qa_artifacts/
 
       - name: Stash Fleet QA artifacts
         if: always()
