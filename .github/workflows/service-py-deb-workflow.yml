@@ -159,6 +159,7 @@ jobs:
           --isolated \
           --exclude dist,.*\.egg-info,.git,__pycache__,.tox,venv \
           --max-complexity 16 \
+          --max-line-length 120 \
           --exit-zero \
           --output-file flake8-report.txt
 
@@ -168,6 +169,7 @@ jobs:
         python3 -m pylint \
           --rcfile dummy-pylint-config \
           --ignore-patterns dist,.*\.egg-info,.git,__pycache__,.tox,venv \
+          --max-line-length 120 \
           --exit-zero \
           --recursive y \
           --output pylint-report.txt \
