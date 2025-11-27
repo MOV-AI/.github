@@ -44,7 +44,7 @@ on:
       ROS_BUILDTOOLS_TAG:
         required: false
         type: string
-        default: "v2.1.1"
+        default: "v2.1.3"
       MOBROS_VERSION:
         required: false
         type: string
@@ -183,9 +183,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install yamllint -y
-          python3 -m pip install pip --upgrade
           python3 -m pip install -r ./dev-requirements.txt
 
       - name: Run pre-commit
@@ -289,8 +286,6 @@ jobs:
       if: ${{ needs.Static-analysis.outputs.pre_commit_exists == 'true' }}
       shell: bash
       run: |
-        sudo apt-get update
-        sudo apt-get install yamllint -y
         python3 -m pip install -r ./dev-requirements.txt
         source /opt/mov.ai/workspaces/USER_ROS1/setup.bash
         git config --global --add safe.directory $(pwd)
