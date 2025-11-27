@@ -25,10 +25,6 @@ on:
         required: false
         type: string
         default: '["release"]'
-      pre_commit:
-        required: false
-        type: boolean
-        default: true
       PYTHON_VERSION:
         required: false
         type: string
@@ -143,7 +139,6 @@ jobs:
           MERGE_MSG: "Branch was auto-updated."
   
   Check-pre-commit:
-    if: ${{ inputs.pre_commit }}
     outputs:
       pre_commit_exists: ${{ steps.check.outputs.exists }}
     runs-on: ubuntu-22.04
@@ -168,7 +163,7 @@ jobs:
     needs: [Check-pre-commit]
     outputs:
       pre_commit_exists: ${{ needs.Check-pre-commit.outputs.pre_commit_exists }}
-    if: ${{ inputs.pre_commit && needs.Check-pre-commit.outputs.pre_commit_exists == 'true' }}
+    if: ${{ needs.Check-pre-commit.outputs.pre_commit_exists == 'true' }}
     runs-on: ubuntu-22.04
     container:
       image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
@@ -290,17 +285,16 @@ jobs:
         export MOVAI_OUTPUT_DIR="$(pwd)/artifacts"
         mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
 
-    - name: Run pylint
-      if: ${{ inputs.pre_commit && needs.Pre-commit.outputs.pre_commit_exists == 'true' }}
+    - name: Run post-build hooks
+      if: ${{ needs.Pre-commit.outputs.pre_commit_exists == 'true' }}
       shell: bash
       run: |
-        HOOK_ID="pylint-postbuild"
-        if grep -q "id: $HOOK_ID" .pre-commit-config.yaml; then
-          python3 -m pip install pre-commit pylint
-          source /opt/mov.ai/workspaces/USER_ROS1/setup.bash
-          git config --global --add safe.directory $(pwd)
-          python3 -m pre_commit run pylint-postbuild --hook-stage manual --show-diff-on-failure --color=always --all-files
-        fi
+        sudo apt-get update
+        sudo apt-get install yamllint -y
+        python3 -m pip install -r ./dev-requirements.txt
+        source /opt/mov.ai/workspaces/USER_ROS1/setup.bash
+        git config --global --add safe.directory $(pwd)
+        python3 -m pre_commit run --hook-stage manual --show-diff-on-failure --color=always --all-files
 
     - name: Run Catkin tests
       if: ${{ inputs.run_catkin_tests }}
