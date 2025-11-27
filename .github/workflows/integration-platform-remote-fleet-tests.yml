@@ -522,7 +522,7 @@ jobs:
           deactivate
 
           # test artifacts
-          scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.target_dir }}/tests_artifacts fleet_qa_artifacts/
+          scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.target_dir }}/tests_artifacts fleet_qa_artifacts/ || true
 
       - name: Stash Fleet QA artifacts
         if: always()
