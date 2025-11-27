@@ -138,7 +138,7 @@ jobs:
           GITHUB_TOKEN: '${{ secrets.auto_commit_pwd }}'
           MERGE_MSG: "Branch was auto-updated."
   
-  Check-pre-commit:
+  Check-static-analysis-config:
     outputs:
       pre_commit_exists: ${{ steps.check.outputs.exists }}
     runs-on: ubuntu-22.04
@@ -156,14 +156,14 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
-  Pre-commit:
+  Static-analysis:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    needs: [Check-pre-commit]
+    needs: [Check-static-analysis-config]
     outputs:
-      pre_commit_exists: ${{ needs.Check-pre-commit.outputs.pre_commit_exists }}
-    if: ${{ needs.Check-pre-commit.outputs.pre_commit_exists == 'true' }}
+      pre_commit_exists: ${{ needs.Check-static-analysis-config.outputs.pre_commit_exists }}
+    if: ${{ needs.Check-static-analysis-config.outputs.pre_commit_exists == 'true' }}
     runs-on: ubuntu-22.04
     container:
       image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
@@ -198,7 +198,7 @@ jobs:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
         build_mode: ${{ fromJSON(inputs.build_modes) }}
-    if: ${{ always() && inputs.release == 'false' && (needs.Pre-commit.result == 'success' || needs.Pre-commit.result == 'skipped') }}
+    if: ${{ always() && inputs.release == 'false' && (needs.Static-analysis.result == 'success' || needs.Static-analysis.result == 'skipped') }}
     runs-on: ubuntu-22.04
     container:
       image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
@@ -206,7 +206,7 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
-    needs: [Pre-commit]
+    needs: [Static-analysis]
 
     steps:
     - name: Checkout
@@ -286,7 +286,7 @@ jobs:
         mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
 
     - name: Run post-build hooks
-      if: ${{ needs.Pre-commit.outputs.pre_commit_exists == 'true' }}
+      if: ${{ needs.Static-analysis.outputs.pre_commit_exists == 'true' }}
       shell: bash
       run: |
         sudo apt-get update
