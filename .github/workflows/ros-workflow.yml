@@ -124,48 +124,23 @@ jobs:
           fi
 
   Pre-commit:
-    strategy:
-      matrix:
-        distro: ${{ fromJSON(inputs.ros_distro) }}
     needs: [Check-pre-commit]
-    outputs:
-      pre_commit_exists: ${{ needs.Check-pre-commit.outputs.pre_commit_exists }}
     if: ${{ inputs.pre_commit && needs.Check-pre-commit.outputs.pre_commit_exists == 'true' }}
-    runs-on: ubuntu-22.04
-    container:
-      image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
-      options: --user root
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
+    uses: MOV-AI/.github/.github/actions/pre-commit@feature/csai-4199-1
+    with:
+      args: "--color=always --show-diff-on-failure --all-files"
+      PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ inputs.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install yamllint -y
-          python3 -m pip install pip --upgrade
-          python3 -m pip install -r ./requirements-dev.txt
-
-      - name: Run pre-commit
-        run: |
-          git config --global --add safe.directory $(pwd)
-          python -m pre_commit run --show-diff-on-failure --color=always --all-files
+      # - name: Run pre-commit
+      #   run: |
+      #     git config --global --add safe.directory $(pwd)
 
   Build:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
         build_mode: ${{ fromJSON(inputs.build_modes) }}
-    if: ${{ always() && inputs.release == 'false' && (needs.Pre-commit.result == 'success' || needs.Pre-commit.result == 'skipped') }}
+    if: ${{ always() && inputs.release == 'false' && (needs.Pre-commit.result == 'success' || needs.Pre-commit.result == 'skipped') && inputs.pre_commit && needs.Check-pre-commit.outputs.pre_commit_exists == 'true' }}
     runs-on: ubuntu-22.04
     container:
       image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
@@ -173,7 +148,7 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
-    needs: [Pre-commit]
+    needs: [Check-pre-commit,Pre-commit]
 
     steps:
     - name: Checkout
