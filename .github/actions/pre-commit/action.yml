@@ -17,6 +17,19 @@ runs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.PYTHON_VERSION }}
+    - name: Install pre-requirements
+      run: |
+          # Install apt requirements if file exists
+          if [[ -f ./requirements-dev.apt ]]; then
+            sudo apt-get update
+            xargs -a ./requirements-dev.apt sudo apt-get install -y
+          fi
+    
+          # Install pip requirements if file exists
+          if [[ -f ./requirements-dev.txt ]]; then
+            python3 -m pip install --upgrade pip
+            python3 -m pip install -r ./requirements-dev.txt
+          fi
     - name: Run pre-commit
       shell: bash
       run: pre-commit/action@v3.0.1
