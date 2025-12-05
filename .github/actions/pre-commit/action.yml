@@ -17,9 +17,8 @@ runs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.x'
-    - name: Install pre-commit
-      shell: bash
-      run: pip install pre-commit
     - name: Run pre-commit
       shell: bash
-      run: pre-commit run  ${{ inputs.args }}
+      run: pre-commit/action@v3.0.1
+      with:
+        extra_args: ${{ inputs.args }}
