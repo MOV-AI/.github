@@ -16,7 +16,7 @@ runs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.x'
+        python-version: ${{ inputs.PYTHON_VERSION }}
     - name: Run pre-commit
       shell: bash
       run: pre-commit/action@v3.0.1
