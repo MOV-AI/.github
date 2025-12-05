@@ -157,38 +157,16 @@ jobs:
           fi
 
   Static-analysis:
-    strategy:
-      matrix:
-        distro: ${{ fromJSON(inputs.ros_distro) }}
     needs: [Check-static-analysis-config]
-    outputs:
-      pre_commit_exists: ${{ needs.Check-static-analysis-config.outputs.pre_commit_exists }}
     if: ${{ needs.Check-static-analysis-config.outputs.pre_commit_exists == 'true' }}
-    runs-on: ubuntu-22.04
-    container:
-      image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
-      options: --user root
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          submodules: recursive
+    uses: MOV-AI/.github/.github/actions/pre-commit@feature/csai-4199-1
+    with:
+      args: "--color=always --show-diff-on-failure --all-files"
+      PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ inputs.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        run: |
-          python3 -m pip install -r ./dev-requirements.txt
-
-      - name: Run pre-commit
-        run: |
-          git config --global --add safe.directory $(pwd)
-          python -m pre_commit run --show-diff-on-failure --color=always --all-files
+      # - name: Run pre-commit
+      #   run: |
+      #     git config --global --add safe.directory $(pwd)
 
   Build:
     strategy:
@@ -203,7 +181,7 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
-    needs: [Static-analysis]
+    needs: [Check-static-analysis-config, Static-analysis]
 
     steps:
     - name: Checkout
@@ -283,7 +261,7 @@ jobs:
         mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
 
     - name: Run post-build hooks
-      if: ${{ needs.Static-analysis.outputs.pre_commit_exists == 'true' }}
+      if: ${{ needs.Check-static-analysis-config.outputs.pre_commit_exists == 'true' }}
       shell: bash
       run: |
         python3 -m pip install -r ./dev-requirements.txt
