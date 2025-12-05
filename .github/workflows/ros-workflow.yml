@@ -168,7 +168,7 @@ jobs:
         with:
           submodules: recursive
       - name: Run pre-commit
-        uses: ./.github/actions/pre-commit
+        uses: MOV-AI/.github/.github/actions/pre-commit
         with:
           args: "--color=always --show-diff-on-failure --all-files"
           PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
