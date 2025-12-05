@@ -158,11 +158,16 @@ jobs:
 
   Static-analysis:
     needs: [Check-static-analysis-config]
+    outputs:
+      pre_commit_exists: ${{ needs.Check-static-analysis-config.outputs.pre_commit_exists }}
     if: ${{ needs.Check-static-analysis-config.outputs.pre_commit_exists == 'true' }}
-    uses: MOV-AI/.github/.github/actions/pre-commit@feature/csai-4199-1
-    with:
-      args: "--color=always --show-diff-on-failure --all-files"
-      PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Run pre-commit
+        uses: ./.github/actions/pre-commit@feature/csai-4199-1
+        with:
+          args: "--color=always --show-diff-on-failure --all-files"
+          PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
 
       # - name: Run pre-commit
       #   run: |
@@ -181,7 +186,7 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
-    needs: [Check-static-analysis-config, Static-analysis]
+    needs: [Static-analysis]
 
     steps:
     - name: Checkout
@@ -261,7 +266,7 @@ jobs:
         mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
 
     - name: Run post-build hooks
-      if: ${{ needs.Check-static-analysis-config.outputs.pre_commit_exists == 'true' }}
+      if: ${{ needs.Static-analysis.outputs.pre_commit_exists == 'true' }}
       shell: bash
       run: |
         python3 -m pip install -r ./dev-requirements.txt
