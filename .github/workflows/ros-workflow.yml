@@ -158,10 +158,19 @@ jobs:
 
   Static-analysis:
     needs: [Check-static-analysis-config]
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(inputs.ros_distro) }}
     outputs:
       pre_commit_exists: ${{ needs.Check-static-analysis-config.outputs.pre_commit_exists }}
     if: ${{ needs.Check-static-analysis-config.outputs.pre_commit_exists == 'true' }}
     runs-on: ubuntu-22.04
+    container:
+      image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
+      options: --user root
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
