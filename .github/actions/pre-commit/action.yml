@@ -32,6 +32,6 @@ runs:
           fi
     - name: Run pre-commit
       shell: bash
-      run: pre-commit/action@v3.0.1
+      uses: pre-commit/action@v3.0.1
       with:
         extra_args: ${{ inputs.args }}
