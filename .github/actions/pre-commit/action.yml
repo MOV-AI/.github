@@ -31,6 +31,7 @@ runs:
             python3 -m pip install --upgrade pip
             python3 -m pip install -r ./requirements-dev.txt
           fi
+          git config --global --add safe.directory $(pwd)
     - name: Run pre-commit
       uses: pre-commit/action@v3.0.1
       with:
