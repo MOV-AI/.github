@@ -23,6 +23,8 @@ runs:
     - name: Install pre-requirements
       shell: bash
       run: |
+          pwd
+          ls
           # Install apt requirements if file exists
           if [[ -f ./requirements-dev.apt ]]; then
             sudo apt-get update
