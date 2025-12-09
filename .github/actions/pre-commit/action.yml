@@ -36,6 +36,9 @@ runs:
           fi
           git config --global --add safe.directory $(pwd)
     - name: Run pre-commit
-      uses: pre-commit/action@v3.0.1
-      with:
-        extra_args: ${{ inputs.args }}
+      shell: bash
+      run: |
+        if [[ -f /opt/mov.ai/workspaces/USER_ROS1/setup.bash ]]; then
+          source /opt/mov.ai/workspaces/USER_ROS1/setup.bash
+        fi
+        pre-commit run ${{ inputs.args }}
