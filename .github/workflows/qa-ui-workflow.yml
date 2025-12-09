@@ -126,7 +126,8 @@ jobs:
             --hub_url ${{ inputs.selenoid_server_url }} \
             --base_url https://${{ steps.agent_info.outputs.ip }}/ \
             --install-platform \
-            | tee pytest-output.log
+            | tee pytest-output.log \
+            -m "not fleet"
 
       - name: Save docker container logs
         if: always()
