@@ -31,7 +31,6 @@ runs:
             python3 -m pip install -r ./requirements-dev.txt
           fi
     - name: Run pre-commit
-      shell: bash
       uses: pre-commit/action@v3.0.1
       with:
         extra_args: ${{ inputs.args }}
