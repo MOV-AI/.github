@@ -187,6 +187,8 @@ jobs:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
         build_mode: ${{ fromJSON(inputs.build_modes) }}
+    outputs:
+      pre_commit_exists: ${{ needs.Static-analysis.outputs.pre_commit_exists }}
     if: ${{ always() && inputs.release == 'false' && (needs.Static-analysis.result == 'success' || needs.Static-analysis.result == 'skipped') }}
     runs-on: ubuntu-22.04
     container:
@@ -273,13 +275,6 @@ jobs:
       run: |
         export MOVAI_OUTPUT_DIR="$(pwd)/artifacts"
         mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
-
-    - name: Run post-build hooks
-      if: ${{ needs.Static-analysis.outputs.pre_commit_exists == 'true' }}
-      uses: MOV-AI/.github/.github/actions/pre-commit@feature/csai-4199-1
-      with:
-        args: "--hook-stage manual --show-diff-on-failure --color=always --all-files"
-        PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
 
     - name: Run Catkin tests
       if: ${{ inputs.run_catkin_tests }}
@@ -416,6 +411,13 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ inputs.MOBTEST_VERSION }} --ignore-installed
           mobtest proj /opt/ros/${{ matrix.distro }}/share/
+
+      - name: Run post-build hooks
+        if: ${{ needs.Build.outputs.pre_commit_exists == 'true' }}
+        uses: MOV-AI/.github/.github/actions/pre-commit@feature/csai-4199-1
+        with:
+          args: "--hook-stage manual --show-diff-on-failure --color=always --all-files"
+          PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
 
   Package-Stack-Tests:
     if: ${{ inputs.release == 'false' && inputs.deploy == 'true' && inputs.run_stack_tests }}
