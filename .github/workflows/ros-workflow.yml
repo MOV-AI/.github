@@ -176,15 +176,11 @@ jobs:
         uses: actions/checkout@v5
         with:
           submodules: recursive
-      - name: Run pre-commit
+      - name: Run static analysis
         uses: MOV-AI/.github/.github/actions/pre-commit@feature/csai-4199-1
         with:
           args: "--color=always --show-diff-on-failure --all-files"
           PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
-
-      # - name: Run pre-commit
-      #   run: |
-      #     git config --global --add safe.directory $(pwd)
 
   Build:
     strategy:
@@ -278,14 +274,18 @@ jobs:
         export MOVAI_OUTPUT_DIR="$(pwd)/artifacts"
         mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
 
-    - name: Run post-build hooks
+    - name: Source ROS workspace
       if: ${{ needs.Static-analysis.outputs.pre_commit_exists == 'true' }}
       shell: bash
       run: |
-        python3 -m pip install -r ./dev-requirements.txt
         source /opt/mov.ai/workspaces/USER_ROS1/setup.bash
-        git config --global --add safe.directory $(pwd)
-        python3 -m pre_commit run --hook-stage manual --show-diff-on-failure --color=always --all-files
+
+    - name: Run post-build hooks
+      if: ${{ needs.Static-analysis.outputs.pre_commit_exists == 'true' }}
+      uses: MOV-AI/.github/.github/actions/pre-commit@feature/csai-4199-1
+      with:
+        args: "--hook-stage manual --show-diff-on-failure --color=always --all-files"
+        PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
 
     - name: Run Catkin tests
       if: ${{ inputs.run_catkin_tests }}
