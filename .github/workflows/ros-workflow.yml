@@ -45,6 +45,10 @@ on:
         required: false
         type: string
         default: "v2.1.3"
+      FLOW_INITIATOR_TAG:
+        required: false
+        type: string
+        default: "4.10.1.1"
       MOBROS_VERSION:
         required: false
         type: string
@@ -274,20 +278,6 @@ jobs:
         export MOVAI_OUTPUT_DIR="$(pwd)/artifacts"
         mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
 
-    - name: Run post-build hooks
-      if: ${{ needs.Static-analysis.outputs.pre_commit_exists == 'true' }}
-      uses: MOV-AI/.github/.github/actions/pre-commit@feature/csai-4199-1
-      with:
-        args: "--hook-stage manual --show-diff-on-failure --color=always --all-files"
-        PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
-
-    - name: Run Catkin tests
-      if: ${{ inputs.run_catkin_tests }}
-      shell: bash
-      run: |
-        cd $ROS1_USER_WS
-        catkin test
-
     - name: Archive binary
       uses: actions/upload-artifact@v4
       with:
@@ -312,10 +302,59 @@ jobs:
         mobros publish
         cat /usr/local/rosdep/ros-pkgs.yaml
 
+  Post-build-static-analysis:
+    if: ${{ inputs.release == 'false' }}
+    needs: [Check-static-analysis-config, Build]
+    runs-on: ubuntu-22.04
+    container:
+      image: registry.cloud.mov.ai/qa/flow-initiator-noetic:${{ inputs.FLOW_INITIATOR_TAG }}
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+    - name: Checkout
+      if: ${{ inputs.install_test }}
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Download artifacts
+      if: ${{ inputs.install_test }}
+      uses: actions/download-artifact@v4
+      with:
+        name: packages
+        path: artifacts
+
+    - name: Install debian artifacts
+      if: ${{ inputs.install_test }}
+      run: |
+        cd artifacts/
+        PACKAGES_INSTALL="$(find -L ./ -name "*.deb")"
+        echo $PACKAGES_INSTALL
+        INSTALL_CONFLICT_HANDLING=${{ inputs.INSTALL_CONFLICT_HANDLING }}
+        if [ "$INSTALL_CONFLICT_HANDLING" != "" ]; then
+          PACKAGES_INSTALL="$PACKAGES_INSTALL $INSTALL_CONFLICT_HANDLING"
+        fi
+        sudo mobros install $PACKAGES_INSTALL -y --upgrade-installed --fail-on-apt-update
+    
+    - name: Run post-build static analysis
+      if: ${{ needs.Check-static-analysis-config.outputs.pre_commit_exists == 'true' }}
+      uses: MOV-AI/.github/.github/actions/pre-commit@feature/csai-4199-1
+      with:
+        args: "--hook-stage manual --show-diff-on-failure --color=always --all-files"
+        PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
+
+    - name: Run Catkin tests
+      if: ${{ inputs.run_catkin_tests }}
+      shell: bash
+      run: |
+        cd $ROS1_USER_WS
+        catkin test
+
   Test:
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-22.04
-    needs: [Build]
+    needs: [Post-build-static-analysis]
 
     steps:
       - name: Checkout
@@ -378,7 +417,7 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
-    needs: [Build]
+    needs: [Post-build-static-analysis]
     steps:
       - name: Checkout
         if: ${{ inputs.install_test }}
@@ -419,7 +458,7 @@ jobs:
 
   Package-Stack-Tests:
     if: ${{ inputs.release == 'false' && inputs.deploy == 'true' && inputs.run_stack_tests }}
-    needs: [Build]
+    needs: [Post-build-static-analysis]
     uses: MOV-AI/.github/.github/workflows/integration-build-robotics-component.yml@v2.3
     with:
       vs_product_name: ${{ inputs.vs_product_name }}
