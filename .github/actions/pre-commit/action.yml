@@ -8,6 +8,9 @@ inputs:
     description: "Arguments to pass to pre-commit"
     required: false
     default: "--all-files"
+  PYTHON_VERSION:
+    required: false
+    default: "3.x"
 runs:
   using: "composite"
   steps:
@@ -23,13 +26,13 @@ runs:
           # Install apt requirements if file exists
           if [[ -f ./requirements-dev.apt ]]; then
             sudo apt-get update
-            xargs -a ./requirements-dev.apt sudo apt-get install -y
+            xargs -a ./dev-requirements.apt sudo apt-get install -y
           fi
     
           # Install pip requirements if file exists
           if [[ -f ./requirements-dev.txt ]]; then
             python3 -m pip install --upgrade pip
-            python3 -m pip install -r ./requirements-dev.txt
+            python3 -m pip install -r ./dev-requirements.txt
           fi
           git config --global --add safe.directory $(pwd)
     - name: Run pre-commit
