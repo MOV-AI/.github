@@ -314,20 +314,17 @@ jobs:
         password: ${{secrets.registry_password}}
     steps:
     - name: Checkout
-      if: ${{ inputs.install_test }}
       uses: actions/checkout@v4
       with:
         submodules: recursive
 
     - name: Download artifacts
-      if: ${{ inputs.install_test }}
       uses: actions/download-artifact@v4
       with:
         name: packages
         path: artifacts
 
     - name: Install debian artifacts
-      if: ${{ inputs.install_test }}
       run: |
         cd artifacts/
         PACKAGES_INSTALL="$(find -L ./ -name "*.deb")"
