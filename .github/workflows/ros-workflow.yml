@@ -308,6 +308,7 @@ jobs:
     runs-on: ubuntu-22.04
     container:
       image: registry.cloud.mov.ai/qa/flow-initiator-noetic:${{ inputs.FLOW_INITIATOR_TAG }}
+      options: --user root
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
