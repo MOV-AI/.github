@@ -26,13 +26,13 @@ runs:
           pwd
           ls
           # Install apt requirements if file exists
-          if [[ -f ./requirements-dev.apt ]]; then
+          if [[ -f ./dev-requirements.apt ]]; then
             sudo apt-get update
             xargs -a ./dev-requirements.apt sudo apt-get install -y
           fi
     
           # Install pip requirements if file exists
-          if [[ -f ./requirements-dev.txt ]]; then
+          if [[ -f ./dev-requirements.txt ]]; then
             python3 -m pip install --upgrade pip
             python3 -m pip install -r ./dev-requirements.txt
           fi
