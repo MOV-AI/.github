@@ -18,6 +18,7 @@ runs:
       with:
         python-version: ${{ inputs.PYTHON_VERSION }}
     - name: Install pre-requirements
+      shell: bash
       run: |
           # Install apt requirements if file exists
           if [[ -f ./requirements-dev.apt ]]; then
