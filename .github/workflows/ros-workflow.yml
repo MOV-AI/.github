@@ -333,6 +333,8 @@ jobs:
         if [ "$INSTALL_CONFLICT_HANDLING" != "" ]; then
           PACKAGES_INSTALL="$PACKAGES_INSTALL $INSTALL_CONFLICT_HANDLING"
         fi
+        # Add ppa-testing to apt sources to resolve dependencies
+        echo "deb [arch=all] https://{DEFAULT_APT_REPOSITORY}/repository/ppa-testing testing main" | sudo tee /etc/apt/sources.list.d/ppa-testing.list
         sudo apt update
         sudo mobros install $PACKAGES_INSTALL -y --upgrade-installed --fail-on-apt-update
     
