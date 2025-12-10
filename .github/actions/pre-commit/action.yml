@@ -11,6 +11,10 @@ inputs:
   PYTHON_VERSION:
     required: false
     default: "3.x"
+  ROS_WORKSPACE:
+    description: "Path to the ROS workspace"
+    required: false
+    default: "/opt/ros/noetic"
 runs:
   using: "composite"
   steps:
@@ -38,8 +42,8 @@ runs:
     - name: Run pre-commit
       shell: bash
       run: |
-        if [[ -f /opt/ros/noetic/setup.bash ]]; then
+        if [[ -f ${{ inputs.ROS_WORKSPACE }}/setup.bash ]]; then
           echo "Sourcing ROS workspace"
-          source /opt/ros/noetic/setup.bash
+          source ${{ inputs.ROS_WORKSPACE }}/setup.bash
         fi
         pre-commit run ${{ inputs.args }}
