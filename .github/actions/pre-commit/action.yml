@@ -51,6 +51,14 @@ runs:
           source ${{ inputs.ROS_WORKSPACE }}/setup.bash
         fi
         set -o pipefail; pre-commit run ${{ inputs.args }} | tee pre-commit-report.txt
+    - name: Capture pre-commit output
+      if: ${{ github.event_name == 'pull_request' && failure()}}
+      id: capture_output
+      shell: bash
+      run: |
+        echo "report<<EOF" >> $GITHUB_OUTPUT
+        sed -n '/Failed/,$p' pre-commit-report.txt | sed '/Passed/d' >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
     - name: Publish pre-commit results to PR comment
       if: ${{ failure() && github.event_name == 'pull_request' }}
       uses: peter-evans/create-or-update-comment@v5
@@ -59,7 +67,14 @@ runs:
         repository: ${{ github.repository }}
         issue-number: ${{ github.event.pull_request.number }}
         body: |
-          ❌ Static Analysis Failed. Details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ❌ Static Analysis Failed. 
+          
+          Analysis Output:
+          ```
+          ${{ steps.capture_output.outputs.report }}
+          ```
+
+          Details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     - name: Publish pre-commit success to PR comment
       if: ${{ success() && github.event_name == 'pull_request' }}
       uses: peter-evans/create-or-update-comment@v5
