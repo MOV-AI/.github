@@ -52,15 +52,6 @@ runs:
         fi
         set -o pipefail; pre-commit run ${{ inputs.args }} | tee pre-commit-report.txt
 
-    - name: Capture pre-commit output
-      if: ${{ github.event_name == 'pull_request' && always()}}
-      id: capture_output
-      shell: bash
-      run: |
-        echo "report<<EOF" >> $GITHUB_OUTPUT
-        cat pre-commit-report.txt >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-
     - name: Publish pre-commit results to PR comment
       if: ${{ failure() && github.event_name == 'pull_request' }}
       uses: peter-evans/create-or-update-comment@v2
@@ -71,10 +62,7 @@ runs:
         body: |
           ❌ Static Analysis Failed
 
-          ```text
-          ${{ steps.capture_output.outputs.report }}
-          ```
-        identifier: pre-commit-results
+          [View pre-commit output](https://github.com/${{ github.repository }}/runs/${{ github.run_id }}?check_suite_focus=true)
 
     - name: Publish pre-commit success to PR comment
       if: ${{ success() && github.event_name == 'pull_request' }}
@@ -86,7 +74,5 @@ runs:
         body: |
           ✅ Static Analysis Passed
 
-          ```text
-          ${{ steps.capture_output.outputs.report }}
-          ```
-        identifier: pre-commit-results  
+          [View pre-commit output](https://github.com/${{ github.repository }}/runs/${{ github.run_id }}?check_suite_focus=true)
+ 
