@@ -52,16 +52,20 @@ runs:
         fi
         set -o pipefail; pre-commit run ${{ inputs.args }} | tee pre-commit-report.txt
 
-    - name: Set pre-commit message
-      if: ${{ always() && github.event_name == 'pull_request' }}
+    - name: Set pre-commit message failure
+      if: ${{ failure() && github.event_name == 'pull_request' }}
       id: precommit_message
       shell: bash
       run: |
-        if ${{ failure() }}; then
-          echo "message=❌ Static Analysis Failed" >> $GITHUB_OUTPUT
-        else
-          echo "message=✅ Static Analysis Passed" >> $GITHUB_OUTPUT
-        fi
+        echo "message=❌ Static Analysis Failed" >> $GITHUB_OUTPUT
+
+    - name: Set pre-commit message success
+      if: ${{ success() && github.event_name == 'pull_request' }}
+      id: precommit_message
+      shell: bash
+      run: |
+        echo "message=✅ Static Analysis Passed" >> $GITHUB_OUTPUT
+
 
     - name: Publish pre-commit results to PR comment
       if: ${{ always() && github.event_name == 'pull_request' }}
