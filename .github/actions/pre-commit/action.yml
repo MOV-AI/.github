@@ -47,4 +47,21 @@ runs:
           echo "Sourcing ROS workspace"
           source ${{ inputs.ROS_WORKSPACE }}/setup.bash
         fi
-        pre-commit run ${{ inputs.args }}
+        set -o pipefail; pre-commit run ${{ inputs.args }} | tee pre-commit-report.txt
+
+    - name: Publish pre-commit results to PR comment
+      if: ${{ always() && github.event_name == 'pull_request' }}
+      env:
+        pre_commit_message: ${{ '❌ Static Analysis Failed' if failure() else '✅ Static Analysis Passed' }}
+      uses: peter-evans/create-or-update-comment@v2
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        repository: ${{ github.repository }}
+        issue-number: ${{ github.event.pull_request.number }}
+        body: |
+          ${{ env.pre_commit_message }}
+
+          ```text
+          $(cat pre-commit-report.txt)
+          ```
+        identifier: pre-commit-results
