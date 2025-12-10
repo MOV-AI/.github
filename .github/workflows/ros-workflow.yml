@@ -25,10 +25,6 @@ on:
         required: false
         type: string
         default: '["release"]'
-      PYTHON_VERSION:
-        required: false
-        type: string
-        default: "3.8.10"
       run_catkin_tests:
         required: false
         type: boolean
