@@ -38,8 +38,8 @@ runs:
     - name: Run pre-commit
       shell: bash
       run: |
-        if [[ -f /opt/mov.ai/workspaces/USER_ROS1/setup.bash ]]; then
-          echo "Sourcing ROS1 workspace"
-          source /opt/mov.ai/workspaces/USER_ROS1/setup.bash
+        if [[ -f /opt/ros/noetic/setup.bash ]]; then
+          echo "Sourcing ROS workspace"
+          source /opt/ros/noetic/setup.bash
         fi
         pre-commit run ${{ inputs.args }}
