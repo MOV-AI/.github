@@ -25,10 +25,6 @@ on:
         required: false
         type: string
         default: '["release"]'
-      PYTHON_VERSION:
-        required: false
-        type: string
-        default: "3.8.10"
       run_catkin_tests:
         required: false
         type: boolean
@@ -278,19 +274,19 @@ jobs:
         export MOVAI_OUTPUT_DIR="$(pwd)/artifacts"
         mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
 
-    - name: Archive binary
-      uses: actions/upload-artifact@v4
-      with:
-        name: packages
-        path: artifacts/*
-        retention-days: 5
-    
     - name: Run Catkin tests
       if: ${{ inputs.run_catkin_tests }}
       shell: bash
       run: |
         cd $ROS1_USER_WS
         catkin test
+
+    - name: Archive binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: packages
+        path: artifacts/*
+        retention-days: 5
 
     - name: Print generated packages
       run: |
