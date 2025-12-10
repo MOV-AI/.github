@@ -52,32 +52,32 @@ runs:
         fi
         set -o pipefail; pre-commit run ${{ inputs.args }} | tee pre-commit-report.txt
 
-    - name: Set pre-commit message failure
-      if: ${{ failure() && github.event_name == 'pull_request' }}
-      id: precommit_message
-      shell: bash
-      run: |
-        echo "message=❌ Static Analysis Failed" >> $GITHUB_OUTPUT
-
-    - name: Set pre-commit message success
-      if: ${{ success() && github.event_name == 'pull_request' }}
-      id: precommit_message
-      shell: bash
-      run: |
-        echo "message=✅ Static Analysis Passed" >> $GITHUB_OUTPUT
-
-
     - name: Publish pre-commit results to PR comment
-      if: ${{ always() && github.event_name == 'pull_request' }}
+      if: ${{ failure() && github.event_name == 'pull_request' }}
       uses: peter-evans/create-or-update-comment@v2
       with:
         token: ${{ inputs.GITHUB_TOKEN }}
         repository: ${{ github.repository }}
         issue-number: ${{ github.event.pull_request.number }}
         body: |
-          ${{ steps.precommit_message.outputs.message }}
+          ❌ Static Analysis Failed
 
           ```text
           $(cat pre-commit-report.txt)
           ```
         identifier: pre-commit-results
+
+    - name: Publish pre-commit success to PR comment
+      if: ${{ success() && github.event_name == 'pull_request' }}
+      uses: peter-evans/create-or-update-comment@v2
+      with:
+        token: ${{ inputs.GITHUB_TOKEN }}
+        repository: ${{ github.repository }}
+        issue-number: ${{ github.event.pull_request.number }}
+        body: |
+          ✅ Static Analysis Passed
+
+          ```text
+          $(cat pre-commit-report.txt)
+          ```
+        identifier: pre-commit-results  
