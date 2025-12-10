@@ -344,7 +344,6 @@ jobs:
       uses: MOV-AI/.github/.github/actions/pre-commit@feature/csai-4199-1
       with:
         args: "--hook-stage manual --show-diff-on-failure --color=always --all-files"
-        PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
 
     - name: Run Catkin tests
       if: ${{ inputs.run_catkin_tests }}
