@@ -181,6 +181,7 @@ jobs:
         with:
           args: "--color=always --show-diff-on-failure --all-files"
           ROS_WORKSPACE: "/opt/mov.ai/workspaces/USER_ROS1"
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
 
   Build:
     strategy:
@@ -345,11 +346,12 @@ jobs:
       uses: MOV-AI/.github/.github/actions/pre-commit@feature/csai-4199-1
       with:
         args: "--hook-stage manual --show-diff-on-failure --color=always --all-files"
+        GITHUB_TOKEN: ${{ secrets.gh_token }}
 
   Test:
-    if: ${{ always() && inputs.release == 'false' && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
+    if: ${{ always() && inputs.release == 'false' && needs.Build.result == 'success' && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
     runs-on: ubuntu-22.04
-    needs: [Post-build-static-analysis]
+    needs: [Build,Post-build-static-analysis]
 
     steps:
       - name: Checkout
@@ -399,7 +401,7 @@ jobs:
           echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
   Package-Install-Test:
-    if: ${{ always() && inputs.release == 'false' && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
+    if: ${{ always() && inputs.release == 'false' && needs.Build.result == 'success' && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
@@ -412,7 +414,7 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
-    needs: [Post-build-static-analysis]
+    needs: [Build,Post-build-static-analysis]
     steps:
       - name: Checkout
         if: ${{ inputs.install_test }}
@@ -452,8 +454,8 @@ jobs:
           mobtest proj /opt/ros/${{ matrix.distro }}/share/
 
   Package-Stack-Tests:
-    if: ${{ always() && inputs.release == 'false' && inputs.deploy == 'true' && inputs.run_stack_tests && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
-    needs: [Post-build-static-analysis]
+    if: ${{ always() && inputs.release == 'false' && inputs.deploy == 'true' && inputs.run_stack_tests && needs.Build.result == 'success' && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
+    needs: [Build,Post-build-static-analysis]
     uses: MOV-AI/.github/.github/workflows/integration-build-robotics-component.yml@v2.3
     with:
       vs_product_name: ${{ inputs.vs_product_name }}
