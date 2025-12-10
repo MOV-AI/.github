@@ -47,6 +47,4 @@ runs:
           echo "Sourcing ROS workspace"
           source ${{ inputs.ROS_WORKSPACE }}/setup.bash
         fi
-        python3 -c "import sys; print(sys.path)"
-        # export PYTHONPATH=/usr/local/lib/python3.8/dist-packages:$PYTHONPATH
         pre-commit run ${{ inputs.args }}
