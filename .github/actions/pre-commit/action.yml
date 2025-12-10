@@ -52,17 +52,26 @@ runs:
         fi
         set -o pipefail; pre-commit run ${{ inputs.args }} | tee pre-commit-report.txt
 
+    - name: Set pre-commit message
+      if: ${{ always() && github.event_name == 'pull_request' }}
+      id: precommit_message
+      shell: bash
+      run: |
+        if ${{ failure() }}; then
+          echo "message=❌ Static Analysis Failed" >> $GITHUB_OUTPUT
+        else
+          echo "message=✅ Static Analysis Passed" >> $GITHUB_OUTPUT
+        fi
+
     - name: Publish pre-commit results to PR comment
       if: ${{ always() && github.event_name == 'pull_request' }}
-      env:
-        pre_commit_message: ${{ '❌ Static Analysis Failed' if failure() else '✅ Static Analysis Passed' }}
       uses: peter-evans/create-or-update-comment@v2
       with:
         token: ${{ inputs.GITHUB_TOKEN }}
         repository: ${{ github.repository }}
         issue-number: ${{ github.event.pull_request.number }}
         body: |
-          ${{ env.pre_commit_message }}
+          ${{ steps.precommit_message.outputs.message }}
 
           ```text
           $(cat pre-commit-report.txt)
