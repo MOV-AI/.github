@@ -60,7 +60,7 @@ runs:
         repository: ${{ github.repository }}
         issue-number: ${{ github.event.pull_request.number }}
         body: |
-          ❌ Static Analysis Failed. Details: #${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ❌ Static Analysis Failed. Details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     - name: Publish pre-commit success to PR comment
       if: ${{ success() && github.event_name == 'pull_request' }}
@@ -70,4 +70,4 @@ runs:
         repository: ${{ github.repository }}
         issue-number: ${{ github.event.pull_request.number }}
         body: |
-          ✅ Static Analysis Passed. Details: #${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ✅ Static Analysis Passed. Details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
