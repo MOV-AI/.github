@@ -184,7 +184,6 @@ jobs:
         uses: MOV-AI/.github/.github/actions/pre-commit@feature/csai-4199-1
         with:
           args: "--color=always --show-diff-on-failure --all-files"
-          PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
           ROS_WORKSPACE: "/opt/mov.ai/workspaces/USER_ROS1"
 
   Build:
