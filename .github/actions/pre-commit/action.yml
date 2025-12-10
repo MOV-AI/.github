@@ -46,4 +46,5 @@ runs:
           echo "Sourcing ROS workspace"
           source ${{ inputs.ROS_WORKSPACE }}/setup.bash
         fi
+        env
         pre-commit run ${{ inputs.args }}
