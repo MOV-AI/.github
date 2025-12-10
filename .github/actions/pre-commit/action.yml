@@ -51,7 +51,6 @@ runs:
           source ${{ inputs.ROS_WORKSPACE }}/setup.bash
         fi
         set -o pipefail; pre-commit run ${{ inputs.args }} | tee pre-commit-report.txt
-
     - name: Publish pre-commit results to PR comment
       if: ${{ failure() && github.event_name == 'pull_request' }}
       uses: peter-evans/create-or-update-comment@v5
@@ -61,7 +60,6 @@ runs:
         issue-number: ${{ github.event.pull_request.number }}
         body: |
           ❌ Static Analysis Failed. Details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
     - name: Publish pre-commit success to PR comment
       if: ${{ success() && github.event_name == 'pull_request' }}
       uses: peter-evans/create-or-update-comment@v5
