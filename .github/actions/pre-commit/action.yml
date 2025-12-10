@@ -50,4 +50,5 @@ runs:
         ls /opt/mov.ai/workspaces/USER_ROS1
         ls /opt/mov.ai/workspaces/MOVAI_ROS1
         ls /opt/mov.ai/workspaces/MOVAI_ROS2
+        python3 -c "import sys; print(sys.path)"
         pre-commit run ${{ inputs.args }}
