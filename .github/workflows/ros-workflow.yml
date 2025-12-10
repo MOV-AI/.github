@@ -185,6 +185,7 @@ jobs:
         with:
           args: "--color=always --show-diff-on-failure --all-files"
           PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
+          ROS_WORKSPACE: "/opt/mov.ai/workspaces/USER_ROS1"
 
   Build:
     strategy:
@@ -344,7 +345,6 @@ jobs:
       with:
         args: "--hook-stage manual --show-diff-on-failure --color=always --all-files"
         PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
-        ROS_WORKSPACE: "/opt/mov.ai/workspaces/USER_ROS1"
 
     - name: Run Catkin tests
       if: ${{ inputs.run_catkin_tests }}
