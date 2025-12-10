@@ -47,4 +47,7 @@ runs:
           source ${{ inputs.ROS_WORKSPACE }}/setup.bash
         fi
         env
+        ls /opt/mov.ai/workspaces/USER_ROS1
+        ls /opt/mov.ai/workspaces/MOVAI_ROS1
+        ls /opt/mov.ai/workspaces/MOVAI_ROS2
         pre-commit run ${{ inputs.args }}
