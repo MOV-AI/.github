@@ -166,7 +166,7 @@ jobs:
     if: ${{ needs.Check-static-analysis-config.outputs.pre_commit_exists == 'true' }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
+      image: registry.cloud.mov.ai/qa/flow-initiator-noetic:${{ inputs.FLOW_INITIATOR_TAG }}
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
