@@ -39,6 +39,7 @@ runs:
       shell: bash
       run: |
         if [[ -f /opt/mov.ai/workspaces/USER_ROS1/setup.bash ]]; then
+          echo "Sourcing ROS1 workspace"
           source /opt/mov.ai/workspaces/USER_ROS1/setup.bash
         fi
         pre-commit run ${{ inputs.args }}
