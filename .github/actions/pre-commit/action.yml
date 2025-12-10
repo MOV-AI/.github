@@ -54,7 +54,7 @@ runs:
 
     - name: Publish pre-commit results to PR comment
       if: ${{ failure() && github.event_name == 'pull_request' }}
-      uses: peter-evans/create-or-update-comment@v2
+      uses: peter-evans/create-or-update-comment@v5
       with:
         token: ${{ inputs.GITHUB_TOKEN }}
         repository: ${{ github.repository }}
@@ -64,7 +64,7 @@ runs:
 
     - name: Publish pre-commit success to PR comment
       if: ${{ success() && github.event_name == 'pull_request' }}
-      uses: peter-evans/create-or-update-comment@v2
+      uses: peter-evans/create-or-update-comment@v5
       with:
         token: ${{ inputs.GITHUB_TOKEN }}
         repository: ${{ github.repository }}
