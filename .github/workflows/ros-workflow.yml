@@ -79,6 +79,10 @@ on:
         required: false
         type: boolean
         default: false
+      handle_submodules_on_deploy:
+        required: false
+        type: string
+        default: "true"
 
     secrets:
       auto_commit_user:
@@ -455,12 +459,17 @@ jobs:
 
     - name: Commit raise version
       id: raise
+      shell: bash
       run: |
         git config --global --add safe.directory $(pwd)
         git config --global user.name '${{ secrets.auto_commit_user }}'
         git config --global user.email '${{ secrets.auto_commit_mail }}'
         git config --global user.password ${{ secrets.auto_commit_pwd }}
-        git pull
+        if [ "${{ inputs.handle_submodules_on_deploy }}" = "true" ]; then
+          git pull
+        else
+          git pull --no-recurse-submodules
+        fi
         git add **package.xml
         git commit -m "[skip actions] Automatic Bump of build version"
 
