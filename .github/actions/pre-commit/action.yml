@@ -31,6 +31,8 @@ runs:
     - name: Install pre-requirements
       shell: bash
       run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pre-commit
           # Install apt requirements if file exists
           if [[ -f ./dev-requirements.apt ]]; then
             sudo apt-get update
@@ -39,7 +41,6 @@ runs:
     
           # Install pip requirements if file exists
           if [[ -f ./dev-requirements.txt ]]; then
-            python3 -m pip install --upgrade pip
             python3 -m pip install -r ./dev-requirements.txt
           fi
           git config --global --add safe.directory $(pwd)
