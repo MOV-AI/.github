@@ -224,6 +224,7 @@ jobs:
           "-Dsonar.cpd.exclusions=**/*.test.js,**/*.test.jsx"
           "-Dsonar.javascript.lcov.reportPaths=**/coverage/lcov.info"
           "-Dsonar.nodejs.executable=${{ steps.build_step.outputs.node_path }}"
+          "-Dsonar.exclusions=.nx/**"
 
     - name: Link to SonarCloud dashboard
       shell: bash
