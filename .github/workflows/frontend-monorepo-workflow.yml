@@ -198,7 +198,7 @@ jobs:
 
     - name: Run tests
       if: ${{ inputs.run_tests == 'true' }}
-      run: ${{ inputs.pm }} run test
+      run: ${{ inputs.pm }} run test:ci
 
     - name: Create SonarCloud project and disable autoscan
       uses: MOV-AI/action-sonarcloud-proj-config@v1
