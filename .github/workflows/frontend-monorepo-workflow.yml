@@ -249,30 +249,41 @@ jobs:
 
     - name: Pack debian
       run: |
-        dch -v ${{ steps.vars-after-raise.outputs.npm_pkg_version }} -b -D "UNRELEASED" "bump version"
-        dpkg-buildpackage && \
-        mkdir artifacts && \
-        cp ../*.deb artifacts
+        for dir in apps/ide apps/task-manager; do
+              if [ -d "$dir/build" ]; then
+                echo "Packing debian for $dir" && \
+                cd "$dir" && \
+                dch -v ${{ steps.vars-after-raise.outputs.npm_pkg_version }} -b -D "UNRELEASED" "bump version" && \
+                dpkg-buildpackage && \
+                cp ../*.deb artifacts
+              fi
+            done
 
     - name: Print generated packages
       run: |
-        ls -la artifacts
+        for dir in apps/ide apps/task-manager; do
+              if [ -d "$dir/build" ]; then
+                cd "$dir" && \
+                echo "Artifacts for $dir:" && \
+                ls -la artifacts
+              fi
+            done
 
-    - name: Publish npm
-      if: ${{ inputs.deploy == 'true' }}
-      run: |
-        if test "${{ inputs.pm }}" = "pnpm"; then
-          pnpm publish --no-git-checks
-        else
-          npm publish
-        fi
+    # - name: Publish npm
+    #   if: ${{ inputs.deploy == 'true' }}
+    #   run: |
+    #     if test "${{ inputs.pm }}" = "pnpm"; then
+    #       pnpm publish --no-git-checks
+    #     else
+    #       npm publish
+    #     fi
 
-    - name: Archive binary
-      uses: actions/upload-artifact@v4
-      with:
-        name: packages
-        path: artifacts/*
-        retention-days: 5
+    # - name: Archive binary
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     name: packages
+    #     path: artifacts/*
+    #     retention-days: 5
 
 
   Publish:
