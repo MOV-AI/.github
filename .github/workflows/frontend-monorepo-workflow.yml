@@ -267,13 +267,7 @@ jobs:
 
     - name: Print generated packages
       run: |
-        for dir in ${{ inputs.applications }}; do
-              if [ -d "$dir/build" ]; then
-                cd "$dir" && \
-                echo "Artifacts for $dir:" && \
-                ls -la artifacts/
-              fi
-            done
+        ls -la artifacts
 
     # - name: Publish npm
     #   if: ${{ inputs.deploy == 'true' }}
