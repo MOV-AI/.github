@@ -45,6 +45,11 @@ on:
         type: string
         default: "9.4.0"
         description: 'pnpm version to use'
+      applications:
+        required: false
+        type: string
+        default: 'apps/ide'
+        description: 'Space-separated list of application directories to build'
 
     secrets:
       auto_commit_user:
@@ -249,23 +254,24 @@ jobs:
 
     - name: Pack debian
       run: |
-        for dir in apps/ide apps/task-manager; do
+        mkdir artifacts
+        for dir in ${{ inputs.applications }}; do
               if [ -d "$dir/build" ]; then
                 echo "Packing debian for $dir" && \
                 cd "$dir" && \
                 dch -v ${{ steps.vars-after-raise.outputs.npm_pkg_version }} -b -D "UNRELEASED" "bump version" && \
                 dpkg-buildpackage && \
-                cp ../*.deb artifacts
+                cp ../*.deb artifacts/
               fi
             done
 
     - name: Print generated packages
       run: |
-        for dir in apps/ide apps/task-manager; do
+        for dir in ${{ inputs.applications }}; do
               if [ -d "$dir/build" ]; then
                 cd "$dir" && \
                 echo "Artifacts for $dir:" && \
-                ls -la artifacts
+                ls -la artifacts/
               fi
             done
 
@@ -278,12 +284,12 @@ jobs:
     #       npm publish
     #     fi
 
-    # - name: Archive binary
-    #   uses: actions/upload-artifact@v4
-    #   with:
-    #     name: packages
-    #     path: artifacts/*
-    #     retention-days: 5
+    - name: Archive binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: packages
+        path: artifacts/*
+        retention-days: 5
 
 
   Publish:
