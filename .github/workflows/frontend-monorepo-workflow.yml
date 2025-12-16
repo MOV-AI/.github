@@ -261,7 +261,7 @@ jobs:
                 cd "$dir" && \
                 dch -v ${{ steps.vars-after-raise.outputs.npm_pkg_version }} -b -D "UNRELEASED" "bump version" && \
                 dpkg-buildpackage && \
-                cp ../*.deb artifacts/
+                cp ../*.deb "${GITHUB_WORKSPACE}/artifacts/"
               fi
             done
 
