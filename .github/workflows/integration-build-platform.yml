@@ -457,11 +457,11 @@ jobs:
     secrets: inherit
     with:
       collect_deployable_artifacts: true
-      test_infra_key: "fleet_backend"
+      test_infra_key: "fleet_ui_tests"
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 120
-      pytest_args: 'tests/regression'
+      pytest_args: '--base_url https://$host_ip/'
       slack_channel: ${{ inputs.slack_channel }}
       provision_tf_env_repo: ${{ inputs.provision_tf_env_repo }}
       provision_tf_env_version: ${{ inputs.provision_tf_env_version }}
