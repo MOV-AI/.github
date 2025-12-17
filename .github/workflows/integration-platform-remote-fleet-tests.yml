@@ -420,9 +420,17 @@ jobs:
             pushd "${tests_dir}"
             python3 -m venv test-venv --clear
             . test-venv/bin/activate
-            pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r test-requirements.txt
+            if  [ -f test-requirements.txt ]; then
+              echo "Installing test requirements from test-requirements.txt"
+              pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r test-requirements.txt
+            elif [ -f requirements.txt ]; then
+              echo "Installing test requirements from requirements.txt"
+              pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r requirements.txt
+            else
+              echo "No test-requirements.txt file found!"
+              exit 1
+            fi
             deactivate
-
             popd
           '
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt /tmp/test_exec_dir.txt
