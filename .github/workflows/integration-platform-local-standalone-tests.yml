@@ -186,12 +186,15 @@ jobs:
 
       - name: Slack message failure
         if: ${{ failure() && inputs.test_infra_key == 'ui_tests' }}
-        uses: slackapi/slack-github-action@v1.23.0
+        uses: slackapi/slack-github-action@v2
         with:
-          channel-id: "C02PB9A9F45"
-          slack-message: ${{ steps.pre_slack.outputs.msg_error }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack.outputs.msg_error }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
       - name: Feature File Validation
         id: feature_file_install
@@ -216,12 +219,15 @@ jobs:
 
       - name: Slack message failure
         if: ${{ failure() && inputs.test_infra_key == 'install_tests' }}
-        uses: slackapi/slack-github-action@v1.23.0
+        uses: slackapi/slack-github-action@v2
         with:
-          channel-id: "C02PB9A9F45"
-          slack-message: ${{ steps.pre_slack_install.outputs.msg_error }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_install.outputs.msg_error }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
       - name: Login to ${{ env.REGISTRY }} Registry
         uses: docker/login-action@v3
@@ -238,7 +244,7 @@ jobs:
           docker pull "${{ env.REGISTRY }}/ci/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
-          
+
 
       - name: Install
         if: ${{ inputs.test_infra_key != 'install_tests' }}
@@ -262,7 +268,7 @@ jobs:
           sudo mkdir -p $USERSPACE_FOLDER_PATH $USERSPACE_FOLDER_PATH/models_shared
           sudo chmod 777 $USERSPACE_FOLDER_PATH
           sudo chmod 777 $USERSPACE_FOLDER_PATH/models_shared
-          
+
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
@@ -311,10 +317,10 @@ jobs:
         run: |
           . test-venv/bin/activate
           pip install buildkite-test-collector
-          echo "python3 -m pytest ${{ inputs.pytest_args}}" 
+          echo "python3 -m pytest ${{ inputs.pytest_args}}"
           python3 -m pytest ${{ inputs.pytest_args}} | tee pytest-output.log
           deactivate
-          
+
       - name: Publish test results trunk
         if: always()
         working-directory: ${{ steps.infra_tests_setup.outputs.target_dir }}
@@ -465,7 +471,7 @@ jobs:
           deactivate
           cp /tmp/deployable.dploy artifacts/host-noetic-deployable.dploy
           cp /tmp/undeployable.dploy artifacts/host-noetic-3rdParty.dploy
-  
+
       - name: Stash deploy_artifacts_noetic
         if: ${{ inputs.collect_deployable_artifacts }}
         uses: actions/upload-artifact@v4

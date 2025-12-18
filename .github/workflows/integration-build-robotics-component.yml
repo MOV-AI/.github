@@ -72,6 +72,7 @@ env:
   PROVISIONING_ENV_CONF_VERSION: "0.2.0-3"
   PROVISION_ENV_CONF_DIR: "infra_env_configs"
   SIMULATION_ID: CI
+  SLACK_CHANNEL: "G0102LEV1CL"
 
 jobs:
   Stack-tests:
@@ -228,12 +229,15 @@ jobs:
 
       - name: Slack message failure
         if: ${{ failure() && github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v1.23.0
+        uses: slackapi/slack-github-action@v2
         with:
-          channel-id: "G0102LEV1CL"
-          slack-message: ${{ steps.pre_slack_infra.outputs.msg_error }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": "${{ steps.pre_slack_infra.outputs.msg_error }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
       - name: Remote - Agent info
         id: agent_info_remote
@@ -280,12 +284,15 @@ jobs:
 
       - name: Slack message failure
         if: ${{ failure() && github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v1.23.0
+        uses: slackapi/slack-github-action@v2
         with:
-          channel-id: "G0102LEV1CL"
-          slack-message: ${{ steps.nvidia_err_msg.outputs.msg_error }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": "${{ steps.nvidia_err_msg.outputs.msg_error }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
       - name: Download component artifacts for patching
         uses: actions/download-artifact@v4

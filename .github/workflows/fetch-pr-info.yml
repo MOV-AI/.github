@@ -5,7 +5,7 @@ on:
       gh_token:
         required: true
     outputs:
-      pr_labels: 
+      pr_labels:
         value: ${{ jobs.fetch_pr_info.outputs.pr_labels }}
       pr_number:
         value: ${{ jobs.fetch_pr_info.outputs.pr_number }}
@@ -20,7 +20,7 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
-        
+
       - name: Get PR Information
         id: get_pr_info
         env:
