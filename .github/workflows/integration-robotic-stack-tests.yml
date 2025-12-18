@@ -256,12 +256,15 @@ jobs:
 
       - name: Slack message failure
         if: ${{ failure() && github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v1.23.0
+        uses: slackapi/slack-github-action@v2
         with:
-          channel-id: "G0102LEV1CL"
-          slack-message: ${{ steps.pre_slack_infra.outputs.msg_error }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+          method: chat.postMessage
+          token: ${{ secrets.slack_token_id }}
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": "${{ steps.pre_slack_infra.outputs.msg_error }}"
+            }
 
       - name: Remote - Agent info
         id: agent_info_remote
@@ -308,12 +311,15 @@ jobs:
 
       - name: Slack message failure
         if: ${{ failure() && github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v1.23.0
+        uses: slackapi/slack-github-action@v2
         with:
-          channel-id: "G0102LEV1CL"
-          slack-message: ${{ steps.nvidia_err_msg.outputs.msg_error }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+          method: chat.postMessage
+          token: ${{ secrets.slack_token_id }}
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": "${{ steps.nvidia_err_msg.outputs.msg_error }}"
+            }
 
       - name: Remote - Login to Registry
         shell: bash
