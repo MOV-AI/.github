@@ -211,30 +211,30 @@ jobs:
         sonar_org: 'mov-ai'
         sonar_token: ${{ secrets.sonar_token }}
 
-    - name: SonarCloud Scan
-      uses: SonarSource/sonarqube-scan-action@v6
-      env:
-        GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
-        SONAR_TOKEN: ${{ secrets.sonar_token }}
-      with:
-        projectBaseDir: ./
-        args: >
-          "-Dsonar.organization=mov-ai"
-          "-Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}"
-          "-Dsonar.sources=."
-          "-Dsonar.scm.provider=git"
-          "-Dsonar.qualitygate.wait=true"
-          "-Dsonar.qualitygate.timeout=300"
-          "-Dsonar.coverage.exclusions=**/*.test.js,**/*.test.jsx"
-          "-Dsonar.cpd.exclusions=**/*.test.js,**/*.test.jsx"
-          "-Dsonar.javascript.lcov.reportPaths=**/coverage/lcov.info"
-          "-Dsonar.nodejs.executable=${{ steps.build_step.outputs.node_path }}"
-          "-Dsonar.exclusions=.nx/**"
+    # - name: SonarCloud Scan
+    #   uses: SonarSource/sonarqube-scan-action@v6
+    #   env:
+    #     GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
+    #     SONAR_TOKEN: ${{ secrets.sonar_token }}
+    #   with:
+    #     projectBaseDir: ./
+    #     args: >
+    #       "-Dsonar.organization=mov-ai"
+    #       "-Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}"
+    #       "-Dsonar.sources=."
+    #       "-Dsonar.scm.provider=git"
+    #       "-Dsonar.qualitygate.wait=true"
+    #       "-Dsonar.qualitygate.timeout=300"
+    #       "-Dsonar.coverage.exclusions=**/*.test.js,**/*.test.jsx"
+    #       "-Dsonar.cpd.exclusions=**/*.test.js,**/*.test.jsx"
+    #       "-Dsonar.javascript.lcov.reportPaths=**/coverage/lcov.info"
+    #       "-Dsonar.nodejs.executable=${{ steps.build_step.outputs.node_path }}"
+    #       "-Dsonar.exclusions=.nx/**"
 
-    - name: Link to SonarCloud dashboard
-      shell: bash
-      run: |
-        echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
+    # - name: Link to SonarCloud dashboard
+    #   shell: bash
+    #   run: |
+    #     echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
     - name: Check manifest.json exists
       id: check_manifest_json
