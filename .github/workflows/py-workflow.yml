@@ -449,7 +449,7 @@ jobs:
         sonar_token: ${{ secrets.sonar_token }}
 
     - name: SonarCloud Scan
-      uses: SonarSource/sonarqube-scan-action@v4.2.1
+      uses: SonarSource/sonarqube-scan-action@v7
       env:
         GITHUB_TOKEN: ${{ github.token }}
         SONAR_TOKEN: ${{ secrets.sonar_token }}

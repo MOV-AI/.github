@@ -384,9 +384,9 @@ jobs:
 
       - name: SonarCloud Scan
         if: ${{ false }}
-        uses: SonarSource/sonarcloud-github-action@v1.8
+        uses: SonarSource/sonarqube-scan-action@v7
         env:
-          GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
+          GITHUB_TOKEN: ${{ github.token }}
           SONAR_TOKEN: ${{ secrets.sonar_token }}
         with:
           projectBaseDir: ./
