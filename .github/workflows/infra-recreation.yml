@@ -52,7 +52,7 @@ jobs:
         if: ${{ always() }}
         id: pre_slack
         run: |
-          MESSAGE="Infrastructure recreation in progress on ${{ inputs.INFRA_NODES }}:construction:"
+          MESSAGE="Infrastructure recreation in progress on ${{ inputs.INFRA_NODES }} :construction:"
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
 
       - name: Send Slack Message
