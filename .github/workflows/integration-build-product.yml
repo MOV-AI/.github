@@ -333,14 +333,16 @@ jobs:
 
       - name: Send Slack Message
         if: ${{ github.event_name != 'pull_request' }}
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2.1.1
         id: send-message
-
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack.outputs.msg }}
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": "${{ steps.pre_slack.outputs.msg }}"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Stash raised_meta
         uses: actions/upload-artifact@v4
@@ -519,23 +521,29 @@ jobs:
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2.1.1
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg }}",
+              "thread_ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Slack message failure
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2.1.1
         if: ${{ failure() && github.event_name != 'pull_request' }}
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
+              "thread_ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Stash robot_jsons_${{ matrix.distro }}
         uses: actions/upload-artifact@v4
@@ -803,23 +811,29 @@ jobs:
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2.1.1
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg }}",
+              "thread_ts": "${{ needs.Build-Spawner.outputs.slack_thread_id }}"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Slack message failure
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2.1.1
         if: ${{ failure() && github.event_name != 'pull_request' }}
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
+              "thread_ts": "${{ needs.Build-Spawner.outputs.slack_thread_id }}"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Stash project metadata
         if: always()
@@ -1004,23 +1018,29 @@ jobs:
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2.1.1
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg }}",
+              "thread_ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Slack message failure
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2.1.1
         if: ${{ failure() && github.event_name != 'pull_request' }}
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
+              "thread_ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Docker cleanups
         if: always()
@@ -1284,23 +1304,29 @@ jobs:
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2.1.1
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg }}",
+              "thread_ts": "${{ needs.Build-Simulator.outputs.slack_thread_id }}"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Slack message failure
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2.1.1
         if: ${{ failure() && github.event_name != 'pull_request' }}
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
+              "thread_ts": "${{ needs.Build-Simulator.outputs.slack_thread_id }}"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: pre-stash
         if: ${{ inputs.with_simulation == 'true' }}
@@ -1912,23 +1938,29 @@ jobs:
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2.1.1
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg }}
-          slack-optional-thread_ts: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg }}",
+              "thread_ts": "${{ needs.Build-Simulator.outputs.slack_thread_id }}"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Slack message failure
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2.1.1
         if: ${{ failure() && github.event_name != 'pull_request' }}
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ${{ steps.pre_slack_result.outputs.msg_error }}
-          slack-optional-thread_ts: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
+              "thread_ts": "${{ needs.Build-Simulator.outputs.slack_thread_id }}"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Prepare QA artifacts upload
         if: ${{ always() &&  inputs.with_simulation_tests }}
@@ -2015,14 +2047,17 @@ jobs:
           echo "publish_url=$PUBLISH_URL" >> $GITHUB_OUTPUT
 
       - name: Slack message Artifact info
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2.1.1
         if: ${{ always() &&  inputs.with_simulation_tests && github.event_name != 'pull_request' }}
         with:
-          slack-function: send-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-text: ":information_source: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) Job artifacts url: ${{ steps.minio_publish.outputs.publish_url }}"
-          slack-optional-thread_ts: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "text": ":information_source: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) Job artifacts url: ${{ steps.minio_publish.outputs.publish_url }}",
+              "thread_ts": "${{ needs.Build-Simulator.outputs.slack_thread_id }}"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Teardown remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -2355,14 +2390,17 @@ jobs:
           echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
 
       - name: Slack message
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2.1.1
         if: ${{ github.event_name != 'pull_request'}}
         with:
-          slack-function: update-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-update-message-text: ${{ steps.pre_slack.outputs.msg }}
-          slack-update-message-ts: ${{ needs.Install-Simulator-Robot.outputs.slack_thread_id }}
+          method: chat.update
+          token: ${{ secrets.slack_token_id }}
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "ts": "${{ needs.Install-Simulator-Robot.outputs.slack_thread_id }}",
+              "text": "${{ steps.pre_slack.outputs.msg }}"
+            }
 
   Run-Status:
     runs-on: ubuntu-22.04
@@ -2396,10 +2434,13 @@ jobs:
 
       - name: Slack message
         if: ${{ github.event_name != 'pull_request' }}
-        uses: archive/github-actions-slack@master
+        uses: slackapi/slack-github-action@v2.1.1
         with:
-          slack-function: update-message
-          slack-bot-user-oauth-access-token: ${{ secrets.slack_token_id }}
-          slack-channel: ${{ env.SLACK_CHANNEL }}
-          slack-update-message-text: ${{ steps.pre_slack.outputs.msg_error }}
-          slack-update-message-ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+          method: chat.update
+          token: ${{ secrets.slack_token_id }}
+          payload: |
+            {
+              "channel": "${{ env.SLACK_CHANNEL }}",
+              "ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}",
+              "text": "${{ steps.pre_slack.outputs.msg_error }}"
+            }
