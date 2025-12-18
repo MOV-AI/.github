@@ -2401,7 +2401,7 @@ jobs:
         uses: slackapi/slack-github-action@v2
         if: ${{ github.event_name != 'pull_request'}}
         with:
-          method: chat.postMessage
+          method: chat.update
           token: ${{ secrets.slack_token_id }}
           payload: |
             {
@@ -2444,7 +2444,7 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         uses: slackapi/slack-github-action@v2
         with:
-          method: chat.postMessage
+          method: chat.update
           token: ${{ secrets.slack_token_id }}
           payload: |
             {
