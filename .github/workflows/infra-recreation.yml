@@ -56,16 +56,16 @@ jobs:
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
 
       - name: Send Slack Message
-        uses: slackapi/slack-github-action@v2.1.1
+        uses: slackapi/slack-github-action@v2
         id: send-message
         with:
+          method: chat.postMessage
+          token: ${{ secrets.slack_token_id }}
           payload: |
             {
               "channel": "${{ env.SLACK_CHANNEL }}",
               "text": "${{ steps.pre_slack.outputs.msg }}"
             }
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
   Destroy-IP-Runners:
     needs: Slack-thread
@@ -192,30 +192,29 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
       - name: Send Slack Message
-        uses: slackapi/slack-github-action@v2.1.1
+        uses: slackapi/slack-github-action@v2
         with:
+          method: chat.postMessage
+          token: ${{ secrets.slack_token_id }}
           payload: |
             {
               "channel": "${{ env.SLACK_CHANNEL }}",
               "text": "${{ steps.pre_slack.outputs.msg }}",
               "thread_ts": "${{ needs.Slack-thread.outputs.slack_thread_id }}"
             }
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Send Slack Message
-        uses: slackapi/slack-github-action@v2.1.1
+        uses: slackapi/slack-github-action@v2
         if: ${{ failure() }}
         with:
+          method: chat.postMessage
+          token: ${{ secrets.slack_token_id }}
           payload: |
             {
               "channel": "${{ env.SLACK_CHANNEL }}",
               "text": "${{ steps.pre_slack.outputs.msg_error }}",
               "thread_ts": "${{ needs.Slack-thread.outputs.slack_thread_id }}"
             }
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
-
 
   Provision-IP-Runners:
     needs: Destroy-IP-Runners
@@ -343,29 +342,29 @@ jobs:
         echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
     - name: Send Slack Message
-      uses: slackapi/slack-github-action@v2.1.1
+      uses: slackapi/slack-github-action@v2
       with:
+        method: chat.postMessage
+        token: ${{ secrets.slack_token_id }}
         payload: |
           {
             "channel": "${{ env.SLACK_CHANNEL }}",
             "text": "${{ steps.pre_slack.outputs.msg }}",
             "thread_ts": "${{ needs.Destroy-IP-Runners.outputs.slack_thread_id }}"
           }
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
     - name: Send Slack Message
-      uses: slackapi/slack-github-action@v2.1.1
+      uses: slackapi/slack-github-action@v2
       if: ${{ failure() }}
       with:
+        method: chat.postMessage
+        token: ${{ secrets.slack_token_id }}
         payload: |
           {
             "channel": "${{ env.SLACK_CHANNEL }}",
             "text": "${{ steps.pre_slack.outputs.msg_error }}",
             "thread_ts": "${{ needs.Destroy-IP-Runners.outputs.slack_thread_id }}"
           }
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
   Destroy-QA-Runners:
     needs: Slack-thread
@@ -493,29 +492,29 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
       - name: Send Slack Message
-        uses: slackapi/slack-github-action@v2.1.1
+        uses: slackapi/slack-github-action@v2
         with:
+          method: chat.postMessage
+          token: ${{ secrets.slack_token_id }}
           payload: |
             {
               "channel": "${{ env.SLACK_CHANNEL }}",
               "text": "${{ steps.pre_slack.outputs.msg }}",
               "thread_ts": "${{ needs.Slack-thread.outputs.slack_thread_id }}"
             }
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Send Slack Message
-        uses: slackapi/slack-github-action@v2.1.1
+        uses: slackapi/slack-github-action@v2
         if: ${{ failure() }}
         with:
+          method: chat.postMessage
+          token: ${{ secrets.slack_token_id }}
           payload: |
             {
               "channel": "${{ env.SLACK_CHANNEL }}",
               "text": "${{ steps.pre_slack.outputs.msg_error }}",
               "thread_ts": "${{ needs.Slack-thread.outputs.slack_thread_id }}"
             }
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
   Provision-QA-Runners:
     needs: Destroy-QA-Runners
@@ -642,29 +641,29 @@ jobs:
         echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
     - name: Send Slack Message
-      uses: slackapi/slack-github-action@v2.1.1
+      uses: slackapi/slack-github-action@v2
       with:
+        method: chat.postMessage
+        token: ${{ secrets.slack_token_id }}
         payload: |
           {
             "channel": "${{ env.SLACK_CHANNEL }}",
             "text": "${{ steps.pre_slack.outputs.msg }}",
             "thread_ts": "${{ needs.Destroy-QA-Runners.outputs.slack_thread_id }}"
           }
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
     - name: Send Slack Message
-      uses: slackapi/slack-github-action@v2.1.1
+      uses: slackapi/slack-github-action@v2
       if: ${{ failure() }}
       with:
+        method: chat.postMessage
+        token: ${{ secrets.slack_token_id }}
         payload: |
           {
             "channel": "${{ env.SLACK_CHANNEL }}",
             "text": "${{ steps.pre_slack.outputs.msg_error }}",
             "thread_ts": "${{ needs.Destroy-QA-Runners.outputs.slack_thread_id }}"
           }
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
   Run-Status:
     needs: [Provision-IP-Runners, Provision-QA-Runners]
@@ -682,9 +681,9 @@ jobs:
 
       - name: Send Slack Message
         if: ${{ needs.Provision-IP-Runners.result == 'success' && needs.Provision-QA-Runners.result == 'success' }}
-        uses: slackapi/slack-github-action@v2.1.1
+        uses: slackapi/slack-github-action@v2
         with:
-          method: chat.update
+          method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
           payload: |
             {
@@ -695,9 +694,9 @@ jobs:
 
       - name: Send Slack Message
         if: ${{ always() && (! needs.Provision-IP-Runners.result == 'success' || ! needs.Provision-QA-Runners.result == 'success') }}
-        uses: slackapi/slack-github-action@v2.1.1
+        uses: slackapi/slack-github-action@v2
         with:
-          method: chat.update
+          method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
           payload: |
             {
