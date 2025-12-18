@@ -683,7 +683,7 @@ jobs:
         if: ${{ needs.Provision-IP-Runners.result == 'success' && needs.Provision-QA-Runners.result == 'success' }}
         uses: slackapi/slack-github-action@v2
         with:
-          method: chat.postMessage
+          method: chat.update
           token: ${{ secrets.slack_token_id }}
           payload: |
             {
@@ -696,7 +696,7 @@ jobs:
         if: ${{ always() && (! needs.Provision-IP-Runners.result == 'success' || ! needs.Provision-QA-Runners.result == 'success') }}
         uses: slackapi/slack-github-action@v2
         with:
-          method: chat.postMessage
+          method: chat.update
           token: ${{ secrets.slack_token_id }}
           payload: |
             {
