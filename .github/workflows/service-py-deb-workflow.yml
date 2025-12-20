@@ -463,7 +463,7 @@ jobs:
         sonar_token: ${{ secrets.sonar_token }}
 
     - name: SonarCloud Scan and Quality Gate check
-      uses: SonarSource/sonarqube-scan-action@v4.2.1
+      uses: SonarSource/sonarqube-scan-action@v7
       if: ${{ inputs.skip_testing != 'true' }}
       env:
         GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
@@ -487,7 +487,7 @@ jobs:
           -Dsonar.python.coverage.reportPaths=coverage.xml
 
     - name: SonarCloud Scan no Quality Gate check
-      uses: SonarSource/sonarcloud-github-action@v2.0.2
+      uses: SonarSource/sonarqube-scan-action@v7
       if: ${{ inputs.skip_testing == 'true' }}
       env:
         GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
