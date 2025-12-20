@@ -72,12 +72,12 @@ env:
   JIRA_PASSWORD: ${{ secrets.jira_password}}
   SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-16"
+  PROVISION_INFRA_VERSION: "2.0.0-17"
   PROVISION_INFRA_DIR: "provision_scripts"
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISIONING_ENV_CONF_VERSION: "0.1.0-17"
+  PROVISIONING_ENV_CONF_VERSION: "0.2.0-2"
   PROVISION_ENV_CONF_DIR: "infra_env_configs"
 
 jobs:

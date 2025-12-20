@@ -1,0 +1,66 @@
+name: Pre Release on merge to main
+
+on:
+  push:
+    branches:
+      - main
+      - 'releases/**'
+    paths-ignore:
+      - 'version'
+jobs:
+  Deploy:
+    timeout-minutes: 30
+    name: "Deploy Script"
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: install raise requirements
+      run: python3 -m pip install -r build-requirements.txt
+
+    - name: Raise Version
+      id: vars-after-raise
+      run: |
+        bump2version revision --no-tag --no-commit
+        RAISED_PACKAGE_VERSION=$(./fleet_install.sh -v | cut -d 'v' -f 2)
+        echo ::set-output name=pkg_version::$RAISED_PACKAGE_VERSION
+
+    - name: Commit raise version
+      id: raise
+      run: |
+        git config --global user.name '${{ secrets.RAISE_BOT_COMMIT_USER }}'
+        git config --global user.email '${{ secrets.RAISE_BOT_COMMIT_MAIL }}'
+        git pull
+        git add .bumpversion.cfg fleet_install.sh
+        git commit -m "[skip actions] Automatic Bump of build version"
+
+    - name: Set branch output
+      id: var_branch
+      run: |
+        echo "Branch name is: ${GITHUB_REF#refs/heads/}"
+        echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+
+    - name: Raise App version
+      uses: CasperWA/push-protected@v2.14.0
+      with:
+        token: ${{ secrets.RAISE_BOT_COMMIT_PASSWORD }}
+        branch: ${{ steps.var_branch.outputs.branch }}
+        unprotect_reviews: true
+
+    - name: Commit of version
+      id: commit_id
+      run: |
+        commit_hash=$(git log --format="%H" -n 1)
+        echo "commit_id=$commit_hash" >> $GITHUB_OUTPUT
+
+    - name: Create Github Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: "Release of ${{ steps.vars-after-raise.outputs.pkg_version }}"
+        body: "Please add release notes"
+        tag_name: ${{ steps.vars-after-raise.outputs.pkg_version }}
+        target_commitish: ${{ steps.commit_id.outputs.commit_id }}
+        token: ${{ secrets.GITHUB_TOKEN }}
+        prerelease: true
+        generate_release_notes: true
