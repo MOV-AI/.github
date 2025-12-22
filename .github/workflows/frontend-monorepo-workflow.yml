@@ -257,6 +257,7 @@ jobs:
         mkdir artifacts
         for dir in ${{ inputs.applications }}; do
               echo "Checking $dir for debian packaging"
+              ls -la "$dir"
               if [ -d "$dir/build" ]; then
                 echo "Packing debian for $dir" && \
                 cd "$dir" && \
