@@ -257,13 +257,13 @@ jobs:
         mkdir artifacts
         for dir in ${{ inputs.applications }}; do
               echo "Checking $dir for debian packaging"
-              ls -la "$dir"
               if [ -d "$dir/build" ]; then
                 echo "Packing debian for $dir" && \
                 cd "$dir" && \
                 dch -v ${{ steps.vars-after-raise.outputs.npm_pkg_version }} -b -D "UNRELEASED" "bump version" && \
                 dpkg-buildpackage && \
-                cp ../*.deb "${GITHUB_WORKSPACE}/artifacts/"
+                cp ../*.deb "${GITHUB_WORKSPACE}/artifacts/" && \
+                cd -
               fi
             done
 
