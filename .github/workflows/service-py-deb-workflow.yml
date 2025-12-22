@@ -528,6 +528,7 @@ jobs:
         git config --global user.email ${{ secrets.auto_commit_mail }}
         . venv/bin/activate
         make bump_version
+        make update_changelog
         deactivate
 
     - name: Set branch output
