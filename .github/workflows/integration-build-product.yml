@@ -123,7 +123,7 @@ env:
   USERSPACE_FOLDER_PATH: /opt/movai/userspace
   REMOTE_WORKSPACE_PATH: workspace
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-16"
+  PROVISION_INFRA_VERSION: "2.0.0-17"
   # slack channel movai-projects
   SLACK_CHANNEL: ${{ inputs.overwrite_slack_channel }}
   # development slack channel
