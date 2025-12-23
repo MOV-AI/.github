@@ -33,7 +33,7 @@ on:
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.31"
   PROVISION_INFRA_REPO: "devops-tf-bpg-runners"
-  PROVISION_INFRA_VERSION: "0.0.1-9"
+  PROVISION_INFRA_VERSION: "dev"
   PROVISION_ENV_CONF_REPO: "devops-tf-env-conf"
   PROVISION_ENV_CONF_VERSION: "0.2.0-3"
   PROVISION_POOL: "GithubRunners"
@@ -674,8 +674,8 @@ jobs:
         if: ${{ always() }}
         id: pre_slack
         run: |
-          MESSAGE="Infrastructure recreated successfully! :sunny:"
-          MESSAGE_ERR="Infrastructure recreation failed! :rain_cloud:"
+          MESSAGE="Infrastructure recreated successfully  on ${{ inputs.INFRA_NODES }} ! :sunny:"
+          MESSAGE_ERR="Infrastructure recreation failed  on ${{ inputs.INFRA_NODES }} ! :rain_cloud:"
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
           echo "msg_err=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
 
