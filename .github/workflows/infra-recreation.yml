@@ -218,7 +218,6 @@ jobs:
 
   Provision-IP-Runners:
     needs: [Destroy-IP-Runners]
-    if: ${{ always() }}
     runs-on: infra-runner
     strategy:
       fail-fast: false
@@ -519,7 +518,6 @@ jobs:
 
   Provision-QA-Runners:
     needs: [Destroy-QA-Runners]
-    if: ${{ always() }}
     runs-on: infra-runner
     strategy:
       fail-fast: false
