@@ -35,7 +35,7 @@ env:
   PROVISION_INFRA_REPO: "devops-tf-bpg-runners"
   PROVISION_INFRA_VERSION: "dev"
   PROVISION_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISION_ENV_CONF_VERSION: "0.2.0-3"
+  PROVISION_ENV_CONF_VERSION: "0.2.0-4"
   PROVISION_POOL: "GithubRunners"
   SLACK_CHANNEL: "G0102LEV1CL"
   #INFRA_NODES: '["hel0", "hel1"]'
