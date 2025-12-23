@@ -1,0 +1,53 @@
+name: Test on PR
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+      - dev
+      - 'releases/**'
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install pre-commit==3.7.1
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+
+      - name: Install test dependencies
+        run: |
+          python3.10 -m venv molecule-venv
+          source molecule-venv/bin/activate
+          pip3 install -r test-requirements.txt
+          ansible-galaxy collection install -r requirements.yml
+          deactivate
+
+      - name: Run molecule
+        env:
+          MOLECULE_GLOB: 'roles/*/molecule/*/molecule.yml'
+        run: |
+          source molecule-venv/bin/activate
+          molecule test --all
+
+  RefreshSource:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: docker://chinthakagodawita/autoupdate-action:v1
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: '${{ secrets.RAISE_BOT_COMMIT_USER }}'
+          MERGE_MSG: "Branch was auto-updated."
