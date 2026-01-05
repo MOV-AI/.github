@@ -176,7 +176,7 @@ jobs:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     outputs:
-      slack_thread_id: ${{ steps.send-message.outputs.slack-result != '' && fromJson(steps.send-message.outputs.slack-result).response.message.ts || 'UNDEFINED' }}
+      slack_thread_id: ${{ steps.send-message.outputs.ts }}
       commit_hash: ${{ steps.Checkout.outputs.commit_hash }}
       pr_prefix: ${{ steps.artifacts_prefix.outputs.pr_prefix }}
 
