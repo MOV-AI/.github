@@ -128,6 +128,7 @@ env:
   REMOTE_WORKSPACE_PATH: workspace
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.0.0-17"
+  DEVOPS_SLACK_CHANNEL: "G0102LEV1CL"
   # slack channel movai-projects
   SLACK_CHANNEL: ${{ inputs.overwrite_slack_channel }}
   # development slack channel
@@ -1553,7 +1554,7 @@ jobs:
           token: ${{ secrets.slack_token_id }}
           payload: |
             {
-              "channel": "${{ env.SLACK_CHANNEL }}",
+              "channel": "${{ env.DEVOPS_SLACK_CHANNEL }}",
               "text": "${{ steps.pre_slack_infra.outputs.msg_error }}"
             }
 
