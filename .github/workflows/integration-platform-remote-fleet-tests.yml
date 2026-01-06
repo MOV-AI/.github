@@ -391,6 +391,7 @@ jobs:
   Fleet-Tests-Execution:
     runs-on: ip-${{ inputs.proxmox_cluster_name }}-queuer
     needs: [Fleet-Tests-Provisioning]
+    if: ${{ inputs.with_fleet_tests }}
     strategy:
       matrix:
         fleet_test_name: ${{ fromJSON( inputs.fleet_test_infra_list ) }}
@@ -406,8 +407,6 @@ jobs:
           ssh ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
             set -e
             mkdir -p ${{ env.REMOTE_WORKSPACE_PATH }}
-          ssh ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
-            set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
             qa_key=fleet_tests.${{ matrix.fleet_test_name}}
@@ -508,7 +507,7 @@ jobs:
           path: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}/${{ env.QA_ARTIFACTS_PATH }}/*
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
-  leet-Tests-Teardown:
+  Fleet-Tests-Teardown:
     runs-on: ip-${{ inputs.proxmox_cluster_name }}-queuer
     needs: [Fleet-Tests-Provisioning, Fleet-Tests-Execution]
     steps:
