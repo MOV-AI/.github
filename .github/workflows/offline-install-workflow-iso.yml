@@ -82,7 +82,7 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: Lint with shellcheck
-        uses: Azbagheri/shell-linter@latest 
+        uses: Azbagheri/shell-linter@latest
         with:
           path: ./*.bash,./scripts/*.bash,./scripts/*.sh
 
@@ -273,22 +273,28 @@ jobs:
           echo -e "${summary_message}" >> $GITHUB_STEP_SUMMARY
 
       - name: Slack message success
-        uses: slackapi/slack-github-action@v1.25.0
+        uses: slackapi/slack-github-action@v2
         if: ${{ success() && inputs.slack_channel }}
         with:
-          channel-id: ${{ inputs.slack_channel }}
-          slack-message: ${{ steps.pre_slack.outputs.msg }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN_ID }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack.outputs.msg }}"
+            }
+          token: ${{ secrets.SLACK_TOKEN_ID }}
 
       - name: Slack message failure
         if: ${{ failure() &&  inputs.slack_channel }}
-        uses: slackapi/slack-github-action@v1.25.0
+        uses: slackapi/slack-github-action@v2
         with:
-          channel-id: ${{ inputs.slack_channel }}
-          slack-message: ${{ steps.pre_slack.outputs.msg_error }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_TOKEN_ID }}
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_TOKEN_ID }}
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack.outputs.msg_error }}"
+            }
 
       - name: Cleanup
         if: always()

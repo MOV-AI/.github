@@ -1,4 +1,4 @@
-name: Clean closed PR 
+name: Clean closed PR
 
 on:
   workflow_call:
@@ -41,7 +41,7 @@ jobs:
           # Retrieve all artifacts using GitHub API
           ARTIFACTS=$(curl -s -H "Authorization: token ${{ secrets.gh_token }}" \
             "https://api.github.com/repos/${{ github.repository }}/actions/artifacts")
-        
+
           ARTIFACT_IDS=$(echo "$ARTIFACTS" | jq -r ".artifacts[] | select(.name | startswith(\"pr${{ github.event.pull_request.number }}~\")) | .id")
 
           if [ -z "$ARTIFACT_IDS" ]; then
@@ -56,7 +56,7 @@ jobs:
             curl -s -X DELETE -H "Authorization: token ${{ secrets.gh_token }}" \
               "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID"
           done
-      
+
       - name: Remote - Login to Docker Registry
         if: ${{ inputs.clean_images }}
         shell: bash
