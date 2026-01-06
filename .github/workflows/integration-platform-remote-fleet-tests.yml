@@ -121,7 +121,7 @@ env:
 
 jobs:
   Provisioning-Fleet-Tests:
-    name: "Fleet Provisioning: ${{ inputs.fleet_test_infra_list }}"
+    name: "Fleet Provisioning"
     runs-on: ip-${{ inputs.proxmox_cluster_name }}-queuer
     outputs:
       host_ip: ${{ steps.infra_outputs.outputs.host_ip }}
@@ -511,7 +511,7 @@ jobs:
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
   Teardown-Fleet-Tests:
-    name: "Fleet tests teardown: ${{ matrix.fleet_test_name }}"
+    name: "Fleet tests teardown"
     runs-on: ip-${{ inputs.proxmox_cluster_name }}-queuer
     needs: [Provisioning-Fleet-Tests, Executing-Fleet-Tests]
     steps:
