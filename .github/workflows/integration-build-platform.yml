@@ -202,11 +202,11 @@ jobs:
         id: extract_fleet_tests_list
         run: |
           FLEET_TESTS=$(python3 -c "
-            import yaml, json
-            with open('product-manifest.yaml') as f:
-                data = yaml.safe_load(f)
-            fleet_tests = data['product_components']['qa']['fleet_tests']
-            print(json.dumps(list(fleet_tests.keys())))
+          import yaml, json
+          with open('product-manifest.yaml') as f:
+              data = yaml.safe_load(f)
+          fleet_tests = data['product_components']['qa']['fleet_tests']
+          print(json.dumps(list(fleet_tests.keys())))
           ")
           echo "fleet_tests_list=${FLEET_TESTS}" >> $GITHUB_OUTPUT
 
