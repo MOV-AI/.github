@@ -125,6 +125,7 @@ jobs:
       ssh_connect_string: ${{ steps.infra_outputs.outputs.ssh_connect_string }}
       fleet_ips: ${{ steps.infra_outputs.outputs.fleet_ips }}
       target_dir_provision_infra: ${{ steps.provision_infra_setup.outputs.target_dir }}
+      target_dir_ansible_install: ${{ steps.ansible_install_setup.outputs.target_dir }}
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
@@ -393,6 +394,7 @@ jobs:
     needs: [Fleet-Tests-Provisioning]
     if: ${{ inputs.with_fleet_tests }}
     strategy:
+      fail-fast: false
       matrix:
         fleet_test_name: ${{ fromJSON( inputs.fleet_test_infra_list ) }}
       max-parallel: 1
@@ -476,7 +478,7 @@ jobs:
           '
 
       - name: Collect Fleet QA artifacts
-        working-directory: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
+        working-directory: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_ansible_install }}
         if: always()
         shell: bash
         run: |
@@ -504,7 +506,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.run_number }}_${{ github.run_attempt }}_${{ matrix.fleet_test_name }}_qa_artifacts_${{ github.run_id }}
-          path: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}/${{ env.QA_ARTIFACTS_PATH }}/*
+          path: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_ansible_install }}/${{ env.QA_ARTIFACTS_PATH }}/*
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
   Fleet-Tests-Teardown:
