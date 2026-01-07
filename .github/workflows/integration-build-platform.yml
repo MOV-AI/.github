@@ -154,6 +154,7 @@ jobs:
         password: ${{secrets.registry_password}}
     outputs:
       slack_thread_id: ${{ steps.send-message.outputs.ts }}
+      fleet_tests_list: ${{ steps.extract_fleet_tests_list.outputs.fleet_tests_list }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -196,6 +197,19 @@ jobs:
                 --override_backend ${{ inputs.backend_name }}
           mkdir component_artifacts
           cp ci_artifacts/* ./component_artifacts
+
+      - name: Extract fleet tests list
+        id: extract_fleet_tests_list
+        run: |
+          FLEET_TESTS=$(python3 -c "
+            import yaml, json
+            with open('product-manifest.yaml') as f:
+                data = yaml.safe_load(f)
+            fleet_tests = data['product_components']['qa']['fleet_tests']
+            print(json.dumps(list(fleet_tests.keys())))
+          ")
+          echo "fleet_tests_list=${FLEET_TESTS}" >> $GITHUB_OUTPUT
+
 
       - name: Stash component_artifacts
         uses: actions/upload-artifact@v4
@@ -451,12 +465,12 @@ jobs:
   #       run: echo "Pass"
 
   Fleet-Validations:
-    needs: [Build-backend]
+    needs: [Validate-boostrap-configs, Build-backend]
     uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@feat/fleet_ui_test
     secrets: inherit
     with:
       collect_deployable_artifacts: true
-      fleet_test_infra_list: '["fleet_ui_tests","fleet_backend"]'
+      fleet_test_infra_list: ${{ needs.Validate-boostrap-configs.outputs.fleet_tests_list }}
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 120
