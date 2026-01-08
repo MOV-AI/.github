@@ -473,7 +473,7 @@ jobs:
             export test_set=${{ steps.tests_setup.outputs.test_set }}
             movai-cli user manager $movai_user $movai_pwd || true
             . test-venv/bin/activate
-            python3 -m pytest -m "$test_set" ${{ steps.tests_setup.outputs.test_args }} --movai-user $movai_user --movai-pw $movai_pwd --base_url https://$host_ip/
+            python3 -m pytest -m "$test_set" ${{ steps.tests_setup.outputs.test_args }} --movai-user $movai_user --movai-pw $movai_pwd
             deactivate
           '
 
