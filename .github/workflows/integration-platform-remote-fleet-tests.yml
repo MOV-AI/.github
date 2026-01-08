@@ -512,53 +512,10 @@ jobs:
   Fleet-Tests-Teardown:
     runs-on: ip-${{ inputs.proxmox_cluster_name }}-queuer
     needs: [Fleet-Tests-Provisioning, Fleet-Tests-Execution]
+    if: always()
     steps:
-      - name: Get current job id
-        if: always()
-        shell: bash
-        id: job_info
-        run: |
-          job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
-          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "$job_id"
-          echo "$job_html_url"
-          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.gh_token }}
-
-      - name: Prepare slack variables
-        if: always()
-        id: pre_slack_result
-        run: |
-          MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
-          MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
-
-      - name: Slack message success
-        uses: slackapi/slack-github-action@v2
-        with:
-          method: chat.postMessage
-          payload: |
-            {
-              "channel": "${{ inputs.slack_channel }}",
-              "text": "${{ steps.pre_slack_result.outputs.msg }}",
-              "thread_ts": "${{ inputs.slack_thread_id }}"
-            }
-          token: ${{ secrets.slack_token_id }}
-
-      - name: Slack message failure
-        uses: slackapi/slack-github-action@v2
-        if: failure()
-        with:
-          method: chat.postMessage
-          payload: |
-            {
-              "channel": "${{ inputs.slack_channel }}",
-              "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
-              "thread_ts": "${{ inputs.slack_thread_id }}"
-            }
-          token: ${{ secrets.slack_token_id }}
+      - name: Checkout
+        uses: actions/checkout@v5
 
       - name: Teardown remote vms (Proxmox)
         working-directory: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
@@ -583,3 +540,74 @@ jobs:
           set -e
           echo "Terraform destroy returned with exit status ${exit_status}. Attempted $count times."
           exit ${exit_status}
+
+  Fleet-Tests-Post-Operation:
+    runs-on: ubuntu-latest
+    needs: [Fleet-Tests-Provisioning, Fleet-Tests-Execution, Fleet-Tests-Teardown]
+    if: always()
+    steps:
+      - name: Get current job id
+        if: always()
+        shell: bash
+        id: job_info
+        run: |
+          job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
+          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("Fleet-Tests-Teardown"))) | .[0].html_url')
+          echo "$job_id"
+          echo "$job_html_url"
+          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+      - name: Determine job status
+        id: job_status
+        run: |
+          teardown_status="${{ needs.Fleet-Tests-Teardown.result }}"
+          execution_status="${{ needs.Fleet-Tests-Execution.result }}"
+
+          if [ "$teardown_status" == "success" ]; then
+            echo "teardown_passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "teardown_passed=false" >> $GITHUB_OUTPUT
+          fi
+
+          if [ "$execution_status" == "success" ] || [ "$execution_status" == "skipped" ]; then
+            echo "execution_passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "execution_passed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Prepare slack variables
+        if: always()
+        id: pre_slack_result
+        run: |
+          MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
+          MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
+          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+
+      - name: Slack message success
+        uses: slackapi/slack-github-action@v2
+        if: ${{ steps.job_status.outputs.teardown_passed == 'true' }}
+        with:
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg }}",
+              "thread_ts": "${{ inputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
+
+      - name: Slack message failure
+        uses: slackapi/slack-github-action@v2
+        if: ${{ steps.job_status.outputs.teardown_passed == 'false' }}
+        with:
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
+              "thread_ts": "${{ inputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
