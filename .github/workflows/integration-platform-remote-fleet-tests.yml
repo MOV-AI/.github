@@ -305,6 +305,7 @@ jobs:
 
       - name: Ansible install platform
         id: ansible_install_platform
+        if: false # Temporarily disabled
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
         shell: bash
         run: |
@@ -486,32 +487,31 @@ jobs:
             deactivate
           '
 
-      - name: Collect Fleet QA artifacts
-        working-directory: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_ansible_install }}
+      - name: Remote - Collect Fleet QA artifacts
         if: always()
         shell: bash
         run: |
           rm -rf $QA_ARTIFACTS_PATH
           mkdir -p $QA_ARTIFACTS_PATH/install
-          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
-          python3.9 -m venv ansible-venv
-          source ansible-venv/bin/activate
-          python3 -m pip install -r requirements.txt
-          ansible-galaxy install -r requirements.yml --timeout 120
-          source ansible-venv/bin/activate
 
-          # install fleet_tests artifacts
+          # Collect artifacts from each fleet host via SSH
           for fleet_host in "manager" "member0" "member1"; do
-            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u movai-service --since "1hour ago"' > $QA_ARTIFACTS_PATH/install/$fleet_host.log || true
+            echo "Collecting artifacts from $fleet_host..."
 
-            echo "From $fleet_host:"
-            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -a' > $QA_ARTIFACTS_PATH/install/$fleet_host-docker_ps.log || true
-            tail -n +2 $QA_ARTIFACTS_PATH/install/$fleet_host-docker_ps.log
-            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u docker --boot --lines=all' > $QA_ARTIFACTS_PATH/install/$fleet_host-all-docker.log || true
+            ssh ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no "
+              set +e
+              journalctl -u movai-service --since '1hour ago' > /tmp/$fleet_host-movai.log 2>&1
+              docker ps -a > /tmp/$fleet_host-docker_ps.log 2>&1
+              journalctl -u docker --boot --lines=all > /tmp/$fleet_host-docker.log 2>&1
+            " || true
+
+            # Copy logs back from remote host
+            scp -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:/tmp/$fleet_host-movai.log $QA_ARTIFACTS_PATH/install/$fleet_host.log 2>/dev/null || true
+            scp -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:/tmp/$fleet_host-docker_ps.log $QA_ARTIFACTS_PATH/install/$fleet_host-docker_ps.log 2>/dev/null || true
+            scp -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:/tmp/$fleet_host-docker.log $QA_ARTIFACTS_PATH/install/$fleet_host-all-docker.log 2>/dev/null || true
           done
-          deactivate
 
-          # test artifacts
+          # Collect test artifacts
           scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}/tests_artifacts $QA_ARTIFACTS_PATH/ || true
 
       - name: Stash Fleet QA artifacts
