@@ -498,7 +498,10 @@ jobs:
 
           # Collect artifacts from each fleet host
           fleet_hosts_names=("manager" "member0" "member1")
-          fleet_hosts_ips=("${{ needs.Fleet-Tests-Provisioning.outputs.host_ip }}" ${{ needs.Fleet-Tests-Provisioning.outputs.fleet_ips }})
+          # Parse fleet IPs - first element is manager, rest are members
+          mapfile -t fleet_ips_array < <(echo "${{ needs.Fleet-Tests-Provisioning.outputs.fleet_ips }}" | tr ',' ' ' | tr -s ' ')
+          fleet_hosts_ips=("${{ needs.Fleet-Tests-Provisioning.outputs.host_ip }}" "${fleet_ips_array[@]}")
+
           for i in "${!fleet_hosts_names[@]}"; do
             fleet_host="${fleet_hosts_names[$i]}"
             fleet_host_ip="${fleet_hosts_ips[$i]}"

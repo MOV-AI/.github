@@ -36,10 +36,10 @@ on:
       slack_channel:
         required: false
         type: string
-        default: "C02U028NMB7"
+        #default: "C02U028NMB7"
         #default: "C02U028NMB7" # rnd-platform
         # development slack channel
-        #default: "C05K2KF1UP8"
+        default: "C05K2KF1UP8"
       simulation_qa_key:
         required: false
         type: string
@@ -143,7 +143,6 @@ env:
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.0.0-17"
   ARTIFACTS_RETENTION_DAYS: 15
-
 jobs:
   Validate-boostrap-configs:
     runs-on: integration-pipeline
