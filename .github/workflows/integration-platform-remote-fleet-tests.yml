@@ -519,7 +519,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.run_number }}_${{ github.run_attempt }}_${{ matrix.fleet_test_name }}_qa_artifacts_${{ github.run_id }}
-          path: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_ansible_install }}/${{ env.QA_ARTIFACTS_PATH }}/*
+          path: ${{ env.QA_ARTIFACTS_PATH }}/*
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
   Fleet-Tests-Teardown:
