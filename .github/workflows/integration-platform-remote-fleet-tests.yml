@@ -652,24 +652,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
-      - name: Determine job status
-        id: job_status
-        run: |
-          teardown_status="${{ needs.Fleet-Tests-Teardown.result }}"
-          execution_status="${{ needs.Fleet-Tests-Execution.result }}"
-
-          if [ "$teardown_status" == "success" ]; then
-            echo "teardown_passed=true" >> $GITHUB_OUTPUT
-          else
-            echo "teardown_passed=false" >> $GITHUB_OUTPUT
-          fi
-
-          if [ "$execution_status" == "success" ] || [ "$execution_status" == "skipped" ]; then
-            echo "execution_passed=true" >> $GITHUB_OUTPUT
-          else
-            echo "execution_passed=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Prepare slack variables
         if: always()
         id: pre_slack_result
@@ -681,7 +663,6 @@ jobs:
 
       - name: Slack message success
         uses: slackapi/slack-github-action@v2
-        if: ${{ steps.job_status.outputs.teardown_passed == 'true' }}
         with:
           method: chat.postMessage
           payload: |
@@ -694,7 +675,7 @@ jobs:
 
       - name: Slack message failure
         uses: slackapi/slack-github-action@v2
-        if: ${{ steps.job_status.outputs.teardown_passed == 'false' }}
+        if: failure()
         with:
           method: chat.postMessage
           payload: |
