@@ -320,7 +320,6 @@ jobs:
 
       - name: Ansible install platform
         id: ansible_install_platform
-        if: false # Temporarily disabled
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
         shell: bash
         run: |
