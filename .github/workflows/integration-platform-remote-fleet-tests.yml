@@ -125,6 +125,7 @@ jobs:
       ssh_connect_string: ${{ steps.infra_outputs.outputs.ssh_connect_string }}
       fleet_ips: ${{ steps.infra_outputs.outputs.fleet_ips }}
       target_dir_provision_infra: ${{ steps.provision_infra_setup.outputs.target_dir }}
+      target_dir_infra_env_configs: ${{ steps.infra_env_configs_setup.outputs.target_dir }}
       target_dir_ansible_install: ${{ steps.ansible_install_setup.outputs.target_dir }}
       manager_vm_name: ${{ steps.infra_names.outputs.manager_prefix }}
 
@@ -253,6 +254,18 @@ jobs:
         with:
           name: provision_infra_dir
           path: ${{ steps.provision_infra_setup.outputs.target_dir }}
+
+      - name: Stash infra_env_configs
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra_env_configs
+          path: ${{ steps.infra_env_configs_setup.outputs.target_dir }}
+
+      - name: Stash provisioned_inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: provisioned_inventory
+          path: ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml
 
       - name: Prepare Devops provisioning slack message
         if: always()
@@ -489,39 +502,33 @@ jobs:
             deactivate
           '
 
-      - name: Remote - Collect Fleet QA artifacts
+      - name: Unstash provisioned_inventory
+        uses: actions/download-artifact@v4
+        with:
+          name: provisioned_inventory
+
+      - name: Collect Fleet QA artifacts
         if: always()
         shell: bash
         run: |
           rm -rf $QA_ARTIFACTS_PATH
           mkdir -p $QA_ARTIFACTS_PATH/
+          source ansible-venv/bin/activate
 
-          # Collect artifacts from each fleet host
-          fleet_hosts_names=("manager" "member0" "member1")
-          # Parse fleet IPs - first element is manager, rest are members
-          mapfile -t fleet_ips_array < <(echo "${{ needs.Fleet-Tests-Provisioning.outputs.fleet_ips }}" | tr ',' ' ' | tr -s ' ')
-          fleet_hosts_ips=("${{ needs.Fleet-Tests-Provisioning.outputs.host_ip }}" "${fleet_ips_array[@]}")
+          # install fleet_tests artifacts
+          for fleet_host in "manager" "member0" "member1"; do
+            ansible $fleet_host -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u movai-service --since "1hour ago"' > $QA_ARTIFACTS_PATH/$fleet_host.log || true
 
-          for i in "${!fleet_hosts_names[@]}"; do
-            fleet_host="${fleet_hosts_names[$i]}"
-            fleet_host_ip="${fleet_hosts_ips[$i]}"
-
-            echo "Saving logs from $fleet_host at $fleet_host_ip"
-            ssh ${{ needs.Fleet-Tests-Provisioning.outputs.host_user }}@"$fleet_host_ip" -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no "
-              set +e
-              journalctl -u movai-service --since '1hour ago' > /tmp/$fleet_host-movai.log 2>&1
-              docker ps -a > /tmp/$fleet_host-docker_ps.log 2>&1
-              journalctl -u docker --boot --lines=all > /tmp/$fleet_host-docker.log 2>&1
-            " || true
-
-            echo "Copying logs from $fleet_host"
-            scp -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ${{ needs.Fleet-Tests-Provisioning.outputs.host_user }}@"$fleet_host_ip":/tmp/$fleet_host-movai.log $QA_ARTIFACTS_PATH/$fleet_host.log 2>/dev/null || true
-            scp -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ${{ needs.Fleet-Tests-Provisioning.outputs.host_user }}@"$fleet_host_ip":/tmp/$fleet_host-docker_ps.log $QA_ARTIFACTS_PATH/$fleet_host-docker_ps.log 2>/dev/null || true
-            scp -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ${{ needs.Fleet-Tests-Provisioning.outputs.host_user }}@"$fleet_host_ip":/tmp/$fleet_host-docker.log $QA_ARTIFACTS_PATH/$fleet_host-all-docker.log 2>/dev/null || true
+            echo "From $fleet_host:"
+            ansible $fleet_host -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -a' > $QA_ARTIFACTS_PATH/$fleet_host-docker_ps.log || true
+            tail -n +2 $QA_ARTIFACTS_PATH/$fleet_host-docker_ps.log
+            ansible $fleet_host -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u docker --boot --lines=all' > $QA_ARTIFACTS_PATH/$fleet_host-all-docker.log || true
           done
 
-          # Collect test artifacts from manager host
-          scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/${{ matrix.fleet_test_name }}/tests_artifacts $QA_ARTIFACTS_PATH/ || true
+          deactivate
+
+          # test artifacts
+          scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.target_dir }}/tests_artifacts $QA_ARTIFACTS_PATH/ || true
 
       - name: Stash Fleet QA artifacts
         if: always()
@@ -545,6 +552,12 @@ jobs:
           name: provision_infra_dir
           path: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
 
+      - name: Unstash infra_env_configs
+        uses: actions/download-artifact@v4
+        with:
+          name: infra_env_configs
+          path: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_infra_env_configs }}
+
       - name: Teardown remote vms (Proxmox)
         working-directory: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
         if: ${{ ( !inputs.debug_fleet_keep_alive && success() ) || cancelled() || ( !inputs.debug_fleet_keep_alive && failure() ) }}
@@ -555,7 +568,7 @@ jobs:
           count=0
           exit_status=-1
           while [ $count -lt $attempts ]; do
-            var_file_arg='-var-file=../${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}/hel/${{ inputs.proxmox_cluster_name }}_fleet_test.tfvars'
+            var_file_arg='-var-file=../${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_infra_env_configs }}/hel/${{ inputs.proxmox_cluster_name }}_fleet_test.tfvars'
             terraform init -backend-config="key=${{ inputs.proxmox_cluster_name }}-fleet-${{ needs.Fleet-Tests-Provisioning.outputs.manager_vm_name }}.tfstate"
             terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars -var "fleet_peer_nr=0" -var "manager_ip_lookup=false"
             exit_status=$?
