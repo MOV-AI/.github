@@ -685,3 +685,19 @@ jobs:
               "thread_ts": "${{ inputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
+
+      - name: Check if upstream jobs failed
+        shell: bash
+        run: |
+          if [[ "${{ needs.Fleet-Tests-Provisioning.result }}" != "success" ]]; then
+            echo "Fleet-Tests-Provisioning failed"
+            exit 1
+          fi
+          if [[ "${{ needs.Fleet-Tests-Execution.result }}" != "success" && "${{ needs.Fleet-Tests-Execution.result }}" != "skipped" ]]; then
+            echo "Fleet-Tests-Execution failed"
+            exit 1
+          fi
+          if [[ "${{ needs.Fleet-Tests-Teardown.result }}" != "success" ]]; then
+            echo "Fleet-Tests-Teardown failed"
+            exit 1
+          fi
