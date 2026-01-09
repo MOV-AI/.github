@@ -172,7 +172,7 @@ jobs:
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=${{ env .PROVISION_INFRA_VERSION}}
+          provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
           provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
 
           rm -rf $provision_infra_dir
@@ -245,6 +245,12 @@ jobs:
           echo "host_user=$(echo $user | sed "s;\";;g")" >> $GITHUB_OUTPUT
           echo "ssh_connect_string=$(echo $user | sed "s;\";;g")@$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
           echo "fleet_ips=$(echo $members | sed "s;\";;g")" >> $GITHUB_OUTPUT
+
+      - name: Stash provision_infra_dir
+        uses: actions/upload-artifact@v4
+        with:
+          name: provision_infra_dir
+          path: ${{ steps.provision_infra_setup.outputs.target_dir }}
 
       - name: Prepare Devops provisioning slack message
         if: always()
@@ -401,6 +407,9 @@ jobs:
     env:
       QA_ARTIFACTS_PATH: ${{ matrix.fleet_test_name}}_qa_artifacts
     steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
       - name: Remote - Setup QA ${{ matrix.fleet_test_name}} tests
         if: ${{ inputs.with_fleet_tests }}
         shell: bash
@@ -484,6 +493,11 @@ jobs:
         run: |
           rm -rf $QA_ARTIFACTS_PATH
           mkdir -p $QA_ARTIFACTS_PATH/install
+          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
+          python3.9 -m venv ansible-venv
+          source ansible-venv/bin/activate
+          python3 -m pip install -r requirements.txt
+          ansible-galaxy install -r requirements.yml --timeout 120
           source ansible-venv/bin/activate
 
           # install fleet_tests artifacts
@@ -495,7 +509,6 @@ jobs:
             tail -n +2 $QA_ARTIFACTS_PATH/install/$fleet_host-docker_ps.log
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u docker --boot --lines=all' > $QA_ARTIFACTS_PATH/install/$fleet_host-all-docker.log || true
           done
-
           deactivate
 
           # test artifacts
@@ -516,6 +529,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Unstash provision_infra_dir
+        uses: actions/download-artifact@v4
+        with:
+          name: provision_infra_dir
+          path: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
 
       - name: Teardown remote vms (Proxmox)
         working-directory: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
