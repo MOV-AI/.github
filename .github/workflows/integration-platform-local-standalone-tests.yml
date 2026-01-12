@@ -324,7 +324,7 @@ jobs:
           . test-venv/bin/activate
           pip install buildkite-test-collector
           echo "python3 -m pytest ${{ inputs.pytest_args}}"
-          python3 -m pytest ${{ inputs.pytest_args}} | tee pytest-output.log
+          python3 -m pytest ${{ inputs.pytest_args}} --junit-xml=junit.xml | tee pytest-output.log
           deactivate
 
       - name: Publish test results trunk

@@ -417,7 +417,7 @@ jobs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 120
-      pytest_args: '-ra --hub_url $selenoid_url --base_url https://$host_ip/ --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json --junit-xml=junit.xml'
+      pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json'
       xray_label: "UI_Automation"
       slack_channel: ${{ inputs.slack_channel }}
 
@@ -430,7 +430,7 @@ jobs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 30
-      pytest_args: 'tests/ -ra -k $test_set --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --jira_report --junit-xml=junit.xml'
+      pytest_args: '-m "$test_set" --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --jira_report'
       slack_channel: ${{ inputs.slack_channel }}
 
   Validation-API-Tests:
@@ -442,7 +442,7 @@ jobs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 30
-      pytest_args: 'src --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd -m "not fleet" --junit-xml=junit.xml'
+      pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
       slack_channel: ${{ inputs.slack_channel }}
 
   Validation-Flow-Tests:
@@ -454,7 +454,7 @@ jobs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 30
-      pytest_args: '-ra --movai-user $movai_user --movai-pw $movai_pwd -m "$test_set" --tb=short --junit-xml=junit.xml'
+      pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
       slack_channel: ${{ inputs.slack_channel }}
 
   Validations-Finish:
@@ -667,7 +667,7 @@ jobs:
       slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-Simulator.outputs.backend_image }}
       test_timeout: 30
-      pytest_args: '-ra --movai-user $movai_user --movai-pw $movai_pwd -m "$test_set" --tb=short --junit-xml=junit.xml'
+      pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
       slack_channel: ${{ inputs.slack_channel }}
       robot_config: 'basic-standalone-ignition-noetic.json'
 
