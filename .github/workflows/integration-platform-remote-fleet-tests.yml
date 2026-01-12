@@ -435,17 +435,16 @@ jobs:
             mkdir -p ${{ env.REMOTE_WORKSPACE_PATH }}
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            qa_key=fleet_tests.${{ matrix.fleet_test_name}}
+            qa_key=${{ matrix.fleet_test_name}}
             rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt
             export PATH="$HOME/.local/bin:$PATH"
 
-            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
             integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
             integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
-            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.test_set --output_file /tmp/test_set.txt
-            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.test_args --output_file /tmp/test_args.txt
 
-            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.test_dir --output_file /tmp/test_dir.txt || true
+            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.fleet.target_dir --output_file /tmp/target_dir.txt
+            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.fleet.test_set --output_file /tmp/test_set.txt
+            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.fleet.test_args --output_file /tmp/test_args.txt
 
             tests_dir=$(cat /tmp/target_dir.txt)
             tests_version=$(cat /tmp/version.txt)
@@ -464,9 +463,6 @@ jobs:
             if  [ -f test-requirements.txt ]; then
               echo "Installing test requirements from test-requirements.txt"
               pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r test-requirements.txt
-            elif [ -f requirements.txt ]; then
-              echo "Installing test requirements from requirements.txt"
-              pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r requirements.txt
             else
               echo "No test-requirements.txt file found!"
               exit 1
