@@ -73,6 +73,7 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   AWS_DEFAULT_REGION: "us-east-1"
+  QA_SLACK_CHANNEL: "C02PB9A9F45"
   REGISTRY: registry.cloud.mov.ai
   MID_REGISTRY: registry.hel.mov.ai
   USERSPACE_FOLDER_PATH: /opt/userspace
@@ -191,7 +192,7 @@ jobs:
           method: chat.postMessage
           payload: |
             {
-              "channel": "${{ inputs.slack_channel }}",
+              "channel": "${{ env.QA_SLACK_CHANNEL }}",
               "text": "${{ steps.pre_slack.outputs.msg_error }}"
             }
           token: ${{ secrets.slack_token_id }}
