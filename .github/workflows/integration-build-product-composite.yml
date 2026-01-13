@@ -1773,6 +1773,7 @@ jobs:
 
   publish:
     needs: [Install-Robot, Install-Heterogeneous-Fleet-Single-VM,Install-Heterogeneous-Fleet-Multi-VM, Install-Simulator-Robot]
+    if: ${{ always() && (needs.Install-Simulator-Robot.result == 'success' ||  needs.Install-Simulator-Robot.result == 'skipped'  ) && needs.Install-Robot.result == 'success' && needs.Install-Heterogeneous-Fleet-Single-VM.result == 'success' && needs.Install-Heterogeneous-Fleet-Multi-VM.result == 'success' }}
     runs-on: integration-pipeline
     # Add safety check for simulator-related steps
     env:
