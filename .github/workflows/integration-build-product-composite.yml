@@ -680,11 +680,8 @@ jobs:
         id: pre_simulator_build
         if: ${{ inputs.with_simulation }}
         run: |
-          if [ ! -f "simulator_artifacts/version" ]; then
-            echo "skip_simulator_build=true" >> $GITHUB_OUTPUT
-          else
-            echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
-          fi
+          # DEBUG: force skip_simulator_build to false so the next job always runs
+          echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
           echo "image_name=${{ env.REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
 
       - name: Lint docker image
