@@ -420,33 +420,33 @@ jobs:
         fleet_test_name: ${{ fromJSON( inputs.fleet_test_infra_list ) }}
       max-parallel: 1
     env:
-      QA_ARTIFACTS_PATH: ${{ matrix.fleet_test_name}}_qa_artifacts
+      QA_ARTIFACTS_PATH: ${{ matrix.fleet_test_name }}_qa_artifacts
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Remote - Setup QA ${{ matrix.fleet_test_name}} tests
+      - name: Remote - Setup QA ${{ matrix.fleet_test_name }} tests
         if: ${{ inputs.with_fleet_tests }}
         shell: bash
         id: tests_setup
         run: |
           ssh ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
             set -e
+            tests_dir="fleet_${{ matrix.fleet_test_name }}"
+            qa_key=${{ matrix.fleet_test_name }}
+
             mkdir -p ${{ env.REMOTE_WORKSPACE_PATH }}
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            qa_key=${{ matrix.fleet_test_name}}
-            rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt
+            rm -f /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt
             export PATH="$HOME/.local/bin:$PATH"
 
             integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
             integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
 
-            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.fleet.target_dir --output_file /tmp/target_dir.txt
             integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.fleet.test_set --output_file /tmp/test_set.txt
             integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.fleet.test_args --output_file /tmp/test_args.txt
 
-            tests_dir=$(cat /tmp/target_dir.txt)
             tests_version=$(cat /tmp/version.txt)
             tests_repo_name=$(cat /tmp/repo_name.txt)
             test_set=$(cat /tmp/test_set.txt)
@@ -470,23 +470,23 @@ jobs:
             deactivate
             popd
           '
-          rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt /tmp/test_args.txt /tmp/test_exec_dir.txt
+          rm -f /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt /tmp/test_args.txt /tmp/test_exec_dir.txt
           scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:/tmp/*.txt /tmp/
 
-          echo "target_dir=$(cat /tmp/target_dir.txt)" >> $GITHUB_OUTPUT
+          echo "tests_dir=fleet_${{ matrix.fleet_test_name }}" >> $GITHUB_OUTPUT
           echo "version=$(cat /tmp/version.txt)" >> $GITHUB_OUTPUT
           echo "test_set=$(cat /tmp/test_set.txt)" >> $GITHUB_OUTPUT
           echo "test_exec_dir=$(cat /tmp/test_exec_dir.txt)" >> $GITHUB_OUTPUT
           echo "test_args=$(cat /tmp/test_args.txt || echo "")" >> $GITHUB_OUTPUT
 
-      - name: Remote - Run Fleet test [${{ matrix.fleet_test_name}}]
+      - name: Remote - Run Fleet test [${{ matrix.fleet_test_name }}]
         if: ${{ inputs.with_fleet_tests }}
         id: run_tests
         shell: bash
         run: |
           ssh ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
             set -e
-            cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.target_dir }}
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.tests_dir }}
             export host_ip=${{ needs.Fleet-Tests-Provisioning.outputs.host_ip }}
             export movai_user=movai
             export movai_pwd=movai123
@@ -525,7 +525,7 @@ jobs:
           deactivate
 
           # test artifacts
-          scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.target_dir }}/tests_artifacts $QA_ARTIFACTS_PATH/ || true
+          scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.tests_dir }}/tests_artifacts $QA_ARTIFACTS_PATH/ || true
 
       - name: Stash Fleet QA artifacts
         if: always()
