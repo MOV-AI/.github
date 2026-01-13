@@ -498,9 +498,11 @@ jobs:
           '
 
       - name: Unstash provisioned_inventory
+        if: always()
         uses: actions/download-artifact@v4
         with:
           name: provisioned_inventory
+          path: ./
 
       - name: Collect Fleet QA artifacts
         if: always()
