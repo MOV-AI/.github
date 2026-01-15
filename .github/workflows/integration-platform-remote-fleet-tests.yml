@@ -113,6 +113,7 @@ env:
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
   SLACK_CHANNEL: ${{ inputs.slack_channel }}
+  DEVOPS_SLACK_CHANNEL: "G0102LEV1CL"
   ARTIFACTS_RETENTION_DAYS: 15
   PROVISIONING_ENV_VERSION: ${{ inputs.provision_tf_env_version }}
   PROVISIONING_ENV_REPO: ${{ inputs.provision_tf_env_repo }}
@@ -260,7 +261,7 @@ jobs:
           method: chat.postMessage
           payload: |
             {
-              "channel": "G0102LEV1CL",
+              "channel": "${{ env.DEVOPS_SLACK_CHANNEL }}",
               "text": "${{ steps.pre_slack_infra.outputs.msg_error }}"
             }
           token: ${{ secrets.slack_token_id }}
