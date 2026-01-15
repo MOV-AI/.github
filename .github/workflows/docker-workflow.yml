@@ -19,11 +19,6 @@ on:
         type: string
         default: linux/amd64 #,linux/arm/v7
         description: list of platform to build and optionally push (comma separated)
-      version:
-        required: false
-        type: string
-        default: local
-        description: tag of image used for build step and optional push to registries
       deploy:
         required: false
         type: boolean
@@ -101,6 +96,69 @@ on:
 
 jobs:
 
+  Raise-Version:
+    if: ${{ inputs.deploy }}
+    runs-on: ubuntu-22.04
+    outputs:
+      package_version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install bump requirements
+        run: python3 -m pip install bump-my-version
+
+      - name: Raise version
+        run: |
+          git config --global --add safe.directory $(pwd)
+          git config --global user.name ${{ secrets.registry_user }}
+          git config --global user.email "${{ secrets.registry_user }}@users.noreply.github.com"
+          bump-my-version bump patch --no-tag
+
+      - name: Set branch output
+        id: var_branch
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BRANCH_NAME=${{ github.head_ref }}
+          else
+            BRANCH_NAME=${{ github.ref_name }}
+          fi
+          echo "Branch name is: $BRANCH_NAME"
+          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+      - name: Push raised version
+        uses: CasperWA/push-protected@v2
+        with:
+          token: ${{ secrets.registry_password }}
+          branch: ${{ steps.var_branch.outputs.branch }}
+          unprotect_reviews: true
+
+      - name: Get raised version
+        id: get_version
+        run: |
+          VERSION=$(bump-my-version show current_version)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Deploying version: $VERSION"
+
+  Read-Version:
+    if: ${{ !inputs.deploy }}
+    runs-on: ubuntu-22.04
+    outputs:
+      package_version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install bump requirements
+        run: python3 -m pip install bump-my-version
+
+      - name: Read version from .bumpversion.toml
+        id: get_version
+        run: |
+          VERSION=$(bump-my-version show current_version)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
   RefreshSource:
     if: ${{ inputs.deploy == 'false' }}
     runs-on: ubuntu-22.04
@@ -112,6 +170,8 @@ jobs:
           MERGE_MSG: "Branch was auto-updated."
 
   build_deploy:
+    needs: [Raise-Version, Read-Version]
+    if: always() && (needs.Raise-Version.result == 'success' || needs.Read-Version.result == 'success')
     runs-on: ubuntu-22.04
     permissions:
       contents: read # for actions/checkout to fetch code
@@ -121,7 +181,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Hadolint ${{ inputs.docker_file }}
         uses: hadolint/hadolint-action@v1.6.0
@@ -160,11 +220,12 @@ jobs:
       - name: Compute docker image names
         id: get_image_names
         env:
+          VERSION: ${{ needs.Raise-Version.outputs.package_version || needs.Read-Version.outputs.package_version }}
           PUBLIC_PUSH: ${{ inputs.public }}
           LATEST: ${{ inputs.push_latest }}
         run: |
           PUB_DOCKER_IMAGE=""
-          DOCKER_IMAGES_TMP=${{ inputs.docker_registry }}/${{ inputs.docker_image }}:${{ inputs.version }}
+          DOCKER_IMAGES_TMP=${{ inputs.docker_registry }}/${{ inputs.docker_image }}:${VERSION}
 
           if [ "${LATEST}" = "true" ]; then
             DOCKER_IMAGES_TMP="$DOCKER_IMAGES_TMP,${{ inputs.docker_registry }}/${{ inputs.docker_image }}:latest"
@@ -172,8 +233,8 @@ jobs:
 
           # If public push is needed
           if [ "${PUBLIC_PUSH}" = "true" ]; then
-            PUB_DOCKER_IMAGE_TMP="${{ inputs.public_registry }}/${{ inputs.public_image }}:${{ inputs.version }}"
-            GITHUB_DOCKER_IMAGE_TMP="${{ inputs.github_registry }}/${{ inputs.public_image }}:${{ inputs.version }}"
+            PUB_DOCKER_IMAGE_TMP="${{ inputs.public_registry }}/${{ inputs.public_image }}:${VERSION}"
+            GITHUB_DOCKER_IMAGE_TMP="${{ inputs.github_registry }}/${{ inputs.public_image }}:${VERSION}"
             DOCKER_IMAGES_TMP="$DOCKER_IMAGES_TMP,$PUB_DOCKER_IMAGE_TMP,$GITHUB_DOCKER_IMAGE_TMP"
             #echo "::set-output name=PUB_DOCKER_IMAGE::$PUB_DOCKER_IMAGE"
             echo "GITHUB_DOCKER_IMAGE=$GITHUB_DOCKER_IMAGE_TMP" >> $GITHUB_OUTPUT
@@ -199,20 +260,24 @@ jobs:
 
       - name: Compute docker label and outputs arguments
         id: get_label_and_outputs_args
+        env:
+          VERSION: ${{ needs.Raise-Version.outputs.package_version || needs.Read-Version.outputs.package_version }}
         run: |
           LABEL_SRC="org.opencontainers.image.source=https://github.com/${{ github.repository }}"
+          LABEL_VERSION="org.opencontainers.image.version=${VERSION}"
           LABEL_DESCRIPTION=""
           OUTPUTS_ARGS_STR_LIST=""
 
           IFS=', ' read -r -a platforms_array <<< "${{ inputs.platforms }}"
           if [ ${#platforms_array[@]} -gt 1 ]; then
-            OUTPUTS_ARGS_STR_LIST="type=image,name=target,annotation-index.org.opencontainers.image.description=Version ${{ inputs.version }} of repo ${{ github.repository }}"
+            OUTPUTS_ARGS_STR_LIST="type=image,name=target,annotation-index.org.opencontainers.image.description=Version ${VERSION} of repo ${{ github.repository }}"
           else
-            LABEL_DESCRIPTION="org.opencontainers.image.description=Version ${{ inputs.version }} of repo ${{ github.repository }}"
+            LABEL_DESCRIPTION="org.opencontainers.image.description=Version ${VERSION} of repo ${{ github.repository }}"
           fi
 
           echo "label_description=$LABEL_DESCRIPTION" >> $GITHUB_OUTPUT
           echo "label_source=$LABEL_SRC" >> $GITHUB_OUTPUT
+          echo "label_version=$LABEL_VERSION" >> $GITHUB_OUTPUT
           echo "outputs_args_str_list=$OUTPUTS_ARGS_STR_LIST" >> $GITHUB_OUTPUT
 
       - name: Download packages to include in build
@@ -241,6 +306,7 @@ jobs:
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
           labels: |
             ${{ steps.get_label_and_outputs_args.outputs.label_source }}
+            ${{ steps.get_label_and_outputs_args.outputs.label_version }}
             ${{ steps.get_label_and_outputs_args.outputs.label_description }}
           outputs: ${{ steps.get_label_and_outputs_args.outputs.outputs_args_str_list }}
           target: ${{ inputs.target }}
@@ -258,6 +324,7 @@ jobs:
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
           labels: |
             ${{ steps.get_label_and_outputs_args.outputs.label_source }}
+            ${{ steps.get_label_and_outputs_args.outputs.label_version }}
             ${{ steps.get_label_and_outputs_args.outputs.label_description }}
           outputs: ${{ steps.get_label_and_outputs_args.outputs.outputs_args_str_list }}
           target: ${{ inputs.target }}
