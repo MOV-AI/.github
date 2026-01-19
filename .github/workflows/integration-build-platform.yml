@@ -143,7 +143,6 @@ env:
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.0.0-17"
   ARTIFACTS_RETENTION_DAYS: 15
-
 jobs:
   Validate-boostrap-configs:
     runs-on: integration-pipeline
@@ -154,6 +153,7 @@ jobs:
         password: ${{secrets.registry_password}}
     outputs:
       slack_thread_id: ${{ steps.send-message.outputs.ts }}
+      fleet_tests_list: ${{ steps.extract_fleet_tests_list.outputs.fleet_tests_list }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -196,6 +196,23 @@ jobs:
                 --override_backend ${{ inputs.backend_name }}
           mkdir component_artifacts
           cp ci_artifacts/* ./component_artifacts
+
+      - name: Extract fleet tests list
+        id: extract_fleet_tests_list
+        run: |
+          FLEET_TESTS=$(python3 -c "
+          import yaml, json
+          with open('product-manifest.yaml') as f:
+              data = yaml.safe_load(f)
+          qa_config = data['product_components']['qa']
+          fleet_test_names = [
+              test_name for test_name, test_config in qa_config.items()
+              if isinstance(test_config, dict) and 'fleet' in test_config
+          ]
+          print(json.dumps(fleet_test_names))
+          ")
+          echo "fleet_tests_list=${FLEET_TESTS}" >> $GITHUB_OUTPUT
+
 
       - name: Stash component_artifacts
         uses: actions/upload-artifact@v4
@@ -342,11 +359,10 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt update
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+          echo "$job_id=$job_id" | tee >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -401,7 +417,7 @@ jobs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 120
-      pytest_args: '-ra --hub_url $selenoid_url --base_url https://$host_ip/ --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json --junit-xml=junit.xml'
+      pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json'
       xray_label: "UI_Automation"
       slack_channel: ${{ inputs.slack_channel }}
 
@@ -414,7 +430,7 @@ jobs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 30
-      pytest_args: 'tests/ -ra -k $test_set --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --jira_report --junit-xml=junit.xml'
+      pytest_args: '-k "$test_set" --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --jira_report'
       slack_channel: ${{ inputs.slack_channel }}
 
   Validation-API-Tests:
@@ -426,7 +442,7 @@ jobs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 30
-      pytest_args: 'src --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd -m "not fleet" --junit-xml=junit.xml'
+      pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
       slack_channel: ${{ inputs.slack_channel }}
 
   Validation-Flow-Tests:
@@ -438,7 +454,7 @@ jobs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 30
-      pytest_args: '-ra --movai-user $movai_user --movai-pw $movai_pwd -m "$test_set" --tb=short --junit-xml=junit.xml'
+      pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
       slack_channel: ${{ inputs.slack_channel }}
 
   Validations-Finish:
@@ -452,16 +468,15 @@ jobs:
         run: echo "Pass"
 
   Fleet-Validations:
-    needs: [Build-backend]
+    needs: [Validate-boostrap-configs, Build-backend]
     uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@v2.3
     secrets: inherit
     with:
       collect_deployable_artifacts: true
-      test_infra_key: "fleet_backend"
+      fleet_test_infra_list: ${{ needs.Validate-boostrap-configs.outputs.fleet_tests_list }}
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 120
-      pytest_args: 'tests/regression'
       slack_channel: ${{ inputs.slack_channel }}
       provision_tf_env_repo: ${{ inputs.provision_tf_env_repo }}
       provision_tf_env_version: ${{ inputs.provision_tf_env_version }}
@@ -582,8 +597,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          sudo apt update
-          sudo apt install jq -y
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
@@ -654,7 +667,7 @@ jobs:
       slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-Simulator.outputs.backend_image }}
       test_timeout: 30
-      pytest_args: '-ra --movai-user $movai_user --movai-pw $movai_pwd -m "$test_set" --tb=short --junit-xml=junit.xml'
+      pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
       slack_channel: ${{ inputs.slack_channel }}
       robot_config: 'basic-standalone-ignition-noetic.json'
 
@@ -820,8 +833,6 @@ jobs:
       - name: Update release notes
         shell: bash
         run: |
-          sudo apt update
-          sudo apt install jq -y
           # release version
           product_version=$(cat product.version)
 

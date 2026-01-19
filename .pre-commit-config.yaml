@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
+    rev: v6.0.0
     hooks:
     - id: check-json                # checks if json files are valid
     - id: check-added-large-files   # checks if large files were added
@@ -11,3 +11,7 @@ repos:
     - id: mixed-line-ending         # fixes line files line ending
       args: [--fix=lf]
     - id: trailing-whitespace       # removes trailing whitespaces from text files
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.10
+    hooks:
+    - id: actionlint
