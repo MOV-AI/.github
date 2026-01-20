@@ -20,9 +20,9 @@ The images are built for the following platforms:
 - GitHub runner for Ubuntu 22.04
 
 ## - name: Build Docker images
-This workflow builds Docker images for CICD usage.
+This workflow builds Docker images for CICD usage. The images are built and tested but not published to GitHub releases or artifacts, instead the images are stored in our private Docker registry and deployed to the CICD environment.
 
-The images are built and tested but not published to GitHub releases or artifacts, instead the images are stored in our private Docker registry and deployed to the CICD environment.
+The workflow also supports automatic version management using bump-my-version to enable multi-release line support. When the version input is omitted the workflow reads and manages versions from a .bumpversion.toml file in the target repository. On deployment it automatically bumps the patch version, commits the change, and pushes it back to the branch. The workflow also adds OCI-compliant docker labels including version, source, and description to all images. Manual version input can still be specified to bypass all automatic version management.
 
 ## - name: Build and pack FE packages
 This workflow builds and packs the frontend packages for the MOV.AI platform.
