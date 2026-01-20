@@ -9,6 +9,7 @@ inputs:
     required: false
     default: ""
   PYTHON_VERSION:
+    description: "Python version to use"
     required: false
     default: ""
   ROS_WORKSPACE:
@@ -22,7 +23,9 @@ runs:
   using: "composite"
   steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
     - name: Set up Python
       if: ${{ inputs.PYTHON_VERSION != '' }}
       uses: actions/setup-python@v5
