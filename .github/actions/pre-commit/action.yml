@@ -1,0 +1,87 @@
+name: "Pre-commit Action"
+description: "Run pre-commit checks on code changes"
+inputs:
+  config_file:
+    description: "Path to the pre-commit configuration file"
+    required: false
+  args:
+    description: "Arguments to pass to pre-commit"
+    required: false
+    default: "--all-files"
+  PYTHON_VERSION:
+    required: false
+    default: ""
+  ROS_WORKSPACE:
+    description: "Path to the ROS workspace"
+    required: false
+    default: "/opt/ros/noetic"
+  GITHUB_TOKEN:
+    description: "GitHub token to post comments on PRs"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: Set up Python
+      if: ${{ inputs.PYTHON_VERSION != '' }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.PYTHON_VERSION }}
+    - name: Install pre-requirements
+      shell: bash
+      run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pre-commit
+          # Install apt requirements if file exists
+          if [[ -f ./dev-requirements.apt ]]; then
+            sudo apt-get update
+            xargs -a ./dev-requirements.apt sudo apt-get install -y
+          fi
+
+          # Install pip requirements if file exists
+          if [[ -f ./dev-requirements.txt ]]; then
+            python3 -m pip install -r ./dev-requirements.txt
+          fi
+          git config --global --add safe.directory $(pwd)
+    - name: Run pre-commit
+      shell: bash
+      run: |
+        if [[ -f ${{ inputs.ROS_WORKSPACE }}/setup.bash ]]; then
+          echo "Sourcing ROS workspace"
+          source ${{ inputs.ROS_WORKSPACE }}/setup.bash
+        fi
+        set -o pipefail; pre-commit run ${{ inputs.args }} | tee pre-commit-report.txt
+    - name: Capture pre-commit output
+      if: ${{ github.event_name == 'pull_request' && failure()}}
+      id: capture_output
+      shell: bash
+      run: |
+        echo "report<<EOF" >> $GITHUB_OUTPUT
+        sed -n '/Failed/,$ { /Passed/d; s/\x1B\[[0-9;]*[mK]//g; p }' pre-commit-report.txt >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    - name: Publish pre-commit results to PR comment
+      if: ${{ failure() && github.event_name == 'pull_request' }}
+      uses: peter-evans/create-or-update-comment@v5
+      with:
+        token: ${{ inputs.GITHUB_TOKEN }}
+        repository: ${{ github.repository }}
+        issue-number: ${{ github.event.pull_request.number }}
+        body: |
+          ❌ Static Analysis Failed.
+
+          Analysis Output:
+          ```
+          ${{ steps.capture_output.outputs.report }}
+          ```
+
+          Details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    - name: Publish pre-commit success to PR comment
+      if: ${{ success() && github.event_name == 'pull_request' }}
+      uses: peter-evans/create-or-update-comment@v5
+      with:
+        token: ${{ inputs.GITHUB_TOKEN }}
+        repository: ${{ github.repository }}
+        issue-number: ${{ github.event.pull_request.number }}
+        body: |
+          ✅ Static Analysis Passed. Details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

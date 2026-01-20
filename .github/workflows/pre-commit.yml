@@ -1,0 +1,16 @@
+name: Pre-commit checks
+
+on:
+  pull_request:
+    branches:
+      - 'v*'
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run pre-commit checks
+        uses: ./.github/actions/pre-commit
+        with:
+          PYTHON_VERSION: '3.11'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

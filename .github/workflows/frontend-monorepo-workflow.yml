@@ -76,7 +76,7 @@ on:
         required: true
       npm_token:
         required: true
-env: 
+env:
   AWS_ACCESS_KEY_ID: ${{ secrets.s3_bucket_cache_user_key }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.s3_bucket_cache_user_secret }}
 jobs:
