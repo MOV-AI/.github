@@ -110,6 +110,7 @@ env:
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
   SLACK_CHANNEL: ${{ inputs.slack_channel }}
+  DEVOPS_SLACK_CHANNEL: "G0102LEV1CL"
   ARTIFACTS_RETENTION_DAYS: 15
   PROVISIONING_ENV_VERSION: ${{ inputs.provision_tf_env_version }}
   PROVISIONING_ENV_REPO: ${{ inputs.provision_tf_env_repo }}
@@ -283,7 +284,7 @@ jobs:
           method: chat.postMessage
           payload: |
             {
-              "channel": "G0102LEV1CL",
+              "channel": "${{ env.DEVOPS_SLACK_CHANNEL }}",
               "text": "${{ steps.pre_slack_infra.outputs.msg_error }}"
             }
           token: ${{ secrets.slack_token_id }}
@@ -498,9 +499,11 @@ jobs:
           '
 
       - name: Unstash provisioned_inventory
+        if: always()
         uses: actions/download-artifact@v4
         with:
           name: provisioned_inventory
+          path: ./
 
       - name: Collect Fleet QA artifacts
         if: always()
@@ -531,7 +534,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.run_number }}_${{ github.run_attempt }}_${{ matrix.fleet_test_name }}_qa_artifacts_${{ github.run_id }}
+          name: ${{ github.run_number }}_${{ github.run_attempt }}_fleet_${{ matrix.fleet_test_name }}_qa_artifacts_${{ github.run_id }}
           path: ${{ env.QA_ARTIFACTS_PATH }}/*
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
