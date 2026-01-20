@@ -7,7 +7,7 @@ inputs:
   args:
     description: "Arguments to pass to pre-commit"
     required: false
-    default: "--all-files"
+    default: ""
   PYTHON_VERSION:
     required: false
     default: ""
@@ -44,6 +44,20 @@ runs:
             python3 -m pip install -r ./dev-requirements.txt
           fi
           git config --global --add safe.directory $(pwd)
+    - name: Get changed files
+      id: changed_files
+      shell: bash
+      run: |
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          # Get list of changed files in the PR
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
+        else
+          # Fall back to all files if not a PR
+          CHANGED_FILES=$(git ls-files)
+        fi
+        echo "files<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
     - name: Run pre-commit
       shell: bash
       run: |
@@ -51,7 +65,12 @@ runs:
           echo "Sourcing ROS workspace"
           source ${{ inputs.ROS_WORKSPACE }}/setup.bash
         fi
-        set -o pipefail; pre-commit run ${{ inputs.args }} | tee pre-commit-report.txt
+        CHANGED_FILES="${{ steps.changed_files.outputs.files }}"
+        if [[ -z "$CHANGED_FILES" ]]; then
+          echo "No files changed, skipping pre-commit"
+          exit 0
+        fi
+        set -o pipefail; pre-commit run ${{ inputs.args }} --files $CHANGED_FILES | tee pre-commit-report.txt
     - name: Capture pre-commit output
       if: ${{ github.event_name == 'pull_request' && failure()}}
       id: capture_output
