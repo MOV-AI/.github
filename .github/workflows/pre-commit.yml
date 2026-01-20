@@ -10,10 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Run pre-commit checks
-        uses: ./.github/actions/pre-commit
+        uses:  MOV-AI/.github/.github/actions/pre-commit@DP-963_docker-image
         with:
           PYTHON_VERSION: '3.11'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
