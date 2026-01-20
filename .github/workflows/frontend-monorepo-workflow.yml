@@ -1,0 +1,508 @@
+name: Build and pack FE packages
+on:
+  workflow_call:
+    inputs:
+      deploy:
+        required: false
+        type: string
+        default: 'false'
+      release:
+        required: false
+        type: string
+        default: 'false'
+      run_lint_staged:
+        required: false
+        type: string
+        default: 'false'
+      run_tests:
+        required: false
+        type: string
+        default: 'true'
+      use_nvmrc:
+        required: false
+        type: string
+        default: 'false'
+        description: 'Use .nvmrc file to determine node version'
+      npm_version:
+        required: false
+        type: string
+        default: '>=16.18.0'
+        description: 'Node version to use'
+      prod_publish_repos:
+        required: false
+        type: string
+        default: '["ppa-main"]'
+      legacy:
+        required: false
+        type: boolean
+        default: false
+      pm:
+        required: false
+        type: string
+        default: "npm"
+      pnpm_version:
+        required: false
+        type: string
+        default: "9.4.0"
+        description: 'pnpm version to use'
+      applications:
+        required: false
+        type: string
+        default: 'apps/ide'
+        description: 'Space-separated list of application directories to build'
+
+    secrets:
+      auto_commit_user:
+        required: true
+      auto_commit_mail:
+        required: true
+      auto_commit_pwd:
+        required: true
+      s3_bucket_cache_user_key:
+        required: true
+      s3_bucket_cache_user_secret:
+        required: true
+      registry_user:
+        required: true
+      registry_password:
+        required: true
+      nexus_publisher_user:
+        required: true
+      nexus_publisher_password:
+        required: true
+      gh_token:
+        required: true
+      sonar_token:
+        required: true
+      npm_token:
+        required: true
+env: 
+  AWS_ACCESS_KEY_ID: ${{ secrets.s3_bucket_cache_user_key }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.s3_bucket_cache_user_secret }}
+jobs:
+  RefreshSource:
+    if: ${{ inputs.deploy == 'false' }}
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: docker://chinthakagodawita/autoupdate-action:v1
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: '${{ secrets.auto_commit_pwd }}'
+          MERGE_MSG: "Branch was auto-updated."
+  Build:
+    if: ${{ inputs.release == 'false' }}
+    runs-on: ubuntu-22.04
+    container:
+      image: registry.aws.cloud.mov.ai/qa/npm-buildserver:v1.0.0
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.npm_token }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        # Disabling shallow clone is recommended for improving relevancy of reporting
+        fetch-depth: 0
+        submodules: recursive
+        token: ${{ secrets.npm_token }}
+
+    - name: Install node and setup Github as proxy Registry (use npm_version)
+      uses: actions/setup-node@v4
+      if: ${{ inputs.use_nvmrc == 'false' }}
+      with:
+        node-version: '${{ inputs.npm_version }}'
+        registry-url: 'https://npm.pkg.github.com/mov-ai'
+
+    - name: Install node and setup Github as proxy Registry (use .nvmrc)
+      uses: actions/setup-node@v4
+      if: ${{ inputs.use_nvmrc == 'true' }}
+      with:
+        node-version-file: '.nvmrc'
+        registry-url: 'https://npm.pkg.github.com/mov-ai'
+
+    - name: Install pnpm and setup .npmrc
+      if: ${{ inputs.pm == 'pnpm' }}
+      run: |
+        npm install -g pnpm@${{ inputs.pnpm_version }}
+        echo "//npm.pkg.github.com/:_authToken=${{ secrets.npm_token }}" > .npmrc
+      env:
+        npm_token: ${{ secrets.npm_token }}
+
+    - name: Global git config
+      run: |
+        git config --global --add safe.directory $(pwd)
+        git config --global user.name '${{ secrets.auto_commit_user }}'
+        git config --global user.email '${{ secrets.auto_commit_mail }}'
+        git config --global user.password ${{ secrets.auto_commit_pwd }}
+
+    - name: Install dependencies
+      run: |
+        if test "${{ inputs.pm }}" = "pnpm"; then
+          pnpm i
+        elif ${{ inputs.legacy }}; then
+          npm ci --loglevel verbose --legacy-peer-deps
+        else
+          npm ci --loglevel verbose
+        fi
+
+    - name: Run lint-staged
+      if: ${{ inputs.run_lint_staged == 'true' && github.event_name == 'pull_request' }}
+      run: |
+        echo "The following files were changed from origin/${GITHUB_BASE_REF}...origin/${GITHUB_HEAD_REF} and will be validated:"
+        git --no-pager diff "origin/${GITHUB_BASE_REF}...origin/${GITHUB_HEAD_REF}" --name-only
+        echo ""
+        npx lint-staged --diff="origin/${GITHUB_BASE_REF}...origin/${GITHUB_HEAD_REF}"
+        echo ""
+        # explicitly check for changes and fail if there are any
+        if ! git diff --quiet HEAD; then
+          echo ""
+          echo "ERROR, the following files have changed:"
+          git diff --name-only HEAD
+          echo ""
+          echo "Changes:"
+          git diff HEAD
+          exit 1
+        fi
+
+    - name: Raise App version
+      run: |
+        ${{ inputs.pm }} version prerelease --no-git-tag-version
+
+    - name: Find Package details
+      id: vars-after-raise
+      run: |
+        PACKAGE_VERSION=$(cat package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
+        PACKAGE_NAME=$(cat package.json | grep name |head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
+
+        echo "npm_pkg_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+        echo "npm_pkg_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Check package.json exists
+      id: check_package_json
+      uses: andstor/file-existence-action@v3
+      with:
+        files: 'package.json'
+
+    - name: Bump package.json metadata Version
+      uses: restackio/update-json-values-action@v1.0.0
+      if: ${{ steps.check_package_json.outputs.files_exists == 'true' }}
+      with:
+        file: package.json
+        values: |
+          {
+            "version": "${{steps.vars-after-raise.outputs.npm_pkg_version}}"
+          }
+
+    - name: Build
+      id: build_step
+      run: |
+        node_path=$(which node)
+        echo "node_path=$node_path" >> $GITHUB_OUTPUT
+        ${{ inputs.pm }} run build
+
+    - name: Check NPM log on failure
+      if: ${{ failure() }}
+      run: cat /github/home/.npm/_logs/*.log
+
+    - name: Run tests
+      if: ${{ inputs.run_tests == 'true' }}
+      run: ${{ inputs.pm }} run test:ci
+
+    - name: Create SonarCloud project and disable autoscan
+      uses: MOV-AI/action-sonarcloud-proj-config@v1
+      with:
+        sonar_org: 'mov-ai'
+        sonar_token: ${{ secrets.sonar_token }}
+
+    # - name: SonarCloud Scan
+    #   uses: SonarSource/sonarqube-scan-action@v6
+    #   env:
+    #     GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
+    #     SONAR_TOKEN: ${{ secrets.sonar_token }}
+    #   with:
+    #     projectBaseDir: ./
+    #     args: >
+    #       "-Dsonar.organization=mov-ai"
+    #       "-Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}"
+    #       "-Dsonar.sources=."
+    #       "-Dsonar.scm.provider=git"
+    #       "-Dsonar.qualitygate.wait=true"
+    #       "-Dsonar.qualitygate.timeout=300"
+    #       "-Dsonar.coverage.exclusions=**/*.test.js,**/*.test.jsx"
+    #       "-Dsonar.cpd.exclusions=**/*.test.js,**/*.test.jsx"
+    #       "-Dsonar.javascript.lcov.reportPaths=**/coverage/lcov.info"
+    #       "-Dsonar.nodejs.executable=${{ steps.build_step.outputs.node_path }}"
+    #       "-Dsonar.exclusions=.nx/**"
+
+    # - name: Link to SonarCloud dashboard
+    #   shell: bash
+    #   run: |
+    #     echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
+
+    - name: Check manifest.json exists
+      id: check_manifest_json
+      uses: andstor/file-existence-action@v3
+      with:
+        files: 'manifest.json'
+
+    - name: Bump manifest.json metadata Version
+      if: ${{ steps.check_manifest_json.outputs.files_exists == 'true' }}
+      uses: restackio/update-json-values-action@v1.0.0
+      with:
+        file: build/manifest.json
+        values: |
+          {
+            "version": "${{steps.vars-after-raise.outputs.npm_pkg_version}}"
+          }
+
+    - name: Pack debian
+      run: |
+        mkdir artifacts
+        for dir in ${{ inputs.applications }}; do
+              echo "Checking $dir for debian packaging"
+              if [ -d "$dir/build" ]; then
+                echo "Packing debian for $dir" && \
+                cd "$dir" && \
+                dch -v ${{ steps.vars-after-raise.outputs.npm_pkg_version }} -b -D "UNRELEASED" "bump version" && \
+                dpkg-buildpackage && \
+                cp ../*.deb "${GITHUB_WORKSPACE}/artifacts/" && \
+                cd -
+              fi
+            done
+
+    - name: Print generated packages
+      run: |
+        ls -la artifacts
+
+    # - name: Publish npm
+    #   if: ${{ inputs.deploy == 'true' }}
+    #   run: |
+    #     if test "${{ inputs.pm }}" = "pnpm"; then
+    #       pnpm publish --no-git-checks
+    #     else
+    #       npm publish
+    #     fi
+
+    - name: Archive binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: packages
+        path: artifacts/*
+        retention-days: 5
+
+
+  Publish:
+    if: ${{ inputs.deploy == 'true' }}
+    runs-on: ubuntu-22.04
+    needs:  [Build]
+    container:
+      image: registry.aws.cloud.mov.ai/qa/npm-buildserver:v1.0.0
+      options: --user root
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.npm_token }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        # Disabling shallow clone is recommended for improving relevancy of reporting
+        fetch-depth: 0
+        submodules: recursive
+        token: ${{ secrets.npm_token }}
+
+    - name: Install node and setup Github as proxy Registry (use npm_version)
+      uses: actions/setup-node@v4
+      if: ${{ inputs.use_nvmrc == 'false' }}
+      with:
+        node-version: '${{ inputs.npm_version }}'
+        registry-url: 'https://npm.pkg.github.com/mov-ai'
+
+    - name: Install node and setup Github as proxy Registry (use .nvmrc)
+      uses: actions/setup-node@v4
+      if: ${{ inputs.use_nvmrc == 'true' }}
+      with:
+        node-version-file: '.nvmrc'
+        registry-url: 'https://npm.pkg.github.com/mov-ai'
+
+    - name: Install pnpm and setup .npmrc
+      if: ${{ inputs.pm == 'pnpm' }}
+      run: |
+        npm install -g pnpm@${{ inputs.pnpm_version }}
+        echo "//npm.pkg.github.com/:_authToken=${{ secrets.npm_token }}" > .npmrc
+      env:
+        npm_token: ${{ secrets.npm_token }}
+
+    - name: Download a single artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: packages
+        path: artifacts
+
+    - name: Publish to Nexus ppa-testing
+      shell: bash
+      run: |
+          NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+          NEXUS_REPO="ppa-testing"
+
+          for file in artifacts/*.deb
+          do
+            RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+            -H "Content-Type: multipart/form-data" \
+            --data-binary "@$file" \
+            -w '%{http_code}' \
+            "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
+
+            #retry
+            if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
+              echo "Failed upload with $RETURN_CODE. Retrying"
+
+              RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+                -H "Content-Type: multipart/form-data" \
+                --data-binary "@$file" \
+                -w '%{http_code}' \
+                "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
+            fi
+
+            if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
+              echo "Failed upload with $RETURN_CODE. Exiting"
+              exit 1
+            fi
+
+          done
+
+    - name: Find Package details
+      id: vars
+      run: |
+        PACKAGE_VERSION=$(cat package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
+
+        echo "pkg_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Raise App version
+      id: raise
+      run: |
+        git config --global --add safe.directory $(pwd)
+        git config --global user.name '${{ secrets.auto_commit_user }}'
+        git config --global user.email '${{ secrets.auto_commit_mail }}'
+        git config --global user.password ${{ secrets.auto_commit_pwd }}
+        ${{ inputs.pm }} version prerelease -m "[skip actions] Automatic Bump of build version"
+        git add package.*
+
+    - name: Prepare raise variables
+      id: pre_raise
+      run: |
+        echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+
+    - name: Raise App version
+      uses: CasperWA/push-protected@v2.14.0
+      with:
+        token: ${{ secrets.auto_commit_pwd }}
+        branch: ${{ steps.pre_raise.outputs.branch }}
+        unprotect_reviews: true
+
+    - name: Find Package details
+      id: vars-after-raise
+      run: |
+        PACKAGE_VERSION=$(cat package.json | grep version | head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
+        PACKAGE_NAME=$(cat package.json | grep name |head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]')
+
+        echo "npm_pkg_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+        echo "npm_pkg_version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Grep manual release notes
+      shell: bash
+      run: |
+        # contains more than one release ?
+        if (( $(grep -o '# v' CHANGELOG.md | wc -l) > 1 )); then
+          # use the latest release notes
+          body=$(grep -m2 -A 9999 "# v" CHANGELOG.md | grep -B 9999 -m2 "# v" |sed '$ d')
+        else
+          body=$(cat CHANGELOG.md)
+        fi
+
+    - name: Create Github Release
+      shell: bash
+      run: |
+        commit_hash=$(git log --format="%H" -n 1)
+        product_version=${{ steps.vars-after-raise.outputs.npm_pkg_version }}
+        previous_version_option=""
+        if gh release view ${{ steps.vars.outputs.pkg_version }} &>/dev/null; then
+          previous_version_option="--notes-start-tag ${{ steps.vars.outputs.pkg_version }}"
+        fi
+        gh release create -p --generate-notes $previous_version_option --target $commit_hash -t "Release of $product_version" $product_version
+        # add all files in the artifacts folder
+        find artifacts -type f -exec gh release upload $product_version {} \;
+      env:
+        GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+  Release:
+    strategy:
+      matrix:
+        publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
+    if: ${{ inputs.release == 'true' }}
+    runs-on: ubuntu-22.04
+    container:
+      image: registry.aws.cloud.mov.ai/qa/npm-buildserver:v1.0.0
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.npm_token }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set tag output
+      id: vars
+      run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+
+    - name: Fetch artifact from github release
+      run: |
+        git config --global --add safe.directory $(pwd)
+        mkdir artifacts
+        cd artifacts
+        gh release download ${{ steps.vars.outputs.tag}} -p *.deb
+      env:
+        GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+    - name: Publish to Nexus
+      shell: bash
+      run: |
+            NEXUS_REPO="${{ matrix.publish_repo }}"
+            if [ "$NEXUS_REPO" != "ppa-public" ]; then
+              NEXUS_ENDPOINT="artifacts.cloud.mov.ai"
+            else
+              NEXUS_ENDPOINT="artifacts.aws.cloud.mov.ai"
+            fi
+
+            for file in artifacts/*.deb
+            do
+              RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+              -H "Content-Type: multipart/form-data" \
+              --data-binary "@$file" \
+              -w '%{http_code}' \
+              "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
+
+              #retry
+              if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
+                echo "Failed upload with $RETURN_CODE. Retrying"
+
+                RETURN_CODE=$(curl -u "${{ secrets.nexus_publisher_user }}:${{ secrets.nexus_publisher_password }}" \
+                  -H "Content-Type: multipart/form-data" \
+                  --data-binary "@$file" \
+                  -w '%{http_code}' \
+                  "https://$NEXUS_ENDPOINT/repository/$NEXUS_REPO/")
+              fi
+
+              if [[ ! "$RETURN_CODE" =~ ^(200|201|202)$ ]]; then
+                echo "Failed upload with $RETURN_CODE. Exiting"
+                exit 1
+              fi
+
+            done
