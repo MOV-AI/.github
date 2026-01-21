@@ -150,7 +150,8 @@ on:
 
 jobs:
   # ============================================================================
-  # Determine image version: either use manual input or read current from git
+  # Determine image version: either use manual input or auto-bump from git
+  # Version is determined and bumped here, then used in build & publish
   # ============================================================================
   get-version:
     name: Determine Version
@@ -160,6 +161,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       # Use manual version if provided
       - name: Use manual version (if provided)
@@ -169,7 +172,7 @@ jobs:
           echo "version=${{ inputs.version }}" | tee -a "$GITHUB_OUTPUT"
           echo "✓ Using manual version: ${{ inputs.version }}"
 
-      # Auto-detect version workflow
+      # Auto-detect/bump version workflow
       - name: Setup Python for bump-my-version
         if: ${{ inputs.version == '' }}
         uses: actions/setup-python@v5
@@ -179,6 +182,15 @@ jobs:
       - name: Install bump-my-version
         if: ${{ inputs.version == '' }}
         run: python3 -m pip install -q bump-my-version
+
+      - name: Bump patch version (auto-bump only on deploy)
+        if: ${{ inputs.version == '' && inputs.deploy }}
+        run: |
+          git config --global --add safe.directory "$(pwd)"
+          git config --global user.name "${{ secrets.commit_user }}"
+          git config --global user.email "${{ secrets.commit_mail }}"
+          bump-my-version bump patch --no-tag
+          echo "✓ Version bumped"
 
       - name: Read current version
         if: ${{ inputs.version == '' }}
@@ -355,50 +367,65 @@ jobs:
         with:
           sarif_file: snyk.sarif
 
-      # ========== VERSION MANAGEMENT (after successful build & scan) ==========
+  # ============================================================================
+  # Publish: Push version bump to git and create GitHub Release
+  # Only runs after successful build and optional security scan
+  # ============================================================================
+  publish:
+    name: Publish Release
+    needs: [get-version, build-and-deploy]
+    runs-on: ubuntu-latest
+    if: ${{ inputs.deploy }}
+    env:
+      VERSION: ${{ needs.get-version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
       - name: Setup Python for version bump
-        if: ${{ inputs.version == '' && inputs.deploy }}
+        if: ${{ inputs.version == '' }}
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install bump-my-version
-        if: ${{ inputs.version == '' && inputs.deploy }}
+        if: ${{ inputs.version == '' }}
         run: python3 -m pip install -q bump-my-version
 
-      - name: Bump patch version
-        if: ${{ inputs.version == '' && inputs.deploy }}
+      - name: Bump patch version and push
+        if: ${{ inputs.version == '' }}
         run: |
           git config --global --add safe.directory "$(pwd)"
           git config --global user.name "${{ secrets.commit_user }}"
           git config --global user.email "${{ secrets.commit_mail }}"
           bump-my-version bump patch --no-tag
-          echo "✓ Version bumped"
+          echo "✓ Version bumped to ${VERSION}"
 
       - name: Push version bump to repository
-        if: ${{ inputs.version == '' && inputs.deploy }}
-        uses: CasperWA/push-protected@v2
+        if: ${{ inputs.version == '' }}
+        uses: CasperWA/push-protected@v2.14.0
         with:
           token: ${{ secrets.commit_token }}
           branch: ${{ github.head_ref || github.ref_name }}
           unprotect_reviews: true
 
-      # ========== GITHUB RELEASE (after successful build & version bump) ==========
       - name: Create GitHub Release
-        if: ${{ inputs.create_release && inputs.deploy }}
+        if: ${{ inputs.create_release }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.VERSION }}
-          name: Release ${{ env.VERSION }}
+          tag_name: v${{ needs.get-version.outputs.version }}
+          name: Release ${{ needs.get-version.outputs.version }}
           body: |
             ## Docker Image Release
 
-            **Version:** `${{ env.VERSION }}`
+            **Version:** `${{ needs.get-version.outputs.version }}`
 
             ### Images Published
-            - **Private Registry:** `${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}:${{ env.VERSION }}`
-            ${{ inputs.public && format('- **AWS Public Registry:** `{0}/{1}:{2}`', inputs.public_registry, inputs.public_image, env.VERSION) || '' }}
-            ${{ inputs.public && format('- **GitHub Registry:** `{0}/{1}:{2}`', inputs.github_registry, inputs.public_image, env.VERSION) || '' }}
+            - **Private Registry:** `${{ inputs.docker_registry }}/${{ inputs.docker_image }}:${{ needs.get-version.outputs.version }}`
+            ${{ inputs.public && format('- **AWS Public Registry:** `{0}/{1}:{2}`', inputs.public_registry, inputs.public_image, needs.get-version.outputs.version) || '' }}
+            ${{ inputs.public && format('- **GitHub Registry:** `{0}/{1}:{2}`', inputs.github_registry, inputs.public_image, needs.get-version.outputs.version) || '' }}
 
             ### Build Information
             - **Platforms:** `${{ inputs.platforms }}`
