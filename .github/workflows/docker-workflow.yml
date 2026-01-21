@@ -113,7 +113,7 @@ jobs:
         if: ${{ inputs.version != '' }}
         id: manual_version
         run: |
-          echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           echo "Using manual version: ${{ inputs.version }}"
 
       - name: Install bump-my-version
@@ -145,7 +145,7 @@ jobs:
         if: ${{ inputs.version == '' && inputs.deploy }}
         uses: CasperWA/push-protected@v2
         with:
-          token: ${{ secrets.gh_token }} # GitHub token with repo permissions -> check this out
+          token: ${{ secrets.RAISE_BOT_COMMIT_PASSWORD }} # GitHub token with repo permissions -> check this out
           branch: ${{ steps.branch.outputs.name }}
           unprotect_reviews: true
 
