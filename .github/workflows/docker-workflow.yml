@@ -405,7 +405,7 @@ jobs:
 
       - name: Push version bump to repository
         if: ${{ inputs.version == '' }}
-        uses: CasperWA/push-protected@v2.14.0
+        uses: CasperWA/push-protected@v2.16.0
         with:
           token: ${{ secrets.commit_token }}
           branch: ${{ github.head_ref || github.ref_name }}
