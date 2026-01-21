@@ -1,332 +1,344 @@
 name: Build, Deploy and release Docker images
+
+# Reusable workflow for building, testing, and pushing Docker images
+# Supports multiple registries, platforms, and optional security scanning
+# Version management with bump-my-version or manual tagging
 on:
   workflow_call:
     inputs:
+      # ==================== REQUIRED INPUTS ====================
       docker_file:
         required: true
         type: string
-        description: path to the Dockerfile used for build step
+        description: Path to the Dockerfile used for build step
       docker_image:
         required: true
         type: string
-        description: name of image used for build step and optional push to registries
+        description: Docker image name used for build and push to registries
+
+      # ==================== BUILD CONFIGURATION ====================
       build_args:
         required: false
         type: string
-        description: list of arguments used for build step (comma separated)
+        description: Docker build arguments (comma-separated)
       platforms:
         required: false
         type: string
-        default: linux/amd64 #,linux/arm/v7
-        description: list of platform to build and optionally push (comma separated)
+        default: linux/amd64
+        description: Target platforms to build (e.g., linux/amd64,linux/arm64)
+      target:
+        required: false
+        type: string
+        description: Docker build target stage
+
+      # ==================== VERSIONING ====================
       version:
         required: false
         type: string
         default: ''
-        description: tag of image used for build step and optional push to registries
+        description: |
+          Manual version tag. If empty, auto-bumped by bump-my-version on deploy.
+          Format: x.y.z (e.g., 1.2.3)
+
+      # ==================== DEPLOYMENT ====================
       deploy:
         required: false
         type: boolean
         default: false
-        description: boolean to enable push
+        description: Enable push to registries (default is build-only)
       push_latest:
         required: false
         type: boolean
         default: false
-        description: boolean to override latest tag on push
+        description: Also tag image as 'latest' when pushing
+
+      # ==================== PRIMARY REGISTRY (PRIVATE) ====================
       docker_registry:
         required: false
         type: string
         default: registry.cloud.mov.ai
-        description: primary registry used for push
+        description: Private registry URL for push
+
+      # ==================== PUBLIC REGISTRIES ====================
       public:
         required: false
         type: boolean
         default: false
-        description: boolean to enable secondary public registry push
+        description: Enable push to public registries (AWS and GitHub)
       public_registry:
         required: false
         type: string
         default: pubregistry.aws.cloud.mov.ai
-        description: secondary public registry used for push
+        description: AWS public registry URL
+      public_image:
+        required: false
+        type: string
+        description: Public image name (required if 'public' is true)
       github_registry:
         required: false
         type: string
         default: ghcr.io/mov-ai
-        description: github public registry used for push
-      public_image:
-        required: false
-        type: string
-        description: secondary public name of image used for build step and optional push to registries
-      snyk_check:
-        required: false
-        type: boolean
-        default: false
-        description: boolean to enable snyk security analysis
+        description: GitHub Container Registry URL
+
+      # ==================== ARTIFACTS INJECTION ====================
       download_artifact:
         required: false
         type: boolean
         default: false
-        description: boolean to enable download of 'packages' artifacts to be included in build
+        description: Download build artifacts before building Docker image
       download_artifact_name:
         required: false
         type: string
-        default: "artifacts"
-        description: artifact name to download
+        default: artifacts
+        description: Name of artifact to download
       download_artifact_path:
         required: false
         type: string
         default: ./dist
-        description: path where package is downloaded
-      target:
+        description: Path where artifacts are extracted
+
+      # ==================== SECURITY SCANNING ====================
+      snyk_check:
         required: false
-        type: string
-        default:
-        description: string of docker build target
+        type: boolean
+        default: false
+        description: Enable Snyk security scanning (requires snyk_token)
+
+      # ==================== RELEASE ====================
+      create_release:
+        required: false
+        type: boolean
+        default: false
+        description: Create GitHub Release with build metadata and digests
+
     secrets:
+      # ==================== REGISTRY CREDENTIALS ====================
       registry_user:
         required: true
+        description: Username for private registry
       registry_password:
         required: true
+        description: Password/token for private registry
       pub_registry_user:
         required: false
+        description: Username for AWS public registry
       pub_registry_password:
         required: false
+        description: Password/token for AWS public registry
       github_registry_user:
         required: false
+        description: Username for GitHub Container Registry
       github_registry_password:
         required: false
-      snyk_token:
-        required: false
+        description: GitHub token with packages write permission
+
+      # ==================== GIT & VERSIONING ====================
       commit_user:
         required: false
+        description: Git user name for version bump commits
       commit_mail:
         required: false
+        description: Git user email for version bump commits
       commit_token:
         required: false
+        description: GitHub token with write permissions for pushing version bumps
+
+      # ==================== SECURITY SCANNING ====================
+      snyk_token:
+        required: false
+        description: Snyk API token for vulnerability scanning
 
 jobs:
-
-  Get-Version:
-    runs-on: ubuntu-22.04
+  # ============================================================================
+  # Determine image version: either use manual input or read current from git
+  # ============================================================================
+  get-version:
+    name: Determine Version
+    runs-on: ubuntu-latest
     outputs:
-      package_version: ${{ steps.get_version.outputs.version }}
+      version: ${{ steps.final_version.outputs.version }}
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Use manual version
+      # Use manual version if provided
+      - name: Use manual version (if provided)
         if: ${{ inputs.version != '' }}
         id: manual_version
         run: |
           echo "version=${{ inputs.version }}" | tee -a "$GITHUB_OUTPUT"
-          echo "Using manual version: ${{ inputs.version }}"
+          echo "✓ Using manual version: ${{ inputs.version }}"
+
+      # Auto-detect version workflow
+      - name: Setup Python for bump-my-version
+        if: ${{ inputs.version == '' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
       - name: Install bump-my-version
         if: ${{ inputs.version == '' }}
-        run: python3 -m pip install bump-my-version
+        run: python3 -m pip install -q bump-my-version
 
-      - name: Bump version (deploy only)
-        if: ${{ inputs.version == '' && inputs.deploy }}
-        run: |
-          git config --global --add safe.directory "$(pwd)"
-          git config --global user.name "${{ secrets.commit_user }}"
-          git config --global user.email "${{ secrets.commit_mail }}"
-          bump-my-version bump patch --no-tag
-
-      - name: Get branch name
-        if: ${{ inputs.version == '' && inputs.deploy }}
-        id: branch
-        env:
-          HEAD_REF: ${{ github.head_ref }}
-          REF_NAME: ${{ github.ref_name }}
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "name=${HEAD_REF}" | tee -a "$GITHUB_OUTPUT"
-          else
-            echo "name=${REF_NAME}" | tee -a "$GITHUB_OUTPUT"
-          fi
-
-      - name: Push version bump
-        if: ${{ inputs.version == '' && inputs.deploy }}
-        uses: CasperWA/push-protected@v2
-        with:
-          token: ${{ secrets.commit_token }}
-          branch: ${{ steps.branch.outputs.name }}
-          unprotect_reviews: true
-
-      - name: Get version from bump-my-version
+      - name: Read current version
         if: ${{ inputs.version == '' }}
         id: auto_version
         run: |
           VERSION=$(bump-my-version show current_version)
           echo "version=${VERSION}" | tee -a "$GITHUB_OUTPUT"
-          echo "Version: ${VERSION}"
+          echo "✓ Current version: ${VERSION}"
 
-      - name: Set final version
-        id: get_version
+      - name: Output final version
+        id: final_version
         run: |
           if [ "${{ inputs.version }}" != "" ]; then
-            echo "version=${{ steps.manual_version.outputs.version }}" | tee -a "$GITHUB_OUTPUT"
+            FINAL_VERSION="${{ steps.manual_version.outputs.version }}"
           else
-            echo "version=${{ steps.auto_version.outputs.version }}" | tee -a "$GITHUB_OUTPUT"
+            FINAL_VERSION="${{ steps.auto_version.outputs.version }}"
           fi
+          echo "version=${FINAL_VERSION}" | tee -a "$GITHUB_OUTPUT"
+          echo "📦 Version for build: ${FINAL_VERSION}"
 
-  build_deploy:
-    needs: [Get-Version]
-    runs-on: ubuntu-22.04
+  # ============================================================================
+  # Build Docker image(s) and optionally push to registries
+  # ============================================================================
+  build-and-deploy:
+    name: Build & Deploy
+    needs: [get-version]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
       security-events: write
-      actions: read
+
+    env:
+      VERSION: ${{ needs.get-version.outputs.version }}
+      DOCKER_REGISTRY: ${{ inputs.docker_registry }}
+      DOCKER_IMAGE: ${{ inputs.docker_image }}
 
     steps:
-      - name: Checkout
+      # ========== VALIDATION ==========
+      - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Hadolint ${{ inputs.docker_file }}
+      - name: Lint Dockerfile
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: ${{ inputs.docker_file }}
           format: tty
           failure-threshold: error
 
-      - name: Login to Private Registry
+      # ========== REGISTRY LOGIN ==========
+      - name: Login to private registry
         uses: docker/login-action@v3
         with:
+          registry: ${{ env.DOCKER_REGISTRY }}
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
-          registry: ${{ inputs.docker_registry }}
 
-      - name: Login to Public Registry (for push permission)
+      - name: Login to AWS public registry
         if: ${{ inputs.public }}
         uses: docker/login-action@v3
         with:
+          registry: ${{ inputs.public_registry }}
           username: ${{ secrets.pub_registry_user }}
           password: ${{ secrets.pub_registry_password }}
-          registry: ${{ inputs.public_registry }}
 
-      - name: Login to Public Github Registry (for push permission)
+      - name: Login to GitHub Container Registry
         if: ${{ inputs.public }}
         uses: docker/login-action@v3
         with:
+          registry: ${{ inputs.github_registry }}
           username: ${{ secrets.github_registry_user }}
           password: ${{ secrets.github_registry_password }}
-          registry: ${{ inputs.github_registry }}
 
-      - name: Compute docker image names
-        id: get_image_names
-        env:
-          VERSION: ${{ needs.Get-Version.outputs.package_version }}
-          PUBLIC_PUSH: ${{ inputs.public }}
-          LATEST: ${{ inputs.push_latest }}
+      # ========== PREPARE BUILD METADATA ==========
+      - name: Generate Docker image tags
+        id: image_tags
         run: |
-          DOCKER_IMAGES_TMP="${{ inputs.docker_registry }}/${{ inputs.docker_image }}:${VERSION}"
+          # Primary registry tags
+          TAGS="${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}:${VERSION}"
 
-          if [ "${LATEST}" = "true" ]; then
-            DOCKER_IMAGES_TMP="${DOCKER_IMAGES_TMP},${{ inputs.docker_registry }}/${{ inputs.docker_image }}:latest"
+          if [ "${{ inputs.push_latest }}" = "true" ]; then
+            TAGS="${TAGS},${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}:latest"
           fi
 
-          # If public push is needed
-          if [ "${PUBLIC_PUSH}" = "true" ]; then
-            PUB_DOCKER_IMAGE_TMP="${{ inputs.public_registry }}/${{ inputs.public_image }}:${VERSION}"
-            GITHUB_DOCKER_IMAGE_TMP="${{ inputs.github_registry }}/${{ inputs.public_image }}:${VERSION}"
-            DOCKER_IMAGES_TMP="${DOCKER_IMAGES_TMP},${PUB_DOCKER_IMAGE_TMP},${GITHUB_DOCKER_IMAGE_TMP}"
-            echo "GITHUB_DOCKER_IMAGE=${GITHUB_DOCKER_IMAGE_TMP}" | tee -a "$GITHUB_OUTPUT"
+          # Public registry tags (if enabled)
+          if [ "${{ inputs.public }}" = "true" ]; then
+            TAGS="${TAGS},${{ inputs.public_registry }}/${{ inputs.public_image }}:${VERSION}"
+            TAGS="${TAGS},${{ inputs.github_registry }}/${{ inputs.public_image }}:${VERSION}"
 
-            if [ "${LATEST}" = "true" ]; then
-              DOCKER_IMAGES_TMP="${DOCKER_IMAGES_TMP},${{ inputs.public_registry }}/${{ inputs.public_image }}:latest,${{ inputs.github_registry }}/${{ inputs.public_image }}:latest"
+            if [ "${{ inputs.push_latest }}" = "true" ]; then
+              TAGS="${TAGS},${{ inputs.public_registry }}/${{ inputs.public_image }}:latest"
+              TAGS="${TAGS},${{ inputs.github_registry }}/${{ inputs.public_image }}:latest"
             fi
           fi
 
-          echo "DOCKER_IMAGES=${DOCKER_IMAGES_TMP}" | tee -a "$GITHUB_OUTPUT"
-          echo -e "Docker images to publish:\n${DOCKER_IMAGES_TMP}"
+          echo "tags=${TAGS}" | tee -a "$GITHUB_OUTPUT"
+          echo "📍 Image tags:" && echo "${TAGS}" | tr ',' '\n'
 
-      - name: Compute docker build arguments
-        id: get_build_args
+      - name: Generate build arguments
+        id: build_args
         run: |
-          BUILD_ARGS_STR_LIST="${{ inputs.build_args }}"
-          if [ -n "${BUILD_ARGS_STR_LIST}" ]; then
-            echo "build_args_str_list=${BUILD_ARGS_STR_LIST}" | tee -a "$GITHUB_OUTPUT"
-            echo -e "Docker build arguments:\n${BUILD_ARGS_STR_LIST}"
+          if [ -n "${{ inputs.build_args }}" ]; then
+            echo "args=${{ inputs.build_args }}" | tee -a "$GITHUB_OUTPUT"
+            echo "🔧 Build args:" && echo "${{ inputs.build_args }}" | tr ',' '\n'
           fi
 
-      - name: Compute docker label and outputs arguments
-        id: get_label_and_outputs_args
+      - name: Generate Docker labels & outputs
+        id: docker_metadata
         env:
-          VERSION: ${{ needs.Get-Version.outputs.package_version }}
+          GITHUB_REPO: ${{ github.repository }}
         run: |
-          LABEL_SRC="org.opencontainers.image.source=https://github.com/${{ github.repository }}"
-          LABEL_VERSION="org.opencontainers.image.version=${VERSION}"
-          LABEL_DESCRIPTION=""
-          OUTPUTS_ARGS_STR_LIST=""
+          # Standard OCI labels
+          LABELS="org.opencontainers.image.source=https://github.com/${GITHUB_REPO}"
+          LABELS="${LABELS},org.opencontainers.image.version=${VERSION}"
 
-          IFS=', ' read -r -a platforms_array <<< "${{ inputs.platforms }}"
-          if [ "${#platforms_array[@]}" -gt 1 ]; then
-            OUTPUTS_ARGS_STR_LIST="type=image,name=target,annotation-index.org.opencontainers.image.description=Version ${VERSION} of repo ${{ github.repository }}"
+          # Multi-platform metadata (for manifest annotations)
+          OUTPUTS=""
+          IFS=',' read -ra PLATFORMS <<< "${{ inputs.platforms }}"
+          if [ "${#PLATFORMS[@]}" -gt 1 ]; then
+            OUTPUTS="type=image,name=target,annotation-index.org.opencontainers.image.description=Version ${VERSION} of repo ${GITHUB_REPO}"
           else
-            LABEL_DESCRIPTION="org.opencontainers.image.description=Version ${VERSION} of repo ${{ github.repository }}"
+            LABELS="${LABELS},org.opencontainers.image.description=Version ${VERSION} of repo ${GITHUB_REPO}"
           fi
 
-          {
-            echo "label_description=${LABEL_DESCRIPTION}"
-            echo "label_source=${LABEL_SRC}"
-            echo "label_version=${LABEL_VERSION}"
-            echo "outputs_args_str_list=${OUTPUTS_ARGS_STR_LIST}"
-          } >> "$GITHUB_OUTPUT"
+          echo "labels=${LABELS}" | tee -a "$GITHUB_OUTPUT"
+          echo "outputs=${OUTPUTS}" | tee -a "$GITHUB_OUTPUT"
 
-      - name: Download packages to include in build
-        if: inputs.download_artifact
+      # ========== PREPARE BUILD ENVIRONMENT ==========
+      - name: Download build artifacts
+        if: ${{ inputs.download_artifact }}
         uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.download_artifact_name }}
           path: ${{ inputs.download_artifact_path }}
 
-      - name: Set up QEMU for multi platform
+      - name: Set up QEMU (multi-platform support)
         if: ${{ contains(inputs.platforms, 'arm') }}
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build with args and push:${{ inputs.deploy }}
-        if: ${{ steps.get_build_args.outputs.build_args_str_list != '' }}
+      # ========== BUILD & PUSH ==========
+      - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: ${{ inputs.platforms }}
           file: ${{ inputs.docker_file }}
-          push: ${{ inputs.deploy }}
-          tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
-          labels: |
-            ${{ steps.get_label_and_outputs_args.outputs.label_source }}
-            ${{ steps.get_label_and_outputs_args.outputs.label_version }}
-            ${{ steps.get_label_and_outputs_args.outputs.label_description }}
-          outputs: ${{ steps.get_label_and_outputs_args.outputs.outputs_args_str_list }}
-          target: ${{ inputs.target }}
-          pull: true
-          build-args: ${{ steps.get_build_args.outputs.build_args_str_list }}
-
-      - name: Build and push:${{ inputs.deploy }}
-        if: ${{ steps.get_build_args.outputs.build_args_str_list == '' }}
-        uses: docker/build-push-action@v6
-        with:
-          context: .
           platforms: ${{ inputs.platforms }}
-          file: ${{ inputs.docker_file }}
           push: ${{ inputs.deploy }}
-          tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
-          labels: |
-            ${{ steps.get_label_and_outputs_args.outputs.label_source }}
-            ${{ steps.get_label_and_outputs_args.outputs.label_version }}
-            ${{ steps.get_label_and_outputs_args.outputs.label_description }}
-          outputs: ${{ steps.get_label_and_outputs_args.outputs.outputs_args_str_list }}
+          tags: ${{ steps.image_tags.outputs.tags }}
+          labels: ${{ steps.docker_metadata.outputs.labels }}
+          outputs: ${{ steps.docker_metadata.outputs.outputs }}
+          build-args: ${{ steps.build_args.outputs.args }}
           target: ${{ inputs.target }}
           pull: true
 
-      - name: Snyk check
-        if: inputs.public && inputs.snyk_check && inputs.deploy
+      # ========== SECURITY SCANNING (optional) ==========
+      - name: Run Snyk security scan
+        if: ${{ inputs.public && inputs.snyk_check && inputs.deploy }}
         uses: snyk/actions/docker@master
         continue-on-error: true
         timeout-minutes: 10
@@ -334,11 +346,72 @@ jobs:
           SNYK_TOKEN: ${{ secrets.snyk_token }}
         with:
           args: --severity-threshold=high --file=${{ inputs.docker_file }}
-          image: ${{ steps.get_image_names.outputs.GITHUB_DOCKER_IMAGE }}
+          image: ${{ inputs.github_registry }}/${{ inputs.public_image }}:${VERSION}
 
-      - name: Snyk upload result to GitHub Code Scanning
-        if: inputs.public && inputs.snyk_check && inputs.deploy
+      - name: Upload Snyk results to GitHub Code Scanning
+        if: ${{ inputs.public && inputs.snyk_check && inputs.deploy && always() }}
         uses: github/codeql-action/upload-sarif@v2
         continue-on-error: true
         with:
           sarif_file: snyk.sarif
+
+      # ========== VERSION MANAGEMENT (after successful build & scan) ==========
+      - name: Setup Python for version bump
+        if: ${{ inputs.version == '' && inputs.deploy }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install bump-my-version
+        if: ${{ inputs.version == '' && inputs.deploy }}
+        run: python3 -m pip install -q bump-my-version
+
+      - name: Bump patch version
+        if: ${{ inputs.version == '' && inputs.deploy }}
+        run: |
+          git config --global --add safe.directory "$(pwd)"
+          git config --global user.name "${{ secrets.commit_user }}"
+          git config --global user.email "${{ secrets.commit_mail }}"
+          bump-my-version bump patch --no-tag
+          echo "✓ Version bumped"
+
+      - name: Push version bump to repository
+        if: ${{ inputs.version == '' && inputs.deploy }}
+        uses: CasperWA/push-protected@v2
+        with:
+          token: ${{ secrets.commit_token }}
+          branch: ${{ github.head_ref || github.ref_name }}
+          unprotect_reviews: true
+
+      # ========== GITHUB RELEASE (after successful build & version bump) ==========
+      - name: Create GitHub Release
+        if: ${{ inputs.create_release && inputs.deploy }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: Release ${{ env.VERSION }}
+          body: |
+            ## Docker Image Release
+
+            **Version:** `${{ env.VERSION }}`
+
+            ### Images Published
+            - **Private Registry:** `${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}:${{ env.VERSION }}`
+            ${{ inputs.public && format('- **AWS Public Registry:** `{0}/{1}:{2}`', inputs.public_registry, inputs.public_image, env.VERSION) || '' }}
+            ${{ inputs.public && format('- **GitHub Registry:** `{0}/{1}:{2}`', inputs.github_registry, inputs.public_image, env.VERSION) || '' }}
+
+            ### Build Information
+            - **Platforms:** `${{ inputs.platforms }}`
+            - **Dockerfile:** `${{ inputs.docker_file }}`
+            ${{ inputs.target && format('- **Build Target:** `{0}`', inputs.target) || '' }}
+            - **Repository:** [${{ github.repository }}](https://github.com/${{ github.repository }})
+            - **Commit:** [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+
+            ### Security
+            ${{ inputs.snyk_check && '- ✓ Snyk security scan completed' || '- Security scanning disabled' }}
+
+            ---
+            *Release created by [GitHub Actions](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})*
+          draft: false
+          prerelease: false
+          token: ${{ secrets.commit_token }}
