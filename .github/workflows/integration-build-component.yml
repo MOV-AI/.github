@@ -185,14 +185,13 @@ jobs:
           mkdir -p test_artifacts
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/jira_report.txt /tmp/test_set.txt
           source ci_scripts/bin/activate
-          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.jira_report --output_file /tmp/jira_report.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.test_set --output_file /tmp/test_set.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key version --output_file /tmp/platform_version.txt
 
-          tests_dir=$(cat /tmp/target_dir.txt)
+          tests_dir=standalone_${{ inputs.test_infra_key }}
           tests_version=$(cat /tmp/version.txt)
           tests_repo_name=$(cat /tmp/repo_name.txt)
           jira_report=$(cat /tmp/jira_report.txt)
