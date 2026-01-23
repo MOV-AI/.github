@@ -188,7 +188,7 @@ jobs:
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.jira_report --output_file /tmp/jira_report.txt
-          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.test_set --output_file /tmp/test_set.txt
+          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.standalone.test_set --output_file /tmp/test_set.txt
           integration-pipeline get_yml_value --file product-manifest.yaml --key version --output_file /tmp/platform_version.txt
 
           tests_dir=standalone_${{ inputs.test_infra_key }}
