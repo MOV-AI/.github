@@ -144,7 +144,7 @@ env:
   PROVISION_INFRA_VERSION: "2.0.0-17"
   ARTIFACTS_RETENTION_DAYS: 15
 jobs:
-  Validate-boostrap-configs:
+  Validate-bootstrap-configs:
     runs-on: integration-pipeline
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
@@ -270,9 +270,9 @@ jobs:
 
   Build-backend:
     runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
-    needs: [Validate-boostrap-configs]
+    needs: [Validate-bootstrap-configs]
     outputs:
-      slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
+      slack_thread_id: ${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id }}
       backend_image: ${{ steps.store_image_name.outputs.backend_image }}
     steps:
       - uses: rtCamp/action-cleanup@master
@@ -311,7 +311,6 @@ jobs:
           cp ./platform_configs/product.version product.version
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
 
-
       - name: Lint docker image
         shell: bash
         run: |
@@ -334,6 +333,7 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
       - name: Docker build
         shell: bash
         run: |
@@ -383,7 +383,7 @@ jobs:
             {
               "channel": "${{ inputs.slack_channel }}",
               "text": "${{ steps.pre_slack_result.outputs.msg }}",
-              "thread_ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
+              "thread_ts": "${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
 
@@ -396,7 +396,7 @@ jobs:
             {
               "channel": "${{ inputs.slack_channel }}",
               "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
-              "thread_ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
+              "thread_ts": "${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
 
@@ -468,12 +468,12 @@ jobs:
         run: echo "Pass"
 
   Fleet-Validations:
-    needs: [Validate-boostrap-configs, Build-backend]
+    needs: [Validate-bootstrap-configs, Build-backend]
     uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@v2.3
     secrets: inherit
     with:
       collect_deployable_artifacts: true
-      fleet_test_infra_list: ${{ needs.Validate-boostrap-configs.outputs.fleet_tests_list }}
+      fleet_test_infra_list: ${{ needs.Validate-bootstrap-configs.outputs.fleet_tests_list }}
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 120
@@ -489,13 +489,12 @@ jobs:
       with_fleet_tests: ${{ inputs.with_fleet_tests }}
 
   Build-Simulator:
-    needs: [Build-backend]
+    needs: [Validate-bootstrap-configs]
     runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     env:
       DISTRO: noetic
     outputs:
-      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-      backend_image: ${{ needs.Build-backend.outputs.backend_image }}
+      slack_thread_id: ${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id }}
 
     steps:
       - name: Cleanup Workspace
@@ -622,7 +621,7 @@ jobs:
             {
               "channel": "${{ inputs.slack_channel }}",
               "text": "${{ steps.pre_slack_result.outputs.msg }}",
-              "thread_ts": "${{ needs.Build-backend.outputs.slack_thread_id  }}"
+              "thread_ts": "${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id  }}"
             }
           token: ${{ secrets.slack_token_id }}
 
@@ -635,7 +634,7 @@ jobs:
             {
               "channel": "${{ inputs.slack_channel }}",
               "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
-              "thread_ts": "${{ needs.Build-backend.outputs.slack_thread_id  }}"
+              "thread_ts": "${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id  }}"
             }
           token: ${{ secrets.slack_token_id }}
 
@@ -665,14 +664,14 @@ jobs:
     with:
       test_infra_key: "simul_flow_tests"
       slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
-      backend_image_name_and_tag: ${{ needs.Build-Simulator.outputs.backend_image }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: 30
       pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
       slack_channel: ${{ inputs.slack_channel }}
       robot_config: 'basic-standalone-ignition-noetic.json'
 
   Robotic-Stack-Integration:
-    needs: [Simulator-Validations, Build-Simulator]
+    needs: [Simulator-Validations, Build-backend, Build-Simulator]
     uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@v2.3
     secrets: inherit
     with:
@@ -681,7 +680,7 @@ jobs:
       slack_channel: ${{ inputs.slack_channel }}
       cluster: ${{ inputs.cluster }}
       debug_simulation_tests_keep_alive: ${{ inputs.debug_simulation_tests_keep_alive }}
-      backend_name: ${{ needs.Build-Simulator.outputs.backend_image }}
+      backend_name: ${{ needs.Build-backend.outputs.backend_image }}
       simulation_qa_key: ${{ inputs.simulation_qa_key }}
       simulation_qa_version: ${{ inputs.simulation_qa_version }}
 
@@ -904,7 +903,7 @@ jobs:
 
   Run-Status:
     runs-on: ubuntu-22.04
-    needs: [publish, Validate-boostrap-configs]
+    needs: [publish, Validate-bootstrap-configs]
     if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled'  || needs.publish.result == 'skipped') }}
     steps:
       - name: unstash raised_meta
@@ -933,6 +932,6 @@ jobs:
             {
               "channel": "${{ inputs.slack_channel }}",
               "text": "${{ steps.pre_slack.outputs.msg_error }}",
-              "ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
+              "ts": "${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id }}"
             }
           token: ${{ secrets.slack_token_id }}
