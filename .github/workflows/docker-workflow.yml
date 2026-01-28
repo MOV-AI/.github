@@ -183,11 +183,8 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       docker_image: ${{ steps.get_image_names.outputs.GITHUB_DOCKER_IMAGE }}
-<<<<<<< HEAD
       ofc_image_dir: ${{ steps.get_image_names.outputs.OFC_IMAGE_DIR }}
       ofc_image_name: ${{ steps.get_image_names.outputs.OFC_IMAGE_NAME }}
-=======
->>>>>>> 6441aa5 (Refactor Docker workflow)
     permissions:
       contents: read
       packages: write
@@ -225,12 +222,7 @@ jobs:
         id: get_image_names
         env:
           VERSION: ${{ needs.raise-version.outputs.package_version }}
-<<<<<<< HEAD
           DOCKER_IMAGE: ${{ inputs.docker_image }}
-=======
-          PUBLIC_PUSH: ${{ inputs.public }}
-          LATEST: ${{ inputs.push_latest }}
->>>>>>> 6441aa5 (Refactor Docker workflow)
         run: |
           OFC_IMAGE_DIR="${DOCKER_IMAGE%%/*}"
           OFC_IMAGE_NAME="${DOCKER_IMAGE#*/}"
@@ -376,7 +368,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-<<<<<<< HEAD
       - name: Login to Private Registry (for push permission)
         uses: docker/login-action@v3
         with:
@@ -438,17 +429,6 @@ jobs:
               docker push ${{ inputs.github_registry }}/${{ inputs.public_image }}:latest
             fi
           fi
-=======
-      - name: Install bump-my-version
-        run: python3 -m pip install bump-my-version
-
-      - name: Bump version
-        run: |
-          git config --global --add safe.directory "$(pwd)"
-          git config --global user.name "${{ secrets.commit_user }}"
-          git config --global user.email "${{ secrets.commit_mail }}"
-          bump-my-version bump patch --no-tag
->>>>>>> 6441aa5 (Refactor Docker workflow)
 
       - name: Push version bump
         uses: CasperWA/push-protected@v2
