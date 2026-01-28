@@ -182,7 +182,6 @@ jobs:
     needs: [static-analyze, raise-version]
     runs-on: ubuntu-22.04
     outputs:
-      docker_image: ${{ steps.get_image_names.outputs.GITHUB_DOCKER_IMAGE }}
       ofc_image_dir: ${{ steps.get_image_names.outputs.OFC_IMAGE_DIR }}
       ofc_image_name: ${{ steps.get_image_names.outputs.OFC_IMAGE_NAME }}
     permissions:
@@ -338,7 +337,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.snyk_token }}
         with:
           args: --severity-threshold=high --file=${{ inputs.docker_file }}
-          image: ${{ needs.build.outputs.docker_image }}
+          image: ${{ inputs.docker_registry }}/ci/${{ needs.build.outputs.ofc_image_name }}:${{ needs.raise-version.outputs.package_version }}
 
       - name: Upload Snyk results to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v2
@@ -358,7 +357,7 @@ jobs:
         if: ${{ steps.snyk.outcome == 'failure' }}
         run: |
           echo "Snyk scan failed - running Docker image for validation..."
-          docker run --rm ${{ needs.build.outputs.docker_image }} --version || echo "Container smoke test completed"
+          docker run --rm ${{ inputs.docker_registry }}/ci/${{ needs.build.outputs.ofc_image_name }}:${{ needs.raise-version.outputs.package_version }} --version || echo "Container smoke test completed"
 
   publish:
     needs: [raise-version, build, test]
