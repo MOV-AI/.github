@@ -183,6 +183,8 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       docker_image: ${{ steps.get_image_names.outputs.GITHUB_DOCKER_IMAGE }}
+      ofc_image_dir: ${{ steps.get_image_names.outputs.OFC_IMAGE_DIR }}
+      ofc_image_name: ${{ steps.get_image_names.outputs.OFC_IMAGE_NAME }}
     permissions:
       contents: read
       packages: write
@@ -220,29 +222,19 @@ jobs:
         id: get_image_names
         env:
           VERSION: ${{ needs.raise-version.outputs.package_version }}
-          PUBLIC_PUSH: ${{ inputs.public }}
-          LATEST: ${{ inputs.push_latest }}
+          DOCKER_IMAGE: ${{ inputs.docker_image }}
         run: |
-          DOCKER_IMAGES_TMP="${{ inputs.docker_registry }}/${{ inputs.docker_image }}:${VERSION}"
-
-          if [ "${LATEST}" = "true" ]; then
-            DOCKER_IMAGES_TMP="${DOCKER_IMAGES_TMP},${{ inputs.docker_registry }}/${{ inputs.docker_image }}:latest"
-          fi
-
-          # If public push is needed
-          if [ "${PUBLIC_PUSH}" = "true" ]; then
-            PUB_DOCKER_IMAGE_TMP="${{ inputs.public_registry }}/${{ inputs.public_image }}:${VERSION}"
-            GITHUB_DOCKER_IMAGE_TMP="${{ inputs.github_registry }}/${{ inputs.public_image }}:${VERSION}"
-            DOCKER_IMAGES_TMP="${DOCKER_IMAGES_TMP},${PUB_DOCKER_IMAGE_TMP},${GITHUB_DOCKER_IMAGE_TMP}"
-            echo "GITHUB_DOCKER_IMAGE=${GITHUB_DOCKER_IMAGE_TMP}" | tee -a "$GITHUB_OUTPUT"
-
-            if [ "${LATEST}" = "true" ]; then
-              DOCKER_IMAGES_TMP="${DOCKER_IMAGES_TMP},${{ inputs.public_registry }}/${{ inputs.public_image }}:latest,${{ inputs.github_registry }}/${{ inputs.public_image }}:latest"
-            fi
-          fi
+          OFC_IMAGE_DIR="${DOCKER_IMAGE%%/*}"
+          OFC_IMAGE_NAME="${DOCKER_IMAGE#*/}"
+          
+          echo "OFC_IMAGE_DIR=${OFC_IMAGE_DIR}" | tee -a "$GITHUB_OUTPUT"
+          echo "OFC_IMAGE_NAME=${OFC_IMAGE_NAME}" | tee -a "$GITHUB_OUTPUT"
+          
+          # Build only for CI directory
+          DOCKER_IMAGES_TMP="${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION}"
 
           echo "DOCKER_IMAGES=${DOCKER_IMAGES_TMP}" | tee -a "$GITHUB_OUTPUT"
-          echo -e "Docker images to publish:\n${DOCKER_IMAGES_TMP}"
+          echo -e "Docker images to build:\n${DOCKER_IMAGES_TMP}"
 
       - name: Compute docker build arguments
         id: get_build_args
@@ -376,15 +368,67 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Install bump-my-version
-        run: python3 -m pip install bump-my-version
+      - name: Login to Private Registry (for push permission)
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ inputs.docker_registry }}
 
-      - name: Bump version
+      - name: Login to Public Registry (for push permission)
+        if: ${{ inputs.public }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.pub_registry_user }}
+          password: ${{ secrets.pub_registry_password }}
+          registry: ${{ inputs.public_registry }}
+
+      - name: Distribute images to official and public registries
+        env:
+          VERSION: ${{ needs.raise-version.outputs.package_version }}
+          LATEST: ${{ inputs.push_latest }}
+          PUBLIC: ${{ inputs.public }}
+          OFC_IMAGE_DIR: ${{ needs.build.outputs.ofc_image_dir }}
+          OFC_IMAGE_NAME: ${{ needs.build.outputs.ofc_image_name }}
         run: |
-          git config --global --add safe.directory "$(pwd)"
-          git config --global user.name "${{ secrets.commit_user }}"
-          git config --global user.email "${{ secrets.commit_mail }}"
-          bump-my-version bump patch --no-tag
+          # Pull from CI directory
+          docker pull ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION}
+          
+          # Push to official directory with version tag
+          docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
+                     ${{ inputs.docker_registry }}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:${VERSION}
+          docker push ${{ inputs.docker_registry }}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:${VERSION}
+          
+          # Handle latest tag
+          if [ "${LATEST}" = "true" ]; then
+            docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
+                       ${{ inputs.docker_registry }}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:latest
+            docker push ${{ inputs.docker_registry }}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:latest
+          fi
+          
+          # Handle public registries
+          if [ "${PUBLIC}" = "true" ]; then
+            # Push to public registry
+            docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
+                       ${{ inputs.public_registry }}/${{ inputs.public_image }}:${VERSION}
+            docker push ${{ inputs.public_registry }}/${{ inputs.public_image }}:${VERSION}
+            
+            # Push to GitHub registry
+            docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
+                       ${{ inputs.github_registry }}/${{ inputs.public_image }}:${VERSION}
+            docker push ${{ inputs.github_registry }}/${{ inputs.public_image }}:${VERSION}
+            
+            # Handle latest for public registries
+            if [ "${LATEST}" = "true" ]; then
+              docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
+                         ${{ inputs.public_registry }}/${{ inputs.public_image }}:latest
+              docker push ${{ inputs.public_registry }}/${{ inputs.public_image }}:latest
+              
+              docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
+                         ${{ inputs.github_registry }}/${{ inputs.public_image }}:latest
+              docker push ${{ inputs.github_registry }}/${{ inputs.public_image }}:latest
+            fi
+          fi
 
       - name: Push version bump
         uses: CasperWA/push-protected@v2
