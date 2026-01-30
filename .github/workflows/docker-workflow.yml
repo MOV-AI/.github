@@ -17,7 +17,7 @@ on:
       platforms:
         required: false
         type: string
-        default: linux/amd64 #,linux/arm/v7
+        default: linux/amd64
         description: list of platform to build and optionally push (comma separated)
       version:
         required: false
@@ -81,7 +81,7 @@ on:
       target:
         required: false
         type: string
-        default:
+        default: ""
         description: string of docker build target
     secrets:
       registry_user:
@@ -201,34 +201,23 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ inputs.docker_registry }}
 
-      - name: Login to Public Registry (for push permission)
-        if: ${{ inputs.public }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.pub_registry_user }}
-          password: ${{ secrets.pub_registry_password }}
-          registry: ${{ inputs.public_registry }}
-
-      - name: Login to Public Github Registry (for push permission)
-        if: ${{ inputs.public }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.github_registry_user }}
-          password: ${{ secrets.github_registry_password }}
-          registry: ${{ inputs.github_registry }}
-
       - name: Compute docker image names
         id: get_image_names
         env:
           VERSION: ${{ needs.raise-version.outputs.package_version }}
           DOCKER_IMAGE: ${{ inputs.docker_image }}
         run: |
+          if [[ "${DOCKER_IMAGE}" != */* ]]; then
+            echo "Error: invalid 'docker_image' input '${DOCKER_IMAGE}'. Expected format '<directory>/<name>'."
+            exit 1
+          fi
+
           OFC_IMAGE_DIR="${DOCKER_IMAGE%%/*}"
           OFC_IMAGE_NAME="${DOCKER_IMAGE#*/}"
-          
+
           echo "OFC_IMAGE_DIR=${OFC_IMAGE_DIR}" | tee -a "$GITHUB_OUTPUT"
           echo "OFC_IMAGE_NAME=${OFC_IMAGE_NAME}" | tee -a "$GITHUB_OUTPUT"
-          
+
           # Build only for CI directory
           DOCKER_IMAGES_TMP="${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION}"
 
@@ -328,6 +317,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Login to Private Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ inputs.docker_registry }}
+
       - name: Snyk security scan
         id: snyk
         uses: snyk/actions/docker@master
@@ -345,23 +341,9 @@ jobs:
         with:
           sarif_file: snyk.sarif
 
-      - name: Login to registry on Snyk failure
-        if: ${{ steps.snyk.outcome == 'failure' }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.github_registry_user }}
-          password: ${{ secrets.github_registry_password }}
-          registry: ${{ inputs.github_registry }}
-
-      - name: Run Docker image on Snyk failure
-        if: ${{ steps.snyk.outcome == 'failure' }}
-        run: |
-          echo "Snyk scan failed - running Docker image for validation..."
-          docker run --rm ${{ inputs.docker_registry }}/ci/${{ needs.build.outputs.ofc_image_name }}:${{ needs.raise-version.outputs.package_version }} --version || echo "Container smoke test completed"
-
   publish:
     needs: [raise-version, build, test]
-    if: ${{ inputs.version == 'auto' && inputs.deploy && always() }}
+    if: ${{ inputs.deploy && always() }}
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -382,6 +364,14 @@ jobs:
           password: ${{ secrets.pub_registry_password }}
           registry: ${{ inputs.public_registry }}
 
+      - name: Login to Public Github Registry (for push permission)
+        if: ${{ inputs.public }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.github_registry_user }}
+          password: ${{ secrets.github_registry_password }}
+          registry: ${{ inputs.github_registry }}
+
       - name: Distribute images to official and public registries
         env:
           VERSION: ${{ needs.raise-version.outputs.package_version }}
@@ -392,37 +382,37 @@ jobs:
         run: |
           # Pull from CI directory
           docker pull ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION}
-          
+
           # Push to official directory with version tag
           docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
                      ${{ inputs.docker_registry }}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:${VERSION}
           docker push ${{ inputs.docker_registry }}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:${VERSION}
-          
+
           # Handle latest tag
           if [ "${LATEST}" = "true" ]; then
             docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
                        ${{ inputs.docker_registry }}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:latest
             docker push ${{ inputs.docker_registry }}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:latest
           fi
-          
+
           # Handle public registries
           if [ "${PUBLIC}" = "true" ]; then
             # Push to public registry
             docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
                        ${{ inputs.public_registry }}/${{ inputs.public_image }}:${VERSION}
             docker push ${{ inputs.public_registry }}/${{ inputs.public_image }}:${VERSION}
-            
+
             # Push to GitHub registry
             docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
                        ${{ inputs.github_registry }}/${{ inputs.public_image }}:${VERSION}
             docker push ${{ inputs.github_registry }}/${{ inputs.public_image }}:${VERSION}
-            
+
             # Handle latest for public registries
             if [ "${LATEST}" = "true" ]; then
               docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
                          ${{ inputs.public_registry }}/${{ inputs.public_image }}:latest
               docker push ${{ inputs.public_registry }}/${{ inputs.public_image }}:latest
-              
+
               docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
                          ${{ inputs.github_registry }}/${{ inputs.public_image }}:latest
               docker push ${{ inputs.github_registry }}/${{ inputs.public_image }}:latest
@@ -430,6 +420,7 @@ jobs:
           fi
 
       - name: Push version bump
+        if: ${{ inputs.version == 'auto' }}
         uses: CasperWA/push-protected@v2
         with:
           token: ${{ secrets.commit_token }}
