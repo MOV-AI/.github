@@ -113,6 +113,16 @@ on:
         required: true
       provision_infra_pwd:
         required: true
+    outputs:
+      product_version:
+        description: "Version of the product built"
+        value: ${{ jobs.Build-Spawner.outputs.raised_version || 'not executed' }}
+      simulation_test_version:
+        description: "Version of the simulation tests executed"
+        value: ${{ jobs.Validation-Simulator-Tests.outputs.simulation_test_version || 'not executed' }}
+      simulation_test_publish_url:
+        description: 'The URL to the published artifacts of simulation tests'
+        value: ${{ jobs.Validation-Simulator-Tests.outputs.simulation_test_publish_url || 'not executed' }}
 
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.8"
@@ -1363,6 +1373,9 @@ jobs:
     runs-on: ${{ needs.Build-Simulator.outputs.simulator_tests_agent_name }}
     if: ${{ github.event_name != 'pull_request'}}
     timeout-minutes: ${{ fromJSON(needs.Compute-timeout.outputs.jobtimeout) }}
+    outputs:
+      simulation_test_version: ${{ steps.simulator_tests_setup.outputs.version || 'not executed' }}
+      simulation_test_publish_url: ${{ steps.minio_publish.outputs.publish_url || 'not executed' }}
     steps:
       - uses: rtCamp/action-cleanup@master
         if: ${{ inputs.with_simulation_tests }}
@@ -1987,7 +2000,7 @@ jobs:
           MAX_RETRIES=5
           RETRY_DELAY=10
           SUCCESS=false
-          URI_OBJ_PATH=ci-artifacts/${{ github.repository }}/$(date '+%Y_%m_%d')/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}
+          URI_OBJ_PATH=ci-artifacts/${{ github.repository }}/$(date '+%Y_%m_%d')/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}/
 
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Attempt $i of $MAX_RETRIES: Uploading artifacts to Minio"
