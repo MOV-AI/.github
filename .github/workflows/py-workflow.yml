@@ -312,6 +312,18 @@ jobs:
         path: coverage.xml
         retention-days: 5
 
+    - name: Docker logs
+      if: always()
+      run: journalctl -u docker.service --since "10 minutes ago" || true > docker-logs.txt
+
+    - name: Upload docker logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: docker-logs
+        path: docker-logs.txt
+        retention-days: 5
+
   Build:
     if: ${{ always() && (needs.Test-on-container.result == 'success' || needs.Test-on-host.result == 'success') }}
     runs-on: ubuntu-22.04
