@@ -314,14 +314,17 @@ jobs:
 
     - name: Docker logs
       if: always()
-      run: journalctl -u docker.service --since "10 minutes ago" || true > docker-logs.txt
+      run: |
+        mkdir -p logs
+        journalctl -u docker.service --since "10 minutes ago" || true > logs/docker-logs.txt
+        docker logs $(docker ps -aq) || true >> logs/container-logs.txt
 
     - name: Upload docker logs
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: docker-logs
-        path: docker-logs.txt
+        path: logs
         retention-days: 5
 
   Build:
