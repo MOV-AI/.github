@@ -83,6 +83,11 @@ on:
         type: string
         default: ""
         description: string of docker build target
+      create_release:
+        required: false
+        type: boolean
+        default: false
+        description: boolean to create GitHub Release with build metadata and digests
     secrets:
       registry_user:
         required: true
@@ -426,3 +431,35 @@ jobs:
           token: ${{ secrets.commit_token }}
           branch: ${{ needs.raise-version.outputs.branch_name }}
           unprotect_reviews: true
+
+      - name: Create GitHub Release
+        if: ${{ inputs.create_release }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.raise-version.outputs.package_version }}
+          name: Release ${{ needs.raise-version.outputs.package_version }}
+          body: |
+            ## Docker Image Release
+
+            **Version:** `${{ needs.raise-version.outputs.package_version }}`
+
+            ### Images Published
+            - **Private Registry:** `${{ inputs.docker_registry }}/${{ inputs.docker_image }}:${{ needs.raise-version.outputs.package_version }}`
+            ${{ inputs.public && format('- **AWS Public Registry:** `{0}/{1}:{2}`', inputs.public_registry, inputs.public_image, needs.raise-version.outputs.package_version) || '' }}
+            ${{ inputs.public && format('- **GitHub Registry:** `{0}/{1}:{2}`', inputs.github_registry, inputs.public_image, needs.raise-version.outputs.package_version) || '' }}
+
+            ### Build Information
+            - **Platforms:** `${{ inputs.platforms }}`
+            - **Dockerfile:** `${{ inputs.docker_file }}`
+            ${{ inputs.target && format('- **Build Target:** `{0}`', inputs.target) || '' }}
+            - **Repository:** [${{ github.repository }}](https://github.com/${{ github.repository }})
+            - **Commit:** [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+
+            ### Security
+            ${{ inputs.snyk_check && '- ✓ Snyk security scan completed' || '- Security scanning disabled' }}
+
+            ---
+            *Release created by [GitHub Actions](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})*
+          draft: false
+          prerelease: false
+          token: ${{ secrets.commit_token }}
