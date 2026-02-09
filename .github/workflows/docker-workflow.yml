@@ -3,13 +3,17 @@ on:
   workflow_call:
     inputs:
       docker_file:
-        required: true
+        required: false
         type: string
         description: path to the Dockerfile used for build step
       docker_image:
-        required: true
+        required: false
         type: string
         description: name of image used for build step and optional push to registries
+      manifest_file:
+        required: false
+        type: string
+        description: path to YAML manifest file containing images configuration
       build_args:
         required: false
         type: string
@@ -112,16 +116,95 @@ on:
 
 jobs:
 
-  static-analyze:
+  parse-matrix:
     runs-on: ubuntu-22.04
+    outputs:
+      matrix: ${{ steps.parse.outputs.matrix }}
+      is_matrix: ${{ steps.parse.outputs.is_matrix }}
+      first_image: ${{ steps.parse.outputs.first_image }}
+      last_image: ${{ steps.parse.outputs.last_image }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Hadolint ${{ inputs.docker_file }}
+      - name: Parse matrix from manifest file
+        id: parse
+        run: |
+          if [ -n "${{ inputs.manifest_file }}" ]; then
+            # load from file
+            echo "is_matrix=true" >> "$GITHUB_OUTPUT"
+            python3 << 'EOF'
+          import json
+          import yaml
+
+          with open('${{ inputs.manifest_file }}') as f:
+              manifest = yaml.safe_load(f)
+
+          images = manifest.get('images', [])
+
+          # convert to matrix
+          matrix = {
+              'include': [
+                  {
+                      'name': img['name'],
+                      'docker_file': img['docker_file'],
+                      'docker_image': img['docker_image'],
+                      'public_image': img['public_image'],
+                      'platforms': img['platforms'],
+                      'public': img['public'],
+                      'snyk_check': img['snyk_check'],
+                      'target': img['target'] if img['target'] else '',
+                  }
+                  for img in images
+              ]
+          }
+
+          matrix_json = json.dumps(matrix)
+          first_image = images[0]['name']
+          last_image = images[-1]['name']
+
+          with open('GITHUB_OUTPUT', 'a') as f:
+              f.write(f"matrix={matrix_json}\n")
+              f.write(f"first_image={first_image}\n")
+              f.write(f"last_image={last_image}\n")
+          EOF
+          else
+            # single image
+            IS_MATRIX="false"
+            echo "is_matrix=${IS_MATRIX}" >> "$GITHUB_OUTPUT"
+            echo "first_image=single" >> "$GITHUB_OUTPUT"
+            echo "last_image=single" >> "$GITHUB_OUTPUT"
+            SINGLE_MATRIX=$(cat <<'MATRIX'
+          {
+            "include": [{
+              "name": "single",
+              "docker_file": "${{ inputs.docker_file }}",
+              "docker_image": "${{ inputs.docker_image }}",
+              "public_image": "${{ inputs.public_image }}",
+              "platforms": "${{ inputs.platforms }}",
+              "public": ${{ inputs.public }},
+              "snyk_check": ${{ inputs.snyk_check }},
+              "target": "${{ inputs.target }}"
+            }]
+          }
+          MATRIX
+            )
+            echo "matrix=${SINGLE_MATRIX}" >> "$GITHUB_OUTPUT"
+          fi
+
+  static-analyze:
+    needs: parse-matrix
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Hadolint ${{ matrix.docker_file }}
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: ${{ inputs.docker_file }}
+          dockerfile: ${{ matrix.docker_file }}
           format: tty
           failure-threshold: error
 
@@ -184,8 +267,10 @@ jobs:
           fi
 
   build:
-    needs: [static-analyze, raise-version]
+    needs: [static-analyze, parse-matrix, raise-version]
     runs-on: ubuntu-22.04
+    strategy:
+      matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     outputs:
       ofc_image_dir: ${{ steps.get_image_names.outputs.OFC_IMAGE_DIR }}
       ofc_image_name: ${{ steps.get_image_names.outputs.OFC_IMAGE_NAME }}
@@ -210,7 +295,7 @@ jobs:
         id: get_image_names
         env:
           VERSION: ${{ needs.raise-version.outputs.package_version }}
-          DOCKER_IMAGE: ${{ inputs.docker_image }}
+          DOCKER_IMAGE: ${{ matrix.docker_image }}
         run: |
           if [[ "${DOCKER_IMAGE}" != */* ]]; then
             echo "Error: invalid 'docker_image' input '${DOCKER_IMAGE}'. Expected format '<directory>/<name>'."
@@ -248,7 +333,7 @@ jobs:
           LABEL_DESCRIPTION=""
           OUTPUTS_ARGS_STR_LIST=""
 
-          IFS=', ' read -r -a platforms_array <<< "${{ inputs.platforms }}"
+          IFS=', ' read -r -a platforms_array <<< "${{ matrix.platforms }}"
           if [ "${#platforms_array[@]}" -gt 1 ]; then
             OUTPUTS_ARGS_STR_LIST="type=image,name=target,annotation-index.org.opencontainers.image.description=Version ${VERSION} of repo ${{ github.repository }}"
           else
@@ -270,7 +355,7 @@ jobs:
           path: ${{ inputs.download_artifact_path }}
 
       - name: Set up QEMU for multi platform
-        if: ${{ contains(inputs.platforms, 'arm') }}
+        if: ${{ contains(matrix.platforms, 'arm') }}
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -281,8 +366,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: ${{ inputs.platforms }}
-          file: ${{ inputs.docker_file }}
+          platforms: ${{ matrix.platforms }}
+          file: ${{ matrix.docker_file }}
           push: ${{ inputs.deploy }}
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
           labels: |
@@ -290,7 +375,7 @@ jobs:
             ${{ steps.get_label_and_outputs_args.outputs.label_version }}
             ${{ steps.get_label_and_outputs_args.outputs.label_description }}
           outputs: ${{ steps.get_label_and_outputs_args.outputs.outputs_args_str_list }}
-          target: ${{ inputs.target }}
+          target: ${{ matrix.target }}
           pull: true
           build-args: ${{ steps.get_build_args.outputs.build_args_str_list }}
 
@@ -299,8 +384,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: ${{ inputs.platforms }}
-          file: ${{ inputs.docker_file }}
+          platforms: ${{ matrix.platforms }}
+          file: ${{ matrix.docker_file }}
           push: ${{ inputs.deploy }}
           tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
           labels: |
@@ -308,13 +393,15 @@ jobs:
             ${{ steps.get_label_and_outputs_args.outputs.label_version }}
             ${{ steps.get_label_and_outputs_args.outputs.label_description }}
           outputs: ${{ steps.get_label_and_outputs_args.outputs.outputs_args_str_list }}
-          target: ${{ inputs.target }}
+          target: ${{ matrix.target }}
           pull: true
 
   test:
-    needs: [raise-version, build]
-    if: ${{ inputs.public && inputs.snyk_check && inputs.deploy }}
+    needs: [raise-version, build, parse-matrix]
+    if: ${{ inputs.deploy && always() }}
     runs-on: ubuntu-22.04
+    strategy:
+      matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     permissions:
       contents: read
       security-events: write
@@ -329,7 +416,19 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ inputs.docker_registry }}
 
+      - name: Compute image name for scanning
+        if: ${{ matrix.snyk_check && matrix.public }}
+        id: get_image_name
+        env:
+          DOCKER_IMAGE: ${{ matrix.docker_image }}
+          VERSION: ${{ needs.raise-version.outputs.package_version }}
+        run: |
+          IMAGE_NAME="${DOCKER_IMAGE#*/}"
+          FULL_IMAGE="${{ inputs.docker_registry }}/ci/${IMAGE_NAME}:${VERSION}"
+          echo "image=${FULL_IMAGE}" | tee -a "$GITHUB_OUTPUT"
+
       - name: Snyk security scan
+        if: ${{ matrix.snyk_check && matrix.public }}
         id: snyk
         uses: snyk/actions/docker@master
         continue-on-error: true
@@ -337,19 +436,22 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.snyk_token }}
         with:
-          args: --severity-threshold=high --file=${{ inputs.docker_file }}
-          image: ${{ inputs.docker_registry }}/ci/${{ needs.build.outputs.ofc_image_name }}:${{ needs.raise-version.outputs.package_version }}
+          args: --severity-threshold=high --file=${{ matrix.docker_file }}
+          image: ${{ steps.get_image_name.outputs.image }}
 
       - name: Upload Snyk results to GitHub Code Scanning
+        if: ${{ matrix.snyk_check && matrix.public }}
         uses: github/codeql-action/upload-sarif@v2
         continue-on-error: true
         with:
           sarif_file: snyk.sarif
 
   publish:
-    needs: [raise-version, build, test]
+    needs: [raise-version, build, test, parse-matrix]
     if: ${{ inputs.deploy && always() }}
     runs-on: ubuntu-22.04
+    strategy:
+      matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -362,7 +464,7 @@ jobs:
           registry: ${{ inputs.docker_registry }}
 
       - name: Login to Public Registry (for push permission)
-        if: ${{ inputs.public }}
+        if: ${{ matrix.public }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.pub_registry_user }}
@@ -370,7 +472,7 @@ jobs:
           registry: ${{ inputs.public_registry }}
 
       - name: Login to Public Github Registry (for push permission)
-        if: ${{ inputs.public }}
+        if: ${{ matrix.public }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.github_registry_user }}
@@ -381,10 +483,14 @@ jobs:
         env:
           VERSION: ${{ needs.raise-version.outputs.package_version }}
           LATEST: ${{ inputs.push_latest }}
-          PUBLIC: ${{ inputs.public }}
-          OFC_IMAGE_DIR: ${{ needs.build.outputs.ofc_image_dir }}
-          OFC_IMAGE_NAME: ${{ needs.build.outputs.ofc_image_name }}
+          PUBLIC: ${{ matrix.public }}
+          DOCKER_IMAGE: ${{ matrix.docker_image }}
+          PUBLIC_IMAGE: ${{ matrix.public_image }}
         run: |
+          # Extract image directory and name
+          OFC_IMAGE_DIR="${DOCKER_IMAGE%%/*}"
+          OFC_IMAGE_NAME="${DOCKER_IMAGE#*/}"
+
           # Pull from CI directory
           docker pull ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION}
 
@@ -404,28 +510,28 @@ jobs:
           if [ "${PUBLIC}" = "true" ]; then
             # Push to public registry
             docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
-                       ${{ inputs.public_registry }}/${{ inputs.public_image }}:${VERSION}
-            docker push ${{ inputs.public_registry }}/${{ inputs.public_image }}:${VERSION}
+                       ${{ inputs.public_registry }}/${PUBLIC_IMAGE}:${VERSION}
+            docker push ${{ inputs.public_registry }}/${PUBLIC_IMAGE}:${VERSION}
 
             # Push to GitHub registry
             docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
-                       ${{ inputs.github_registry }}/${{ inputs.public_image }}:${VERSION}
-            docker push ${{ inputs.github_registry }}/${{ inputs.public_image }}:${VERSION}
+                       ${{ inputs.github_registry }}/${PUBLIC_IMAGE}:${VERSION}
+            docker push ${{ inputs.github_registry }}/${PUBLIC_IMAGE}:${VERSION}
 
             # Handle latest for public registries
             if [ "${LATEST}" = "true" ]; then
               docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
-                         ${{ inputs.public_registry }}/${{ inputs.public_image }}:latest
-              docker push ${{ inputs.public_registry }}/${{ inputs.public_image }}:latest
+                         ${{ inputs.public_registry }}/${PUBLIC_IMAGE}:latest
+              docker push ${{ inputs.public_registry }}/${PUBLIC_IMAGE}:latest
 
               docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
-                         ${{ inputs.github_registry }}/${{ inputs.public_image }}:latest
-              docker push ${{ inputs.github_registry }}/${{ inputs.public_image }}:latest
+                         ${{ inputs.github_registry }}/${PUBLIC_IMAGE}:latest
+              docker push ${{ inputs.github_registry }}/${PUBLIC_IMAGE}:latest
             fi
           fi
 
       - name: Push version bump
-        if: ${{ inputs.version == 'auto' }}
+        if: ${{ inputs.version == 'auto' && matrix.name == needs.parse-matrix.outputs.first_image }}
         uses: CasperWA/push-protected@v2
         with:
           token: ${{ secrets.commit_token }}
@@ -433,7 +539,7 @@ jobs:
           unprotect_reviews: true
 
       - name: Create GitHub Release
-        if: ${{ inputs.create_release }}
+        if: ${{ inputs.create_release && needs.parse-matrix.outputs.last_image == matrix.name }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.raise-version.outputs.package_version }}
@@ -444,19 +550,20 @@ jobs:
             **Version:** `${{ needs.raise-version.outputs.package_version }}`
 
             ### Images Published
-            - **Private Registry:** `${{ inputs.docker_registry }}/${{ inputs.docker_image }}:${{ needs.raise-version.outputs.package_version }}`
-            ${{ inputs.public && format('- **AWS Public Registry:** `{0}/{1}:{2}`', inputs.public_registry, inputs.public_image, needs.raise-version.outputs.package_version) || '' }}
-            ${{ inputs.public && format('- **GitHub Registry:** `{0}/{1}:{2}`', inputs.github_registry, inputs.public_image, needs.raise-version.outputs.package_version) || '' }}
+            ${{ needs.parse-matrix.outputs.is_matrix == 'true' && '#### All Images:' || '' }}
+            ${{ matrix.public && format('- **Private Registry:** `{0}/{1}:{2}`', inputs.docker_registry, matrix.docker_image, needs.raise-version.outputs.package_version) || '' }}
+            ${{ matrix.public && format('- **AWS Public Registry:** `{0}/{1}:{2}`', inputs.public_registry, matrix.public_image, needs.raise-version.outputs.package_version) || '' }}
+            ${{ matrix.public && format('- **GitHub Registry:** `{0}/{1}:{2}`', inputs.github_registry, matrix.public_image, needs.raise-version.outputs.package_version) || '' }}
 
             ### Build Information
-            - **Platforms:** `${{ inputs.platforms }}`
-            - **Dockerfile:** `${{ inputs.docker_file }}`
-            ${{ inputs.target && format('- **Build Target:** `{0}`', inputs.target) || '' }}
+            - **Platforms:** `${{ matrix.platforms }}`
+            - **Dockerfile:** `${{ matrix.docker_file }}`
+            ${{ matrix.target && format('- **Build Target:** `{0}`', matrix.target) || '' }}
             - **Repository:** [${{ github.repository }}](https://github.com/${{ github.repository }})
             - **Commit:** [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
 
             ### Security
-            ${{ inputs.snyk_check && '- ✓ Snyk security scan completed' || '- Security scanning disabled' }}
+            ${{ matrix.snyk_check && '- ✓ Snyk security scan completed' || '- Security scanning disabled' }}
 
             ---
             *Release created by [GitHub Actions](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})*
