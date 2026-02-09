@@ -2000,7 +2000,7 @@ jobs:
           MAX_RETRIES=5
           RETRY_DELAY=10
           SUCCESS=false
-          URI_OBJ_PATH=ci-artifacts/${{ github.repository }}/$(date '+%Y_%m_%d')/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}/
+          URI_OBJ_PATH=ci-artifacts/${{ github.repository }}/$(date '+%Y_%m_%d')/${{ github.run_id}}/${{ github.job }}/attempts/${{ github.run_attempt }}
 
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Attempt $i of $MAX_RETRIES: Uploading artifacts to Minio"
@@ -2024,7 +2024,7 @@ jobs:
               exit 1
           fi
 
-          PUBLISH_URL="${{ env.MINIO_PUBLIC_URL }}/browser/$URI_OBJ_PATH"
+          PUBLISH_URL="${{ env.MINIO_PUBLIC_URL }}/browser/$URI_OBJ_PATH/"
           echo "publish_url=$PUBLISH_URL" >> $GITHUB_OUTPUT
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.minio_key_id }}
