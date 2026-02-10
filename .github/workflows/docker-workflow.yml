@@ -136,11 +136,14 @@ jobs:
             python3 << 'EOF'
           import json
           import yaml
+          import os
 
+          print("Reading manifest file: ${{ inputs.manifest_file }}")
           with open('${{ inputs.manifest_file }}') as f:
               manifest = yaml.safe_load(f)
 
           images = manifest.get('images', [])
+          print(f"Found {len(images)} images in manifest")
 
           # convert to matrix
           matrix = {
@@ -163,10 +166,19 @@ jobs:
           first_image = images[0]['name']
           last_image = images[-1]['name']
 
-          with open('GITHUB_OUTPUT', 'a') as f:
+          print(f"First image: {first_image}")
+          print(f"Last image: {last_image}")
+          print(f"Matrix JSON: {matrix_json}")
+
+          github_output = os.environ.get('GITHUB_OUTPUT', 'GITHUB_OUTPUT')
+          print(f"Writing to: {github_output}")
+          
+          with open(github_output, 'a') as f:
               f.write(f"matrix={matrix_json}\n")
               f.write(f"first_image={first_image}\n")
               f.write(f"last_image={last_image}\n")
+          
+          print("Successfully wrote outputs")
           EOF
           else
             # single image
