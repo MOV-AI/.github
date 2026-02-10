@@ -181,27 +181,34 @@ jobs:
           print("Successfully wrote outputs")
           EOF
           else
-            # single image
+            # image from inputs
             IS_MATRIX="false"
             echo "is_matrix=${IS_MATRIX}" >> "$GITHUB_OUTPUT"
             echo "first_image=single" >> "$GITHUB_OUTPUT"
             echo "last_image=single" >> "$GITHUB_OUTPUT"
-            SINGLE_MATRIX=$(cat <<'MATRIX'
-          {
-            "include": [{
-              "name": "single",
-              "docker_file": "${{ inputs.docker_file }}",
-              "docker_image": "${{ inputs.docker_image }}",
-              "public_image": "${{ inputs.public_image }}",
-              "platforms": "${{ inputs.platforms }}",
-              "public": ${{ inputs.public }},
-              "snyk_check": ${{ inputs.snyk_check }},
-              "target": "${{ inputs.target }}"
-            }]
+            python3 << 'EOF'
+          import json
+          import os
+
+          matrix = {
+              "include": [{
+                  "name": "single",
+                  "docker_file": "${{ inputs.docker_file }}",
+                  "docker_image": "${{ inputs.docker_image }}",
+                  "public_image": "${{ inputs.public_image }}",
+                  "platforms": "${{ inputs.platforms }}",
+                  "public": ${{ inputs.public }},
+                  "snyk_check": ${{ inputs.snyk_check }},
+                  "target": "${{ inputs.target }}" if "${{ inputs.target }}" else ""
+              }]
           }
-          MATRIX
-            )
-            echo "matrix=${SINGLE_MATRIX}" >> "$GITHUB_OUTPUT"
+          
+          matrix_json = json.dumps(matrix)
+          github_output = os.environ.get('GITHUB_OUTPUT', 'GITHUB_OUTPUT')
+          
+          with open(github_output, 'a') as f:
+              f.write(f"matrix={matrix_json}\n")
+          EOF
           fi
 
   static-analyze:
