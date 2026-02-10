@@ -197,8 +197,8 @@ jobs:
                   "docker_image": "${{ inputs.docker_image }}",
                   "public_image": "${{ inputs.public_image }}",
                   "platforms": "${{ inputs.platforms }}",
-                  "public": ${{ inputs.public }},
-                  "snyk_check": ${{ inputs.snyk_check }},
+                  "public": "${{ inputs.public }}" == "true",
+                  "snyk_check": "${{ inputs.snyk_check }}" == "true",
                   "target": "${{ inputs.target }}" if "${{ inputs.target }}" else ""
               }]
           }
