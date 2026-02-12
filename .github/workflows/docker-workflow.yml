@@ -381,7 +381,7 @@ jobs:
 
   test:
     needs: [raise-version, build, parse-matrix]
-    if: ${{ inputs.deploy && always() }}
+    if: ${{ inputs.deploy && needs.build.result == 'success' }}
     runs-on: ubuntu-22.04
     strategy:
       matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
