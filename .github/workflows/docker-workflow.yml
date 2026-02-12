@@ -131,8 +131,15 @@ jobs:
       PUBLIC_REGISTRY: ${{ inputs.public_registry }}
       GITHUB_REGISTRY: ${{ inputs.github_registry }}
     steps:
-      - name: Checkout
+      - name: Checkout calling repository
         uses: actions/checkout@v5
+
+      - name: Checkout workflow repository for scripts
+        uses: actions/checkout@v5
+        with:
+          repository: MOV-AI/.github
+          path: .github-workflows
+          ref: DP-963_docker-image-v3
 
       - name: Install Python dependencies
         run: |
@@ -145,11 +152,11 @@ jobs:
         run: |
           set -e
           if [ -n "${{ inputs.manifest_file }}" ]; then
-            python3 .github/scripts/parse_docker_manifest.py \
+            python3 .github-workflows/.github/scripts/parse_docker_manifest.py \
               --manifest-file "${{ inputs.manifest_file }}" \
-              --push-latest "${{ inputs.push_latest }}" \
+              --push-latest "${{ inputs.push_latest }}"
           else
-            python3 .github/scripts/parse_docker_manifest.py \
+            python3 .github-workflows/.github/scripts/parse_docker_manifest.py \
               --docker-file "${{ inputs.docker_file }}" \
               --docker-image "${{ inputs.docker_image }}" \
               --public-image "${{ inputs.public_image }}" \
@@ -159,6 +166,7 @@ jobs:
               --target "${{ inputs.target }}" \
               --push-latest "${{ inputs.push_latest }}"
           fi
+
       - name: Upload release notes template
         uses: actions/upload-artifact@v4
         with:
