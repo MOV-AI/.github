@@ -213,7 +213,6 @@ jobs:
           bump-my-version bump patch --no-tag
 
       - name: Get branch name
-        if: ${{ inputs.version == 'auto' }}
         id: branch
         env:
           HEAD_REF: ${{ github.head_ref }}
@@ -424,7 +423,7 @@ jobs:
 
   publish:
     needs: [raise-version, build, test, parse-matrix]
-    if: ${{ inputs.deploy && always() }}
+    if: ${{ inputs.deploy && needs.build.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
     runs-on: ubuntu-22.04
     strategy:
       matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
@@ -539,7 +538,7 @@ jobs:
           unprotect_reviews: true
 
   create-release:
-    needs: [parse-matrix, raise-version, publish]
+    needs: [raise-version, publish]
     if: ${{ inputs.create_release && inputs.deploy }}
     runs-on: ubuntu-22.04
     steps:
