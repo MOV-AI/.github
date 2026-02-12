@@ -70,6 +70,20 @@ def parse_from_manifest(manifest_file):
 
 def parse_from_inputs(args):
     """Parse matrix from workflow input parameters."""
+    # Validate required parameters
+    if not args.docker_file:
+        print("Error: --docker-file is required when not using --manifest-file", file=sys.stderr)
+        sys.exit(1)
+
+    if not args.docker_image:
+        print("Error: --docker-image is required when not using --manifest-file", file=sys.stderr)
+        sys.exit(1)
+
+    print("Building matrix from inputs:")
+    print(f"  docker_file: {args.docker_file}")
+    print(f"  docker_image: {args.docker_image}")
+    print(f"  platforms: {args.platforms}")
+
     matrix = {
         "include": [
             {
