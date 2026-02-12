@@ -16,3 +16,9 @@ repos:
     rev: v1.7.7
     hooks:
     - id: actionlint
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.0
+    hooks:
+    - id: ruff                      # fast Python linter (replaces flake8, isort, etc.)
+      args: [--fix, --exit-non-zero-on-fix]
+    - id: ruff-format                # fast Python formatter (replaces black)

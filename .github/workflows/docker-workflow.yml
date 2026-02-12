@@ -66,7 +66,7 @@ on:
         required: false
         type: boolean
         default: false
-        description: boolean to enable snyk security analysis
+        description: boolean to enable snyk security analysis (requires snyk_token secret)
       download_artifact:
         required: false
         type: boolean
@@ -91,7 +91,7 @@ on:
         required: false
         type: boolean
         default: false
-        description: boolean to create GitHub Release with build metadata and digests
+        description: boolean to create GitHub Release with build metadata and digests (requires commit_token secret)
     secrets:
       registry_user:
         required: true
@@ -107,12 +107,16 @@ on:
         required: false
       snyk_token:
         required: false
+        description: Required when snyk_check is enabled
       commit_user:
         required: false
+        description: Required when version='auto' and deploy=true for version bumping
       commit_mail:
         required: false
+        description: Required when version='auto' and deploy=true for version bumping
       commit_token:
         required: false
+        description: Required when version='auto' and deploy=true for pushing version changes
 
 jobs:
 
@@ -127,88 +131,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Install Python dependencies
+        run: |
+          set -e
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pyyaml
+
       - name: Parse matrix from manifest file
         id: parse
         run: |
+          set -e
           if [ -n "${{ inputs.manifest_file }}" ]; then
-            # load from file
-            echo "is_matrix=true" >> "$GITHUB_OUTPUT"
-            python3 << 'EOF'
-          import json
-          import yaml
-          import os
-
-          print("Reading manifest file: ${{ inputs.manifest_file }}")
-          with open('${{ inputs.manifest_file }}') as f:
-              manifest = yaml.safe_load(f)
-
-          images = manifest.get('images', [])
-          print(f"Found {len(images)} images in manifest")
-
-          # convert to matrix
-          matrix = {
-              'include': [
-                  {
-                      'name': img['name'],
-                      'docker_file': img['docker_file'],
-                      'docker_image': img['docker_image'],
-                      'public_image': img['public_image'],
-                      'platforms': img['platforms'],
-                      'public': img['public'],
-                      'snyk_check': img['snyk_check'],
-                      'target': img['target'] if img['target'] else '',
-                  }
-                  for img in images
-              ]
-          }
-
-          matrix_json = json.dumps(matrix)
-          first_image = images[0]['name']
-          last_image = images[-1]['name']
-
-          print(f"First image: {first_image}")
-          print(f"Last image: {last_image}")
-          print(f"Matrix JSON: {matrix_json}")
-
-          github_output = os.environ.get('GITHUB_OUTPUT', 'GITHUB_OUTPUT')
-          print(f"Writing to: {github_output}")
-          
-          with open(github_output, 'a') as f:
-              f.write(f"matrix={matrix_json}\n")
-              f.write(f"first_image={first_image}\n")
-              f.write(f"last_image={last_image}\n")
-          
-          print("Successfully wrote outputs")
-          EOF
+            python3 .github/scripts/parse_docker_manifest.py \
+              --manifest-file "${{ inputs.manifest_file }}"
           else
-            # image from inputs
-            IS_MATRIX="false"
-            echo "is_matrix=${IS_MATRIX}" >> "$GITHUB_OUTPUT"
-            echo "first_image=single" >> "$GITHUB_OUTPUT"
-            echo "last_image=single" >> "$GITHUB_OUTPUT"
-            python3 << 'EOF'
-          import json
-          import os
-
-          matrix = {
-              "include": [{
-                  "name": "single",
-                  "docker_file": "${{ inputs.docker_file }}",
-                  "docker_image": "${{ inputs.docker_image }}",
-                  "public_image": "${{ inputs.public_image }}",
-                  "platforms": "${{ inputs.platforms }}",
-                  "public": "${{ inputs.public }}" == "true",
-                  "snyk_check": "${{ inputs.snyk_check }}" == "true",
-                  "target": "${{ inputs.target }}" if "${{ inputs.target }}" else ""
-              }]
-          }
-          
-          matrix_json = json.dumps(matrix)
-          github_output = os.environ.get('GITHUB_OUTPUT', 'GITHUB_OUTPUT')
-          
-          with open(github_output, 'a') as f:
-              f.write(f"matrix={matrix_json}\n")
-          EOF
+            python3 .github/scripts/parse_docker_manifest.py \
+              --docker-file "${{ inputs.docker_file }}" \
+              --docker-image "${{ inputs.docker_image }}" \
+              --public-image "${{ inputs.public_image }}" \
+              --platforms "${{ inputs.platforms }}" \
+              --public "${{ inputs.public }}" \
+              --snyk-check "${{ inputs.snyk_check }}" \
+              --target "${{ inputs.target }}"
           fi
 
   static-analyze:
@@ -221,7 +165,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Hadolint ${{ matrix.docker_file }}
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: ${{ matrix.docker_file }}
           format: tty
@@ -250,6 +194,7 @@ jobs:
       - name: Bump version (deploy only)
         if: ${{ inputs.version == 'auto' && inputs.deploy }}
         run: |
+          set -e
           git config --global --add safe.directory "$(pwd)"
           git config --global user.name "${{ secrets.commit_user }}"
           git config --global user.email "${{ secrets.commit_mail }}"
@@ -505,49 +450,72 @@ jobs:
           PUBLIC: ${{ matrix.public }}
           DOCKER_IMAGE: ${{ matrix.docker_image }}
           PUBLIC_IMAGE: ${{ matrix.public_image }}
+          DOCKER_REGISTRY: ${{ inputs.docker_registry }}
+          PUBLIC_REGISTRY: ${{ inputs.public_registry }}
+          GITHUB_REGISTRY: ${{ inputs.github_registry }}
         run: |
+          set -e -o pipefail
+
           # Extract image directory and name
           OFC_IMAGE_DIR="${DOCKER_IMAGE%%/*}"
           OFC_IMAGE_NAME="${DOCKER_IMAGE#*/}"
 
           # Pull from CI directory
-          docker pull ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION}
+          echo "Pulling image from CI registry..."
+          docker pull "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}"
+          echo "✓ Successfully pulled image"
 
           # Push to official directory with version tag
-          docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
-                     ${{ inputs.docker_registry }}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:${VERSION}
-          docker push ${{ inputs.docker_registry }}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:${VERSION}
+          echo "Pushing to official registry with version tag..."
+          docker tag "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}" \
+                     "${DOCKER_REGISTRY}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:${VERSION}"
+          docker push "${DOCKER_REGISTRY}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:${VERSION}"
+          echo "✓ Successfully pushed version tag to official registry"
 
           # Handle latest tag
           if [ "${LATEST}" = "true" ]; then
-            docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
-                       ${{ inputs.docker_registry }}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:latest
-            docker push ${{ inputs.docker_registry }}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:latest
+            echo "Pushing latest tag to official registry..."
+            docker tag "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}" \
+                       "${DOCKER_REGISTRY}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:latest"
+            docker push "${DOCKER_REGISTRY}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:latest"
+            echo "✓ Successfully pushed latest tag to official registry"
           fi
 
           # Handle public registries
           if [ "${PUBLIC}" = "true" ]; then
+            echo "Distributing to public registries..."
+
             # Push to public registry
-            docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
-                       ${{ inputs.public_registry }}/${PUBLIC_IMAGE}:${VERSION}
-            docker push ${{ inputs.public_registry }}/${PUBLIC_IMAGE}:${VERSION}
+            echo "Pushing version tag to public registry..."
+            docker tag "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}" \
+                       "${PUBLIC_REGISTRY}/${PUBLIC_IMAGE}:${VERSION}"
+            docker push "${PUBLIC_REGISTRY}/${PUBLIC_IMAGE}:${VERSION}"
+            echo "✓ Successfully pushed version tag to public registry"
 
             # Push to GitHub registry
-            docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
-                       ${{ inputs.github_registry }}/${PUBLIC_IMAGE}:${VERSION}
-            docker push ${{ inputs.github_registry }}/${PUBLIC_IMAGE}:${VERSION}
+            echo "Pushing version tag to GitHub registry..."
+            docker tag "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}" \
+                       "${GITHUB_REGISTRY}/${PUBLIC_IMAGE}:${VERSION}"
+            docker push "${GITHUB_REGISTRY}/${PUBLIC_IMAGE}:${VERSION}"
+            echo "✓ Successfully pushed version tag to GitHub registry"
 
             # Handle latest for public registries
             if [ "${LATEST}" = "true" ]; then
-              docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
-                         ${{ inputs.public_registry }}/${PUBLIC_IMAGE}:latest
-              docker push ${{ inputs.public_registry }}/${PUBLIC_IMAGE}:latest
+              echo "Pushing latest tag to public registry..."
+              docker tag "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}" \
+                         "${PUBLIC_REGISTRY}/${PUBLIC_IMAGE}:latest"
+              docker push "${PUBLIC_REGISTRY}/${PUBLIC_IMAGE}:latest"
+              echo "✓ Successfully pushed latest tag to public registry"
 
-              docker tag ${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION} \
-                         ${{ inputs.github_registry }}/${PUBLIC_IMAGE}:latest
-              docker push ${{ inputs.github_registry }}/${PUBLIC_IMAGE}:latest
+              echo "Pushing latest tag to GitHub registry..."
+              docker tag "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}" \
+                         "${GITHUB_REGISTRY}/${PUBLIC_IMAGE}:latest"
+              docker push "${GITHUB_REGISTRY}/${PUBLIC_IMAGE}:latest"
+              echo "✓ Successfully pushed latest tag to GitHub registry"
             fi
           fi
+
+          echo "✓ Image distribution completed successfully"
 
       - name: Push version bump
         if: ${{ inputs.version == 'auto' && matrix.name == needs.parse-matrix.outputs.first_image }}
@@ -569,10 +537,16 @@ jobs:
             **Version:** `${{ needs.raise-version.outputs.package_version }}`
 
             ### Images Published
-            ${{ needs.parse-matrix.outputs.is_matrix == 'true' && '#### All Images:' || '' }}
-            ${{ matrix.public && format('- **Private Registry:** `{0}/{1}:{2}`', inputs.docker_registry, matrix.docker_image, needs.raise-version.outputs.package_version) || '' }}
+
+            #### Private Registry
+            - **Image:** `${{ inputs.docker_registry }}/${{ matrix.docker_image }}:${{ needs.raise-version.outputs.package_version }}`
+            ${{ inputs.push_latest && format('- **Latest:** `{0}/{1}:latest`', inputs.docker_registry, matrix.docker_image) || '' }}
+
+            ${{ matrix.public && '#### Public Registries' || '' }}
             ${{ matrix.public && format('- **AWS Public Registry:** `{0}/{1}:{2}`', inputs.public_registry, matrix.public_image, needs.raise-version.outputs.package_version) || '' }}
+            ${{ matrix.public && inputs.push_latest && format('  - Latest: `{0}/{1}:latest`', inputs.public_registry, matrix.public_image) || '' }}
             ${{ matrix.public && format('- **GitHub Registry:** `{0}/{1}:{2}`', inputs.github_registry, matrix.public_image, needs.raise-version.outputs.package_version) || '' }}
+            ${{ matrix.public && inputs.push_latest && format('  - Latest: `{0}/{1}:latest`', inputs.github_registry, matrix.public_image) || '' }}
 
             ### Build Information
             - **Platforms:** `${{ matrix.platforms }}`

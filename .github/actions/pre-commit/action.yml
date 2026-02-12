@@ -38,7 +38,7 @@ runs:
             sudo apt-get update
             xargs -a ./dev-requirements.apt sudo apt-get install -y
           fi
-    
+
           # Install pip requirements if file exists
           if [[ -f ./dev-requirements.txt ]]; then
             python3 -m pip install -r ./dev-requirements.txt
@@ -68,8 +68,8 @@ runs:
         repository: ${{ github.repository }}
         issue-number: ${{ github.event.pull_request.number }}
         body: |
-          ❌ Static Analysis Failed. 
-          
+          ❌ Static Analysis Failed.
+
           Analysis Output:
           ```
           ${{ steps.capture_output.outputs.report }}

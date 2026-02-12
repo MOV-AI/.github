@@ -1,0 +1,49 @@
+# Ruff configuration for Python linting
+# Documentation: https://docs.astral.sh/ruff/
+
+# Exclude common directories
+extend-exclude = [
+    ".venv",
+    "venv",
+    "__pycache__",
+    "*.egg-info",
+]
+
+# Set line length to match common Python style guides
+line-length = 120
+
+# Target Python 3.8+ for compatibility
+target-version = "py38"
+
+[lint]
+# Enable these rule sets:
+# E: pycodestyle errors
+# F: Pyflakes
+# I: isort (import sorting)
+# N: pep8-naming
+# W: pycodestyle warnings
+# UP: pyupgrade (modernize Python syntax)
+# B: flake8-bugbear (find likely bugs)
+# C4: flake8-comprehensions (better list/dict/set comprehensions)
+# SIM: flake8-simplify (simplify code)
+# RUF: Ruff-specific rules
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "RUF"]
+
+# Ignore specific rules if needed
+ignore = [
+    "E501",  # Line too long (handled by formatter)
+]
+
+# Allow autofix for these rule categories
+fixable = ["ALL"]
+unfixable = []
+
+[format]
+# Use double quotes for strings
+quote-style = "double"
+
+# Indent with spaces (4 spaces)
+indent-style = "space"
+
+# Use Unix line endings
+line-ending = "lf"
