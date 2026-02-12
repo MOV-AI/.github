@@ -110,6 +110,72 @@ def write_github_output(outputs):
         sys.exit(1)
 
 
+def generate_release_notes(matrix, version, push_latest, output_file):
+    """Generate release notes markdown file."""
+    if not version:
+        return  # Don't generate if no version provided
+
+    # Read registry URLs from environment variables
+    docker_registry = os.environ.get("DOCKER_REGISTRY", "registry.cloud.mov.ai")
+    public_registry = os.environ.get("PUBLIC_REGISTRY", "pubregistry.aws.cloud.mov.ai")
+    github_registry = os.environ.get("GITHUB_REGISTRY", "ghcr.io/mov-ai")
+
+    print(f"Generating release notes to: {output_file}")
+    print(f"Using registries - Docker: {docker_registry}, Public: {public_registry}, GitHub: {github_registry}")
+
+    try:
+        with open(output_file, "w") as f:
+            f.write("## Docker Image Release\n\n")
+            f.write(f"**Version:** `{version}`\n\n")
+
+            for item in matrix["include"]:
+                name = item.get("name", "unknown")
+                docker_image = item.get("docker_image", "")
+                public_image = item.get("public_image", "")
+                is_public = item.get("public", False)
+                platforms = item.get("platforms", "linux/amd64")
+                dockerfile = item.get("docker_file", "")
+                target = item.get("target", "")
+                snyk = item.get("snyk_check", False)
+
+                if name == "single":
+                    name = docker_image  # Use image name if single image
+
+                f.write(f"## {name}\n\n")
+                f.write("**Private Registry:**\n")
+                f.write(f"- `{docker_registry}/{docker_image}:{version}`\n")
+                if push_latest:
+                    f.write(f"- Latest: `{docker_registry}/{docker_image}:latest`\n")
+
+                if is_public and public_image:
+                    f.write("\n**Public Registries:**\n")
+                    f.write(f"- AWS Public: `{public_registry}/{public_image}:{version}`")
+                    if push_latest:
+                        f.write(f" (latest: `{public_registry}/{public_image}:latest`)")
+                    f.write("\n")
+                    f.write(f"- GitHub: `{github_registry}/{public_image}:{version}`")
+                    if push_latest:
+                        f.write(f" (latest: `{github_registry}/{public_image}:latest`)")
+                    f.write("\n")
+
+                f.write(f"\n**Build:** {platforms}\n")
+                f.write(f"\n**Dockerfile:** `{dockerfile}`")
+                if target:
+                    f.write(f" (target: `{target}`)")
+                f.write("\n")
+                if snyk:
+                    f.write("\n**Security scan:** enabled\n")
+                f.write("\n\n")
+
+            f.write("---\n\n")
+            f.write("*Release notes generated during build*\n")
+
+        print(f"✓ Release notes written to {output_file}")
+    except OSError as e:
+        print(f"Warning: Failed to write release notes: {e}", file=sys.stderr)
+        # Don't fail the workflow if release notes can't be written
+
+
 def main():
     parser = argparse.ArgumentParser(description="Parse Docker build matrix for GitHub Actions")
     parser.add_argument(
@@ -124,6 +190,13 @@ def main():
     parser.add_argument("--snyk-check", default="false", help="Enable Snyk security scan")
     parser.add_argument("--target", default="", help="Docker build target")
 
+    # Release notes generation arguments (optional)
+    parser.add_argument("--version", default="{{VERSION}}", help="Version for release notes")
+    parser.add_argument("--push-latest", default="false", help="Whether latest tag will be pushed")
+    parser.add_argument(
+        "--release-notes-output", default="release_notes_template.md", help="Output file for release notes"
+    )
+
     args = parser.parse_args()
 
     # Determine which mode to use
@@ -131,6 +204,16 @@ def main():
 
     # Write outputs to GitHub Actions
     write_github_output(outputs)
+
+    # Generate release notes if version is provided
+    if args.version:
+        matrix = json.loads(outputs["matrix"])
+        generate_release_notes(
+            matrix=matrix,
+            version=args.version,
+            push_latest=args.push_latest.lower() == "true",
+            output_file=args.release_notes_output,
+        )
 
 
 if __name__ == "__main__":

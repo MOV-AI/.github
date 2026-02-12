@@ -4,16 +4,16 @@ This directory contains utility scripts used by GitHub Actions workflows.
 
 ## parse_docker_manifest.py
 
-Parses Docker build matrix configuration for multi-image builds.
+Parses Docker build matrix configuration for multi-image builds and generates release notes.
 
 ### Usage
 
-**From manifest file:**
+**Parse matrix from manifest file:**
 ```bash
 python3 parse_docker_manifest.py --manifest-file path/to/manifest.yaml
 ```
 
-**From individual inputs:**
+**Parse matrix from individual inputs:**
 ```bash
 python3 parse_docker_manifest.py \
   --docker-file Dockerfile \
@@ -21,6 +21,14 @@ python3 parse_docker_manifest.py \
   --platforms "linux/amd64,linux/arm64" \
   --public true \
   --snyk-check true
+```
+
+**Generate release notes (requires matrix parsing arguments and registry environment variables):**
+```bash
+python3 parse_docker_manifest.py \
+  --manifest-file path/to/manifest.yaml \
+  --version 1.2.3 \
+  --release-notes-output release_notes.md
 ```
 
 ### Manifest File Format
@@ -52,6 +60,21 @@ The script writes to `$GITHUB_OUTPUT`:
 - `matrix`: JSON-encoded build matrix for GitHub Actions
 - `first_image`: Name of the first image (used for version bumping)
 - `last_image`: Name of the last image (used for release creation)
+
+The script also generates release notes based on the provided information:
+- Creates a markdown file at the specified `--release-notes-output` path
+- Contains formatted information about all Docker images in the build
+- Includes version, registry URLs, platform details, and build configuration
+- Designed to be uploaded as a GitHub Actions artifact and downloaded by the `create-release` job
+
+### Workflow Integration
+
+The script is used in two places in the Docker workflow:
+
+1. **parse-matrix job**: Parses the manifest to generate the build matrix, and conditionally generates release notes template with version placeholder `{{VERSION}}`
+2. **create-release job**: Downloads the artifact and uses sed to replace `{{VERSION}}` with the actual version from raise-version output
+
+This approach ensures the script is only called once per workflow run, with simple text replacement handling the version substitution.
 
 ### Dependencies
 
