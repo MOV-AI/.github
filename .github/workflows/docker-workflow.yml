@@ -1,0 +1,592 @@
+name: Build, Deploy and release Docker images
+on:
+  workflow_call:
+    inputs:
+      docker_file:
+        required: false
+        type: string
+        description: path to the Dockerfile used for build step
+      docker_image:
+        required: false
+        type: string
+        description: name of image used for build step and optional push to registries
+      manifest_file:
+        required: false
+        type: string
+        description: path to YAML manifest file containing images configuration
+      build_args:
+        required: false
+        type: string
+        description: list of arguments used for build step (comma separated)
+      platforms:
+        required: false
+        type: string
+        default: linux/amd64
+        description: list of platform to build and optionally push (comma separated)
+      version:
+        required: false
+        type: string
+        default: auto
+        description: version to use for the docker image, 'auto' to auto bump version on deploy
+      deploy:
+        required: false
+        type: boolean
+        default: false
+        description: boolean to enable push
+      push_latest:
+        required: false
+        type: boolean
+        default: false
+        description: boolean to override latest tag on push
+      docker_registry:
+        required: false
+        type: string
+        default: registry.cloud.mov.ai
+        description: primary registry used for push
+      public:
+        required: false
+        type: boolean
+        default: false
+        description: boolean to enable secondary public registry push
+      public_registry:
+        required: false
+        type: string
+        default: pubregistry.aws.cloud.mov.ai
+        description: secondary public registry used for push
+      github_registry:
+        required: false
+        type: string
+        default: ghcr.io/mov-ai
+        description: github public registry used for push
+      public_image:
+        required: false
+        type: string
+        description: secondary public name of image used for build step and optional push to registries
+      snyk_check:
+        required: false
+        type: boolean
+        default: false
+        description: boolean to enable snyk security analysis (requires snyk_token secret)
+      download_artifact:
+        required: false
+        type: boolean
+        default: false
+        description: boolean to enable download of 'packages' artifacts to be included in build
+      download_artifact_name:
+        required: false
+        type: string
+        default: "artifacts"
+        description: artifact name to download
+      download_artifact_path:
+        required: false
+        type: string
+        default: ./dist
+        description: path where package is downloaded
+      target:
+        required: false
+        type: string
+        default: ""
+        description: string of docker build target
+      create_release:
+        required: false
+        type: boolean
+        default: false
+        description: boolean to create GitHub Release with build metadata and digests (requires commit_token secret)
+    secrets:
+      registry_user:
+        required: true
+      registry_password:
+        required: true
+      pub_registry_user:
+        required: false
+      pub_registry_password:
+        required: false
+      github_registry_user:
+        required: false
+      github_registry_password:
+        required: false
+      snyk_token:
+        required: false
+        description: Required when snyk_check is enabled
+      commit_user:
+        required: false
+        description: Required when version='auto' and deploy=true for version bumping
+      commit_mail:
+        required: false
+        description: Required when version='auto' and deploy=true for version bumping
+      commit_token:
+        required: false
+        description: Required when version='auto' and deploy=true for pushing version changes
+
+jobs:
+  parse-matrix:
+    runs-on: ubuntu-22.04
+    outputs:
+      matrix: ${{ steps.parse.outputs.matrix }}
+      is_matrix: ${{ steps.parse.outputs.is_matrix }}
+      first_image: ${{ steps.parse.outputs.first_image }}
+      last_image: ${{ steps.parse.outputs.last_image }}
+    env:
+      DOCKER_REGISTRY: ${{ inputs.docker_registry }}
+      PUBLIC_REGISTRY: ${{ inputs.public_registry }}
+      GITHUB_REGISTRY: ${{ inputs.github_registry }}
+    steps:
+      - name: Checkout calling repository
+        uses: actions/checkout@v5
+
+      - name: Checkout workflow repository for scripts
+        uses: actions/checkout@v5
+        with:
+          repository: MOV-AI/.github
+          path: .github-workflows
+          ref: DP-963_docker-image-v3
+
+      - name: Install Python dependencies
+        run: |
+          set -e
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pyyaml
+
+      - name: Parse manifest
+        id: parse
+        run: |
+          set -e
+          if [ -n "${{ inputs.manifest_file }}" ]; then
+            python3 .github-workflows/.github/scripts/parse_docker_manifest.py \
+              --manifest-file "${{ inputs.manifest_file }}" \
+              --push-latest "${{ inputs.push_latest }}"
+          else
+            python3 .github-workflows/.github/scripts/parse_docker_manifest.py \
+              --docker-file "${{ inputs.docker_file }}" \
+              --docker-image "${{ inputs.docker_image }}" \
+              --public-image "${{ inputs.public_image }}" \
+              --platforms "${{ inputs.platforms }}" \
+              --public "${{ inputs.public }}" \
+              --snyk-check "${{ inputs.snyk_check }}" \
+              --target "${{ inputs.target }}" \
+              --push-latest "${{ inputs.push_latest }}"
+          fi
+
+      - name: Upload release notes template
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release_notes_template.md
+          retention-days: 1
+
+  static-analyze:
+    needs: parse-matrix
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Hadolint ${{ matrix.docker_file }}
+        uses: hadolint/hadolint-action@v3.3.0
+        with:
+          dockerfile: ${{ matrix.docker_file }}
+          format: tty
+          failure-threshold: error
+
+  raise-version:
+    needs: parse-matrix
+    runs-on: ubuntu-22.04
+    outputs:
+      package_version: ${{ steps.get_version.outputs.version }}
+      branch_name: ${{ steps.branch.outputs.name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Use manual version
+        if: ${{ inputs.version != 'auto' }}
+        id: manual_version
+        run: |
+          echo "version=${{ inputs.version }}" | tee -a "$GITHUB_OUTPUT"
+          echo "Using manual version: ${{ inputs.version }}"
+
+      - name: Install bump-my-version
+        if: ${{ inputs.version == 'auto' }}
+        run: python3 -m pip install bump-my-version
+
+      - name: Bump version (deploy only)
+        if: ${{ inputs.version == 'auto' && inputs.deploy }}
+        run: |
+          set -e
+          git config --global --add safe.directory "$(pwd)"
+          git config --global user.name "${{ secrets.commit_user }}"
+          git config --global user.email "${{ secrets.commit_mail }}"
+          bump-my-version bump patch --no-tag
+
+      - name: Get branch name
+        id: branch
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "name=${HEAD_REF}" | tee -a "$GITHUB_OUTPUT"
+          else
+            echo "name=${REF_NAME}" | tee -a "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get version from bump-my-version
+        if: ${{ inputs.version == 'auto' }}
+        id: auto_version
+        run: |
+          VERSION=$(bump-my-version show current_version)
+          echo "version=${VERSION}" | tee -a "$GITHUB_OUTPUT"
+          echo "Version: ${VERSION}"
+
+      - name: Set final version
+        id: get_version
+        run: |
+          if [ "${{ inputs.version }}" != 'auto' ]; then
+            echo "version=${{ steps.manual_version.outputs.version }}" | tee -a "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ steps.auto_version.outputs.version }}" | tee -a "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: [static-analyze, parse-matrix, raise-version]
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
+    outputs:
+      ofc_image_dir: ${{ steps.get_image_names.outputs.OFC_IMAGE_DIR }}
+      ofc_image_name: ${{ steps.get_image_names.outputs.OFC_IMAGE_NAME }}
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+      actions: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Login to Private Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ inputs.docker_registry }}
+
+      - name: Compute docker image names
+        id: get_image_names
+        env:
+          VERSION: ${{ needs.raise-version.outputs.package_version }}
+          DOCKER_IMAGE: ${{ matrix.docker_image }}
+        run: |
+          if [[ "${DOCKER_IMAGE}" != */* ]]; then
+            echo "Error: invalid 'docker_image' input '${DOCKER_IMAGE}'. Expected format '<directory>/<name>'."
+            exit 1
+          fi
+
+          OFC_IMAGE_DIR="${DOCKER_IMAGE%%/*}"
+          OFC_IMAGE_NAME="${DOCKER_IMAGE#*/}"
+
+          echo "OFC_IMAGE_DIR=${OFC_IMAGE_DIR}" | tee -a "$GITHUB_OUTPUT"
+          echo "OFC_IMAGE_NAME=${OFC_IMAGE_NAME}" | tee -a "$GITHUB_OUTPUT"
+
+          # Build only for CI directory
+          DOCKER_IMAGES_TMP="${{ inputs.docker_registry }}/ci/${OFC_IMAGE_NAME}:${VERSION}"
+
+          echo "DOCKER_IMAGES=${DOCKER_IMAGES_TMP}" | tee -a "$GITHUB_OUTPUT"
+          echo -e "Docker images to build:\n${DOCKER_IMAGES_TMP}"
+
+      - name: Compute docker build arguments
+        id: get_build_args
+        run: |
+          BUILD_ARGS_STR_LIST="${{ inputs.build_args }}"
+          if [ -n "${BUILD_ARGS_STR_LIST}" ]; then
+            echo "build_args_str_list=${BUILD_ARGS_STR_LIST}" | tee -a "$GITHUB_OUTPUT"
+            echo -e "Docker build arguments:\n${BUILD_ARGS_STR_LIST}"
+          fi
+
+      - name: Compute docker label and outputs arguments
+        id: get_label_and_outputs_args
+        env:
+          VERSION: ${{ needs.raise-version.outputs.package_version }}
+        run: |
+          LABEL_SRC="org.opencontainers.image.source=https://github.com/${{ github.repository }}"
+          LABEL_VERSION="org.opencontainers.image.version=${VERSION}"
+          LABEL_DESCRIPTION=""
+          OUTPUTS_ARGS_STR_LIST=""
+
+          IFS=', ' read -r -a platforms_array <<< "${{ matrix.platforms }}"
+          if [ "${#platforms_array[@]}" -gt 1 ]; then
+            OUTPUTS_ARGS_STR_LIST="type=image,name=target,annotation-index.org.opencontainers.image.description=Version ${VERSION} of repo ${{ github.repository }}"
+          else
+            LABEL_DESCRIPTION="org.opencontainers.image.description=Version ${VERSION} of repo ${{ github.repository }}"
+          fi
+
+          {
+            echo "label_description=${LABEL_DESCRIPTION}"
+            echo "label_source=${LABEL_SRC}"
+            echo "label_version=${LABEL_VERSION}"
+            echo "outputs_args_str_list=${OUTPUTS_ARGS_STR_LIST}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Download packages to include in build
+        if: inputs.download_artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.download_artifact_name }}
+          path: ${{ inputs.download_artifact_path }}
+
+      - name: Set up QEMU for multi platform
+        if: ${{ contains(matrix.platforms, 'arm') }}
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build with args and push:${{ inputs.deploy }}
+        if: ${{ steps.get_build_args.outputs.build_args_str_list != '' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platforms }}
+          file: ${{ matrix.docker_file }}
+          push: ${{ inputs.deploy }}
+          tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
+          labels: |
+            ${{ steps.get_label_and_outputs_args.outputs.label_source }}
+            ${{ steps.get_label_and_outputs_args.outputs.label_version }}
+            ${{ steps.get_label_and_outputs_args.outputs.label_description }}
+          outputs: ${{ steps.get_label_and_outputs_args.outputs.outputs_args_str_list }}
+          target: ${{ matrix.target }}
+          pull: true
+          build-args: ${{ steps.get_build_args.outputs.build_args_str_list }}
+
+      - name: Build and push:${{ inputs.deploy }}
+        if: ${{ steps.get_build_args.outputs.build_args_str_list == '' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platforms }}
+          file: ${{ matrix.docker_file }}
+          push: ${{ inputs.deploy }}
+          tags: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
+          labels: |
+            ${{ steps.get_label_and_outputs_args.outputs.label_source }}
+            ${{ steps.get_label_and_outputs_args.outputs.label_version }}
+            ${{ steps.get_label_and_outputs_args.outputs.label_description }}
+          outputs: ${{ steps.get_label_and_outputs_args.outputs.outputs_args_str_list }}
+          target: ${{ matrix.target }}
+          pull: true
+
+  test:
+    needs: [raise-version, build, parse-matrix]
+    if: ${{ inputs.deploy && needs.build.result == 'success' }}
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Login to Private Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ inputs.docker_registry }}
+
+      - name: Compute image name for scanning
+        if: ${{ matrix.snyk_check && matrix.public }}
+        id: get_image_name
+        env:
+          DOCKER_IMAGE: ${{ matrix.docker_image }}
+          VERSION: ${{ needs.raise-version.outputs.package_version }}
+        run: |
+          IMAGE_NAME="${DOCKER_IMAGE#*/}"
+          FULL_IMAGE="${{ inputs.docker_registry }}/ci/${IMAGE_NAME}:${VERSION}"
+          echo "image=${FULL_IMAGE}" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Snyk security scan
+        if: ${{ matrix.snyk_check && matrix.public }}
+        id: snyk
+        uses: snyk/actions/docker@master
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          SNYK_TOKEN: ${{ secrets.snyk_token }}
+        with:
+          args: --severity-threshold=high --file=${{ matrix.docker_file }}
+          image: ${{ steps.get_image_name.outputs.image }}
+
+      - name: Upload Snyk results to GitHub Code Scanning
+        if: ${{ matrix.snyk_check && matrix.public }}
+        uses: github/codeql-action/upload-sarif@v2
+        continue-on-error: true
+        with:
+          sarif_file: snyk.sarif
+
+  publish:
+    needs: [raise-version, build, test, parse-matrix]
+    if: ${{ inputs.deploy && needs.build.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
+    env:
+      DOCKER_REGISTRY: ${{ inputs.docker_registry }}
+      PUBLIC_REGISTRY: ${{ inputs.public_registry }}
+      GITHUB_REGISTRY: ${{ inputs.github_registry }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Login to Private Registry (for push permission)
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ inputs.docker_registry }}
+
+      - name: Login to Public Registry (for push permission)
+        if: ${{ matrix.public }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.pub_registry_user }}
+          password: ${{ secrets.pub_registry_password }}
+          registry: ${{ inputs.public_registry }}
+
+      - name: Login to Public Github Registry (for push permission)
+        if: ${{ matrix.public }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.github_registry_user }}
+          password: ${{ secrets.github_registry_password }}
+          registry: ${{ inputs.github_registry }}
+
+      - name: Distribute images to official and public registries
+        env:
+          VERSION: ${{ needs.raise-version.outputs.package_version }}
+          LATEST: ${{ inputs.push_latest }}
+          PUBLIC: ${{ matrix.public }}
+          DOCKER_IMAGE: ${{ matrix.docker_image }}
+          PUBLIC_IMAGE: ${{ matrix.public_image }}
+        run: |
+          set -e -o pipefail
+
+          # Extract image directory and name
+          OFC_IMAGE_DIR="${DOCKER_IMAGE%%/*}"
+          OFC_IMAGE_NAME="${DOCKER_IMAGE#*/}"
+
+          # Pull from CI directory
+          echo "Pulling image from CI registry..."
+          docker pull "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}"
+          echo "✓ Successfully pulled image"
+
+          # Push to official directory with version tag
+          echo "Pushing to official registry with version tag..."
+          docker tag "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}" \
+                     "${DOCKER_REGISTRY}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:${VERSION}"
+          docker push "${DOCKER_REGISTRY}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:${VERSION}"
+          echo "✓ Successfully pushed version tag to official registry"
+
+          # Handle latest tag
+          if [ "${LATEST}" = "true" ]; then
+            echo "Pushing latest tag to official registry..."
+            docker tag "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}" \
+                       "${DOCKER_REGISTRY}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:latest"
+            docker push "${DOCKER_REGISTRY}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:latest"
+            echo "✓ Successfully pushed latest tag to official registry"
+          fi
+
+          # Handle public registries
+          if [ "${PUBLIC}" = "true" ]; then
+            echo "Distributing to public registries..."
+
+            # Push to public registry
+            echo "Pushing version tag to public registry..."
+            docker tag "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}" \
+                       "${PUBLIC_REGISTRY}/${PUBLIC_IMAGE}:${VERSION}"
+            docker push "${PUBLIC_REGISTRY}/${PUBLIC_IMAGE}:${VERSION}"
+            echo "✓ Successfully pushed version tag to public registry"
+
+            # Push to GitHub registry
+            echo "Pushing version tag to GitHub registry..."
+            docker tag "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}" \
+                       "${GITHUB_REGISTRY}/${PUBLIC_IMAGE}:${VERSION}"
+            docker push "${GITHUB_REGISTRY}/${PUBLIC_IMAGE}:${VERSION}"
+            echo "✓ Successfully pushed version tag to GitHub registry"
+
+            # Handle latest for public registries
+            if [ "${LATEST}" = "true" ]; then
+              echo "Pushing latest tag to public registry..."
+              docker tag "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}" \
+                         "${PUBLIC_REGISTRY}/${PUBLIC_IMAGE}:latest"
+              docker push "${PUBLIC_REGISTRY}/${PUBLIC_IMAGE}:latest"
+              echo "✓ Successfully pushed latest tag to public registry"
+
+              echo "Pushing latest tag to GitHub registry..."
+              docker tag "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}" \
+                         "${GITHUB_REGISTRY}/${PUBLIC_IMAGE}:latest"
+              docker push "${GITHUB_REGISTRY}/${PUBLIC_IMAGE}:latest"
+              echo "✓ Successfully pushed latest tag to GitHub registry"
+            fi
+          fi
+
+          echo "✓ Image distribution completed successfully"
+
+      - name: Commit and push version changes
+        if: ${{ inputs.version == 'auto' && matrix.name == needs.parse-matrix.outputs.first_image }}
+        uses: CasperWA/push-protected@v2
+        with:
+          token: ${{ secrets.commit_token }}
+          branch: ${{ needs.raise-version.outputs.branch_name }}
+          unprotect_reviews: true
+
+  create-release:
+    needs: [raise-version, publish]
+    if: ${{ inputs.create_release && inputs.deploy }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download release notes
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
+      - name: Replace version placeholder and append metadata
+        env:
+          VERSION: ${{ needs.raise-version.outputs.package_version }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -e
+
+          # Replace version placeholder
+          sed "s/{{VERSION}}/${VERSION}/g" release_notes_template.md > release_body.md
+
+          # Append repository info
+          {
+            echo ""
+            echo "---"
+            echo ""
+            echo "**Commit:** [\`${COMMIT_SHA:0:7}\`](https://github.com/${REPOSITORY}/commit/${COMMIT_SHA})"
+            echo "**Workflow:** [Run #${RUN_ID}](https://github.com/${REPOSITORY}/actions/runs/${RUN_ID})"
+          } >> release_body.md
+
+          echo "✓ Release body finalized with version ${VERSION}"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.raise-version.outputs.package_version }}
+          name: Release v${{ needs.raise-version.outputs.package_version }}
+          body_path: release_body.md
+          draft: false
+          prerelease: false
+          token: ${{ secrets.commit_token }}
