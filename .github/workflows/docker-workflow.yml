@@ -139,7 +139,7 @@ jobs:
         with:
           repository: MOV-AI/.github
           path: .github-workflows
-          ref: DP-963_docker-image-v3
+          ref: v3
 
       - name: Install Python dependencies
         run: |
