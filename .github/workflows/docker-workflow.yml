@@ -537,6 +537,10 @@ jobs:
 
           echo "✓ Image distribution completed successfully"
 
+      - name: Install bump-my-version for pushing version changes
+        if: ${{ inputs.version == 'auto' && matrix.name == needs.parse-matrix.outputs.first_image }}
+        run: python3 -m pip install bump-my-version
+
       - name: Raise version before git push
         if: ${{ inputs.version == 'auto' && matrix.name == needs.parse-matrix.outputs.first_image }}
         run: |
