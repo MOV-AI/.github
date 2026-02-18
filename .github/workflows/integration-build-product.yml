@@ -114,7 +114,10 @@ on:
       provision_infra_pwd:
         required: true
     outputs:
-      product_version:
+      init_version:
+        description: "Version of the product before built"
+        value: ${{ jobs.Validate-boostrap-configs.outputs.init_version || 'not executed' }}
+      raised_version:
         description: "Version of the product built"
         value: ${{ jobs.Build-Spawner.outputs.raised_version || 'not executed' }}
       simulation_test_version:
@@ -190,6 +193,7 @@ jobs:
       slack_thread_id: ${{ steps.send-message.outputs.ts }}
       commit_hash: ${{ steps.Checkout.outputs.commit_hash }}
       pr_prefix: ${{ steps.artifacts_prefix.outputs.pr_prefix }}
+      init_version: ${{ steps.raise.outputs.init_version }}
 
     steps:
       - name: Checkout
@@ -314,6 +318,7 @@ jobs:
           rm -rf simulator_artifacts ci_artifacts
           mkdir platform_configs
           source ci_scripts/bin/activate
+          echo "init_version=$(cat product.version)" >> $GITHUB_OUTPUT
           # Check if a PR triggered the workflow
           if [ -n "${{ inputs.pr_id }}" ]; then
             # raised version has sufix of PR number
