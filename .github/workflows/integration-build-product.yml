@@ -313,6 +313,7 @@ jobs:
           retention-days: 5
 
       - name: raise
+        id: raise
         shell: bash
         run: |
           rm -rf simulator_artifacts ci_artifacts
