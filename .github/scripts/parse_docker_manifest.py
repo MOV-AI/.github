@@ -14,7 +14,7 @@ import sys
 import yaml
 
 
-def parse_from_manifest(manifest_file):
+def parse_from_manifest(manifest_file, global_args):
     """Parse matrix from YAML manifest file."""
     print(f"Reading manifest file: {manifest_file}")
 
@@ -35,7 +35,13 @@ def parse_from_manifest(manifest_file):
         print("Error: No images found in manifest", file=sys.stderr)
         sys.exit(1)
 
-    # Convert to matrix
+    def get_val(img, key, global_val, default):
+        if key in img and img[key] is not None:
+            return img[key]
+        if global_val not in [None, ""]:
+            return global_val
+        return default
+
     matrix = {
         "include": [
             {
@@ -47,6 +53,11 @@ def parse_from_manifest(manifest_file):
                 "public": img["public"],
                 "snyk_check": img["snyk_check"],
                 "target": img["target"] if img["target"] else "",
+                "build_args": get_val(img, "build_args", global_args["build_args"], ""),
+                "push_latest": get_val(img, "push_latest", global_args["push_latest"], False),
+                "download_artifact": get_val(img, "download_artifact", global_args["download_artifact"], False),
+                "download_artifact_name": get_val(img, "download_artifact_name", global_args["download_artifact_name"], "artifacts"),
+                "download_artifact_path": get_val(img, "download_artifact_path", global_args["download_artifact_path"], "./dist"),
             }
             for img in images
         ]
@@ -95,6 +106,11 @@ def parse_from_inputs(args):
                 "public": args.public == "true",
                 "snyk_check": args.snyk_check == "true",
                 "target": args.target if args.target else "",
+                "build_args": args.build_args,
+                "push_latest": args.push_latest,
+                "download_artifact": args.download_artifact,
+                "download_artifact_name": args.download_artifact_name,
+                "download_artifact_path": args.download_artifact_path,
             }
         ]
     }
@@ -203,18 +219,34 @@ def main():
     parser.add_argument("--public", default="false", help="Enable public registry push")
     parser.add_argument("--snyk-check", default="false", help="Enable Snyk security scan")
     parser.add_argument("--target", default="", help="Docker build target")
+    parser.add_argument("--build-args", default="", help="Build arguments (comma separated)")
+    parser.add_argument("--push-latest", default="false", help="Whether latest tag will be pushed")
+    parser.add_argument("--download-artifact", default="false", help="Enable download of 'packages' artifacts")
+    parser.add_argument("--download-artifact-name", default="artifacts", help="Artifact name to download")
+    parser.add_argument("--download-artifact-path", default="./dist", help="Path where package is downloaded")
 
     # Release notes generation arguments (optional)
     parser.add_argument("--version", default="{{VERSION}}", help="Version for release notes")
-    parser.add_argument("--push-latest", default="false", help="Whether latest tag will be pushed")
     parser.add_argument(
         "--release-notes-output", default="release_notes_template.md", help="Output file for release notes"
     )
 
     args = parser.parse_args()
 
+    global_args = {
+        "build_args": args.build_args,
+        "push_latest": args.push_latest,
+        "download_artifact": args.download_artifact,
+        "download_artifact_name": args.download_artifact_name,
+        "download_artifact_path": args.download_artifact_path,
+    }
+
     # Determine which mode to use
-    outputs = parse_from_manifest(args.manifest_file) if args.manifest_file else parse_from_inputs(args)
+    outputs = (
+        parse_from_manifest(args.manifest_file, global_args)
+        if args.manifest_file
+        else parse_from_inputs(args)
+    )
 
     # Write outputs to GitHub Actions
     write_github_output(outputs)
