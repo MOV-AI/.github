@@ -154,6 +154,10 @@ jobs:
           if [ -n "${{ inputs.manifest_file }}" ]; then
             python3 .github-workflows/.github/scripts/parse_docker_manifest.py \
               --manifest-file "${{ inputs.manifest_file }}" \
+              --build-args "${{ inputs.build_args }}" \
+              --download-artifact "${{ inputs.download_artifact }}" \
+              --download-artifact-name "${{ inputs.download_artifact_name }}" \
+              --download-artifact-path "${{ inputs.download_artifact_path }}" \
               --push-latest "${{ inputs.push_latest }}"
           else
             python3 .github-workflows/.github/scripts/parse_docker_manifest.py \
@@ -331,11 +335,11 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Download packages to include in build
-        if: inputs.download_artifact
+        if: matrix.download_artifact
         uses: actions/download-artifact@v4
         with:
-          name: ${{ inputs.download_artifact_name }}
-          path: ${{ inputs.download_artifact_path }}
+          name: ${{ matrix.download_artifact_name }}
+          path: ${{ matrix.download_artifact_path }}
 
       - name: Set up QEMU for multi platform
         if: ${{ contains(matrix.platforms, 'arm') }}
