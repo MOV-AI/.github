@@ -139,7 +139,7 @@ jobs:
         with:
           repository: MOV-AI/.github
           path: .github-workflows
-          ref: feature/support-secrets
+          ref: feature/v3
 
       - name: Install Python dependencies
         run: |
