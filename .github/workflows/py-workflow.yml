@@ -37,6 +37,11 @@ on:
         type: boolean
         default: false
         description: When true the tests are run on the host machine, otherwise they are run inside a container. Useful when running tests using docker compose
+      bump_version:
+        required: false
+        type: boolean
+        default: true
+        description: When true the version is bumped at the end of the build
     secrets:
       auto_commit_user:
         required: false # only when deploy true
@@ -346,6 +351,7 @@ jobs:
         python -m pip install build twine
 
     - name: Raise version locally before build
+      if: ${{ inputs.bump_version }}
       id: bump
       run: |
         python3 -m venv venv --clear
