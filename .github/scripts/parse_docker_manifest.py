@@ -108,7 +108,7 @@ def parse_from_inputs(args):
                 "target": args.target if args.target else "",
                 "build_args": args.build_args,
                 "push_latest": args.push_latest,
-                "download_artifact": args.download_artifact,
+                "download_artifact": args.download_artifact == "true",
                 "download_artifact_name": args.download_artifact_name,
                 "download_artifact_path": args.download_artifact_path,
             }
