@@ -364,9 +364,9 @@ jobs:
             --key-file ~/.ssh/aws_slave.pem \
             --extra-vars=@"$(pwd)/.."/product-manifest.yaml \
             -e fleet_domain_dns="" \
-            -e "{\"proxycerts__remote_redis_servers_fqn\": [$(cat ../staging/manager_private_ip.txt)]}" \
+            -e "{\"fleet__redis_masters_fqdn\": [$(cat ../staging/manager_private_ip.txt)]}" \
             -e "{\"fleet_manager_san\": [ \"DNS:$(cat ../staging/manager_private_ip.txt)\" ]}" \
-            -e "{\"fleet_extra_hosts\": [ \"10.26.0.10    registry.${{ inputs.proxmox_cluster_name }}.mov.ai traefik\", \"$(cat ../staging/manager_private_ip.txt)    manager ${{ steps.infra_names.outputs.manager_prefix }}\" ]}" \
+            -e "{\"movai_fleet_extra_hosts\": [ \"10.26.0.10    registry.${{ inputs.proxmox_cluster_name }}.mov.ai traefik\", \"$(cat ../staging/manager_private_ip.txt)    manager ${{ steps.infra_names.outputs.manager_prefix }}\" ]}" \
             --skip-tags "validate,ufw,hardening"
           execution_status=$?
           deactivate
