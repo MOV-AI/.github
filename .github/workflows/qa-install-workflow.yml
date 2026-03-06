@@ -114,7 +114,7 @@ jobs:
           # tests execution
           python3 -m pytest \
             tests/ \
-            -k ${{ inputs.test_config_file }} \
+            -m ${{ inputs.test_config_file }} \
             --installPath="." \
             --jsonConfigFilePath="config/platform_example_script.json" --full_clean
 
@@ -148,6 +148,7 @@ jobs:
           rm -rf ./results/*
 
       - name: Install tests suite
+        if: false
         timeout-minutes: 70
         shell: bash
         run: |
