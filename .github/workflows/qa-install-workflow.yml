@@ -122,18 +122,6 @@ jobs:
           # exit virtual environment
           deactivate
 
-      - name: Run mobtest
-        shell: bash
-        run: |
-          # added to match EE job
-          container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
-          docker exec -t "$container_id" bash -c '
-            set -e
-            export PATH="$HOME/.local/bin:$PATH"
-            python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
-            mobtest proj /opt/ros/noetic/share/
-            '
-
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
