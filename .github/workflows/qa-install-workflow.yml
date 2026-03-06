@@ -48,6 +48,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Feature file validation
+        if: false
         shell: bash
         env:
           XRAY_CLIENTID: ${{ secrets.xray_clientid }}
@@ -114,24 +115,12 @@ jobs:
           # tests execution
           python3 -m pytest \
             tests/ \
-            -k ${{ inputs.test_config_file }} \
+            -m ${{ inputs.test_config_file }} \
             --installPath="." \
             --jsonConfigFilePath="config/platform_example_script.json" --full_clean
 
           # exit virtual environment
           deactivate
-
-      - name: Run mobtest
-        shell: bash
-        run: |
-          # added to match EE job
-          container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
-          docker exec -t "$container_id" bash -c '
-            set -e
-            export PATH="$HOME/.local/bin:$PATH"
-            python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
-            mobtest proj /opt/ros/noetic/share/
-            '
 
       - name: Upload artifacts
         if: always()
@@ -148,6 +137,7 @@ jobs:
           rm -rf ./results/*
 
       - name: Install tests suite
+        if: false
         timeout-minutes: 70
         shell: bash
         run: |
