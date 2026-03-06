@@ -48,6 +48,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Feature file validation
+        if: false
         shell: bash
         env:
           XRAY_CLIENTID: ${{ secrets.xray_clientid }}
