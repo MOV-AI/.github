@@ -14,6 +14,12 @@ import sys
 import yaml
 
 
+def normalize_bool(val):
+    if isinstance(val, bool):
+        return val
+    return str(val).lower() == "true"
+
+
 def parse_from_manifest(manifest_file, global_args):
     """Parse matrix from YAML manifest file."""
     print(f"Reading manifest file: {manifest_file}")
@@ -231,11 +237,6 @@ def main():
     )
 
     args = parser.parse_args()
-
-    def normalize_bool(val):
-        if isinstance(val, bool):
-            return val
-        return str(val).lower() == "true"
 
     global_args = {
         "build_args": args.build_args,
