@@ -367,6 +367,7 @@ jobs:
             -e "{\"fleet__redis_masters_fqdn\": [$(cat ../staging/manager_private_ip.txt)]}" \
             -e "{\"fleet_manager_san\": [ \"DNS:$(cat ../staging/manager_private_ip.txt)\" ]}" \
             -e "{\"movai_fleet_extra_hosts\": [ \"10.26.0.10    registry.${{ inputs.proxmox_cluster_name }}.mov.ai traefik\", \"$(cat ../staging/manager_private_ip.txt)    manager ${{ steps.infra_names.outputs.manager_prefix }}\" ]}" \
+            --limit 'fleet' \
             --skip-tags "validate,ufw,hardening"
           execution_status=$?
           deactivate
