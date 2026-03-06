@@ -1,0 +1,322 @@
+name: "Push to Protected Branch"
+description: "Push commits to a protected branch (supports both classic branch protection and rulesets via temporary PR)"
+inputs:
+  token:
+    description: "GitHub token with admin/bypass permissions (for rulesets, use 'bypass_actor' scope or admin token)"
+    required: true
+  branch:
+    description: "Target branch name to push to"
+    required: true
+  repository:
+    description: "Repository in owner/repo format"
+    required: true
+  bypass_status_checks:
+    description: "Whether to bypass required status checks when merging PR (true/false)"
+    required: false
+    default: "false"
+  git_user_email:
+    description: "Git user email for commits"
+    required: false
+    default: "github-actions[bot]@users.noreply.github.com"
+  git_user_name:
+    description: "Git user name for commits"
+    required: false
+    default: "github-actions[bot]"
+outputs:
+  pr_number:
+    description: "The PR number created for ruleset bypass (if applicable)"
+    value: ${{ steps.merge-pr.outputs.pr_number }}
+  merge_method:
+    description: "The merge method used"
+    value: ${{ steps.merge-pr.outputs.merge_method }}
+runs:
+  using: "composite"
+  steps:
+    - name: Configure git authentication
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/${{ inputs.repository }}.git
+        git config --global user.email "${{ inputs.git_user_email }}"
+        git config --global user.name "${{ inputs.git_user_name }}"
+
+    - name: Attempt direct push
+      id: direct-push
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      continue-on-error: true
+      run: |
+        BRANCH="${{ inputs.branch }}"
+        if git push origin "$BRANCH" 2>&1; then
+          echo "direct_push_success=true" >> $GITHUB_OUTPUT
+          echo "✓ Successfully pushed directly to protected branch"
+        else
+          echo "direct_push_success=false" >> $GITHUB_OUTPUT
+          echo "ℹ Direct push failed, will attempt alternative method"
+        fi
+
+    - name: Check protection type
+      if: steps.direct-push.outputs.direct_push_success == 'false'
+      id: check-protection
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        BRANCH="${{ inputs.branch }}"
+        REPO="${{ inputs.repository }}"
+
+        echo "Checking branch protection configuration..."
+
+        # Check for rulesets
+        RULESET_CHECK=$(gh api "/repos/$REPO/rulesets" --jq '.[] | select(.target == "branch") | .rules[].ref' 2>/dev/null | grep -c "$BRANCH" || echo "0")
+
+        # Check for classic protection
+        CLASSIC_CHECK=$(gh api "/repos/$REPO/branches/$BRANCH/protection" 2>/dev/null | jq -r '.url' || echo "")
+
+        if [ "$RULESET_CHECK" -gt 0 ]; then
+          echo "protection_type=ruleset" >> $GITHUB_OUTPUT
+          echo "✓ Repository uses branch rulesets for '$BRANCH'"
+        elif [ -n "$CLASSIC_CHECK" ]; then
+          echo "protection_type=classic" >> $GITHUB_OUTPUT
+          echo "✓ Repository uses classic branch protection"
+        else
+          echo "protection_type=none" >> $GITHUB_OUTPUT
+          echo "⚠ No protection rules detected (unexpected)"
+        fi
+
+    - name: Create temporary PR for merge bypass (default approach)
+      if: steps.direct-push.outputs.direct_push_success == 'false'
+      id: merge-pr
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        BRANCH="${{ inputs.branch }}"
+        REPO="${{ inputs.repository }}"
+        BYPASS_CHECKS="${{ inputs.bypass_status_checks }}"
+        MERGE_METHOD="squash"
+
+        echo "Creating temporary PR to bypass branch protection..."
+
+        # Get current commit
+        CURRENT_COMMIT=$(git rev-parse HEAD)
+        TEMP_BRANCH="temp-bypass-$(date +%s)"
+
+        # Push temporary branch
+        echo "Creating temporary branch: $TEMP_BRANCH"
+        if ! git push origin "$CURRENT_COMMIT:refs/heads/$TEMP_BRANCH"; then
+          echo "✗ Failed to push temporary branch"
+          exit 1
+        fi
+
+        # Create PR
+        echo "Creating PR from $TEMP_BRANCH to $BRANCH..."
+        PR_JSON=$(gh api \
+          --method POST \
+          "/repos/$REPO/pulls" \
+          -f title="Temporary PR: Merge to $BRANCH" \
+          -f head="$TEMP_BRANCH" \
+          -f base="$BRANCH" \
+          -f body="Temporary PR to bypass branch protection. Auto-merging after creation.")
+
+        PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number // empty')
+
+        if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" = "null" ]; then
+          echo "✗ Failed to create PR"
+          echo "PR API Response: $PR_JSON"
+          exit 1
+        fi
+
+        echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+        echo "merge_method=$MERGE_METHOD" >> $GITHUB_OUTPUT
+        echo "✓ Created PR #$PR_NUMBER"
+
+        # Wait for PR to be ready
+        echo "Waiting for PR to be indexed..."
+        max_attempts=15
+        attempt=1
+        while [ "$attempt" -le "$max_attempts" ]; do
+          if gh api "/repos/$REPO/pulls/$PR_NUMBER" > /dev/null 2>&1; then
+            echo "✓ PR is ready"
+            break
+          fi
+
+          if [ "$attempt" -eq "$max_attempts" ]; then
+            echo "✗ Timeout waiting for PR to be indexed"
+            exit 1
+          fi
+
+          echo "PR not indexed yet, retrying in 1 second... (attempt $attempt/$max_attempts)"
+          attempt=$((attempt + 1))
+          sleep 1
+        done
+
+        # Merge PR
+        echo "Merging PR #$PR_NUMBER..."
+
+        MERGE_CMD="gh api --method PUT "/repos/$REPO/pulls/$PR_NUMBER/merge" -f merge_method=\"$MERGE_METHOD\""
+
+        if [ "$BYPASS_CHECKS" = "true" ]; then
+          echo "⚠ Attempting merge with status check bypass..."
+          MERGE_CMD="$MERGE_CMD --input /dev/null"
+        fi
+
+        MERGE_JSON=$(eval "$MERGE_CMD" 2>&1 || true)
+
+        # Check merge result
+        if echo "$MERGE_JSON" | jq -e '.merged' > /dev/null 2>&1; then
+          echo "✓ PR #$PR_NUMBER merged successfully"
+        elif echo "$MERGE_JSON" | grep -q "required status check\|Merge cannot be performed"; then
+          echo "⚠ Merge blocked by status checks, attempting force merge..."
+
+          if gh pr merge "$PR_NUMBER" --squash --admin 2>&1 | grep -q "merged"; then
+            echo "✓ Force merge succeeded"
+          else
+            echo "✗ Force merge also failed"
+            echo "Merge response: $(echo "$MERGE_JSON" | jq -r '.message // .message // "unknown"')"
+            exit 1
+          fi
+        else
+          MERGE_MESSAGE=$(echo "$MERGE_JSON" | jq -r '.message // "unknown error"')
+          echo "✗ Merge failed: $MERGE_MESSAGE"
+          exit 1
+        fi
+
+        # Clean up temporary branch
+        echo "Cleaning up temporary branch..."
+        git push origin --delete "$TEMP_BRANCH" 2>/dev/null || {
+          echo "⚠ Failed to delete temporary branch from origin, proceeding anyway"
+        }
+
+    - name: Temporarily disable admin enforcement (fallback for classic)
+      if: steps.check-protection.outputs.protection_type == 'classic' && steps.merge-pr.outcome == 'skipped'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        BRANCH="${{ inputs.branch }}"
+        REPO="${{ inputs.repository }}"
+
+        echo "Checking if branch has classic protection..."
+
+        # Verify branch protection exists and has enforce_admins setting
+        PROTECTION_INFO=$(gh api "/repos/$REPO/branches/$BRANCH/protection" 2>&1) || {
+          echo "⚠ No classic branch protection found on '$BRANCH'"
+          echo "Skipping admin enforcement disable"
+          exit 0
+        }
+
+        # Check if enforce_admins exists in the protection config
+        if ! echo "$PROTECTION_INFO" | jq -e '.enforce_admins' > /dev/null 2>&1; then
+          echo "⚠ Branch protection exists but has no enforce_admins setting (might be ruleset-based)"
+          exit 0
+        fi
+
+        echo "Temporarily disabling admin enforcement for classic branch protection..."
+
+        if ! gh api \
+          --method PUT \
+          "/repos/$REPO/branches/$BRANCH/protection/enforce_admins" \
+          --input /dev/null \
+          -f enabled=false; then
+          echo "✗ Failed to disable admin enforcement"
+          exit 1
+        fi
+
+        # Wait and verify disable was successful
+        max_attempts=10
+        attempt=1
+        while [ "$attempt" -le "$max_attempts" ]; do
+          CURRENT_STATUS=$(gh api "/repos/$REPO/branches/$BRANCH/protection/enforce_admins" 2>&1 | jq -r '.enabled' 2>/dev/null) || CURRENT_STATUS="unknown"
+
+          if [ "$CURRENT_STATUS" = "false" ]; then
+            echo "✓ Admin enforcement successfully disabled"
+            sleep 1
+            exit 0
+          fi
+
+          if [ "$attempt" -eq "$max_attempts" ]; then
+            echo "✗ Timeout waiting for admin enforcement to be disabled (status: $CURRENT_STATUS)"
+            exit 1
+          fi
+
+          echo "Admin enforcement disable pending, retrying in 2 seconds... (attempt $attempt/$max_attempts)"
+          attempt=$((attempt + 1))
+          sleep 2
+        done
+
+    - name: Push to branch (classic protection fallback)
+      if: steps.check-protection.outputs.protection_type == 'classic' && steps.merge-pr.outcome == 'skipped'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        BRANCH="${{ inputs.branch }}"
+        REPO="${{ inputs.repository }}"
+
+        if git push origin "$BRANCH"; then
+          echo "✓ Successfully pushed to $BRANCH"
+        else
+          echo "✗ Push failed"
+          exit 1
+        fi
+
+    - name: Re-enable admin enforcement (fallback cleanup)
+      if: steps.check-protection.outputs.protection_type == 'classic' && steps.merge-pr.outcome == 'skipped' && always()
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        BRANCH="${{ inputs.branch }}"
+        REPO="${{ inputs.repository }}"
+
+        echo "Re-enabling admin enforcement..."
+
+        # Check if branch protection exists
+        if ! gh api "/repos/$REPO/branches/$BRANCH/protection" > /dev/null 2>&1; then
+          echo "⚠ No branch protection found, skipping re-enable"
+          exit 0
+        fi
+
+        # Re-enable admin enforcement
+        if ! gh api \
+          --method PUT \
+          "/repos/$REPO/branches/$BRANCH/protection/enforce_admins" \
+          --input /dev/null \
+          -f enabled=true 2>&1; then
+          echo "⚠ Warning: Failed to re-enable admin enforcement"
+          exit 0
+        fi
+
+        # Verify it was re-enabled
+        max_attempts=5
+        attempt=1
+        while [ "$attempt" -le "$max_attempts" ]; do
+          CURRENT_STATUS=$(gh api "/repos/$REPO/branches/$BRANCH/protection/enforce_admins" 2>&1 | jq -r '.enabled' 2>/dev/null) || CURRENT_STATUS="unknown"
+
+          if [ "$CURRENT_STATUS" = "true" ]; then
+            echo "✓ Admin enforcement successfully re-enabled"
+            exit 0
+          fi
+
+          if [ "$attempt" -eq "$max_attempts" ]; then
+            echo "⚠ Warning: Could not verify admin enforcement was re-enabled (status: $CURRENT_STATUS)"
+            exit 0
+          fi
+
+          attempt=$((attempt + 1))
+          sleep 1
+        done
+
+    - name: Summary
+      shell: bash
+      run: |
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Push to Protected Branch Summary"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Target Branch: ${{ inputs.branch }}"
+        echo "Repository: ${{ inputs.repository }}"
+        echo "Bypass Status Checks: ${{ inputs.bypass_status_checks }}"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
