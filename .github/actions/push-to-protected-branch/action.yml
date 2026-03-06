@@ -156,14 +156,12 @@ runs:
         # Merge PR
         echo "Merging PR #$PR_NUMBER..."
 
-        MERGE_CMD="gh api --method PUT "/repos/$REPO/pulls/$PR_NUMBER/merge" -f merge_method=\"$MERGE_METHOD\""
-
         if [ "$BYPASS_CHECKS" = "true" ]; then
           echo "⚠ Attempting merge with status check bypass..."
-          MERGE_CMD="$MERGE_CMD --input /dev/null"
+          MERGE_JSON=$(gh api --method PUT "/repos/$REPO/pulls/$PR_NUMBER/merge" -f merge_method="$MERGE_METHOD" --input /dev/null 2>&1 || true)
+        else
+          MERGE_JSON=$(gh api --method PUT "/repos/$REPO/pulls/$PR_NUMBER/merge" -f merge_method="$MERGE_METHOD" 2>&1 || true)
         fi
-
-        MERGE_JSON=$(eval "$MERGE_CMD" 2>&1 || true)
 
         # Check merge result
         if echo "$MERGE_JSON" | jq -e '.merged' > /dev/null 2>&1; then
