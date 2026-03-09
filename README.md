@@ -113,6 +113,7 @@ Runs UI tests for MOV.AI platform.
 
 ## Composite Actions
 - **publish-to-nexus**: Publishes artifacts (Debian/RPM packages) to Nexus repository.
+- **push-to-protected-branch**: Pushes changes to branches protected by organization rulesets or classic branch protection using a temporary PR which is automatically merged.
 
 ## Usage
 To use a shared workflow or composite action, reference it in your repository's workflow YAML:
