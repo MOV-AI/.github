@@ -14,6 +14,12 @@ import sys
 import yaml
 
 
+def normalize_bool(val):
+    if isinstance(val, bool):
+        return val
+    return str(val).lower() == "true"
+
+
 def parse_from_manifest(manifest_file, global_args):
     """Parse matrix from YAML manifest file."""
     print(f"Reading manifest file: {manifest_file}")
@@ -36,11 +42,10 @@ def parse_from_manifest(manifest_file, global_args):
         sys.exit(1)
 
     def get_val(img, key, global_val, default):
-        if key in img and img[key] is not None:
-            return img[key]
-        if global_val not in [None, ""]:
-            return global_val
-        return default
+        val = img[key] if key in img and img[key] is not None else global_val if global_val not in [None, ""] else default
+        if key in ["download_artifact", "push_latest"]:
+            return normalize_bool(val)
+        return val
 
     matrix = {
         "include": [
@@ -107,8 +112,8 @@ def parse_from_inputs(args):
                 "snyk_check": args.snyk_check == "true",
                 "target": args.target if args.target else "",
                 "build_args": args.build_args,
-                "push_latest": args.push_latest,
-                "download_artifact": args.download_artifact == "true",
+                "push_latest": global_args["push_latest"],
+                "download_artifact": global_args["download_artifact"],
                 "download_artifact_name": args.download_artifact_name,
                 "download_artifact_path": args.download_artifact_path,
             }
@@ -235,8 +240,8 @@ def main():
 
     global_args = {
         "build_args": args.build_args,
-        "push_latest": args.push_latest,
-        "download_artifact": args.download_artifact,
+        "push_latest": normalize_bool(args.push_latest),
+        "download_artifact": normalize_bool(args.download_artifact),
         "download_artifact_name": args.download_artifact_name,
         "download_artifact_path": args.download_artifact_path,
     }
