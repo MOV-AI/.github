@@ -43,7 +43,7 @@ def parse_from_manifest(manifest_file, global_args):
 
     def get_val(img, key, global_val, default):
         val = img[key] if key in img and img[key] is not None else global_val if global_val not in [None, ""] else default
-        if key in ["download_artifact", "push_latest"]:
+        if key in ["download_artifact", "push_latest", "public", "snyk_check"]:
             return normalize_bool(val)
         return val
 
@@ -51,13 +51,13 @@ def parse_from_manifest(manifest_file, global_args):
         "include": [
             {
                 "name": img["name"],
-                "docker_file": img["docker_file"],
-                "docker_image": img["docker_image"],
-                "public_image": img["public_image"],
-                "platforms": img["platforms"],
-                "public": img["public"],
-                "snyk_check": img["snyk_check"],
-                "target": img["target"] if img["target"] else "",
+                "docker_file": get_val(img, "docker_file", None, ""),
+                "docker_image": get_val(img, "docker_image", None, ""),
+                "public_image": get_val(img, "public_image", None, ""),
+                "platforms": get_val(img, "platforms", None, "linux/amd64"),
+                "public": get_val(img, "public", None, False),
+                "snyk_check": get_val(img, "snyk_check", None, False),
+                "target": get_val(img, "target", None, ""),
                 "build_args": get_val(img, "build_args", global_args["build_args"], ""),
                 "push_latest": get_val(img, "push_latest", global_args["push_latest"], False),
                 "download_artifact": get_val(img, "download_artifact", global_args["download_artifact"], False),
