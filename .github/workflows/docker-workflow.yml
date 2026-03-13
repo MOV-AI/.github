@@ -537,13 +537,22 @@ jobs:
           git config --global user.email "${{ secrets.commit_mail }}"
           bump-my-version bump patch --commit --tag
 
-      - name: Commit and push version changes
-        if: ${{ inputs.version == 'auto' && matrix.name == needs.parse-matrix.outputs.first_image }}
-        uses: CasperWA/push-protected@v2
+#      - name: Commit and push version changes
+#        if: ${{ inputs.version == 'auto' && matrix.name == needs.parse-matrix.outputs.first_image }}
+#        uses: CasperWA/push-protected@v2
+#        with:
+#          token: ${{ secrets.commit_token }}
+#          branch: ${{ needs.raise-version.outputs.branch_name }}
+#          unprotect_reviews: true 
+
+      - name: Push version bump to protected branch
+        uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
         with:
-          token: ${{ secrets.commit_token }}
-          branch: ${{ needs.raise-version.outputs.branch_name }}
-          unprotect_reviews: true
+          token: ${{ secrets.RAISE_BOT_COMMIT_PASSWORD }}
+          git_user_email: ${{ secrets.RAISE_BOT_COMMIT_MAIL }}
+          git_user_name: ${{ secrets.RAISE_BOT_COMMIT_USER }}
+          branch: ${{ steps.var_branch.outputs.branch }}
+          repository: ${{ github.repository }}
 
   create-release:
     needs: [raise-version, publish]
