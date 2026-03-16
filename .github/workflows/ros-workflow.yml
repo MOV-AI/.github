@@ -181,7 +181,7 @@ jobs:
         with:
           submodules: recursive
       - name: Run static analysis
-        uses: MOV-AI/.github/.github/actions/pre-commit@v3
+        uses: MOV-AI/.github/.github/actions/pre-commit@fix/run-pre-commit-in-venv
         with:
           args: "--color=always --show-diff-on-failure --all-files"
           ROS_WORKSPACE: "/opt/mov.ai/workspaces/USER_ROS1"
@@ -347,7 +347,7 @@ jobs:
         sudo mobros install $PACKAGES_INSTALL -y --upgrade-installed --fail-on-apt-update
 
     - name: Run post-build static analysis
-      uses: MOV-AI/.github/.github/actions/pre-commit@v3
+      uses: MOV-AI/.github/.github/actions/pre-commit@fix/run-pre-commit-in-venv
       with:
         args: "--hook-stage manual --show-diff-on-failure --color=always --all-files"
         GITHUB_TOKEN: ${{ secrets.gh_token }}
