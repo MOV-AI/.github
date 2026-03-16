@@ -41,7 +41,7 @@ runs:
 
           # Install pip requirements if file exists
           if [[ -f ./dev-requirements.txt ]]; then
-            python3 -m pip install -r ./dev-requirements.txt
+            python3 -m pip install --ignore-installed -r ./dev-requirements.txt
           fi
           git config --global --add safe.directory $(pwd)
     - name: Run pre-commit
