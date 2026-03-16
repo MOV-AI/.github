@@ -32,6 +32,8 @@ runs:
       shell: bash
       run: |
           python3 -m pip install --upgrade pip
+          python3 -m venv .venv
+          source .venv/bin/activate
           python3 -m pip install pre-commit
           # Install apt requirements if file exists
           if [[ -f ./dev-requirements.apt ]]; then
@@ -51,6 +53,7 @@ runs:
           echo "Sourcing ROS workspace"
           source ${{ inputs.ROS_WORKSPACE }}/setup.bash
         fi
+        source .venv/bin/activate
         set -o pipefail; pre-commit run ${{ inputs.args }} | tee pre-commit-report.txt
     - name: Capture pre-commit output
       if: ${{ github.event_name == 'pull_request' && failure()}}
