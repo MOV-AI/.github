@@ -708,7 +708,7 @@ jobs:
         if: ${{ inputs.deployment_project == false }}
         shell: bash
         run: |
-          container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
+          container_id=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace-.*)")
           docker exec -t "$container_id" bash -c '
             set -e
             export PATH="$HOME/.local/bin:$PATH"
@@ -1250,7 +1250,7 @@ jobs:
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' && inputs.deployment_project == false}}
         shell: bash
         run: |
-          container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
+          container_id=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace-.*)")
           docker exec -t "$container_id" bash -c '
             set -e
             export PATH="$HOME/.local/bin:$PATH"
@@ -1272,7 +1272,7 @@ jobs:
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         shell: bash
         run: |
-          container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
+          container_id=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace-.*)")
           docker exec -t "$container_id" bash -c '
             set -e
             ls -la /tmp
