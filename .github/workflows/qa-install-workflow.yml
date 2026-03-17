@@ -125,7 +125,7 @@ jobs:
         shell: bash
         run: |
           # added to match EE job
-          container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
+          container_id=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace.*)")
           docker exec -t "$container_id" bash -c '
             set -e
             export PATH="$HOME/.local/bin:$PATH"
