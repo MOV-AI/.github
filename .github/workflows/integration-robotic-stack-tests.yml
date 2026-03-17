@@ -513,7 +513,7 @@ jobs:
 
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            CONTAINER_ID=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
+            CONTAINER_ID=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace-.*)")
 
             mkdir -p firmwares/
             cp ./*.apt firmwares/
