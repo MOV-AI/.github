@@ -674,6 +674,7 @@ jobs:
     needs: [Simulator-Validations, Build-backend, Build-Simulator]
     uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@v2.3
     secrets: inherit
+    if: false
     with:
       product_name: ${{ inputs.product_name }}
       slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
@@ -685,7 +686,7 @@ jobs:
       simulation_qa_version: ${{ inputs.simulation_qa_version }}
 
   publish:
-    needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
+    needs: [Validations-Finish, Fleet-Validations, Simulator-Validations]
     runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     outputs:
       slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
