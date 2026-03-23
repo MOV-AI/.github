@@ -261,7 +261,7 @@ jobs:
     - name: Install Mobros
       run: |
         sudo apt update
-        sudo apt install -y mobros=${{ inputs.MOBROS_VERSION }}
+        python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-edge/simple --extra-index-url https://pypi.org/simple mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
 
     - name: Setup link to Ros userspace
       run: |
