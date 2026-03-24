@@ -359,7 +359,7 @@ jobs:
         args: "--hook-stage manual --show-diff-on-failure --color=always --all-files"
         GITHUB_TOKEN: ${{ secrets.gh_token }}
 
-  Test:
+  Mobtests:
     if: ${{ always() && inputs.release == 'false' && needs.Build.result == 'success' && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
     runs-on: ubuntu-22.04
     needs: [Build,Post-build-static-analysis]
