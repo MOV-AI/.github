@@ -231,6 +231,7 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: |
         expected_url="<url>$GITHUB_SERVER_URL/$GITHUB_REPOSITORY</url>"
+        echo "Expected URL: $expected_url"
         VALIDATION_FILE="/tmp/verification-failed"
         find -L ./ -type f -name 'package.xml' -exec sh -c '
 
