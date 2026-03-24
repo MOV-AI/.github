@@ -482,7 +482,7 @@ jobs:
   Publish:
     if: ${{ always() && (needs.Package-Install-Test.result == 'success' || needs.Package-Install-Test.result == 'skipped') && (needs.Test.result == 'success' || needs.Test.result == 'skipped') && (needs.Package-Stack-Tests.result == 'success' || needs.Package-Stack-Tests.result == 'skipped') && inputs.deploy == 'true' }}
     runs-on: ubuntu-22.04
-    needs:  [Package-Install-Test,Test,Package-Stack-Tests]
+    needs:  [Package-Install-Test,Mobtests,Package-Stack-Tests]
     container:
       image: registry.cloud.mov.ai/qa/ros-buildtools-noetic:${{ inputs.ROS_BUILDTOOLS_TAG }}
       options: --user root
