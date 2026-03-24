@@ -444,7 +444,8 @@ jobs:
         if: ${{ inputs.install_test }}
         run: |
           sudo apt update
-          sudo apt install mobros=${{ inputs.MOBROS_VERSION }} -y
+          python3 -m pip install mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
+          
       - name: Install debian artifacts
         if: ${{ inputs.install_test }}
         run: |
