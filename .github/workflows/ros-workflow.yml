@@ -278,7 +278,7 @@ jobs:
         sudo mobros install-build-dependencies --workspace="$(pwd)"
 
     - name: Build
-      run: mobros build --mode ${{ matrix.build_mode }}
+      run: mobros build --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
 
     - name: Pack
       run: |
