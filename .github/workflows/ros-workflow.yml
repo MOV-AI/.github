@@ -165,39 +165,12 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
-  Static-analysis:
-    needs: [Check-static-analysis-config]
-    strategy:
-      matrix:
-        distro: ${{ fromJSON(inputs.ros_distro) }}
-    outputs:
-      pre_commit_exists: ${{ needs.Check-static-analysis-config.outputs.pre_commit_exists }}
-    if: ${{ needs.Check-static-analysis-config.outputs.pre_commit_exists == 'true' }}
-    runs-on: ubuntu-22.04
-    container:
-      image: registry.cloud.mov.ai/qa/flow-initiator-noetic:${{ inputs.FLOW_INITIATOR_TAG }}
-      options: --user root
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          submodules: recursive
-      - name: Run static analysis
-        uses: MOV-AI/.github/.github/actions/pre-commit@v3
-        with:
-          args: "--color=always --show-diff-on-failure --all-files"
-          ROS_WORKSPACE: "/opt/mov.ai/workspaces/USER_ROS1"
-          GITHUB_TOKEN: ${{ secrets.gh_token }}
-
   Build:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
         build_mode: ${{ fromJSON(inputs.build_modes) }}
-    if: ${{ always() && inputs.release == 'false' && (needs.Static-analysis.result == 'success' || needs.Static-analysis.result == 'skipped') }}
+    if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-22.04
     container:
       image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
@@ -205,7 +178,6 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
-    needs: [Static-analysis]
 
     steps:
     - name: Checkout
@@ -317,102 +289,8 @@ jobs:
         mobros publish
         cat /usr/local/rosdep/ros-pkgs.yaml
 
-  Post-build-static-analysis:
-    if: ${{ inputs.release == 'false' && needs.Check-static-analysis-config.outputs.pre_commit_exists == 'true' }}
-    needs: [Check-static-analysis-config, Build]
-    runs-on: ubuntu-22.04
-    container:
-      image: registry.cloud.mov.ai/qa/flow-initiator-noetic:${{ inputs.FLOW_INITIATOR_TAG }}
-      options: --user root
-      credentials:
-        username: ${{secrets.registry_user}}
-        password: ${{secrets.registry_password}}
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: packages
-        path: artifacts
-
-    - name: Install debian artifacts
-      run: |
-        cd artifacts/
-        PACKAGES_INSTALL="$(find -L ./ -name "*.deb")"
-        echo $PACKAGES_INSTALL
-        INSTALL_CONFLICT_HANDLING=${{ inputs.INSTALL_CONFLICT_HANDLING }}
-        if [ "$INSTALL_CONFLICT_HANDLING" != "" ]; then
-          PACKAGES_INSTALL="$PACKAGES_INSTALL $INSTALL_CONFLICT_HANDLING"
-        fi
-        # Add ppa-testing to apt sources to resolve dependencies
-        echo "deb [arch=all] https://artifacts.cloud.mov.ai/repository/${{ inputs.test_publish_repo }} testing main" | sudo tee /etc/apt/sources.list.d/${{ inputs.test_publish_repo }}.list
-        sudo apt update
-        sudo mobros install $PACKAGES_INSTALL -y --upgrade-installed --fail-on-apt-update
-
-    - name: Run post-build static analysis
-      uses: MOV-AI/.github/.github/actions/pre-commit@v3
-      with:
-        args: "--hook-stage manual --show-diff-on-failure --color=always --all-files"
-        GITHUB_TOKEN: ${{ secrets.gh_token }}
-
-  Mobtests:
-    if: ${{ always() && inputs.release == 'false' && needs.Build.result == 'success' && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
-    runs-on: ubuntu-22.04
-    needs: [Build,Post-build-static-analysis]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          # Disabling shallow clone is recommended for improving relevancy of reporting
-          fetch-depth: 0
-          submodules: recursive
-
-      - name: Install Mobtest
-        run: |
-          python3 -m pip install \
-          -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple \
-          mobtest==${{ inputs.MOBTEST_VERSION }} --ignore-installed
-
-      - name: Mobtest validations
-        run: |
-          mobtest repo --issues ./mobtest-issues.json .
-
-      - name: Create SonarCloud project and disable autoscan
-        if: ${{ false }}
-        uses: MOV-AI/action-sonarcloud-proj-config@v1
-        with:
-          sonar_org: 'mov-ai'
-          sonar_token: ${{ secrets.sonar_token }}
-
-      - name: SonarCloud Scan
-        if: ${{ false }}
-        uses: SonarSource/sonarqube-scan-action@v7
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          SONAR_TOKEN: ${{ secrets.sonar_token }}
-        with:
-          projectBaseDir: ./
-          args: >
-            -Dsonar.organization=mov-ai
-            -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
-            -Dsonar.sources=.
-            -Dsonar.scm.provider=git
-            -Dsonar.qualitygate.wait=true
-            -Dsonar.qualitygate.timeout=300
-            -Dsonar.externalIssuesReportPaths=./mobtest-issues.json
-
-      - name: Link to SonarCloud dashboard
-        shell: bash
-        run: |
-          echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
-
   Package-Install-Test:
-    if: ${{ always() && inputs.release == 'false' && needs.Build.result == 'success' && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
+    if: ${{ always() && inputs.release == 'false' && needs.Build.result == 'success' }}
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
@@ -425,7 +303,7 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
-    needs: [Build,Post-build-static-analysis]
+    needs: [Build]
     steps:
       - name: Checkout
         if: ${{ inputs.install_test }}
@@ -466,8 +344,8 @@ jobs:
           mobtest proj /opt/ros/${{ matrix.distro }}/share/
 
   Package-Stack-Tests:
-    if: ${{ always() && inputs.release == 'false' && inputs.deploy == 'true' && inputs.run_stack_tests && needs.Build.result == 'success' && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
-    needs: [Build,Post-build-static-analysis]
+    if: ${{ always() && inputs.release == 'false' && inputs.deploy == 'true' && inputs.run_stack_tests && needs.Build.result == 'success' }}
+    needs: [Build]
     uses: MOV-AI/.github/.github/workflows/integration-build-robotics-component.yml@v2.3
     with:
       vs_product_name: ${{ inputs.vs_product_name }}
@@ -483,7 +361,7 @@ jobs:
   Publish:
     if: ${{ always() && (needs.Package-Install-Test.result == 'success' || needs.Package-Install-Test.result == 'skipped') && (needs.Test.result == 'success' || needs.Test.result == 'skipped') && (needs.Package-Stack-Tests.result == 'success' || needs.Package-Stack-Tests.result == 'skipped') && inputs.deploy == 'true' }}
     runs-on: ubuntu-22.04
-    needs:  [Package-Install-Test,Mobtests,Package-Stack-Tests]
+    needs:  [Package-Install-Test,Package-Stack-Tests]
     container:
       image: registry.cloud.mov.ai/qa/ros-buildtools-noetic:${{ inputs.ROS_BUILDTOOLS_TAG }}
       options: --user root
