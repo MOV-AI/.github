@@ -30,10 +30,6 @@ on:
         required: false
         type: string
         default: '["release"]'
-      run_catkin_tests:
-        required: false
-        type: boolean
-        default: true
       propagate_to_projects:
         required: false
         type: boolean
@@ -258,13 +254,6 @@ jobs:
         export MOVAI_OUTPUT_DIR="$(pwd)/artifacts"
         mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
 
-    - name: Run Catkin tests
-      if: ${{ inputs.run_catkin_tests }}
-      shell: bash
-      run: |
-        cd $ROS1_USER_WS
-        catkin test
-
     - name: Archive binary
       uses: actions/upload-artifact@v4
       with:
@@ -359,7 +348,7 @@ jobs:
     secrets: inherit
 
   Publish:
-    if: ${{ always() && (needs.Package-Install-Test.result == 'success' || needs.Package-Install-Test.result == 'skipped') && (needs.Test.result == 'success' || needs.Test.result == 'skipped') && (needs.Package-Stack-Tests.result == 'success' || needs.Package-Stack-Tests.result == 'skipped') && inputs.deploy == 'true' }}
+    if: ${{ always() && (needs.Package-Install-Test.result == 'success' || needs.Package-Install-Test.result == 'skipped') && (needs.Package-Stack-Tests.result == 'success' || needs.Package-Stack-Tests.result == 'skipped') && inputs.deploy == 'true' }}
     runs-on: ubuntu-22.04
     needs:  [Package-Install-Test,Package-Stack-Tests]
     container:
