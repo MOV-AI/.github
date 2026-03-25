@@ -349,7 +349,7 @@ jobs:
           PACKAGES_INSTALL="$PACKAGES_INSTALL $INSTALL_CONFLICT_HANDLING"
         fi
         # Add ppa-testing to apt sources to resolve dependencies
-        echo "deb [arch=all] https://artifacts.cloud.mov.ai/repository/ppa-testing testing main" | sudo tee /etc/apt/sources.list.d/ppa-testing.list
+        echo "deb [arch=all] https://artifacts.cloud.mov.ai/repository/${{ inputs.test_publish_repo }} testing main" | sudo tee /etc/apt/sources.list.d/${{ inputs.test_publish_repo }}.list
         sudo apt update
         sudo mobros install $PACKAGES_INSTALL -y --upgrade-installed --fail-on-apt-update
 
