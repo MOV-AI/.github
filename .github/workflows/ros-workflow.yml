@@ -348,11 +348,14 @@ jobs:
     secrets: inherit
 
   Publish:
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(inputs.ros_distro) }}
     if: ${{ always() && (needs.Package-Install-Test.result == 'success' || needs.Package-Install-Test.result == 'skipped') && (needs.Package-Stack-Tests.result == 'success' || needs.Package-Stack-Tests.result == 'skipped') && inputs.deploy == 'true' }}
     runs-on: ubuntu-22.04
     needs:  [Package-Install-Test,Package-Stack-Tests]
     container:
-      image: registry.cloud.mov.ai/qa/ros-buildtools-noetic:${{ inputs.ROS_BUILDTOOLS_TAG }}
+      image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -484,10 +487,11 @@ jobs:
     strategy:
       matrix:
         publish_repo: ${{ fromJSON(inputs.prod_publish_repos) }}
+        distro: ${{ fromJSON(inputs.ros_distro) }}
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.cloud.mov.ai/qa/ros-buildtools-noetic:${{ inputs.ROS_BUILDTOOLS_TAG }}
+      image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
