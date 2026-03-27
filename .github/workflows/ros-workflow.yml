@@ -131,7 +131,6 @@ on:
       slack_token_id:
         required: false
 
-
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_access_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_access_key }}
@@ -139,7 +138,6 @@ env:
   ROS_DISTRO: ${{ fromJson(inputs.ros_distro)[0] }} # Currently only single distro is supported, so we take the first element of the array
 
 jobs:
-
   RefreshSource:
     if: ${{ inputs.deploy == 'false' }}
     runs-on: ubuntu-22.04
@@ -370,16 +368,13 @@ jobs:
       shell: bash
       run: |
         cd artifacts/
-        PACKAGES_INSTALL="$(find -L ./ -name "*.deb")"
-        echo "$PACKAGES_INSTALL"
+
         INSTALL_CONFLICT_HANDLING="${{ inputs.INSTALL_CONFLICT_HANDLING }}"
-        if [ -n "$INSTALL_CONFLICT_HANDLING" ]; then
-          PACKAGES_INSTALL="$PACKAGES_INSTALL $INSTALL_CONFLICT_HANDLING"
-        fi
+
         # Add test_publish_repo to apt sources to resolve dependencies
         echo "deb [arch=all] https://artifacts.cloud.mov.ai/repository/${{ inputs.test_publish_repo }} testing main" | sudo tee /etc/apt/sources.list.d/ppa-testing.list
         sudo apt update
-        sudo mobros install "$PACKAGES_INSTALL" -y --upgrade-installed --fail-on-apt-update
+        find -L ./ -name "*.deb" -exec sudo mobros install -y --upgrade-installed --fail-on-apt-update $INSTALL_CONFLICT_HANDLING {} \+
 
     - name: Run post-build static analysis
       uses: MOV-AI/.github/.github/actions/pre-commit@v3
@@ -388,7 +383,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
 
   Test:
-    if: ${{ always() && inputs.release == 'false' && needs.Build.result == 'success' &&  inputs.ros_distro == 'noetic' && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
+    if: ${{ always() && inputs.release == 'false' && needs.Build.result == 'success' &&  fromJSON(inputs.ros_distro)[0] == 'noetic' && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
     runs-on: ubuntu-22.04
     needs: [Build,Post-build-static-analysis]
 
@@ -478,13 +473,7 @@ jobs:
         if: ${{ inputs.install_test }}
         run: |
           cd artifacts/
-          PACKAGES_INSTALL="$(find -L ./ -name "*.deb")"
-          echo "$PACKAGES_INSTALL"
-          INSTALL_CONFLICT_HANDLING="${{ inputs.INSTALL_CONFLICT_HANDLING }}"
-          if [ -n "$INSTALL_CONFLICT_HANDLING" ]; then
-            PACKAGES_INSTALL="$PACKAGES_INSTALL $INSTALL_CONFLICT_HANDLING"
-          fi
-          sudo mobros install "$PACKAGES_INSTALL" -y --upgrade-installed --fail-on-apt-update
+          find -L ./ -name "*.deb" -exec sudo mobros install -y --upgrade-installed --fail-on-apt-update $INSTALL_CONFLICT_HANDLING {} \+
 
       - name: Mobtest project validations
         if: ${{ inputs.install_test }}
