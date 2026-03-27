@@ -261,27 +261,24 @@ jobs:
         VALIDATION_FILE="/tmp/verification-failed"
         find -L ./ -type f -name 'package.xml' -exec sh -c '
 
-        search_result=$(cat $0 | grep "$1")
-        is_movai_package=$(cat $0 | grep "<name>movai_")
+        search_result=$(grep "$1" "$0")
+        is_movai_package=$(grep "<name>movai_" "$0")
 
         # is movai package ?
-        if [ -n "$is_movai_package" ]:
-        then
-          if [ -z "$search_result" ]:
-          then
+        if [ -n "$is_movai_package" ]; then
+          if [ -z "$search_result" ]; then
               echo "\e[31m$0"
-              echo "$0" >> $2
+              echo "$0" >> "$2"
           fi
         fi
 
-        ' {} $expected_url $VALIDATION_FILE \;
+        ' {} "$expected_url" "$VALIDATION_FILE" \;
 
-        if [ -f $VALIDATION_FILE ];
-        then
+        if [ -f "$VALIDATION_FILE" ]; then
             echo "::error Validation failed::The following package.xml files are missing the URL tag"
-            for file in $(cat $VALIDATION_FILE); do
-                echo "::error file=$file::Please add $expected_url to the package.xml"
-            done
+            while IFS= read -r file; do
+              echo "::error file=$file::Please add $expected_url to the package.xml"
+            done < "$VALIDATION_FILE"
             exit 1
         fi
 
@@ -292,12 +289,12 @@ jobs:
     - name: Setup link to Ros userspace
       run: |
         mkdir /opt/mov.ai/user/cache/ros/src/
-        ln -s $(pwd)/* /opt/mov.ai/user/cache/ros/src/
+        ln -s "$(pwd)"/* /opt/mov.ai/user/cache/ros/src/
         if [ "${{ matrix.distro }}" = "noetic" ]; then
           echo "ROS1 detected, no link to workspaces needed"
         elif [ "${{ matrix.distro }}" = "humble" ]; then
           echo "ROS2 detected, linking source to ROS2 workspace"
-          ln -s $(pwd)/* /opt/mov.ai/workspaces/USER_ROS2/
+          ln -s "$(pwd)"/* /opt/mov.ai/workspaces/USER_ROS2/
         fi
 
     - name: Raise version and validate Ros repository
@@ -374,15 +371,15 @@ jobs:
       run: |
         cd artifacts/
         PACKAGES_INSTALL="$(find -L ./ -name "*.deb")"
-        echo $PACKAGES_INSTALL
-        INSTALL_CONFLICT_HANDLING=${{ inputs.INSTALL_CONFLICT_HANDLING }}
-        if [ "$INSTALL_CONFLICT_HANDLING" != "" ]; then
+        echo "$PACKAGES_INSTALL"
+        INSTALL_CONFLICT_HANDLING="${{ inputs.INSTALL_CONFLICT_HANDLING }}"
+        if [ -n "$INSTALL_CONFLICT_HANDLING" ]; then
           PACKAGES_INSTALL="$PACKAGES_INSTALL $INSTALL_CONFLICT_HANDLING"
         fi
         # Add test_publish_repo to apt sources to resolve dependencies
         echo "deb [arch=all] https://artifacts.cloud.mov.ai/repository/${{ inputs.test_publish_repo }} testing main" | sudo tee /etc/apt/sources.list.d/ppa-testing.list
         sudo apt update
-        sudo mobros install $PACKAGES_INSTALL -y --upgrade-installed --fail-on-apt-update
+        sudo mobros install "$PACKAGES_INSTALL" -y --upgrade-installed --fail-on-apt-update
 
     - name: Run post-build static analysis
       uses: MOV-AI/.github/.github/actions/pre-commit@v3
@@ -482,12 +479,12 @@ jobs:
         run: |
           cd artifacts/
           PACKAGES_INSTALL="$(find -L ./ -name "*.deb")"
-          echo $PACKAGES_INSTALL
-          INSTALL_CONFLICT_HANDLING=${{ inputs.INSTALL_CONFLICT_HANDLING }}
-          if [ "$INSTALL_CONFLICT_HANDLING" != "" ]; then
+          echo "$PACKAGES_INSTALL"
+          INSTALL_CONFLICT_HANDLING="${{ inputs.INSTALL_CONFLICT_HANDLING }}"
+          if [ -n "$INSTALL_CONFLICT_HANDLING" ]; then
             PACKAGES_INSTALL="$PACKAGES_INSTALL $INSTALL_CONFLICT_HANDLING"
           fi
-          sudo mobros install $PACKAGES_INSTALL -y --upgrade-installed --fail-on-apt-update
+          sudo mobros install "$PACKAGES_INSTALL" -y --upgrade-installed --fail-on-apt-update
 
       - name: Mobtest project validations
         if: ${{ inputs.install_test }}
@@ -552,13 +549,12 @@ jobs:
       id: vars-after-raise
       run: |
             main_package=$(cat /tmp/main-package.mobrosinfo)
-            build_version_section=$(cat $main_package | grep build_version)
-            version_section=$(cat $main_package | grep "<version")
-            main_version=$(echo $version_section | sed 's/ //g' | sed -e 's/<\w*>'//g | sed -e 's/<\/\w*>'//g)
-            buildid=$(echo $build_version_section | sed 's/ //g' | sed -e 's/<\w*>'//g | sed -e 's/<\/\w*>'//g)
+            build_version_section=$(grep build_version "$main_package")
+            version_section=$(grep "<version" "$main_package")
+            main_version=$(echo "$version_section" | sed 's/ //g' | sed -e 's/<\w*>//g' | sed -e 's/<\/\w*>//g')
+            buildid=$(echo "$build_version_section" | sed 's/ //g' | sed -e 's/<\w*>//g' | sed -e 's/<\/\w*>//g')
             VERSION="$main_version-$buildid"
-            #echo ::set-output name=ros_pkg_version::$VERSION
-            echo "ros_pkg_version=$VERSION" >> $GITHUB_OUTPUT
+            echo "ros_pkg_version=$VERSION" >> "$GITHUB_OUTPUT"
 
     - name: Publish to Nexus ${{ inputs.test_publish_repo }}
       shell: bash
@@ -589,23 +585,22 @@ jobs:
               echo "Failed upload with $RETURN_CODE. Exiting"
               exit 1
             fi
-
           done
 
     - name: Commit raise version
       id: raise
       shell: bash
       run: |
-        git config --global --add safe.directory $(pwd)
-        git config --global user.name '${{ secrets.auto_commit_user }}'
-        git config --global user.email '${{ secrets.auto_commit_mail }}'
-        git config --global user.password ${{ secrets.auto_commit_pwd }}
+        git config --global --add safe.directory "$(pwd)"
+        git config --global user.name "${{ secrets.auto_commit_user }}"
+        git config --global user.email "${{ secrets.auto_commit_mail }}"
+        git config --global user.password "${{ secrets.auto_commit_pwd }}"
         if [ "${{ inputs.handle_submodules_on_deploy }}" = "true" ]; then
           git pull
         else
           git pull --no-recurse-submodules
         fi
-        git add **package.xml
+        git add -- '**package.xml'
         git commit -m "[skip actions] Automatic Bump of build version"
 
     - name: Prepare raise variables
@@ -615,9 +610,9 @@ jobs:
         REF_NAME: ${{ github.ref_name }}
       run: |
         if [ "${{ github.event_name }}" = "pull_request" ]; then
-          echo "branch=${HEAD_REF}" >> $GITHUB_OUTPUT
+          echo "branch=${HEAD_REF}" >> "$GITHUB_OUTPUT"
         else
-          echo "branch=${REF_NAME}" >> $GITHUB_OUTPUT
+          echo "branch=${REF_NAME}" >> "$GITHUB_OUTPUT"
         fi
 
     - name: Push version bump to protected branch
@@ -633,14 +628,14 @@ jobs:
       shell: bash
       run: |
         commit_hash=$(git log --format="%H" -n 1)
-        product_version=${{ steps.vars-after-raise.outputs.ros_pkg_version }}
+        product_version="${{ steps.vars-after-raise.outputs.ros_pkg_version }}"
         previous_version_option=""
-        if gh release view ${{ steps.vars-after-raise.outputs.ros_pkg_version }} &>/dev/null; then
-          previous_version_option="--notes-start-tag ${{ steps.vars-after-raise.outputs.ros_pkg_version }}"
+        if gh release view "$product_version" &>/dev/null; then
+          previous_version_option="--notes-start-tag $product_version"
         fi
-        gh release create -p --generate-notes $previous_version_option --target $commit_hash -t "Release of $product_version" $product_version
+        gh release create -p --generate-notes $previous_version_option --target "$commit_hash" -t "Release of $product_version" "$product_version"
         # add all files in the artifacts folder
-        find artifacts -type f -exec gh release upload $product_version {} \;
+        find artifacts -type f -exec gh release upload "$product_version" {} \;
       env:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -651,8 +646,8 @@ jobs:
       run: |
         gh workflow run .github/workflows/PropagateRosToProjectsOnDispatch.yml \
           --repo MOV-AI/qa-automations \
-          -f repo_name=${GITHUB_REPOSITORY#*/} \
-          -f repo_version=${{ steps.vars-after-raise.outputs.ros_pkg_version }}
+          -f "repo_name=${GITHUB_REPOSITORY#*/}" \
+          -f "repo_version=${{ steps.vars-after-raise.outputs.ros_pkg_version }}"
       env:
         GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
 
@@ -678,14 +673,14 @@ jobs:
 
     - name: Set tag output
       id: vars
-      run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+      run: echo "tag=${GITHUB_REF#refs/*/}" >> "$GITHUB_OUTPUT"
 
     - name: Fetch artifact from github release
       run: |
-        git config --global --add safe.directory $(pwd)
+        git config --global --add safe.directory "$(pwd)"
         mkdir artifacts
         cd artifacts
-        gh release download ${{ steps.vars.outputs.tag}} -p *.deb
+        gh release download "${{ steps.vars.outputs.tag}}" -p "*.deb"
       env:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -722,5 +717,4 @@ jobs:
                 echo "Failed upload with $RETURN_CODE. Exiting"
                 exit 1
               fi
-
             done
