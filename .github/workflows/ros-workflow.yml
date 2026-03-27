@@ -13,6 +13,7 @@ on:
       ros_distro:
         required: true
         type: string
+        description: 'ROS distribution to build for, e.g. ["noetic"] or ["humble"]. Array format is required to allow for future support of multiple distributions in a single workflow run.'
       install_test:
         required: false
         type: boolean
@@ -30,6 +31,11 @@ on:
         required: false
         type: string
         default: '["release"]'
+      run_catkin_tests:
+        required: false
+        type: boolean
+        default: true
+        description: Whether to run catkin tests during the build process (ROS1 only)
       propagate_to_projects:
         required: false
         type: boolean
@@ -130,6 +136,7 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_access_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_access_key }}
   AWS_DEFAULT_REGION: "eu-west-1"
+  ROS_DISTRO: ${{ fromJson(inputs.ros_distro)[0] }} # Currently only single distro is supported, so we take the first element of the array
 
 jobs:
 
@@ -146,6 +153,8 @@ jobs:
   Check-static-analysis-config:
     outputs:
       pre_commit_exists: ${{ steps.check.outputs.exists }}
+      static_test_image_name: ${{ steps.distro_vars.outputs.static_test_image_name }}
+      ros_workspace: ${{ steps.distro_vars.outputs.ros_workspace }}
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -161,12 +170,60 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Compute distro specific vars
+        id: distro_vars
+        run: |
+          if [ "${ROS_DISTRO}" = "noetic" ]; then
+            # TODO: migrate to ros1-workspace:5.3.0.1 for EE 3.0 once the image is available
+            # for now we need to use flow-initiator-noetic which contains the necessary pre-commit dependencies
+            static_test_image_name="registry.cloud.mov.ai/qa/flow-initiator-noetic:${{ inputs.FLOW_INITIATOR_TAG }}"
+            ros_workspace="/opt/mov.ai/workspaces/USER_ROS1"
+          elif [ "${ROS_DISTRO}" = "humble" ]; then
+            # TODO: expose the tag as an input once we have a stable image with the necessary pre-commit dependencies
+            # for now we use spawner-base-humble which might not contain all the necessary dependencies
+            static_test_image_name="registry.cloud.mov.ai/qa/spawner-base-humble:3.2.2"
+            ros_workspace="/opt/mov.ai/workspaces/USER_ROS2"
+          else
+            echo "Unsupported ROS distribution: ${ROS_DISTRO}"
+            exit 1
+          fi
+
+          echo "static_test_image_name=$static_test_image_name" >> $GITHUB_OUTPUT
+          echo "ros_workspace=$ros_workspace" >> $GITHUB_OUTPUT
+
+  Static-analysis:
+    needs: [Check-static-analysis-config]
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(inputs.ros_distro) }}
+    outputs:
+      pre_commit_exists: ${{ needs.Check-static-analysis-config.outputs.pre_commit_exists }}
+    if: ${{ needs.Check-static-analysis-config.outputs.pre_commit_exists == 'true' }}
+    runs-on: ubuntu-22.04
+    container:
+      image: ${{ needs.Check-static-analysis-config.outputs.static_test_image_name }}
+      options: --user root
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Run static analysis
+        uses: MOV-AI/.github/.github/actions/pre-commit@v3
+        with:
+          args: "--color=always --show-diff-on-failure --all-files"
+          ROS_WORKSPACE: ${{ needs.Check-static-analysis-config.outputs.ros_workspace }}
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
+
   Build:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
         build_mode: ${{ fromJSON(inputs.build_modes) }}
-    if: ${{ inputs.release == 'false' }}
+    if: ${{ always() && inputs.release == 'false' && (needs.Static-analysis.result == 'success' || needs.Static-analysis.result == 'skipped') }}
     runs-on: ubuntu-22.04
     container:
       image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
@@ -174,6 +231,7 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
+    needs: [Static-analysis]
 
     steps:
     - name: Checkout
@@ -229,14 +287,18 @@ jobs:
 
     - name: Install Mobros
       run: |
-        sudo apt update
         python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-edge/simple --extra-index-url https://pypi.org/simple mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
 
     - name: Setup link to Ros userspace
       run: |
         mkdir /opt/mov.ai/user/cache/ros/src/
         ln -s $(pwd)/* /opt/mov.ai/user/cache/ros/src/
-        ln -s $(pwd)/* /opt/mov.ai/workspaces/USER_ROS2/
+        if [ "${{ matrix.distro }}" = "noetic" ]; then
+          echo "ROS1 detected, no link to workspaces needed"
+        elif [ "${{ matrix.distro }}" = "humble" ]; then
+          echo "ROS2 detected, linking source to ROS2 workspace"
+          ln -s $(pwd)/* /opt/mov.ai/workspaces/USER_ROS2/
+        fi
 
     - name: Raise version and validate Ros repository
       run: mobros raise --workspace="$(pwd)"
@@ -253,6 +315,13 @@ jobs:
       run: |
         export MOVAI_OUTPUT_DIR="$(pwd)/artifacts"
         mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
+
+    - name: Run Catkin tests
+      if: ${{ inputs.run_catkin_tests && matrix.distro == 'noetic' }}
+      shell: bash
+      run: |
+        cd $ROS1_USER_WS
+        catkin test
 
     - name: Archive binary
       uses: actions/upload-artifact@v4
@@ -278,8 +347,103 @@ jobs:
         mobros publish
         cat /usr/local/rosdep/ros-pkgs.yaml
 
+  Post-build-static-analysis:
+    if: ${{ inputs.release == 'false' && needs.Check-static-analysis-config.outputs.pre_commit_exists == 'true' }}
+    needs: [Check-static-analysis-config, Build]
+    runs-on: ubuntu-22.04
+    container:
+      image: ${{ needs.Check-static-analysis-config.outputs.static_test_image_name }}
+      options: --user root
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+      with:
+        submodules: recursive
+
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: packages
+        path: artifacts
+
+    - name: Check package is installable
+      shell: bash
+      run: |
+        cd artifacts/
+        PACKAGES_INSTALL="$(find -L ./ -name "*.deb")"
+        echo $PACKAGES_INSTALL
+        INSTALL_CONFLICT_HANDLING=${{ inputs.INSTALL_CONFLICT_HANDLING }}
+        if [ "$INSTALL_CONFLICT_HANDLING" != "" ]; then
+          PACKAGES_INSTALL="$PACKAGES_INSTALL $INSTALL_CONFLICT_HANDLING"
+        fi
+        # Add test_publish_repo to apt sources to resolve dependencies
+        echo "deb [arch=all] https://artifacts.cloud.mov.ai/repository/${{ inputs.test_publish_repo }} testing main" | sudo tee /etc/apt/sources.list.d/ppa-testing.list
+        sudo apt update
+        sudo mobros install $PACKAGES_INSTALL -y --upgrade-installed --fail-on-apt-update
+
+    - name: Run post-build static analysis
+      uses: MOV-AI/.github/.github/actions/pre-commit@v3
+      with:
+        args: "--hook-stage manual --show-diff-on-failure --color=always --all-files"
+        GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+  Test:
+    if: ${{ always() && inputs.release == 'false' && needs.Build.result == 'success' &&  inputs.ros_distro == 'noetic' && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
+    runs-on: ubuntu-22.04
+    needs: [Build,Post-build-static-analysis]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # Disabling shallow clone is recommended for improving relevancy of reporting
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install Mobtest
+        run: |
+          python3 -m pip install \
+          -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple \
+          mobtest==${{ inputs.MOBTEST_VERSION }} --ignore-installed
+
+      - name: Mobtest validations
+        run: |
+          mobtest repo --issues ./mobtest-issues.json .
+
+      - name: Create SonarCloud project and disable autoscan
+        if: ${{ false }}
+        uses: MOV-AI/action-sonarcloud-proj-config@v1
+        with:
+          sonar_org: 'mov-ai'
+          sonar_token: ${{ secrets.sonar_token }}
+
+      - name: SonarCloud Scan
+        if: ${{ false }}
+        uses: SonarSource/sonarqube-scan-action@v7
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SONAR_TOKEN: ${{ secrets.sonar_token }}
+        with:
+          projectBaseDir: ./
+          args: >
+            -Dsonar.organization=mov-ai
+            -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
+            -Dsonar.sources=.
+            -Dsonar.scm.provider=git
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
+            -Dsonar.externalIssuesReportPaths=./mobtest-issues.json
+
+      - name: Link to SonarCloud dashboard
+        shell: bash
+        run: |
+          echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
+
   Package-Install-Test:
-    if: ${{ always() && inputs.release == 'false' && needs.Build.result == 'success' }}
+    if: ${{ always() && inputs.release == 'false' && needs.Build.result == 'success' && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
@@ -292,7 +456,7 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
-    needs: [Build]
+    needs: [Build,Post-build-static-analysis]
     steps:
       - name: Checkout
         if: ${{ inputs.install_test }}
@@ -312,7 +476,7 @@ jobs:
         run: |
           sudo apt update
           python3 -m pip install mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
-          
+
       - name: Install debian artifacts
         if: ${{ inputs.install_test }}
         run: |
@@ -333,8 +497,8 @@ jobs:
           mobtest proj /opt/ros/${{ matrix.distro }}/share/
 
   Package-Stack-Tests:
-    if: ${{ always() && inputs.release == 'false' && inputs.deploy == 'true' && inputs.run_stack_tests && needs.Build.result == 'success' }}
-    needs: [Build]
+    if: ${{ always() && inputs.release == 'false' && inputs.deploy == 'true' && inputs.run_stack_tests && needs.Build.result == 'success' && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
+    needs: [Build,Post-build-static-analysis]
     uses: MOV-AI/.github/.github/workflows/integration-build-robotics-component.yml@v2.3
     with:
       vs_product_name: ${{ inputs.vs_product_name }}
@@ -351,9 +515,9 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    if: ${{ always() && (needs.Package-Install-Test.result == 'success' || needs.Package-Install-Test.result == 'skipped') && (needs.Package-Stack-Tests.result == 'success' || needs.Package-Stack-Tests.result == 'skipped') && inputs.deploy == 'true' }}
+    if: ${{ always() && (needs.Package-Install-Test.result == 'success' || needs.Package-Install-Test.result == 'skipped') && (needs.Test.result == 'success' || needs.Test.result == 'skipped') && (needs.Package-Stack-Tests.result == 'success' || needs.Package-Stack-Tests.result == 'skipped') && inputs.deploy == 'true' }}
     runs-on: ubuntu-22.04
-    needs:  [Package-Install-Test,Package-Stack-Tests]
+    needs:  [Package-Install-Test,Test,Package-Stack-Tests]
     container:
       image: registry.cloud.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
       options: --user root
