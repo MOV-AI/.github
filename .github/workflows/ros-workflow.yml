@@ -367,14 +367,14 @@ jobs:
     - name: Check package is installable
       shell: bash
       run: |
-        cd artifacts/
-
-        INSTALL_CONFLICT_HANDLING="${{ inputs.INSTALL_CONFLICT_HANDLING }}"
-
         # Add test_publish_repo to apt sources to resolve dependencies
         echo "deb [arch=all] https://artifacts.cloud.mov.ai/repository/${{ inputs.test_publish_repo }} testing main" | sudo tee /etc/apt/sources.list.d/ppa-testing.list
         sudo apt update
-        find -L ./ -name "*.deb" -exec sudo mobros install -y --upgrade-installed --fail-on-apt-update $INSTALL_CONFLICT_HANDLING {} \+
+
+        cd artifacts/
+        PACKAGES_TO_INSTALL="${{ inputs.INSTALL_CONFLICT_HANDLING }}"
+        PACKAGES_TO_INSTALL=$(find -L ./ -name "*.deb")
+        sudo mobros install $PACKAGES_TO_INSTALL -y --upgrade-installed --fail-on-apt-update
 
     - name: Run post-build static analysis
       uses: MOV-AI/.github/.github/actions/pre-commit@v3
@@ -473,7 +473,9 @@ jobs:
         if: ${{ inputs.install_test }}
         run: |
           cd artifacts/
-          find -L ./ -name "*.deb" -exec sudo mobros install -y --upgrade-installed --fail-on-apt-update $INSTALL_CONFLICT_HANDLING {} \+
+          PACKAGES_TO_INSTALL="${{ inputs.INSTALL_CONFLICT_HANDLING }}"
+          PACKAGES_TO_INSTALL=$(find -L ./ -name "*.deb")
+          sudo mobros install $PACKAGES_TO_INSTALL -y --upgrade-installed --fail-on-apt-update
 
       - name: Mobtest project validations
         if: ${{ inputs.install_test }}
