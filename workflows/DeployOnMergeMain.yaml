@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: install raise requirements
       run: python3 -m pip install -r build-requirements.txt
@@ -42,11 +42,13 @@ jobs:
         echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
     - name: Raise App version
-      uses: CasperWA/push-protected@v2.14.0
+      uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
       with:
         token: ${{ secrets.RAISE_BOT_COMMIT_PASSWORD }}
+        git_user_email: ${{ secrets.RAISE_BOT_COMMIT_MAIL }}
+        git_user_name: ${{ secrets.RAISE_BOT_COMMIT_USER }}
         branch: ${{ steps.var_branch.outputs.branch }}
-        unprotect_reviews: true
+        repository: ${{ github.repository }}
 
     - name: Commit of version
       id: commit_id
