@@ -544,13 +544,15 @@ jobs:
         echo "Branch name is: $BRANCH_NAME"
         echo "branch=$BRANCH_NAME" | tee -a "$GITHUB_OUTPUT"
 
-    - name: Push raised version
+    - name: Push version bump to protected branch
       if: ${{ inputs.deploy == 'true' }}
-      uses: CasperWA/push-protected@v2.16.0
+      uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
       with:
         token: ${{ secrets.auto_commit_password }}
+        git_user_email: ${{ secrets.auto_commit_mail }}
+        git_user_name: ${{ secrets.auto_commit_user }}
         branch: ${{ steps.var_branch.outputs.branch }}
-        unprotect_reviews: true
+        repository: ${{ github.repository }}
 
     - name: Store commit id of version
       if: ${{ inputs.deploy == 'true' }}
