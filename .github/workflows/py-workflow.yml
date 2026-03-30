@@ -86,7 +86,7 @@ jobs:
       branch: ${{ steps.var_branch.outputs.branch }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
 
@@ -105,7 +105,7 @@ jobs:
       image: python:${{ inputs.PYTHON_VERSION }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -129,7 +129,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
 
@@ -201,7 +201,7 @@ jobs:
       image: python:${{ inputs.PYTHON_VERSION }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
 
@@ -249,7 +249,7 @@ jobs:
     needs: [ Linting ]
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
 
@@ -322,7 +322,7 @@ jobs:
       image: python:${{ inputs.PYTHON_VERSION }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
 
@@ -383,7 +383,7 @@ jobs:
 
     - name: Checkout gh-pages
       if: ${{ inputs.deploy && inputs.with_docs }}
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         ref: gh-pages
         path: gh-pages
@@ -424,7 +424,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -493,11 +493,13 @@ jobs:
 
     - name: Raise App version
       if: ${{ inputs.deploy }}
-      uses: CasperWA/push-protected@v2.14.0
+      uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
       with:
         token: ${{ secrets.auto_commit_password }}
+        git_user_email: ${{ secrets.auto_commit_mail }}
+        git_user_name: ${{ secrets.auto_commit_user }}
         branch: ${{ needs.Pre-build.outputs.branch }}
-        unprotect_reviews: true
+        repository: ${{ github.repository }}
 
     - name: Commit of version
       if: ${{ inputs.deploy }}
@@ -536,7 +538,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Set tag output
       id: vars
