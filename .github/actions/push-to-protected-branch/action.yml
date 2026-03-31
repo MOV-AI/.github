@@ -29,6 +29,12 @@ outputs:
   merge_method:
     description: "The merge method used"
     value: ${{ steps.merge-pr.outputs.merge_method }}
+  temp_branch:
+    description: "The temporary branch created (if applicable, for cleanup)"
+    value: ${{ steps.merge-pr.outputs.temp_branch }}
+  merge_failed:
+    description: "Whether the merge failed (requires cleanup)"
+    value: ${{ steps.merge-pr.outputs.merge_failed }}
 runs:
   using: "composite"
   steps:
@@ -70,7 +76,7 @@ runs:
         echo "Checking branch protection configuration..."
 
         # Check for rulesets
-        RULESET_CHECK=$(gh api "/repos/$REPO/rulesets" 2>/dev/null | jq -r '.[] | select(.target == "branch") | .rules[]? | .ref? // empty' 2>/dev/null | grep -c "$BRANCH" || echo "0")
+        RULESET_CHECK=$(gh api "/repos/$REPO/rulesets" 2>/dev/null | jq -r '.[] | select(.target == "branch") | .rules[]? | .ref? // empty' 2>/dev/null | grep -c "$BRANCH" || true)
         # Validate that RULESET_CHECK is a clean integer; fail loudly if not
         if ! echo "$RULESET_CHECK" | grep -qE '^[0-9]+$'; then
           echo "Error: Non-numeric RULESET_CHECK value: '$RULESET_CHECK'" >&2
@@ -108,6 +114,9 @@ runs:
         # Get current commit
         CURRENT_COMMIT=$(git rev-parse HEAD)
         TEMP_BRANCH="temp-bypass-$(date +%s)"
+
+        # Save temp branch name early for cleanup on failure
+        echo "temp_branch=$TEMP_BRANCH" >> $GITHUB_OUTPUT
 
         # Push temporary branch
         echo "Creating temporary branch: $TEMP_BRANCH"
@@ -163,22 +172,26 @@ runs:
 
         if [ "$BYPASS_CHECKS" = "true" ]; then
           echo "⚠ Attempting merge with status check bypass..."
-          MERGE_JSON=$(gh api --method PUT "/repos/$REPO/pulls/$PR_NUMBER/merge" -f merge_method="$MERGE_METHOD" --input /dev/null 2>/dev/null || echo '{}')
+          MERGE_JSON=$(gh api --method PUT "/repos/$REPO/pulls/$PR_NUMBER/merge" -f merge_method="$MERGE_METHOD" --input /dev/null 2>&1)
         else
-          MERGE_JSON=$(gh api --method PUT "/repos/$REPO/pulls/$PR_NUMBER/merge" -f merge_method="$MERGE_METHOD" 2>/dev/null || echo '{}')
+          MERGE_JSON=$(gh api --method PUT "/repos/$REPO/pulls/$PR_NUMBER/merge" -f merge_method="$MERGE_METHOD" 2>&1)
         fi
 
         # Validate JSON response before parsing
         if ! echo "$MERGE_JSON" | jq empty 2>/dev/null; then
-          echo "✗ Invalid API response received. Merge status unknown."
-          echo "Raw response: $MERGE_JSON"
+          echo "✗ Merge failed with error:"
+          echo "$MERGE_JSON"
+          echo "merge_failed=true" >> $GITHUB_OUTPUT
           exit 1
         fi
 
-        elif MERGE_MESSAGE=$(echo "$MERGE_JSON" | jq -r '.message // empty') && [ -n "$MERGE_MESSAGE" ]; then
+        # Check merge result - .merged must be true for success
+        if echo "$MERGE_JSON" | jq -e '.merged == true' > /dev/null 2>&1; then
           echo "✓ PR #$PR_NUMBER merged successfully"
-        elif echo "$MERGE_JSON" | jq -e '.message' > /dev/null 2>&1; then
-          MERGE_MESSAGE=$(echo "$MERGE_JSON" | jq -r '.message')
+          MERGE_SUCCESS=true
+        else
+          # Merge failed - check for error message
+          MERGE_MESSAGE=$(echo "$MERGE_JSON" | jq -r '.message // "Unknown error"')
 
           if echo "$MERGE_MESSAGE" | grep -q "required status check\|Merge cannot be performed"; then
             echo "⚠ Merge blocked by status checks, attempting force merge..."
@@ -186,26 +199,60 @@ runs:
 
             if echo "$FORCE_MERGE_OUTPUT" | grep -q "merged"; then
               echo "✓ Force merge succeeded"
+              MERGE_SUCCESS=true
             else
               echo "✗ Force merge also failed"
               echo "Merge response: $MERGE_MESSAGE"
+              echo "merge_failed=true" >> $GITHUB_OUTPUT
               exit 1
             fi
           else
             echo "✗ Merge failed: $MERGE_MESSAGE"
+            echo "merge_failed=true" >> $GITHUB_OUTPUT
             exit 1
           fi
-        else
-          echo "✗ Merge failed with unknown error"
-          echo "API response: $MERGE_JSON"
-          exit 1
         fi
 
-        # Clean up temporary branch
-        echo "Cleaning up temporary branch..."
-        git push origin --delete "$TEMP_BRANCH" 2>/dev/null || {
-          echo "⚠ Failed to delete temporary branch from origin, proceeding anyway"
-        }
+        # Clean up temporary branch (successful merge)
+        if [ "$MERGE_SUCCESS" = "true" ]; then
+          echo "Cleaning up temporary branch after successful merge..."
+          if ! git push origin --delete "$TEMP_BRANCH" 2>/dev/null; then
+            echo "⚠ Failed to delete temporary branch from origin"
+          fi
+        fi
+
+    - name: Cleanup failed temporary PR
+      if: steps.merge-pr.outcome == 'failure'
+      continue-on-error: true
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        REPO="${{ inputs.repository }}"
+        TEMP_BRANCH="${{ steps.merge-pr.outputs.temp_branch }}"
+        PR_NUMBER="${{ steps.merge-pr.outputs.pr_number }}"
+
+        echo "Cleaning up after failed merge..."
+
+        # Close the PR if it exists
+        if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ]; then
+          echo "Closing temporary PR #$PR_NUMBER..."
+          if gh api --method PATCH "/repos/$REPO/pulls/$PR_NUMBER" -f state="closed" 2>/dev/null; then
+            echo "✓ PR #$PR_NUMBER closed successfully"
+          else
+            echo "⚠ Failed to close PR #$PR_NUMBER (may already be closed or merged)"
+          fi
+        fi
+
+        # Delete the temporary branch if it exists
+        if [ -n "$TEMP_BRANCH" ] && [ "$TEMP_BRANCH" != "null" ]; then
+          echo "Deleting temporary branch $TEMP_BRANCH..."
+          if git push origin --delete "$TEMP_BRANCH" 2>/dev/null; then
+            echo "✓ Temporary branch $TEMP_BRANCH deleted successfully"
+          else
+            echo "⚠ Failed to delete temporary branch $TEMP_BRANCH (may already be deleted)"
+          fi
+        fi
 
     - name: Temporarily disable admin enforcement (fallback for classic)
       if: steps.check-protection.outputs.protection_type == 'classic' && steps.merge-pr.outcome == 'skipped'

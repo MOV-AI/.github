@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
     - id: check-json                # checks if json files are valid
     - id: check-added-large-files   # checks if large files were added
@@ -13,11 +13,11 @@ repos:
       args: [--fix=lf]
     - id: trailing-whitespace       # removes trailing whitespaces from text files
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.7
+    rev: v1.7.12
     hooks:
     - id: actionlint
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.0
+    rev: v0.15.8
     hooks:
     - id: ruff                      # fast Python linter (replaces flake8, isort, etc.)
       args: [--fix, --exit-non-zero-on-fix]
