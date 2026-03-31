@@ -23,17 +23,17 @@ on:
         required: false
         type: string
         default: 'false'
-      testing_publish_repos:  
-        required: false  
-        type: string  
+      testing_publish_repos:
+        required: false
+        type: string
         default: '["ppa-testing", "ppa-testing-focal", "ppa-testing-jammy", "ppa-testing-noble"]'
       test_runner:
         required: false
         type: string
         default: 'ubuntu-22.04'
-      prod_publish_repos:  
-        required: false  
-        type: string  
+      prod_publish_repos:
+        required: false
+        type: string
         default: '[ "ppa-main", "ppa-stable-focal", "ppa-stable-jammy", "ppa-stable-noble"]'
 
     secrets:
@@ -147,7 +147,7 @@ jobs:
         # Store generated .deb
         mkdir artifacts && \
         cp ../*.deb artifacts
-        
+
     - name: Prepare raise variables
       if: ${{ inputs.deploy == 'true' }}
       id: pre_raise
@@ -190,7 +190,7 @@ jobs:
         target_commitish: ${{ steps.commit.outputs.commit_id }}
       env:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
-    
+
     - uses: DenverCoder1/doxygen-github-pages-action@v2.0.0
       if: ${{ inputs.with_docs == 'true' }}
       with:
