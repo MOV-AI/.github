@@ -23,17 +23,17 @@ on:
         required: false
         type: string
         default: 'false'
-      testing_publish_repos:  
-        required: false  
-        type: string  
+      testing_publish_repos:
+        required: false
+        type: string
         default: '["ppa-testing", "ppa-testing-focal", "ppa-testing-jammy", "ppa-testing-noble"]'
       test_runner:
         required: false
         type: string
         default: 'ubuntu-22.04'
-      prod_publish_repos:  
-        required: false  
-        type: string  
+      prod_publish_repos:
+        required: false
+        type: string
         default: '[ "ppa-main", "ppa-stable-focal", "ppa-stable-jammy", "ppa-stable-noble"]'
 
     secrets:
@@ -71,7 +71,7 @@ jobs:
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - uses: actions/setup-python@v2
       with:
@@ -103,7 +103,7 @@ jobs:
         password: ${{secrets.registry_password}}
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Find Package details
       id: vars
@@ -147,7 +147,7 @@ jobs:
         # Store generated .deb
         mkdir artifacts && \
         cp ../*.deb artifacts
-        
+
     - name: Prepare raise variables
       if: ${{ inputs.deploy == 'true' }}
       id: pre_raise
@@ -156,11 +156,13 @@ jobs:
 
     - name: Raise App version
       if: ${{ inputs.deploy == 'true' }}
-      uses: CasperWA/push-protected@v2.14.0
+      uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
       with:
         token: ${{ secrets.auto_commit_pwd }}
+        git_user_email: ${{ secrets.auto_commit_mail }}
+        git_user_name: ${{ secrets.auto_commit_user }}
         branch: ${{ steps.pre_raise.outputs.branch }}
-        unprotect_reviews: true
+        repository: ${{ github.repository }}
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
@@ -188,7 +190,7 @@ jobs:
         target_commitish: ${{ steps.commit.outputs.commit_id }}
       env:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
-    
+
     - uses: DenverCoder1/doxygen-github-pages-action@v2.0.0
       if: ${{ inputs.with_docs == 'true' }}
       with:
@@ -204,7 +206,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Download artifacts
       uses: actions/download-artifact@v4
@@ -272,7 +274,7 @@ jobs:
         artifact_repo_ppas: ${{fromJson(inputs.prod_publish_repos)}}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Fetch artifact from github release
         run: |
