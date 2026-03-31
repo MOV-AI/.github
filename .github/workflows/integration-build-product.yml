@@ -179,11 +179,11 @@ jobs:
     steps:
       - name: Checkout
         if: ${{ inputs.is_nightly_run == false }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Nightly Checkout
         if: ${{ inputs.is_nightly_run }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.nightly_run_branch }}
 
@@ -357,11 +357,11 @@ jobs:
       - uses: rtCamp/action-cleanup@master
       - name: Checkout
         if: ${{ inputs.is_nightly_run == false }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Nightly Checkout
         if: ${{ inputs.is_nightly_run }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.Validate-boostrap-configs.outputs.commit_hash }}
 
@@ -558,11 +558,11 @@ jobs:
 
       - name: Checkout
         if: ${{ inputs.is_nightly_run == false }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Nightly Checkout
         if: ${{ inputs.is_nightly_run }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.Build-Spawner.outputs.commit_hash }}
 
@@ -864,11 +864,11 @@ jobs:
 
       - name: Checkout
         if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run == false }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Nightly Checkout
         if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.Build-Spawner.outputs.commit_hash }}
 
@@ -1055,11 +1055,11 @@ jobs:
 
       - name: Checkout
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' && inputs.is_nightly_run == false }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Nightly Checkout
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' && inputs.is_nightly_run }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.Build-Spawner.outputs.commit_hash }}
 
@@ -1341,11 +1341,11 @@ jobs:
 
       - name: Checkout
         if: ${{ inputs.with_simulation_tests && inputs.is_nightly_run == false }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Nightly Checkout
         if: ${{ inputs.with_simulation_tests && inputs.is_nightly_run }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.Build-Spawner.outputs.commit_hash }}
 
@@ -2053,7 +2053,7 @@ jobs:
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
 
       - name: Agent info
@@ -2227,11 +2227,13 @@ jobs:
 
       - name: Raise App version
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: CasperWA/push-protected@v2.14.0
+        uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
         with:
           token: ${{ secrets.auto_commit_pwd }}
+          git_user_email: ${{ secrets.auto_commit_mail }}
+          git_user_name: ${{ secrets.auto_commit_user }}
           branch: ${{ steps.pre_raise.outputs.branch }}
-          unprotect_reviews: true
+          repository: ${{ github.repository }}
 
       - name: Github Publish
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
