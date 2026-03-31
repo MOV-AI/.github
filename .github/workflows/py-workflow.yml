@@ -109,6 +109,10 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Configure Git safe directory
+        shell: bash
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Install dependencies and package
         run: |
           python3 -m pip install pip pre-commit --upgrade
@@ -132,6 +136,10 @@ jobs:
       uses: actions/checkout@v6
       with:
         submodules: recursive
+
+    - name: Configure Git safe directory
+      shell: bash
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
     - name: Upgrade pip
       run: python3 -m pip install pip --upgrade
@@ -205,6 +213,10 @@ jobs:
       with:
         submodules: recursive
 
+    - name: Configure Git safe directory
+      shell: bash
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
     - name: Upgrade pip
       run: python3 -m pip install pip --upgrade
 
@@ -252,6 +264,10 @@ jobs:
       uses: actions/checkout@v6
       with:
         submodules: recursive
+
+    - name: Configure Git safe directory
+      shell: bash
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
     - name: Calculate python version
       if: ${{ startsWith(inputs.PYTHON_VERSION, '3.8') }}
@@ -325,6 +341,10 @@ jobs:
       uses: actions/checkout@v6
       with:
         submodules: recursive
+
+    - name: Configure Git safe directory
+      shell: bash
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
     - name: Upgrade pip
       run: python -m pip install pip --upgrade
@@ -491,9 +511,9 @@ jobs:
         git config --global --add safe.directory $(pwd)
         git commit -am "[skip actions] Automatic Bump of build version to ${{ steps.bump.outputs.current_version }}"
 
-    - name: Raise App version
-      if: ${{ inputs.deploy }}
+    - name: Push version bump to protected branch
       uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
+      if: ${{ inputs.deploy }}
       with:
         token: ${{ secrets.auto_commit_password }}
         git_user_email: ${{ secrets.auto_commit_mail }}
