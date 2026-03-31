@@ -70,10 +70,15 @@ runs:
         echo "Checking branch protection configuration..."
 
         # Check for rulesets
-        RULESET_CHECK=$(gh api "/repos/$REPO/rulesets" --jq '.[] | select(.target == "branch") | .rules[].ref' 2>/dev/null | grep -c "$BRANCH" || echo "0")
+        RULESET_CHECK=$(gh api "/repos/$REPO/rulesets" 2>/dev/null | jq -r '.[] | select(.target == "branch") | .rules[]? | .ref? // empty' 2>/dev/null | grep -c "$BRANCH" || echo "0")
+        # Validate that RULESET_CHECK is a clean integer; fail loudly if not
+        if ! echo "$RULESET_CHECK" | grep -qE '^[0-9]+$'; then
+          echo "Error: Non-numeric RULESET_CHECK value: '$RULESET_CHECK'" >&2
+          exit 1
+        fi
 
         # Check for classic protection
-        CLASSIC_CHECK=$(gh api "/repos/$REPO/branches/$BRANCH/protection" 2>/dev/null | jq -r '.url' || echo "")
+        CLASSIC_CHECK=$(gh api "/repos/$REPO/branches/$BRANCH/protection" 2>/dev/null | jq -r '.url' 2>/dev/null || echo "")
 
         if [ "$RULESET_CHECK" -gt 0 ]; then
           echo "protection_type=ruleset" >> $GITHUB_OUTPUT
@@ -158,27 +163,41 @@ runs:
 
         if [ "$BYPASS_CHECKS" = "true" ]; then
           echo "⚠ Attempting merge with status check bypass..."
-          MERGE_JSON=$(gh api --method PUT "/repos/$REPO/pulls/$PR_NUMBER/merge" -f merge_method="$MERGE_METHOD" --input /dev/null 2>&1 || true)
+          MERGE_JSON=$(gh api --method PUT "/repos/$REPO/pulls/$PR_NUMBER/merge" -f merge_method="$MERGE_METHOD" --input /dev/null 2>/dev/null || echo '{}')
         else
-          MERGE_JSON=$(gh api --method PUT "/repos/$REPO/pulls/$PR_NUMBER/merge" -f merge_method="$MERGE_METHOD" 2>&1 || true)
+          MERGE_JSON=$(gh api --method PUT "/repos/$REPO/pulls/$PR_NUMBER/merge" -f merge_method="$MERGE_METHOD" 2>/dev/null || echo '{}')
         fi
 
-        # Check merge result
-        if echo "$MERGE_JSON" | jq -e '.merged' > /dev/null 2>&1; then
-          echo "✓ PR #$PR_NUMBER merged successfully"
-        elif echo "$MERGE_JSON" | grep -q "required status check\|Merge cannot be performed"; then
-          echo "⚠ Merge blocked by status checks, attempting force merge..."
+        # Validate JSON response before parsing
+        if ! echo "$MERGE_JSON" | jq empty 2>/dev/null; then
+          echo "✗ Invalid API response received. Merge status unknown."
+          echo "Raw response: $MERGE_JSON"
+          exit 1
+        fi
 
-          if gh pr merge "$PR_NUMBER" --squash --admin 2>&1 | grep -q "merged"; then
-            echo "✓ Force merge succeeded"
+        elif MERGE_MESSAGE=$(echo "$MERGE_JSON" | jq -r '.message // empty') && [ -n "$MERGE_MESSAGE" ]; then
+          echo "✓ PR #$PR_NUMBER merged successfully"
+        elif echo "$MERGE_JSON" | jq -e '.message' > /dev/null 2>&1; then
+          MERGE_MESSAGE=$(echo "$MERGE_JSON" | jq -r '.message')
+
+          if echo "$MERGE_MESSAGE" | grep -q "required status check\|Merge cannot be performed"; then
+            echo "⚠ Merge blocked by status checks, attempting force merge..."
+            FORCE_MERGE_OUTPUT=$(gh pr merge "$PR_NUMBER" --squash --admin 2>&1 || true)
+
+            if echo "$FORCE_MERGE_OUTPUT" | grep -q "merged"; then
+              echo "✓ Force merge succeeded"
+            else
+              echo "✗ Force merge also failed"
+              echo "Merge response: $MERGE_MESSAGE"
+              exit 1
+            fi
           else
-            echo "✗ Force merge also failed"
-            echo "Merge response: $(echo "$MERGE_JSON" | jq -r '.message // .message // "unknown"')"
+            echo "✗ Merge failed: $MERGE_MESSAGE"
             exit 1
           fi
         else
-          MERGE_MESSAGE=$(echo "$MERGE_JSON" | jq -r '.message // "unknown error"')
-          echo "✗ Merge failed: $MERGE_MESSAGE"
+          echo "✗ Merge failed with unknown error"
+          echo "API response: $MERGE_JSON"
           exit 1
         fi
 
