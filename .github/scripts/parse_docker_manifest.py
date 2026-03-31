@@ -42,7 +42,9 @@ def parse_from_manifest(manifest_file, global_args):
         sys.exit(1)
 
     def get_val(img, key, global_val, default):
-        val = img[key] if key in img and img[key] is not None else global_val if global_val not in [None, ""] else default
+        val = (
+            img[key] if key in img and img[key] is not None else global_val if global_val not in [None, ""] else default
+        )
         if key in ["download_artifact", "push_latest", "public", "snyk_check"]:
             return normalize_bool(val)
         return val
@@ -61,8 +63,12 @@ def parse_from_manifest(manifest_file, global_args):
                 "build_args": get_val(img, "build_args", global_args["build_args"], ""),
                 "push_latest": get_val(img, "push_latest", global_args["push_latest"], False),
                 "download_artifact": get_val(img, "download_artifact", global_args["download_artifact"], False),
-                "download_artifact_name": get_val(img, "download_artifact_name", global_args["download_artifact_name"], "artifacts"),
-                "download_artifact_path": get_val(img, "download_artifact_path", global_args["download_artifact_path"], "./dist"),
+                "download_artifact_name": get_val(
+                    img, "download_artifact_name", global_args["download_artifact_name"], "artifacts"
+                ),
+                "download_artifact_path": get_val(
+                    img, "download_artifact_path", global_args["download_artifact_path"], "./dist"
+                ),
             }
             for img in images
         ]
@@ -247,11 +253,7 @@ def main():
     }
 
     # Determine which mode to use
-    outputs = (
-        parse_from_manifest(args.manifest_file, global_args)
-        if args.manifest_file
-        else parse_from_inputs(args)
-    )
+    outputs = parse_from_manifest(args.manifest_file, global_args) if args.manifest_file else parse_from_inputs(args)
 
     # Write outputs to GitHub Actions
     write_github_output(outputs)
