@@ -572,7 +572,7 @@ jobs:
         echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
     - name: Raise App version
-      uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
+      uses: MOV-AI/.github/.github/actions/push-to-protected-branch@patch/install_jq
       with:
         token: ${{ secrets.auto_commit_pwd }}
         git_user_email: ${{ secrets.auto_commit_mail }}
