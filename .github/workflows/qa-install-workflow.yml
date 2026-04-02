@@ -2,10 +2,6 @@ name: Install Tests
 on:
   workflow_call:
     inputs:
-      test_config_file:
-        required: true
-        type: string
-        description: Test JIRA ID of installation using config file
       test_set:
         required: true
         type: string
@@ -107,7 +103,7 @@ jobs:
           # deactivate venv
           deactivate
 
-      - name: Install tests using config file with full clean
+      - name: Install tests 
         timeout-minutes: 30
         shell: bash
         run: |
@@ -118,11 +114,7 @@ jobs:
           rm -rf results/*
 
           # tests execution
-          python3 -m pytest \
-            tests/ \
-            -k ${{ inputs.test_config_file }} \
-            --installPath="." \
-            --jsonConfigFilePath="config/platform_example_script.json" --full_clean
+          python3 -m pytest 
 
           # exit virtual environment
           deactivate
