@@ -6,10 +6,6 @@ on:
         required: true
         type: string
         description: Test set to execute
-      tests_to_validate:
-        required: true
-        type: string
-        description: Test JIRA ID of cucumber tests to be validated
       nightly:
         required: false
         type: boolean
@@ -59,7 +55,7 @@ jobs:
           . venv/bin/activate
           pip install -r requirements.txt
 
-          python3 testcasemanagement/testcase_importer.py --target "${{ inputs.tests_to_validate }}"
+          python3 testcasemanagement/testcase_importer.py --target "${{ inputs.test_set }}"
           python3 testcasemanagement/feature_file_processor.py --validate
 
           # deactivate venv
