@@ -67,6 +67,9 @@ runs:
         BRANCH="${{ inputs.branch }}"
         REPO="${{ inputs.repository }}"
 
+        echo "Installing pre-requirements..."
+        sudo apt-get update && sudo apt-get install -y jq
+
         echo "Checking branch protection configuration..."
 
         # Check for rulesets
