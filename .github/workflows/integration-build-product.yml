@@ -128,7 +128,7 @@ on:
         value: ${{ jobs.Validation-Simulator-Tests.outputs.simulation_test_publish_url || 'not executed' }}
 
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.8"
+  CI_INTEGRATION_SCRIPTS_VERSION: "0.0.0.2"
   MOBTEST_VERSION: "0.0.6.1"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.26"
   GITHUB_API_USR: "OttoMation-Movai"
@@ -420,7 +420,7 @@ jobs:
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
           . .ci-venv/bin/activate
           cat product-manifest.yaml
-          integration-pipeline generate_meta_artifacts --update_simulator --override_spawner ${{ inputs.product_name }} --manifest_platform_base_key "product_dependencies"
+          integration-pipeline generate_meta_artifacts --update_simulator --override_ros1_workspace ${{ inputs.product_name }} --manifest_platform_base_key "product_dependencies"
           deactivate
 
       - name: Update robot jsons to use ci project
@@ -430,19 +430,34 @@ jobs:
           . .ci-venv/bin/activate
           # iterate over .json files and update images to use ci image
           for file in $(find . -maxdepth 1 -name "*.json"); do
-            echo $file
-            # add ci prefix to spawner.image current value
-            spawner_img=$(cat $file | jq .spawner.image | tr -d \")
-            jq --arg spawner_img ci/$spawner_img '.spawner.image = $spawner_img' "$file" > tmp.json
-            # verify if there is simulator section
-            if [[ $(cat tmp.json | jq .simulator) != "null" ]]; then
-              # add ci prefix to simulator.image current value
-              simulator_img=$(cat tmp.json | jq .simulator.image | tr -d \")
-              jq --arg simulator_img ci/$simulator_img '.simulator.image = $simulator_img' tmp.json > tmp-sim.json
-              mv tmp-sim.json tmp.json
-            fi
-            mv tmp.json $file
-            cat $file | jq .spawner.image
+            echo "$file"
+
+            tmp="tmp.json"
+            cp "$file" "$tmp"
+
+            update_image () {
+              local section=$1
+              local file_in=$2
+              local file_out=$3
+
+              if [[ $(jq "has(\"$section\")" "$file_in") == "true" ]]; then
+                img=$(jq -r ".\"$section\".image" "$file_in")
+                jq --arg img "ci/$img" ".\"$section\".image = \$img" "$file_in" > "$file_out"
+              else
+                cp "$file_in" "$file_out"
+              fi
+            }
+
+            # apply updates
+            update_image "spawner" "$tmp" "tmp1.json"
+            update_image "simulator" "tmp1.json" "tmp2.json"
+            update_image "ros1-workspace" "tmp2.json" "tmp3.json"
+            update_image "ros2-workspace" "tmp3.json" "$tmp"
+
+            mv "$tmp" "$file"
+
+            # debug
+            jq '.spawner.image?, ."ros1-workspace".image?, ."ros2-workspace".image?' "$file"
           done
           deactivate
 
