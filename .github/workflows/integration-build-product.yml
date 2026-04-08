@@ -5,7 +5,7 @@ on:
       product_name:
         required: true
         type: string
-      ros_distro:
+      product_distro_list:
         required: true
         type: string
       with_simulation:
@@ -119,7 +119,7 @@ on:
         value: ${{ jobs.Validate-boostrap-configs.outputs.init_version || 'not executed' }}
       raised_version:
         description: "Version of the product built"
-        value: ${{ jobs.Build-Spawner.outputs.raised_version || 'not executed' }}
+        value: ${{ jobs.Build-Workspace.outputs.raised_version || 'not executed' }}
       simulation_test_version:
         description: "Version of the simulation tests executed"
         value: ${{ jobs.Validation-Simulator-Tests.outputs.simulation_test_version || 'not executed' }}
@@ -371,11 +371,11 @@ jobs:
           retention-days: 5
           include-hidden-files: true
 
-  Build-Spawner:
+  Build-Workspace:
     needs: [Validate-boostrap-configs]
     strategy:
       matrix:
-        distro: ${{ fromJSON(inputs.ros_distro) }}
+        workspace: ${{ fromJSON(inputs.product_distro_list) }}
     runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     outputs:
       raised_version: ${{ steps.pre_build.outputs.raised_version }}
@@ -471,7 +471,7 @@ jobs:
       - name: Lint docker image
         shell: bash
         run: |
-          docker run --rm -i -e HADOLINT_FAILURE_THRESHOLD=error hadolint/hadolint < docker/${{ matrix.distro }}/Dockerfile
+          docker run --rm -i -e HADOLINT_FAILURE_THRESHOLD=error hadolint/hadolint < docker/${{ matrix.workspace['distro'] }}/Dockerfile
 
       - name: Login to ${{ env.REGISTRY }} Registry
         uses: docker/login-action@v3
@@ -498,14 +498,14 @@ jobs:
         id: pre_build
         shell: bash
         run: |
-          echo "base_name=$(cat ci_artifacts/spawner_base_name_${{ matrix.distro }}.ci)" >> $GITHUB_OUTPUT
-          echo "base_version=$(cat ci_artifacts/spawner_base_version_${{ matrix.distro }}.ci)" >> $GITHUB_OUTPUT
+          echo "base_name=$(cat ci_artifacts/${{ matrix.workspace['service'] }}_base_name_${{ matrix.workspace['distro'] }}.ci)" >> $GITHUB_OUTPUT
+          echo "base_version=$(cat ci_artifacts/${{ matrix.workspace['service'] }}_base_version_${{ matrix.workspace['distro'] }}.ci)" >> $GITHUB_OUTPUT
           echo "raised_version=$(cat product.version)" >> $GITHUB_OUTPUT
           # Check if propagated project is false
           if [ "${{ inputs.propagate_project }}" = "false" ];
           then
             mkdir -p dependency_version
-            cp ci_artifacts/spawner_base_version_${{ matrix.distro }}.ci dependency_version/base_version
+            cp ci_artifacts/${{ matrix.workspace['service'] }}_base_version_${{ matrix.workspace['distro'] }}.ci dependency_version/base_version
           fi
 
       - name: Stash dependency_version
@@ -527,9 +527,9 @@ jobs:
             --build-arg BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} \
             --build-arg TAG=${{ steps.pre_build.outputs.base_version }} \
             --build-arg CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }} \
-            --file docker/${{ matrix.distro }}/Dockerfile \
+            --file docker/${{ matrix.workspace['distro'] }}/Dockerfile \
             --platform linux/amd64 \
-            --tag ${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ steps.pre_build.outputs.raised_version }} \
+            --tag ${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ steps.pre_build.outputs.raised_version }} \
             --pull \
             --push .
 
@@ -579,10 +579,10 @@ jobs:
               "thread_ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
             }
 
-      - name: Stash robot_jsons_${{ matrix.distro }}
+      - name: Stash robot_jsons_${{ matrix.workspace['distro'] }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_${{ matrix.distro }}
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_${{ matrix.workspace['distro'] }}
           path: "*.json*"
           retention-days: 10
 
@@ -594,10 +594,10 @@ jobs:
           docker image prune --all -f
 
   Install-Robot:
-    needs: [Validate-boostrap-configs, Build-Spawner]
+    needs: [Validate-boostrap-configs, Build-Workspace]
     strategy:
       matrix:
-        distro: ${{ fromJSON(inputs.ros_distro) }}
+        workspace: ${{ fromJSON(inputs.product_distro_list) }}
     runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     steps:
       - uses: rtCamp/action-cleanup@master
@@ -610,7 +610,7 @@ jobs:
         if: ${{ inputs.is_nightly_run }}
         uses: actions/checkout@v6
         with:
-          ref: ${{ needs.Build-Spawner.outputs.commit_hash }}
+          ref: ${{ needs.Build-Workspace.outputs.commit_hash }}
 
       - name: Agent info
         run: |
@@ -629,10 +629,10 @@ jobs:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
 
-      - name: unstash robot_jsons_${{ matrix.distro }}
+      - name: unstash robot_jsons_${{ matrix.workspace['distro'] }}
         uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_${{ matrix.distro }}
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_${{ matrix.workspace['distro'] }}
           path: .
 
       - name: Login to ${{ env.REGISTRY }} Registry
@@ -659,14 +659,14 @@ jobs:
       - name: Docker load spawner image
         shell: bash
         run: |
-          docker pull "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+          docker pull "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
           # if event is pr create ci tags
           if [ "${{ github.event_name }}" = "pull_request" ];
           then
-            docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-            docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+            docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
+            docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
           fi
 
       - name: Installation
@@ -678,7 +678,7 @@ jobs:
 
           mkdir -p artifacts
           cp *.json artifacts/
-          CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.distro }}.json
+          CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}.json
 
           python3 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
@@ -757,7 +757,7 @@ jobs:
           docker images
           echo "container list:"
           docker ps -a
-          container_id=$(docker ps -q -f "ancestor=$REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)")
+          container_id=$(docker ps -q -f "ancestor=$REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:$(cat product.version)")
           docker exec -t "$container_id" bash -c '
             set -e
             sudo apt update
@@ -783,16 +783,16 @@ jobs:
             echo "backup of metadata finished"
           ' || true
             echo "export finished"
-            docker cp $container_id:/tmp/deployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-deployable.dploy
-            docker cp $container_id:/tmp/undeployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-3rdParty.dploy
-            docker cp $container_id:/tmp/apt_packages.json artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-apt_packages.json
+            docker cp $container_id:/tmp/deployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}-deployable.dploy
+            docker cp $container_id:/tmp/undeployable.dploy artifacts/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}-3rdParty.dploy
+            docker cp $container_id:/tmp/apt_packages.json artifacts/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}-apt_packages.json
 
             mkdir -p metadata_artifact tmp_meta
             docker cp $container_id:/tmp/proj_metadata/ ./
             tar cvzf ./metadata_artifact/metadata.tar.gz ./proj_metadata
-            CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.distro }}.json
+            CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}.json
 
-            echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)">artifacts/product-${{ matrix.distro }}.image.artifact
+            echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:$(cat product.version)">artifacts/product-${{ matrix.workspace['distro'] }}.image.artifact
 
       - name: Un stash dependency_version
         if: ${{ inputs.propagate_project == false }}
@@ -818,10 +818,10 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          curl --location '${{ env.PROJECT_DATA_VIEWER_API}}?Name=${{ inputs.product_name }}-${{ matrix.distro }}&Version=${{ steps.project_and_solution_version.outputs.PROJECT_VERSION }}&SolutionVersion=${{ steps.project_and_solution_version.outputs.MOVAI_SOLUTION_VERSION }}' \
+          curl --location '${{ env.PROJECT_DATA_VIEWER_API}}?Name=${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}&Version=${{ steps.project_and_solution_version.outputs.PROJECT_VERSION }}&SolutionVersion=${{ steps.project_and_solution_version.outputs.MOVAI_SOLUTION_VERSION }}' \
           --header 'Content-Type: application/json' \
           --header 'Authorization: Basic ${{ secrets.pdv_auth_token }}' \
-          --data @artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-apt_packages.json
+          --data @artifacts/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}-apt_packages.json
 
       - name: Get current job id
         if: always()
@@ -853,7 +853,7 @@ jobs:
             {
               "channel": "${{ env.SLACK_CHANNEL }}",
               "text": "${{ steps.pre_slack_result.outputs.msg }}",
-              "thread_ts": "${{ needs.Build-Spawner.outputs.slack_thread_id }}"
+              "thread_ts": "${{ needs.Build-Workspace.outputs.slack_thread_id }}"
             }
 
       - name: Slack message failure
@@ -866,7 +866,7 @@ jobs:
             {
               "channel": "${{ env.SLACK_CHANNEL }}",
               "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
-              "thread_ts": "${{ needs.Build-Spawner.outputs.slack_thread_id }}"
+              "thread_ts": "${{ needs.Build-Workspace.outputs.slack_thread_id }}"
             }
 
       - name: Stash project metadata
@@ -898,7 +898,7 @@ jobs:
           docker image prune --all -f
 
   Build-Simulator:
-    needs: [Validate-boostrap-configs, Build-Spawner]
+    needs: [Validate-boostrap-configs, Build-Workspace]
     runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     env:
       DISTRO: noetic
@@ -907,7 +907,7 @@ jobs:
       skip_simulator: "${{ steps.pre_simulator_build.outputs.skip_simulator_build }}"
       simulator_tests_agent_name: "${{ steps.post_simulator_build.outputs.simul_tests_infra }}"
       slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
-      commit_hash: ${{ needs.Build-Spawner.outputs.commit_hash }}
+      commit_hash: ${{ needs.Build-Workspace.outputs.commit_hash }}
     steps:
       - name: Pre clean ups
         uses: rtCamp/action-cleanup@master
@@ -921,7 +921,7 @@ jobs:
         if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run }}
         uses: actions/checkout@v6
         with:
-          ref: ${{ needs.Build-Spawner.outputs.commit_hash }}
+          ref: ${{ needs.Build-Workspace.outputs.commit_hash }}
 
       - name: Agent info
         if: ${{ inputs.with_simulation == 'true' }}
@@ -1095,13 +1095,13 @@ jobs:
           fi
 
   Install-Simulator-Robot:
-    needs: [Validate-boostrap-configs, Build-Spawner, Build-Simulator]
+    needs: [Validate-boostrap-configs, Build-Workspace, Build-Simulator]
     strategy:
       matrix:
-        distro: ${{ fromJSON(inputs.ros_distro) }}
+        workspace: ${{ fromJSON(inputs.product_distro_list) }}
     runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
     outputs:
-      slack_thread_id: ${{ needs.Build-Spawner.outputs.slack_thread_id }}
+      slack_thread_id: ${{ needs.Build-Workspace.outputs.slack_thread_id }}
       skip_simulator: ${{ needs.Build-Simulator.outputs.skip_simulator }}
 
     steps:
@@ -1116,7 +1116,7 @@ jobs:
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' && inputs.is_nightly_run }}
         uses: actions/checkout@v6
         with:
-          ref: ${{ needs.Build-Spawner.outputs.commit_hash }}
+          ref: ${{ needs.Build-Workspace.outputs.commit_hash }}
 
       - name: Agent info
         if: ${{ inputs.with_simulation == 'true' }}
@@ -1148,11 +1148,11 @@ jobs:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
 
-      - name: unstash robot_jsons_${{ matrix.distro }}
+      - name: unstash robot_jsons_${{ matrix.workspace['distro'] }}
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_${{ matrix.distro }}
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_${{ matrix.workspace['distro'] }}
           path: .
 
       - name: Login to ${{ env.REGISTRY }} Registry
@@ -1182,14 +1182,14 @@ jobs:
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         shell: bash
         run: |
-          docker pull "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+          docker pull "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
           # if event is pr create ci tags
           if [ "${{ github.event_name }}" = "pull_request" ];
           then
-            docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-            docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+            docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
+            docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
           fi
 
       - name: Docker load simulator image
@@ -1219,7 +1219,7 @@ jobs:
 
           mkdir -p artifacts
           cp *.json artifacts/
-          CONFIG_FILE_NAME="standalone-${{ inputs.product_name }}-simulator-${{ matrix.distro }}.json"
+          CONFIG_FILE_NAME="standalone-${{ inputs.product_name }}-simulator-${{ matrix.workspace['distro'] }}.json"
           sudo rm -rf $USERSPACE_FOLDER_PATH || true
           sudo mkdir -p $USERSPACE_FOLDER_PATH $USERSPACE_FOLDER_PATH/models_database $USERSPACE_FOLDER_PATH/tugbot_ignition
           sudo chmod 777 -R $USERSPACE_FOLDER_PATH
@@ -1270,7 +1270,7 @@ jobs:
             set -e
             export PATH="$HOME/.local/bin:$PATH"
             python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
-            mobtest proj /opt/ros/${{ matrix.distro }}/share/
+            mobtest proj /opt/ros/${{ matrix.workspace['distro'] }}/share/
           '
 
       - name: Output simulator image
@@ -1390,7 +1390,7 @@ jobs:
           docker image prune --all -f
 
   Validation-Simulator-Tests:
-    needs: [Validate-boostrap-configs, Compute-timeout, Build-Spawner, Build-Simulator]
+    needs: [Validate-boostrap-configs, Compute-timeout, Build-Workspace, Build-Simulator]
     runs-on: ${{ needs.Build-Simulator.outputs.simulator_tests_agent_name }}
     if: ${{ github.event_name != 'pull_request'}}
     timeout-minutes: ${{ fromJSON(needs.Compute-timeout.outputs.jobtimeout) }}
@@ -1409,7 +1409,7 @@ jobs:
         if: ${{ inputs.with_simulation_tests && inputs.is_nightly_run }}
         uses: actions/checkout@v6
         with:
-          ref: ${{ needs.Build-Spawner.outputs.commit_hash }}
+          ref: ${{ needs.Build-Workspace.outputs.commit_hash }}
 
       - name: Agent info
         run: |
@@ -1683,8 +1683,8 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
-            docker pull "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}"
-            docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}"
+            docker pull "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
+            docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
           '
 
       - name: Remote - Docker load simulator image
@@ -1905,7 +1905,7 @@ jobs:
             # for sanity
             docker ps -a
 
-            for container in backend spawner message-server; do
+            for container in backend spawner ros1-workspace message-server; do
              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
             done || true
