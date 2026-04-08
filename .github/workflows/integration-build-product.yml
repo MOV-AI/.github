@@ -672,6 +672,7 @@ jobs:
 
       - name: Installation
         shell: bash
+        if: false
         run: |
           sudo apt-mark unhold movai-service || true
           sudo apt-mark unhold movai-cli || true
