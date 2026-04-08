@@ -498,14 +498,15 @@ jobs:
         id: pre_build
         shell: bash
         run: |
-          echo "base_name=$(cat ci_artifacts/${{ matrix.workspace['service'] }}_base_name_${{ matrix.workspace['distro'] }}.ci)" >> $GITHUB_OUTPUT
-          echo "base_version=$(cat ci_artifacts/${{ matrix.workspace['service'] }}_base_version_${{ matrix.workspace['distro'] }}.ci)" >> $GITHUB_OUTPUT
+          service_name_file_pattern=$(echo ${{ matrix.workspace['service'] }} | sed 's/-/_/g')
+          echo "base_name=$(cat ci_artifacts/${service_name_file_pattern}_base_name_${{ matrix.workspace['distro'] }}.ci)" >> $GITHUB_OUTPUT
+          echo "base_version=$(cat ci_artifacts/${service_name_file_pattern}_base_version_${{ matrix.workspace['distro'] }}.ci)" >> $GITHUB_OUTPUT
           echo "raised_version=$(cat product.version)" >> $GITHUB_OUTPUT
           # Check if propagated project is false
           if [ "${{ inputs.propagate_project }}" = "false" ];
           then
             mkdir -p dependency_version
-            cp ci_artifacts/${{ matrix.workspace['service'] }}_base_version_${{ matrix.workspace['distro'] }}.ci dependency_version/base_version
+            cp ci_artifacts/${service_name_file_pattern}_base_version_${{ matrix.workspace['distro'] }}.ci dependency_version/base_version
           fi
 
       - name: Stash dependency_version
