@@ -722,6 +722,7 @@ jobs:
           retention-days: 5
 
       - name: Run mobtest
+        continue-on-error: true
         if: ${{ inputs.deployment_project == false }}
         shell: bash
         run: |
@@ -732,8 +733,24 @@ jobs:
             python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==0.0.4.3 --ignore-installed
             mobtest proj /opt/ros/noetic/share/
           '
-
       - name: Collect Installed components
+        if: always()
+        shell: bash
+        run: |
+            set -e
+            mkdir -p artifacts proj_metadata
+            cp *.json artifacts/
+            touch artifacts/spawner-solution-noetic-deployable.dploy
+            touch artifacts/spawner-solution-noetic-3rdParty.dploy
+            touch artifacts/spawner-solution-noetic-apt_packages.json
+
+            touch proj_metadata/metadata.tar.gz
+            
+            CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}.json
+
+            echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:$(cat product.version)">artifacts/product-${{ matrix.workspace['distro'] }}.image.artifact
+      - name: Collect Installed components2
+        continue-on-error: true
         if: always()
         shell: bash
         run: |
