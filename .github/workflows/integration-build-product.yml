@@ -741,10 +741,13 @@ jobs:
             set -e
             mkdir -p artifacts proj_metadata metadata_artifact
             cp *.json artifacts/
+            
             touch artifacts/spawner-solution-noetic-deployable.dploy
             touch artifacts/spawner-solution-noetic-3rdParty.dploy
             touch artifacts/spawner-solution-noetic-apt_packages.json
-
+            echo '{"packages": []}' > artifacts/spawner-solution-noetic-apt_packages.json
+            echo '{"packages": []}' > artifacts/spawner-solution-noetic-deployable.dploy
+            echo '{"packages": []}' > artifacts/spawner-solution-noetic-3rdParty.dploy
             touch proj_metadata/metadata.tar.gz
             touch metadata_artifact/metadata.tar.gz 
             
