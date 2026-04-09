@@ -2217,7 +2217,6 @@ jobs:
 
           cp ./platform_configs/product.version product.version
           cp ./platform_configs/.bumpversion.cfg .bumpversion.cfg
-          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
           mkdir -p deployment_artifacts
 
           . .ci-venv/bin/activate
