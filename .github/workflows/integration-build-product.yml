@@ -669,6 +669,7 @@ jobs:
             docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
             docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
           fi
+          docker images
 
       - name: Installation
         shell: bash
