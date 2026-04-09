@@ -128,7 +128,7 @@ on:
         value: ${{ jobs.Validation-Simulator-Tests.outputs.simulation_test_publish_url || 'not executed' }}
 
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "0.0.0.3"
+  CI_INTEGRATION_SCRIPTS_VERSION: "0.0.0.4"
   MOBTEST_VERSION: "0.0.6.1"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.26"
   GITHUB_API_USR: "OttoMation-Movai"
@@ -420,7 +420,7 @@ jobs:
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
           . .ci-venv/bin/activate
           cat product-manifest.yaml
-          integration-pipeline generate_meta_artifacts --update_simulator --override_ros1_workspace ${{ inputs.product_name }} --manifest_platform_base_key "product_dependencies"
+          integration-pipeline generate_meta_artifacts --update_simulator --override_ros1_workspace ${{ inputs.product_name }}-${{ matrix.workspace['distro'] }} --manifest_platform_base_key "product_dependencies"
           deactivate
 
       - name: Update robot jsons to use ci project
@@ -673,7 +673,6 @@ jobs:
 
       - name: Installation
         shell: bash
-        if: false
         run: |
           sudo apt-mark unhold movai-service || true
           sudo apt-mark unhold movai-cli || true
