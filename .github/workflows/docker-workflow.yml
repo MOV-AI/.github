@@ -590,5 +590,5 @@ jobs:
           name: Release v${{ needs.raise-version.outputs.package_version }}
           body_path: release_body.md
           draft: false
-          prerelease: false
+          prerelease: true
           token: ${{ secrets.commit_token }}
