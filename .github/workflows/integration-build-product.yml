@@ -2322,7 +2322,6 @@ jobs:
             docker push $target
           done
 
-          integration-pipeline patch_manifest_with_spawner
           cat product-manifest.yaml
           cp product-manifest.yaml deployment_artifacts
           cp metadata.tar.gz deployment_artifacts
