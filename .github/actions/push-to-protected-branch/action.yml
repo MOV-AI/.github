@@ -34,7 +34,7 @@ outputs:
     value: ${{ steps.merge-pr.outputs.temp_branch }}
   merge_failed:
     description: "Whether the merge failed (requires cleanup)"
-    value: ${{ steps.merge-pr.outputs.merge_failed }}
+    value: ${{ steps.merge-pr.outputs.merge_failed || 'false' }}
 runs:
   using: "composite"
   steps:
@@ -76,7 +76,7 @@ runs:
         echo "Checking branch protection configuration..."
 
         # Check for rulesets
-        RULESET_CHECK=$(gh api "/repos/$REPO/rulesets" 2>/dev/null | jq -r '.[] | select(.target == "branch") | .rules[]? | .ref? // empty' 2>/dev/null | grep -c "$BRANCH" || true)
+        RULESET_CHECK=$(gh api "/repos/$REPO/rulesets" 2>/dev/null | jq -r '.[] | select(.target == "branch") | .rules[]? | .ref? // empty' 2>/dev/null | grep -F -c -- "$BRANCH" || true)
         # Validate that RULESET_CHECK is a clean integer; fail loudly if not
         if ! echo "$RULESET_CHECK" | grep -qE '^[0-9]+$'; then
           echo "Error: Non-numeric RULESET_CHECK value: '$RULESET_CHECK'" >&2
