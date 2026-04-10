@@ -791,11 +791,11 @@ jobs:
           # git restore product-manifest.yaml
           # git pull
 
-          # get previous version so we can generate the release report
-          echo "previous_version=$(cat product.version)" >> $GITHUB_OUTPUT
+          # # get previous version so we can generate the release report
+          # echo "previous_version=$(cat product.version)" >> $GITHUB_OUTPUT
 
-          # write the raised version to be committed
-          echo "$product_version" > product.version
+          # # write the raised version to be committed
+          # echo "$product_version" > product.version
 
           git add product.version
           git commit -m "[skip actions] Automatic Raise"
