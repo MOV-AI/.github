@@ -172,14 +172,24 @@ runs:
 
         if [ "$BYPASS_CHECKS" = "true" ]; then
           echo "⚠ Attempting merge with status check bypass..."
-          MERGE_JSON=$(gh api --method PUT "/repos/$REPO/pulls/$PR_NUMBER/merge" -f merge_method="$MERGE_METHOD" --input /dev/null 2>&1)
+          MERGE_JSON=$(gh api --method PUT "/repos/$REPO/pulls/$PR_NUMBER/merge" -f merge_method="$MERGE_METHOD" --input /dev/null)
+          MERGE_EXIT_CODE=$?
         else
-          MERGE_JSON=$(gh api --method PUT "/repos/$REPO/pulls/$PR_NUMBER/merge" -f merge_method="$MERGE_METHOD" 2>&1)
+          MERGE_JSON=$(gh api --method PUT "/repos/$REPO/pulls/$PR_NUMBER/merge" -f merge_method="$MERGE_METHOD")
+          MERGE_EXIT_CODE=$?
+        fi
+
+        # Check exit code first
+        if [ $MERGE_EXIT_CODE -ne 0 ]; then
+          echo "✗ Merge API call failed with exit code $MERGE_EXIT_CODE"
+          echo "$MERGE_JSON"
+          echo "merge_failed=true" >> $GITHUB_OUTPUT
+          exit 1
         fi
 
         # Validate JSON response before parsing
         if ! echo "$MERGE_JSON" | jq empty 2>/dev/null; then
-          echo "✗ Merge failed with error:"
+          echo "✗ Failed to parse merge response as JSON:"
           echo "$MERGE_JSON"
           echo "merge_failed=true" >> $GITHUB_OUTPUT
           exit 1
