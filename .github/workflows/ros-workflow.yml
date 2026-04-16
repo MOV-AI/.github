@@ -148,7 +148,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Check if pre-commit config exists
@@ -177,7 +177,7 @@ jobs:
         password: ${{secrets.registry_password}}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Run static analysis
@@ -204,7 +204,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
 
@@ -322,7 +322,7 @@ jobs:
         password: ${{secrets.registry_password}}
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
 
@@ -359,7 +359,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # Disabling shallow clone is recommended for improving relevancy of reporting
           fetch-depth: 0
@@ -422,7 +422,7 @@ jobs:
     steps:
       - name: Checkout
         if: ${{ inputs.install_test }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -485,7 +485,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
 
@@ -572,11 +572,13 @@ jobs:
         echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
     - name: Raise App version
-      uses: CasperWA/push-protected@v2.14.0
+      uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
       with:
         token: ${{ secrets.auto_commit_pwd }}
+        git_user_email: ${{ secrets.auto_commit_mail }}
+        git_user_name: ${{ secrets.auto_commit_user }}
         branch: ${{ steps.pre_raise.outputs.branch }}
-        unprotect_reviews: true
+        repository: ${{ github.repository }}
 
     - name: Create Github Release
       shell: bash
@@ -620,7 +622,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
 

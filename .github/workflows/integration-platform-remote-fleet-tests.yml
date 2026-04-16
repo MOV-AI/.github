@@ -135,7 +135,7 @@ jobs:
         uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Agent info
         run: |
@@ -425,7 +425,7 @@ jobs:
       QA_ARTIFACTS_PATH: ${{ matrix.fleet_test_name }}_qa_artifacts
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Remote - Setup QA ${{ matrix.fleet_test_name }} tests
         if: ${{ inputs.with_fleet_tests }}
@@ -570,7 +570,7 @@ jobs:
     if: always()
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Unstash provision_infra_dir
         uses: actions/download-artifact@v4

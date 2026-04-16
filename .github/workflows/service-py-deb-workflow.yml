@@ -78,7 +78,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -141,7 +141,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -186,7 +186,7 @@ jobs:
       commit_id: ${{ steps.commit_id.outputs.commit_id }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install build-requirements
         run: |
@@ -230,11 +230,13 @@ jobs:
 
       - name: Push raised version
         if: ${{ inputs.deploy == 'true' }}
-        uses: CasperWA/push-protected@v2.16.0
+        uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
         with:
           token: ${{ secrets.auto_commit_password }}
+          git_user_email: ${{ secrets.auto_commit_mail }}
+          git_user_name: ${{ secrets.auto_commit_user }}
           branch: ${{ steps.var_branch.outputs.branch }}
-          unprotect_reviews: true
+          repository: ${{ github.repository }}
 
       - name: Store commit id of version
         if: ${{ inputs.deploy == 'true' }}
@@ -255,7 +257,7 @@ jobs:
       commit_id: ${{ needs.Raise.outputs.commit_id }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         ref: ${{ needs.Raise.outputs.commit_id }}
 
@@ -305,7 +307,7 @@ jobs:
           verbose: 'true'
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install test requirements
         run: |
@@ -372,7 +374,7 @@ jobs:
       RPM_DISTRO: rocky8
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install test requirements
         run: |
@@ -434,7 +436,7 @@ jobs:
         password: ${{secrets.registry_password}}
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -761,7 +763,7 @@ jobs:
         password: ${{secrets.registry_password}}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download package artifacts
         uses: actions/download-artifact@v4
@@ -815,7 +817,7 @@ jobs:
         distro: ${{ fromJSON(inputs.distributions) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download pack artifacts
         uses: actions/download-artifact@v4
