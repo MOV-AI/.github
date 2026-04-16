@@ -672,9 +672,8 @@ jobs:
 
   Robotic-Stack-Integration:
     needs: [Simulator-Validations, Build-backend, Build-Simulator]
-    uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@v2.3
+    uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@feature/prepare-project-detach-spawner
     secrets: inherit
-    if: false
     with:
       product_name: ${{ inputs.product_name }}
       slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
