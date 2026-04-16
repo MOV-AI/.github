@@ -593,7 +593,7 @@ jobs:
           path: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_infra_env_configs }}
 
       - name: Teardown remote vms (Proxmox)
-        working-directory: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra || '.' }}
+        working-directory: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
         if: ${{ needs.Fleet-Tests-Provisioning.result != 'skipped' && ( ( !inputs.debug_fleet_keep_alive && success() ) || cancelled() || ( !inputs.debug_fleet_keep_alive && failure() ) ) }}
         shell: bash
         run: |
