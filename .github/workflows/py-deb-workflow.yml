@@ -70,7 +70,7 @@ jobs:
       deploy: ${{ inputs.deploy }}
       release: ${{ inputs.release }}
       run_black: ${{ inputs.run_black }}
-      with_docs: true
+      with_docs: ${{ inputs.with_docs }}
       prod_publish_repos: ${{ inputs.prod_publish_pypi }}
       PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
       test_on_host: ${{ inputs.test_on_host }}
