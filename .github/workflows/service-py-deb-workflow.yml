@@ -314,7 +314,7 @@ jobs:
           if [ -z "${{ env.TOX_MARKER }}" ]; then
             tox
           else
-            tox -- -m ${{ env.TOX_MARKER }}
+            tox -- -m "${{ env.TOX_MARKER }}"
           fi
           deactivate
 
@@ -384,7 +384,7 @@ jobs:
           if [ -z "${{ env.TOX_MARKER }}" ]; then
             pytest tests/ --cov=movai_service --cov=movai_cli --cov=extra-plugins --cov=scripts --cov-report=term --cov-report=xml -o log_cli=true -x
           else
-            pytest tests/ --cov=movai_service --cov=movai_cli --cov=extra-plugins --cov=scripts --cov-report=term --cov-report=xml -o log_cli=true -x -m ${{ env.TOX_MARKER }}
+            pytest tests/ --cov=movai_service --cov=movai_cli --cov=extra-plugins --cov=scripts --cov-report=term --cov-report=xml -o log_cli=true -x -m "${{ env.TOX_MARKER }}"
           fi
           deactivate
 
