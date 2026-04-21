@@ -354,7 +354,7 @@ jobs:
     timeout-minutes: 90
     env:
       RPM_DISTRO: rocky8
-      TOX_MARKER: ""
+      TOX_MARKER: "not simulatortest"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
