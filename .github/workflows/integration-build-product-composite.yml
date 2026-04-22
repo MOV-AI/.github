@@ -118,7 +118,7 @@ env:
   # SLACK_CHANNEL: "C05K2KF1UP8"
   PROJECT_DATA_VIEWER_API: "https://personal-7vf0v2cu.outsystemscloud.com/ProjectDataViewer5/rest/V1//CreateProject"
   MINIO_S3_URL: "https://s3.mov.ai"
-  PROVISIONING_ENV_VERSION: 0.2.0-2
+  PROVISIONING_ENV_VERSION: 0.2.0-5
   PROVISIONING_ENV_REPO: devops-tf-env-conf
 
 jobs:
