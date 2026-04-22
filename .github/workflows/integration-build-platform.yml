@@ -98,7 +98,7 @@ env:
   SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
   # development slack channel
   #SLACK_CHANNEL: "C05K2KF1UP8"
-  PROVISIONING_ENV_VERSION: 0.2.0-2
+  PROVISIONING_ENV_VERSION: 0.2.0-6
   PROVISIONING_ENV_REPO: devops-tf-env-conf
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.0.0-17"
