@@ -134,117 +134,34 @@ jobs:
           mkdir  -p ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
           sudo chmod -R 777 ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
-      - name: Setup infra environment configs
-        id: infra_env_configs_setup
-        shell: bash
-        run: |
-          env_configs_dir=${{ env.PROVISION_ENV_CONF_DIR }}
-          env_configs_version=${{ env.PROVISIONING_ENV_CONF_VERSION }}
-          env_configs_repo_name=${{ env.PROVISIONING_ENV_CONF_REPO }}
-
-          rm -rf $env_configs_dir
-          docker run \
-            -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
-            -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
-            fetch_by_tag --repo $env_configs_repo_name \
-            --version $env_configs_version \
-            --gh_api_user $GITHUB_API_USR \
-            --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-            --target_dir $env_configs_dir
-          cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/$env_configs_dir ./$env_configs_dir
-
-          ls -la $env_configs_dir
-          echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
-
-      - name: Setup terraform proxmox provisioner
-        id: provision_infra_setup
-        shell: bash
-        run: |
-          provision_infra_dir=${{ env.PROVISION_INFRA_DIR }}
-          provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
-          provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
-
-          rm -rf $provision_infra_dir
-          docker run \
-            -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
-            -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
-            fetch_by_tag --repo $provision_infra_repo_name \
-            --version $provision_infra_version \
-            --gh_api_user $GITHUB_API_USR \
-            --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-            --target_dir $provision_infra_dir
-          cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/$provision_infra_dir ./$provision_infra_dir
-
-          ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-      - name: Define Instance names
-        id: infra_names
-        shell: bash
-        run: |
-          BRANCH_NAME=${GITHUB_REF#refs/heads/}
-          branch=$(echo ${BRANCH_NAME} | sed "s;\.;-;g" )
-
-          run_type="ci"
-
-          local_manager_prefix="ip-$run_type-${{ inputs.cluster }}-${{ inputs.product_name }}-$branch"
-
-          tf_state="${{ inputs.cluster }}-sim-$local_manager_prefix"
-          echo "simul_prefix=${local_manager_prefix}" | tee >> $GITHUB_OUTPUT
-          echo "tfstate_name=${tf_state}" | tee >> $GITHUB_OUTPUT
-
-
-      - name: Provision remote vms (Proxmox)
-        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
-        shell: bash
-        run: |
-          multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..1})
-          node_list_str=${multiply_node::-1}
-
-          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
-
-          echo "proxmox_host_list=[$node_list_str]">>input.tfvars
-          echo "fleet_peer_nr=0">>input.tfvars
-          echo 'fleet_password="${{ secrets.provision_infra_pwd }}"'>>input.tfvars
-          echo 'fleet_manager_name="${{ steps.infra_names.outputs.simul_prefix }}"'>>input.tfvars
-          echo 'ip_list=["dhcp"]'>>input.tfvars
-          echo 'tags=["ip-simul-ci"]'>>input.tfvars
-          echo 'pool="IP-Temp-VMs"'>>input.tfvars
-          echo 'proxmox_ve_username="${{ secrets.proxmox_ve_sim_username }}"'>>input.tfvars
-          echo 'proxmox_ve_password="${{ secrets.proxmox_ve_sim_password }}"'>>input.tfvars
-          echo "\n">>input
-
-          echo "File args: $var_file_arg"
-          echo "Input File args: $(cat input.tfvars)"
-          terraform init -backend-config="key=${{ inputs.cluster }}-ci-simul-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
-          terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
-          terraform refresh $var_file_arg -var-file=input.tfvars
-
-          echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
-          sudo chmod 600 ~/.ssh/ci_priv_key.pem
-
-      - name: Gather Terraform outputs
-        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
-        id: infra_outputs
-        shell: bash
-        run: |
-          ip=$(terraform output manager_ip_address)
-          user=$(terraform output user)
-          echo "host_ip=$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
-          echo "host_user=$(echo $user | sed "s;\";;g")" >> $GITHUB_OUTPUT
-          echo "ssh_connect_string=$(echo $user | sed "s;\";;g")@$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
-
-      - name: Configure SSH
-        id: remote_ssh_setup
-        shell: bash
-        run: |
-          ssh-keygen -f ~/.ssh/known_hosts -R ${{ steps.infra_outputs.outputs.host_ip }} || true
-          ssh-keyscan -H ${{ steps.infra_outputs.outputs.host_ip }} >> ~/.ssh/known_hosts || true
-
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
-            set -e
-            cloud-init status --wait; rm -rf ./${{ env.REMOTE_WORKSPACE_PATH }}; mkdir -p ./${{ env.REMOTE_WORKSPACE_PATH }}
-          '
+      - name: Setup Infrastructure
+        id: infra_setup
+        uses: ./.github/actions/infrastructure-setup
+        with:
+          cluster_node: ${{ inputs.cluster }}
+          infrastructure_identifier: "robotic-stack-tests"
+          fleet_usage: "ip-temp-simulation-fleet"
+          provision_infra_repo: ${{ env.PROVISION_INFRA_REPO }}
+          provision_infra_version: ${{ env.PROVISION_INFRA_VERSION }}
+          provision_infra_env_repo: ${{ env.PROVISIONING_ENV_CONF_REPO }}
+          provision_infra_env_version: ${{ env.PROVISIONING_ENV_CONF_VERSION }}
+          ci_integration_scripts_version: "4.0.0.31"
+          github_api_user: ${{ env.GITHUB_API_USR }}
+          github_api_token: ${{ secrets.auto_commit_pwd }}
+          proxmox_username: ${{ secrets.proxmox_ve_sim_username }}
+          proxmox_password: ${{ secrets.proxmox_ve_sim_password }}
+          proxmox_marvin_username: ${{ secrets.proxmox_ve_sim_username }}
+          proxmox_marvin_password: ${{ secrets.proxmox_ve_sim_password }}
+          proxmox_hel0_username: ${{ secrets.proxmox_ve_sim_username }}
+          proxmox_hel0_password: ${{ secrets.proxmox_ve_sim_password }}
+          proxmox_hel1_username: ${{ secrets.proxmox_ve_sim_username }}
+          proxmox_hel1_password: ${{ secrets.proxmox_ve_sim_password }}
+          aws_access_key: ${{ secrets.aws_key_id }}
+          aws_secret_key: ${{ secrets.aws_secret_key_id }}
+          fleet_password: ""
+          ssh_private_key: ${{ secrets.ssh_priv_key }}
+          docker_container_version: ${{ env.CI_INTEGRATION_CONTAINER_VERSION }}
+          ci_integration_execution_folder: ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
       - name: Prepare Devops provisioning slack message
         if: ${{ failure() && github.event_name != 'pull_request' }}
@@ -270,7 +187,7 @@ jobs:
       - name: Remote - Agent info
         id: agent_info_remote
         run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+          ssh ${{ steps.infra_setup.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
             ip=$(hostname -I | cut -d " " -f1)
             echo $ip '
@@ -285,7 +202,7 @@ jobs:
         shell: bash
         id: nvidia_check
         run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -t '
+          ssh ${{ steps.infra_setup.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -t '
               set -e
               Architecture="$(uname -m)"
               distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
@@ -304,7 +221,7 @@ jobs:
               done
               sudo apt-get update -q > /dev/null && sudo apt-get install -yq nvidia-docker2 nvidia-container-toolkit
           '
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+          ssh ${{ steps.infra_setup.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
               sudo systemctl restart docker
               sleep 3
               docker run --gpus=all --rm nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi 2>&1
@@ -325,7 +242,7 @@ jobs:
       - name: Remote - Login to Registry
         shell: bash
         run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+          ssh ${{ steps.infra_setup.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
             docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
           '
@@ -338,16 +255,16 @@ jobs:
 
       - name: Remote - unstash robot configs
         shell: bash
-        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ./*.json* ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ./*.json* ${{ steps.infra_setup.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
 
       - name: Remote - unstash manifest
         shell: bash
-        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no product-manifest.yaml ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/product-manifest.yaml
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no product-manifest.yaml ${{ steps.infra_setup.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/product-manifest.yaml
 
       - name: Remote - create execution folder
         shell: bash
         run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+          ssh ${{ steps.infra_setup.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
@@ -360,7 +277,7 @@ jobs:
       - name: Remote - Fetch product version and merge platform product
         shell: bash
         run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+          ssh ${{ steps.infra_setup.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
@@ -394,7 +311,7 @@ jobs:
         id: simulator_tests_setup
         shell: bash
         run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+          ssh ${{ steps.infra_setup.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
@@ -428,7 +345,7 @@ jobs:
             export PYTHONPATH="/usr/lib/python3/dist-packages"
           '
 
-          scp -r -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/temp/*.txt /tmp/
+          scp -r -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no ${{ steps.infra_setup.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/temp/*.txt /tmp/
 
           echo "target_dir=$(cat /tmp/target_dir.txt)" >> $GITHUB_OUTPUT
           echo "test_dir=$(cat /tmp/test_dir.txt)" >> $GITHUB_OUTPUT
@@ -437,7 +354,7 @@ jobs:
         if: ${{ inputs.backend_name != '' }}
         shell: bash
         run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+          ssh ${{ steps.infra_setup.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
             docker pull "${{ env.REGISTRY }}/ci/${{ inputs.backend_name }}"
             docker tag ${{ env.REGISTRY }}/ci/${{ inputs.backend_name }} ${{ env.REGISTRY }}/qa/${{ inputs.backend_name }}
@@ -448,7 +365,7 @@ jobs:
         id: install
         shell: bash
         run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+          ssh ${{ steps.infra_setup.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
 
             export DISPLAY="$(w -oush | grep -Eo " :[0-9]+" | uniq | cut -d \  -f 2)"
@@ -508,7 +425,7 @@ jobs:
       - name: Remote - Firmware Patch
         shell: bash
         run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+          ssh ${{ steps.infra_setup.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
 
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
@@ -562,7 +479,7 @@ jobs:
         id: simulation_tests
         shell: bash
         run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+          ssh ${{ steps.infra_setup.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
@@ -597,7 +514,7 @@ jobs:
         if: ${{ always() }}
         shell: bash
         run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+          ssh ${{ steps.infra_setup.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
 
             cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.simulator_tests_setup.outputs.target_dir }}
 
@@ -623,7 +540,7 @@ jobs:
         if: ${{ always() }}
         shell: bash
         run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+          ssh ${{ steps.infra_setup.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
             # cleanup
@@ -634,7 +551,7 @@ jobs:
             mkdir -p qa_artifacts
             cp -r "${{ steps.simulator_tests_setup.outputs.target_dir }}"/*.log ./qa_artifacts || true
           '
-          scp -r -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/qa_artifacts .
+          scp -r -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no ${{ steps.infra_setup.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/qa_artifacts .
 
       - name: Get current job id
         if: always()
@@ -737,15 +654,14 @@ jobs:
           token: ${{ secrets.slack_token_id }}
 
       - name: Teardown remote vms (Proxmox)
-        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        working-directory: ${{ steps.infra_setup.outputs.provision_infra_dir }}
         if: ${{ inputs.debug_simulation_tests_keep_alive == false && always() }}
         shell: bash
         run: |
           attempts=3
           count=0
           while [ $count -lt $attempts ]; do
-            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
-            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars -var "fleet_peer_nr=0"
+            terraform destroy -auto-approve
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
               break

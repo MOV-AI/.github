@@ -121,14 +121,14 @@ jobs:
   Fleet-Tests-Provisioning:
     runs-on: ip-${{ inputs.proxmox_cluster_name }}-queuer
     outputs:
-      host_ip: ${{ steps.infra_outputs.outputs.host_ip }}
-      host_user: ${{ steps.infra_outputs.outputs.host_user }}
-      ssh_connect_string: ${{ steps.infra_outputs.outputs.ssh_connect_string }}
-      fleet_ips: ${{ steps.infra_outputs.outputs.fleet_ips }}
-      target_dir_provision_infra: ${{ steps.provision_infra_setup.outputs.target_dir }}
-      target_dir_infra_env_configs: ${{ steps.infra_env_configs_setup.outputs.target_dir }}
+      host_ip: ${{ steps.infra_setup.outputs.host_ip }}
+      host_user: ${{ steps.infra_setup.outputs.host_user }}
+      ssh_connect_string: ${{ steps.infra_setup.outputs.ssh_connect_string }}
+      fleet_ips: ${{ steps.infra_fleet_outputs.outputs.fleet_ips }}
+      target_dir_provision_infra: ${{ steps.infra_setup.outputs.provision_infra_dir }}
+      target_dir_infra_env_configs: ${{ steps.infra_setup.outputs.env_configs_dir }}
       target_dir_ansible_install: ${{ steps.ansible_install_setup.outputs.target_dir }}
-      manager_vm_name: ${{ steps.infra_names.outputs.manager_prefix }}
+      manager_vm_name: "ip-manager"
 
     steps:
       - name: Cleanup Workspace
@@ -156,98 +156,46 @@ jobs:
           name: robot_configs
           path: .
 
-      - name: Setup infra environment configs
-        id: infra_env_configs_setup
+      - name: Setup Infrastructure
+        id: infra_setup
+        uses: ./.github/actions/infrastructure-setup
+        with:
+          cluster_node: ${{ inputs.proxmox_cluster_name }}
+          infrastructure_identifier: "platform-remote-fleet-tests"
+          fleet_usage: "ip-temp-fleet"
+          fleet_peer_nr: ${{ inputs.fleet_number_members }}
+          provision_infra_repo: ${{ env.PROVISION_INFRA_REPO }}
+          provision_infra_version: ${{ env.PROVISION_INFRA_VERSION }}
+          provision_infra_env_repo: ${{ env.PROVISIONING_ENV_REPO }}
+          provision_infra_env_version: ${{ env.PROVISIONING_ENV_VERSION }}
+          ci_integration_scripts_version: "4.0.0.31"
+          github_api_user: ${{ env.GITHUB_API_USR }}
+          github_api_token: ${{ secrets.auto_commit_pwd }}
+          proxmox_username: ${{ secrets.proxmox_ve_username }}
+          proxmox_password: ${{ secrets.proxmox_ve_password }}
+          proxmox_marvin_username: ${{ secrets.proxmox_ve_username }}
+          proxmox_marvin_password: ${{ secrets.proxmox_ve_password }}
+          proxmox_hel0_username: ${{ secrets.proxmox_ve_username }}
+          proxmox_hel0_password: ${{ secrets.proxmox_ve_password }}
+          proxmox_hel1_username: ${{ secrets.proxmox_ve_username }}
+          proxmox_hel1_password: ${{ secrets.proxmox_ve_password }}
+          aws_access_key: ${{ secrets.aws_key_id }}
+          aws_secret_key: ${{ secrets.aws_secret_key_id }}
+          fleet_password: ""
+          ssh_private_key: ${{ secrets.ssh_pem_fleet_aws_vm }}
+          docker_container_version: ${{ env.CI_INTEGRATION_CONTAINER_VERSION }}
+          ci_integration_execution_folder: ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+          custom_tfvars_content: |
+            fleet_manager_name="ip-manager"
+            fleet_peer_name_prefix="ip-worker"
+            ip_list=${{ inputs.fleet_ips }}
+
+      - name: Gather Fleet Terraform outputs
+        working-directory: ${{ steps.infra_setup.outputs.provision_infra_dir }}
+        id: infra_fleet_outputs
         shell: bash
         run: |
-          env_configs_dir=infra_env_configs
-          env_configs_version=${{ env.PROVISIONING_ENV_VERSION }}
-          env_configs_repo_name=${{ env.PROVISIONING_ENV_REPO }}
-
-          rm -rf $env_configs_dir
-          . .ci-venv/bin/activate
-          integration-pipeline fetch_by_tag --repo $env_configs_repo_name --version $env_configs_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $env_configs_dir
-          ls -la $env_configs_dir
-          echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
-          deactivate
-
-      - name: Setup terraform proxmox provisioner
-        id: provision_infra_setup
-        shell: bash
-        run: |
-          provision_infra_dir=provision_scripts
-          provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
-          provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
-
-          rm -rf $provision_infra_dir
-          . .ci-venv/bin/activate
-          integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
-          deactivate
-          ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-      - name: Define Instance names
-        id: infra_names
-        shell: bash
-        run: |
-          branch=$(echo ${GITHUB_REF#refs/heads/} | sed "s;\.;-;g" )
-
-          local_manager_prefix="ip-$branch-manager"
-          local_worker_prefix="ip-$branch-worker"
-          echo "$local_manager_prefix"
-          echo "$local_worker_prefix"
-          total_resources=${{ inputs.fleet_number_members }}
-          ((total_resources+=1))
-
-          echo "manager_prefix=${local_manager_prefix}" >> $GITHUB_OUTPUT
-          echo "worker_prefix=${local_worker_prefix}" >> $GITHUB_OUTPUT
-          echo "total_resources=${total_resources}" >> $GITHUB_OUTPUT
-
-      - name: Provision remote vms (Proxmox)
-        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
-        shell: bash
-        run: |
-          echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
-          sudo chmod 600 ~/.ssh/aws_slave.pem
-
-          multiply_node=$(printf '"${{ inputs.proxmox_cluster_name }}",%.0s' {1..${{ steps.infra_names.outputs.total_resources }}})
-          node_list_str=${multiply_node::-1}
-
-          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.proxmox_cluster_name }}_fleet_test.tfvars'
-
-          echo "proxmox_host_list=[$node_list_str]">>input.tfvars
-          echo "fleet_peer_nr=${{ inputs.fleet_number_members }}">>input.tfvars
-          echo 'fleet_password="n/a"'>>input.tfvars
-          echo 'fleet_manager_name="${{ steps.infra_names.outputs.manager_prefix }}"'>>input.tfvars
-          echo 'fleet_peer_name_prefix="${{ steps.infra_names.outputs.worker_prefix }}"'>>input.tfvars
-          echo 'ip_list=${{ inputs.fleet_ips }}'>>input.tfvars
-          echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
-          echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
-          echo "\n">>input
-
-          echo "File args: $var_file_arg"
-          echo "Input File args: $(cat input.tfvars)"
-          terraform init -backend-config="key=${{ inputs.proxmox_cluster_name }}-fleet-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
-          terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
-          terraform refresh $var_file_arg -var-file=input.tfvars
-
-      - name: Check tf data fetch output
-        if: failure()
-        shell: bash
-        continue-on-error: true
-        run: cat /tmp/terraform-external-debug.log
-
-      - name: Gather Terraform outputs
-        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
-        id: infra_outputs
-        shell: bash
-        run: |
-          ip=$(terraform output manager_ip_address)
-          user=$(terraform output user)
           members=$(terraform output peers_ip_addresses)
-          echo "host_ip=$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
-          echo "host_user=$(echo $user | sed "s;\";;g")" >> $GITHUB_OUTPUT
-          echo "ssh_connect_string=$(echo $user | sed "s;\";;g")@$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
           echo "fleet_ips=$(echo $members | sed "s;\";;g")" >> $GITHUB_OUTPUT
 
       - name: Stash provision_infra_dir
@@ -256,7 +204,7 @@ jobs:
         continue-on-error: true
         with:
           name: provision_infra_dir
-          path: ${{ steps.provision_infra_setup.outputs.target_dir }}
+          path: ${{ steps.infra_setup.outputs.provision_infra_dir }}
 
       - name: Stash infra_env_configs
         uses: actions/upload-artifact@v4
@@ -264,7 +212,7 @@ jobs:
         continue-on-error: true
         with:
           name: infra_env_configs
-          path: ${{ steps.infra_env_configs_setup.outputs.target_dir }}
+          path: ${{ steps.infra_setup.outputs.env_configs_dir }}
 
       - name: Stash provisioned_inventory
         uses: actions/upload-artifact@v4
@@ -272,7 +220,7 @@ jobs:
         continue-on-error: true
         with:
           name: provisioned_inventory
-          path: ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml
+          path: ${{ steps.infra_setup.outputs.provision_infra_dir }}/provisioned_inventory.yml
 
       - name: Prepare Devops provisioning slack message
         if: always()
@@ -299,7 +247,7 @@ jobs:
         shell: bash
         run: |
           . .ci-venv/bin/activate
-          cp ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml staging/provisioned_inventory.yml
+          cp ${{ steps.infra_setup.outputs.provision_infra_dir }}/provisioned_inventory.yml staging/provisioned_inventory.yml
           cat staging/provisioned_inventory.yml
           integration-pipeline get_yml_value --file staging/provisioned_inventory.yml --key fleet.children.managers.hosts.manager.ansible_host --output_file ./staging/manager_private_ip.txt
           deactivate
@@ -602,9 +550,7 @@ jobs:
           count=0
           exit_status=-1
           while [ $count -lt $attempts ]; do
-            var_file_arg='-var-file=../${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_infra_env_configs }}/hel/${{ inputs.proxmox_cluster_name }}_fleet_test.tfvars'
-            terraform init -backend-config="key=${{ inputs.proxmox_cluster_name }}-fleet-${{ needs.Fleet-Tests-Provisioning.outputs.manager_vm_name }}.tfstate"
-            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars -var "fleet_peer_nr=0" -var "manager_ip_lookup=false"
+            terraform destroy -auto-approve
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
               break

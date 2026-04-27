@@ -1,0 +1,3 @@
+# actionlint configuration for custom runner labels
+self-hosted-runner-labels:
+  - infra-runner

@@ -1,0 +1,272 @@
+name: 'Infrastructure Teardown'
+description: 'Tears down Proxmox infrastructure and cleans up resources'
+inputs:
+  cluster_node:
+    description: 'Cluster node where infrastructure was provisioned'
+    required: true
+    default: 'bb-9'
+  infrastructure_identifier:
+    description: 'Infrastructure identifier for naming the provisioned resources (e.g., ip-runner-hel0, qa-runner-hel1)'
+    required: true
+  provision_infra_repo:
+    description: 'Provision infrastructure repository name'
+    required: false
+    default: 'devops-tf-proxmox-bpg'
+  provision_infra_version:
+    description: 'Provision infrastructure version'
+    required: true
+    default: '2.0.0-17'
+  provision_infra_env_repo:
+    description: 'Provision infrastructure environment repository name'
+    required: false
+    default: 'devops-tf-env-conf'
+  provision_infra_env_version:
+    description: 'Provision infrastructure environment version'
+    required: true
+    default: '0.2.0-6'
+  ci_integration_scripts_version:
+    description: 'CI Integration Scripts version for integration-pipeline package'
+    required: false
+    default: '4.0.0.32'
+  github_api_user:
+    description: 'GitHub API username'
+    required: true
+  github_api_token:
+    description: 'GitHub API token'
+    required: true
+  proxmox_username:
+    description: 'Proxmox VE username'
+    required: true
+  proxmox_password:
+    description: 'Proxmox VE password'
+    required: true
+  aws_access_key:
+    description: 'AWS access key for S3 storage'
+    required: true
+  aws_secret_key:
+    description: 'AWS secret key for S3 storage'
+    required: true
+  fleet_password:
+    description: 'Fleet password'
+    required: true
+  ssh_private_key:
+    description: 'SSH private key for VM access'
+    required: true
+  proxmox_marvin_username:
+    description: 'Proxmox VE username for Marvin cluster nodes'
+    required: false
+  proxmox_marvin_password:
+    description: 'Proxmox VE password for Marvin cluster nodes'
+    required: false
+  proxmox_hel0_username:
+    description: 'Proxmox VE username for HEL0 cluster node'
+    required: false
+  proxmox_hel0_password:
+    description: 'Proxmox VE password for HEL0 cluster node'
+    required: false
+  proxmox_hel1_username:
+    description: 'Proxmox VE username for HEL1 cluster node'
+    required: false
+  proxmox_hel1_password:
+    description: 'Proxmox VE password for HEL1 cluster node'
+    required: false
+  destroy_retry_attempts:
+    description: 'Number of attempts to retry terraform destroy on failure'
+    required: false
+    default: '3'
+  docker_container_version:
+    description: 'Docker image version for fetching infrastructure configs'
+    required: false
+    default: 'registry.cloud.mov.ai/qa/ci-tools:4.0.0.31'
+  ci_integration_execution_folder:
+    description: 'Temporary folder for Docker volume mounts and execution'
+    required: false
+    default: '$(pwd)/temp'
+
+outputs:
+  teardown_success:
+    description: 'Whether teardown was successful'
+    value: ${{ steps.teardown_status.outputs.success }}
+  destroy_attempt_count:
+    description: 'Which attempt number succeeded in terraform destroy'
+    value: ${{ steps.destroy_vms.outputs.attempt_count }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup infra environment configs
+      id: infra_env_configs_setup
+      shell: bash
+      env:
+        PROVISION_ENV_CONF_DIR: "infra_env_configs"
+        PROVISION_INFRA_ENV_REPO: "${{ inputs.provision_infra_env_repo }}"
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_key }}
+        CI_INTEGRATION_EXECUTION_FOLDER: "${{ inputs.ci_integration_execution_folder }}"
+      run: |
+        env_configs_dir=$PROVISION_ENV_CONF_DIR
+        env_configs_version=${{ inputs.provision_infra_env_version }}
+        env_configs_repo_name=$PROVISION_INFRA_ENV_REPO
+
+        rm -rf "$env_configs_dir"
+        mkdir -p "$CI_INTEGRATION_EXECUTION_FOLDER"
+        docker run \
+          -v "$CI_INTEGRATION_EXECUTION_FOLDER":/opt/mov.ai/workspace \
+          -i ${{ inputs.docker_container_version }} \
+          fetch_by_tag --repo "$env_configs_repo_name" \
+          --version "$env_configs_version" \
+          --gh_api_user "${{ inputs.github_api_user }}" \
+          --gh_api_pwd "${{ inputs.github_api_token }}" \
+          --target_dir "$env_configs_dir"
+        cp -r "$CI_INTEGRATION_EXECUTION_FOLDER/$env_configs_dir" "./$env_configs_dir"
+
+        ls -la "$env_configs_dir"
+        echo "target_dir=${env_configs_dir}" >> "$GITHUB_OUTPUT"
+
+    - name: Setup terraform proxmox provisioner
+      id: provision_infra_setup
+      shell: bash
+      env:
+        PROVISION_INFRA_REPO: "${{ inputs.provision_infra_repo }}"
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_key }}
+        CI_INTEGRATION_EXECUTION_FOLDER: "${{ inputs.ci_integration_execution_folder }}"
+      run: |
+        provision_infra_dir=provision_scripts
+        provision_infra_version=${{ inputs.provision_infra_version }}
+        provision_infra_repo_name=$PROVISION_INFRA_REPO
+
+        rm -rf "$provision_infra_dir"
+        mkdir -p "$CI_INTEGRATION_EXECUTION_FOLDER"
+        docker run \
+          -v "$CI_INTEGRATION_EXECUTION_FOLDER":/opt/mov.ai/workspace \
+          -i ${{ inputs.docker_container_version }} \
+          fetch_by_tag --repo "$provision_infra_repo_name" \
+          --version "$provision_infra_version" \
+          --gh_api_user "${{ inputs.github_api_user }}" \
+          --gh_api_pwd "${{ inputs.github_api_token }}" \
+          --target_dir "$provision_infra_dir"
+        cp -r "$CI_INTEGRATION_EXECUTION_FOLDER/$provision_infra_dir" "./$provision_infra_dir"
+
+        ls -la "$provision_infra_dir"
+        echo "target_dir=${provision_infra_dir}/" >> "$GITHUB_OUTPUT"
+
+    - name: Define Instance names
+      id: infra_names
+      shell: bash
+      run: |
+        local_manager_prefix="$(echo ${{ inputs.infrastructure_identifier }}-${{ inputs.cluster_node }} | sed 's/\./-/g' | sed 's/\/-/g' | sed 's/_/-/g' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/^-//;s/-$//')"
+        echo "$local_manager_prefix"
+        echo "simul_prefix=${local_manager_prefix}" >> "$GITHUB_OUTPUT"
+
+    - name: Select Proxmox credentials
+      id: select_proxmox_creds
+      shell: bash
+      env:
+        CLUSTER_NODE: ${{ inputs.cluster_node }}
+        PROXMOX_MARVIN_VE_USERNAME: ${{ inputs.proxmox_marvin_username }}
+        PROXMOX_MARVIN_VE_PASSWORD: ${{ inputs.proxmox_marvin_password }}
+        PROXMOX_HEL0_VE_USERNAME: ${{ inputs.proxmox_hel0_username }}
+        PROXMOX_HEL0_VE_PASSWORD: ${{ inputs.proxmox_hel0_password }}
+        PROXMOX_HEL1_VE_USERNAME: ${{ inputs.proxmox_hel1_username }}
+        PROXMOX_HEL1_VE_PASSWORD: ${{ inputs.proxmox_hel1_password }}
+      run: |
+        case "$CLUSTER_NODE" in
+          hel0)
+            if [ -z "$PROXMOX_HEL0_VE_USERNAME" ] || [ -z "$PROXMOX_HEL0_VE_PASSWORD" ]; then
+              echo "::error::No valid Proxmox credentials found for HEL0 node"
+              exit 1
+            fi
+            echo "username=$PROXMOX_HEL0_VE_USERNAME" >> "$GITHUB_OUTPUT"
+            echo "password=$PROXMOX_HEL0_VE_PASSWORD" >> "$GITHUB_OUTPUT"
+            echo "group=hel" >> "$GITHUB_OUTPUT"
+            echo "tfvar=${CLUSTER_NODE}_fleet_test.tfvars" >> "$GITHUB_OUTPUT"
+            echo "::notice::Using Proxmox credentials for cluster: hel0"
+            ;;
+          hel1)
+            if [ -z "$PROXMOX_HEL1_VE_USERNAME" ] || [ -z "$PROXMOX_HEL1_VE_PASSWORD" ]; then
+              echo "::error::No valid Proxmox credentials found for HEL1 node"
+              exit 1
+            fi
+            echo "username=$PROXMOX_HEL1_VE_USERNAME" >> "$GITHUB_OUTPUT"
+            echo "password=$PROXMOX_HEL1_VE_PASSWORD" >> "$GITHUB_OUTPUT"
+            echo "group=hel" >> "$GITHUB_OUTPUT"
+            echo "tfvar=${CLUSTER_NODE}_fleet_test.tfvars" >> "$GITHUB_OUTPUT"
+            echo "::notice::Using Proxmox credentials for cluster: hel1"
+            ;;
+          bb-8|bb-9|marvin|mary|supermama)
+            if [ -z "$PROXMOX_MARVIN_VE_USERNAME" ] || [ -z "$PROXMOX_MARVIN_VE_PASSWORD" ]; then
+              echo "::error::No valid Proxmox credentials found for Marvin cluster nodes"
+              exit 1
+            fi
+            echo "username=$PROXMOX_MARVIN_VE_USERNAME" >> "$GITHUB_OUTPUT"
+            echo "password=$PROXMOX_MARVIN_VE_PASSWORD" >> "$GITHUB_OUTPUT"
+            echo "group=marvin" >> "$GITHUB_OUTPUT"
+            echo "tfvar=${CLUSTER_NODE}_simul_bpg.tfvars" >> "$GITHUB_OUTPUT"
+            echo "::notice::Using Proxmox credentials for cluster: $CLUSTER_NODE (Marvin group)"
+            ;;
+          *)
+            echo "::error::Unknown cluster node: $CLUSTER_NODE"
+            exit 1
+            ;;
+        esac
+
+    - name: Teardown remote vms (Proxmox)
+      id: destroy_vms
+      working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_key }}
+        PROXMOX_VE_USERNAME: ${{ steps.select_proxmox_creds.outputs.username }}
+        PROXMOX_VE_PASSWORD: ${{ steps.select_proxmox_creds.outputs.password }}
+      run: |
+        multiply_node=$(printf '"${{ inputs.cluster_node }}",%.0s' {1..1})
+        node_list_str=${multiply_node::-1}
+        mkdir -p ~/.ssh/
+        sudo chmod 700 ~/.ssh/
+        echo "${{ inputs.ssh_private_key }}" > ~/.ssh/aws_slave.pem
+        var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/${{ steps.select_proxmox_creds.outputs.group }}/${{ steps.select_proxmox_creds.outputs.tfvar }}'
+        {
+          echo "proxmox_host_list=[$node_list_str]"
+          echo 'fleet_peer_nr="0"'
+          echo 'fleet_password="${{ inputs.fleet_password }}"'
+          echo 'fleet_manager_name="${{ steps.infra_names.outputs.simul_prefix }}"'
+          echo 'ip_list=["dhcp","dhcp","dhcp"]'
+          echo 'tags=["ip-fleet"]'
+          echo 'pool="IP-Temp-VMs"'
+          echo "proxmox_ve_username=\"${PROXMOX_VE_USERNAME}\""
+          echo "proxmox_ve_password=\"${PROXMOX_VE_PASSWORD}\""
+          echo
+        } >>input.tfvars
+
+        echo "File args: $var_file_arg"
+        echo "Input File args: $(cat input.tfvars)"
+
+        max_attempts=${{ inputs.destroy_retry_attempts }}
+        attempt=0
+        while [ $attempt -lt $max_attempts ]; do
+          attempt=$((attempt + 1))
+          echo "Terraform destroy attempt $attempt of $max_attempts"
+          terraform init -backend-config="key=${{ inputs.cluster_node }}-sanity-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
+          terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+          exit_status=$?
+          if [ $exit_status -eq 0 ]; then
+            echo "Terraform destroy succeeded on attempt $attempt"
+            echo "attempt_count=$attempt" >> "$GITHUB_OUTPUT"
+            break
+          elif [ $attempt -lt $max_attempts ]; then
+            echo "Terraform destroy failed with exit status $exit_status. Retrying in 5 seconds..."
+            sleep 5
+          else
+            echo "Terraform destroy failed after $max_attempts attempts with exit status $exit_status"
+            echo "attempt_count=$attempt" >> "$GITHUB_OUTPUT"
+            exit $exit_status
+          fi
+        done
+
+    - name: Set teardown status
+      id: teardown_status
+      shell: bash
+      run: |
+        echo "success=true" >> "$GITHUB_OUTPUT"
