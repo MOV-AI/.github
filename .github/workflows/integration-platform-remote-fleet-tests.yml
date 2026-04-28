@@ -365,6 +365,17 @@ jobs:
             ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker tag $SOURCE_TAG $TARGET_TAG_MID_REGISTRY"
           done
 
+          VAULT_FILE="$(pwd)/playbooks/.vault-password-file"
+          echo "test-vault-password-123456789" > "$VAULT_FILE"
+          cat > playbooks/group_vars/fleet/vault.yml << 'EOF'
+          ---
+          vault_proxycerts_supervisor_password: "admin123"
+          vault_proxycerts_ca_passphrase: "TestCAPassphrase456!@#"
+          vault_movai_fleet_docker_password: "$REGISTRY_PASS"
+          vault_movai_fleet_admin_password: "TestAdminPassword012!@#"
+          EOF
+          ansible-vault encrypt playbooks/group_vars/fleet/vault.yml --vault-password-file "$VAULT_FILE"
+
           ansible-playbook install.yml \
             -i ../staging/provisioned_inventory.yml \
             --key-file ~/.ssh/aws_slave.pem \
@@ -374,6 +385,7 @@ jobs:
             -e "{\"fleet_manager_san\": [ \"DNS:$(cat ../staging/manager_private_ip.txt)\" ]}" \
             -e "{\"movai_fleet_extra_hosts\": [ \"10.26.0.10    registry.${{ inputs.proxmox_cluster_name }}.mov.ai traefik\", \"$(cat ../staging/manager_private_ip.txt)    manager ${{ steps.infra_names.outputs.manager_prefix }}\" ]}" \
             --limit 'fleet' \
+            --vault-password-file "$VAULT_FILE" \
             --skip-tags "validate,ufw,hardening"
           execution_status=$?
           deactivate

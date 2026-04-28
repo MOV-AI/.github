@@ -131,18 +131,18 @@ jobs:
           provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
           provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
 
-          rm -rf $provision_infra_dir
+          rm -rf "$provision_infra_dir"
           docker run \
-            -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
-            -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
-            fetch_by_tag --repo $provision_infra_repo_name \
-            --version $provision_infra_version \
-            --gh_api_user $GITHUB_API_USR \
-            --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-            --target_dir $provision_infra_dir
-          cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/$provision_infra_dir ./$provision_infra_dir
+            -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":"${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}" \
+            -i "${{ env.CI_INTEGRATION_CONTAINER_VERSION }}" \
+            fetch_by_tag --repo "$provision_infra_repo_name" \
+            --version "$provision_infra_version" \
+            --gh_api_user "$GITHUB_API_USR" \
+            --gh_api_pwd  "${{ secrets.auto_commit_pwd }}" \
+            --target_dir "$provision_infra_dir"
+          cp -r "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/$provision_infra_dir" "./$provision_infra_dir"
 
-          ls -la $provision_infra_dir
+          ls -la "$provision_infra_dir"
           echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
 
       - name: Define Instance names
@@ -152,7 +152,7 @@ jobs:
           BRANCH=${GITHUB_REF#refs/heads/}
           # Remove branch prefix
           branch=${BRANCH#*/}
-          branch=$(echo ${branch} | sed "s;\.;-;g" )
+          branch=$(echo "${branch}" | sed "s;\.;-;g" )
 
           run_type="ci"
 
@@ -302,7 +302,7 @@ jobs:
 
       - name: Remote - Move component artifacts
         shell: bash
-        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ./artifacts ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ./artifacts "${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/"
 
       - name: Remote - create execution folder
         shell: bash

@@ -143,11 +143,11 @@ jobs:
           ip_list_str=${multiply_ips::-1}
           var_file_arg='-var-file=../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars'
 
-
-          echo "proxmox_host_list=[$node_list_str]">>input.tfvars
-
-          echo 'gh_runner_nr="${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }}"'>>input.tfvars
-          echo 'gh_runner_name_prefix="${{ matrix.node }}-ip-runner"'>>input.tfvars
+          {
+            echo "proxmox_host_list=[$node_list_str]"
+            echo 'gh_runner_nr="${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }}"'
+            echo 'gh_runner_name_prefix="${{ matrix.node }}-ip-runner"'
+          } >> input.tfvars
           echo "ip_list=[$ip_list_str]">>input.tfvars
           echo 'tags=["ip-runner"]'>>input.tfvars
           echo 'pool="${{ env.PROVISION_POOL }}"'>>input.tfvars
@@ -176,7 +176,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
         env:
@@ -326,7 +325,6 @@ jobs:
       shell: bash
       id: job_info
       run: |
-        job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
         job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
         echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
       env:
@@ -476,7 +474,6 @@ jobs:
         shell: bash
         id: job_info
         run: |
-          job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
         env:
@@ -625,7 +622,6 @@ jobs:
       shell: bash
       id: job_info
       run: |
-        job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
         job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
         echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
       env:
