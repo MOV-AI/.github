@@ -1,0 +1,159 @@
+name: Build and run tests from a Python package
+on:
+  workflow_call:
+    inputs:
+      test_set:
+        required: true
+        type: string
+      deploy:
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      jira_username:
+        required: true
+      jira_password:
+        required: true
+      xray_clientid:
+        required: true
+      xray_secret:
+        required: true
+      auto_commit_user:
+        required: false # only when deploy true
+      auto_commit_mail:
+        required: false # only when deploy true
+      auto_commit_password:
+        required: false
+      registry_user:
+        required: true
+      registry_password:
+        required: true
+      nexus_publisher_user:
+        required: true
+      nexus_publisher_password:
+        required: true
+      gh_token:
+        required: true
+      sonar_token:
+        required: true
+
+jobs:
+  Validate-features:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Feature file validation
+        shell: bash
+        env:
+          XRAY_CLIENTID: ${{ secrets.xray_clientid }}
+          XRAY_SECRET: ${{ secrets.xray_secret }}
+          JIRA_USERNAME: ${{ secrets.jira_username }}
+          JIRA_PASSWORD: ${{ secrets.jira_password }}
+        run: |
+          # create virtual environment
+          python3 -m venv venv --clear
+          . venv/bin/activate
+
+          # install tests requirements in venv
+          pip install \
+            -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple \
+            --extra-index-url https://pypi.org/simple \
+            .
+
+          xray download ${{ inputs.test_set }}
+          xray compare ./qa_install_tests/tests/feature/
+
+  CI:
+    uses: MOV-AI/.github/.github/workflows/py-workflow.yml@v2.3
+    with:
+      PYTHON_VERSION: "3.10"
+      deploy: ${{ inputs.deploy }}
+      run_black: true
+      pre_commit: true
+    secrets:
+      auto_commit_user: ${{ secrets.auto_commit_user }}
+      auto_commit_mail: ${{ secrets.auto_commit_mail }}
+      registry_user: ${{ secrets.registry_user }}
+      registry_password: ${{ secrets.registry_password }}
+      nexus_publisher_user: ${{ secrets.nexus_publisher_user }}
+      nexus_publisher_password: ${{ secrets.nexus_publisher_password }}
+      gh_token: ${{ secrets.gh_token }}
+      sonar_token: ${{ secrets.sonar_token }}
+
+  Install-Tests:
+    needs: CI
+    runs-on: qa-runner
+
+    steps:
+      - name: Agent info
+        id: agent_info
+        run: |
+          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
+
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: packages
+
+      - name: Install package
+        shell: bash
+        run: |
+          python3 -m venv .ci-venv --clear
+          . .ci-venv/bin/activate
+          pip install packages/*.whl
+
+      - name: Tests
+        shell: bash
+        run: |
+          . .ci-venv/bin/activate
+          python3 -m pytest --full_clean --pyargs qa_install_tests.tests
+
+      - name: Save docker container logs
+        if: always()
+        shell: bash
+        run: |
+          # for sanity
+          docker ps -a
+
+          # save all container logs and inspect
+          CONTAINERS=$(docker ps -a --format '{{.Names}}')
+          for container in ${CONTAINERS}; do
+              docker logs "${container}" &> "${container}.log" || true
+              docker inspect "${container}" &> "${container}-inspect.log"
+          done || true
+
+          # movai-service
+          journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
+
+          # spawner (mobros firmware)
+          journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
+
+      - name: Collect artifacts
+        if: always()
+        shell: bash
+        run: |
+          rm -rf qa_artifacts
+          mkdir qa_artifacts
+
+          cp -r tests_artifacts/ qa_artifacts/ || true
+
+          cp *.log ./qa_artifacts/ || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa_artifacts
+          path: qa_artifacts/*
+
+      - name: Remove robots
+        if: always()
+        shell: bash
+        run: |
+          movai remove --all
