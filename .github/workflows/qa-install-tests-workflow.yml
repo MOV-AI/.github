@@ -39,6 +39,7 @@ on:
 
 jobs:
   Validate-features:
+    if: ${{ inputs.deploy == false }}
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -83,6 +84,7 @@ jobs:
       sonar_token: ${{ secrets.sonar_token }}
 
   Install-Tests:
+    if: ${{ inputs.deploy == false }}
     needs: CI
     runs-on: qa-runner
 
