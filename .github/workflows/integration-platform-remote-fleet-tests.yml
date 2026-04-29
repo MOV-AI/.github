@@ -325,6 +325,12 @@ jobs:
           echo "target_dir=${install_infra_dir}" >> $GITHUB_OUTPUT
           deactivate
 
+
+      - name: Setup python3.10
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.10
+
       - name: Ansible install platform
         id: ansible_install_platform
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
@@ -523,6 +529,11 @@ jobs:
         with:
           name: provisioned_inventory
           path: ./
+
+      - name: Setup python3.10
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.10
 
       - name: Collect Fleet QA artifacts
         if: always()
