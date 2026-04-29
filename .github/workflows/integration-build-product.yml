@@ -740,7 +740,7 @@ jobs:
             set -e
             mkdir -p artifacts proj_metadata metadata_artifact
             cp *.json artifacts/
-            
+
             touch artifacts/spawner-solution-noetic-deployable.dploy
             touch artifacts/spawner-solution-noetic-3rdParty.dploy
             touch artifacts/spawner-solution-noetic-apt_packages.json
@@ -748,8 +748,8 @@ jobs:
             echo '{"packages": []}' > artifacts/spawner-solution-noetic-deployable.dploy
             echo '{"packages": []}' > artifacts/spawner-solution-noetic-3rdParty.dploy
             touch proj_metadata/metadata.tar.gz
-            touch metadata_artifact/metadata.tar.gz 
-            
+            touch metadata_artifact/metadata.tar.gz
+
             CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}.json
 
             echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:$(cat product.version)">artifacts/product-${{ matrix.workspace['distro'] }}.image.artifact
@@ -1865,7 +1865,7 @@ jobs:
             # for sanity
             docker ps -a
 
-            for container in backend spawner ros1-workspace message-server; do
+            for container in backend spawner ros1-workspace orchestrator message-server; do
              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
             done || true
