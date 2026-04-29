@@ -88,6 +88,8 @@ on:
         required: true
       xray_secret:
         required: true
+      FLEET_PASSWORD:
+        required: true
 
 env:
   CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.0.0.31"
