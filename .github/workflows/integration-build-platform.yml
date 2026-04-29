@@ -120,6 +120,8 @@ on:
         required: true
       buildkite_token:
         required: false
+      FLEET_PASSWORD:
+        required: true
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "4.0.2.3"
   MOBTEST_VERSION: "0.0.7.2"
