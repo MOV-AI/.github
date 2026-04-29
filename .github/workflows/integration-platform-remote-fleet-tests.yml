@@ -312,7 +312,8 @@ jobs:
             hosts:
               localhost:
                 ansible_connection: local
-                ansible_python_interpreter: {{ setup_python_3_10.outputs.python_path }}
+                ansible_python_interpreter: ${{ steps.setup_python_3_10.outputs.python_path }}
+
           EOF
 
           # printout the inventory for debug purposes
