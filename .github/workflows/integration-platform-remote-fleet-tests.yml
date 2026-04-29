@@ -150,6 +150,12 @@ jobs:
           python3 -m pip install --upgrade pyOpenSSL cryptography
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
+      - name: Setup python3.10
+        uses: actions/setup-python@v6
+        id: setup_python_3_10
+        with:
+          python-version: '3.10'
+
       - name: unstash robot_configs
         uses: actions/download-artifact@v4
         with:
@@ -295,12 +301,24 @@ jobs:
             }
           token: ${{ secrets.slack_token_id }}
 
-      - name: Apply ansible inventory
+      - name: Prepare ansible inventory
         shell: bash
         run: |
           . .ci-venv/bin/activate
           cp ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml staging/provisioned_inventory.yml
+          # Add localhost configuration for delegated tasks
+          cat >> staging/provisioned_inventory.yml << 'EOF'
+          all:
+            hosts:
+              localhost:
+                ansible_connection: local
+                ansible_python_interpreter: {{ setup_python_3_10.outputs.python_path }}
+          EOF
+
+          # printout the inventory for debug purposes
           cat staging/provisioned_inventory.yml
+
+          # update manager ansible_host in inventory with the actual IP from terraform output
           integration-pipeline get_yml_value --file staging/provisioned_inventory.yml --key fleet.children.managers.hosts.manager.ansible_host --output_file ./staging/manager_private_ip.txt
           deactivate
 
@@ -324,12 +342,6 @@ jobs:
           ls -la $install_infra_dir
           echo "target_dir=${install_infra_dir}" >> $GITHUB_OUTPUT
           deactivate
-
-
-      - name: Setup python3.10
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.10'
 
       - name: Ansible install platform
         id: ansible_install_platform
