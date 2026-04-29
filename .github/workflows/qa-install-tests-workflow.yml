@@ -114,7 +114,7 @@ jobs:
         shell: bash
         run: |
           . .ci-venv/bin/activate
-          python3 -m pytest --full_clean --pyargs qa_install_tests.tests
+          python3 -m pytest --full-clean --pyargs qa_install_tests.tests
 
       - name: Save docker container logs
         if: always()
