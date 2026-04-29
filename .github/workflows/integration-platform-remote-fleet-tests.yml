@@ -88,7 +88,7 @@ on:
         required: true
       xray_secret:
         required: true
-      FLEET_PASSWORD:
+      fleet_password:
         required: true
 
 env:

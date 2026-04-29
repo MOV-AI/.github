@@ -120,7 +120,7 @@ on:
         required: true
       buildkite_token:
         required: false
-      FLEET_PASSWORD:
+      fleet_password:
         required: true
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "4.0.2.3"
