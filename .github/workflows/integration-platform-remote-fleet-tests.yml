@@ -291,9 +291,10 @@ jobs:
           echo "=== Gather terraform outputs ==="
           ip=$(terraform output manager_ip_address)
           user=$(terraform output user)
-          members=$(terraform output peers_ip_addresses)
+          members=$(terraform output peers_ip_addresses | xargs | sed 's/,$//')
           echo "Manager IP: ${ip//\"/}"
           echo "User: ${user//\"/}"
+          echo "Members: ${members//\"/}"
           echo "✓ Terraform outputs gathered"
 
           if [ -f /tmp/terraform-external-debug.log ]; then
