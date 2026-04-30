@@ -236,13 +236,11 @@ jobs:
           echo "::endgroup::"
 
           # Output variables
-          {
-            echo "env_configs_dir=${env_configs_dir}"
-            echo "provision_infra_dir=${provision_infra_dir}"
-            echo "manager_prefix=${local_manager_prefix}"
-            echo "worker_prefix=${local_worker_prefix}"
-            echo "total_resources=${total_resources}"
-          } >> "$GITHUB_OUTPUT"
+          echo "env_configs_dir=${env_configs_dir}" >> "$GITHUB_OUTPUT"
+          echo "provision_infra_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
+          echo "manager_prefix=${local_manager_prefix}" >> "$GITHUB_OUTPUT"
+          echo "worker_prefix=${local_worker_prefix}" >> "$GITHUB_OUTPUT"
+          echo "total_resources=${total_resources}" >> "$GITHUB_OUTPUT"
 
       - name: Provision & Gather Infrastructure
         id: infra_provision
@@ -306,12 +304,10 @@ jobs:
           echo "::endgroup::"
 
           # Output terraform values
-          {
-            echo "host_ip=${ip//\"/}"
-            echo "host_user=${user//\"/}"
-            echo "ssh_connect_string=${user//\"/}@${ip//\"/}"
-            echo "fleet_ips=${members//\"/}"
-          } >> "$GITHUB_OUTPUT"
+          echo "host_ip=${ip//\"/}" >> "$GITHUB_OUTPUT"
+          echo "host_user=${user//\"/}" >> "$GITHUB_OUTPUT"
+          echo "ssh_connect_string=${user//\"/}@${ip//\"/}" >> "$GITHUB_OUTPUT"
+          echo "fleet_ips=${members//\"/}" >> "$GITHUB_OUTPUT"
 
       - name: Stash provision_infra_dir
         uses: actions/upload-artifact@v4
@@ -632,16 +628,14 @@ jobs:
             echo "=========================================="
           '
           rm -f /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt /tmp/test_args.txt /tmp/test_exec_dir.txt
-          # shellcheck disable=SC2086
+          # shellcheck disable=SC2086,SC2129
           scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no "${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:/tmp/*.txt" /tmp/
 
-          {
-            echo "tests_dir=fleet_${{ matrix.fleet_test_name }}"
-            echo "version=$(cat /tmp/version.txt)"
-            echo "test_set=$(cat /tmp/test_set.txt)"
-            echo "test_exec_dir=$(cat /tmp/test_exec_dir.txt)"
-            echo "test_args=$(cat /tmp/test_args.txt || echo \"\")"
-          } >> "$GITHUB_OUTPUT"
+          echo "tests_dir=fleet_${{ matrix.fleet_test_name }}" >> "$GITHUB_OUTPUT"
+          echo "version=$(cat /tmp/version.txt)" >> "$GITHUB_OUTPUT"
+          echo "test_set=$(cat /tmp/test_set.txt)" >> "$GITHUB_OUTPUT"
+          echo "test_exec_dir=$(cat /tmp/test_exec_dir.txt)" >> "$GITHUB_OUTPUT"
+          echo "test_args=$(cat /tmp/test_args.txt || echo \"\")" >> "$GITHUB_OUTPUT"
 
       - name: Remote - Run Fleet test [${{ matrix.fleet_test_name }}]
         if: ${{ inputs.with_fleet_tests }}
@@ -737,13 +731,11 @@ jobs:
         if: always()
         id: pre_slack_execution
         run: |
-          {
-            MESSAGE=":white_check_mark: Fleet-Tests-Execution [${{ matrix.fleet_test_name }}] passed"
-            if [ "${{ job.status }}" != "success" ]; then
-              MESSAGE=":x: Fleet-Tests-Execution [${{ matrix.fleet_test_name }}] failed"
-            fi
-            echo "msg=${MESSAGE}"
-          } >> "$GITHUB_OUTPUT"
+          MESSAGE=":white_check_mark: Fleet-Tests-Execution [${{ matrix.fleet_test_name }}] passed"
+          if [ "${{ job.status }}" != "success" ]; then
+            MESSAGE=":x: Fleet-Tests-Execution [${{ matrix.fleet_test_name }}] failed"
+          fi
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
 
       - name: Slack message for execution
         uses: slackapi/slack-github-action@v2
@@ -827,13 +819,11 @@ jobs:
         if: always()
         id: pre_slack_teardown
         run: |
-          {
-            MESSAGE=":white_check_mark: Fleet-Tests-Teardown passed"
-            if [ "${{ job.status }}" != "success" ]; then
-              MESSAGE=":x: Fleet-Tests-Teardown failed"
-            fi
-            echo "msg=${MESSAGE}"
-          } >> "$GITHUB_OUTPUT"
+          MESSAGE=":white_check_mark: Fleet-Tests-Teardown passed"
+          if [ "${{ job.status }}" != "success" ]; then
+            MESSAGE=":x: Fleet-Tests-Teardown failed"
+          fi
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
 
       - name: Slack message for teardown
         uses: slackapi/slack-github-action@v2
@@ -872,10 +862,8 @@ jobs:
           echo "=== Prepare status messages ==="
           MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
           MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed - Details: $job_html_url"
-          {
-            echo "msg=${MESSAGE}"
-            echo "msg_error=${MESSAGE_ERR}"
-          } >> "$GITHUB_OUTPUT"
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+          echo "msg_error=${MESSAGE_ERR}" >> "$GITHUB_OUTPUT"
           echo "✓ Status messages prepared"
 
           echo "::endgroup::"
