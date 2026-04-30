@@ -94,6 +94,10 @@ on:
         required: true
       fleet_password:
         required: true
+      proxmox_ve_username:
+        required: true
+      proxmox_ve_password:
+        required: true
 
 env:
   CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.0.0.31"
@@ -218,7 +222,7 @@ jobs:
           echo ""
           echo "=== Define instance names ==="
           branch="${GITHUB_REF#refs/heads/}"
-          branch="${branch//./- }"
+          branch="${branch//./-}"
           local_manager_prefix="ip-${branch}-manager"
           local_worker_prefix="ip-${branch}-worker"
           total_resources=${{ inputs.fleet_number_members }}
