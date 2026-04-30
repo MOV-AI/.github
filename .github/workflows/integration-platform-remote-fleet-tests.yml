@@ -60,6 +60,10 @@ on:
         required: false
         type: string
         default: 'C02PB9A9F45' # rnd-platform
+      enable_slack_notifications:
+        required: false
+        type: boolean
+        default: false
 
     secrets:
       auto_commit_user:
@@ -149,9 +153,7 @@ jobs:
         run: |
           # shellcheck disable=SC2086
           set -eo pipefail
-          echo "=========================================="
-          echo "Setup CI Environment"
-          echo "=========================================="
+          echo "::group::Setup CI Environment"
 
           echo "=== Create CI Scripts venv ==="
           python3 -m venv .ci-venv --clear
@@ -168,9 +170,7 @@ jobs:
           echo "✓ Python environment ready"
 
           echo ""
-          echo "=========================================="
-          echo "✓ CI environment setup complete"
-          echo "=========================================="
+          echo "::endgroup::"
 
       - name: Download Robot Configs
         uses: actions/download-artifact@v4
@@ -188,9 +188,7 @@ jobs:
         shell: bash
         run: |
           set -eo pipefail
-          echo "=========================================="
-          echo "Setup Infrastructure Configuration"
-          echo "=========================================="
+          echo "::group::Setup Infrastructure Configuration"
 
           echo "=== Download environment configs ==="
           . .ci-venv/bin/activate
@@ -231,9 +229,7 @@ jobs:
           echo "Total resources: $total_resources"
           echo "✓ Instance names defined"
 
-          echo "=========================================="
-          echo "Setup Infrastructure Configuration Complete"
-          echo "=========================================="
+          echo "::endgroup::"
 
           # Output variables
           {
@@ -250,9 +246,7 @@ jobs:
         shell: bash
         run: |
           set -eo pipefail
-          echo "=========================================="
-          echo "Provision & Gather Infrastructure"
-          echo "=========================================="
+          echo "::group::Provision & Gather Infrastructure"
 
           echo "=== Configure SSH ==="
           echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
@@ -272,8 +266,8 @@ jobs:
             echo "fleet_manager_name=\"${{ steps.infra_setup.outputs.manager_prefix }}\""
             echo "fleet_peer_name_prefix=\"${{ steps.infra_setup.outputs.worker_prefix }}\""
             echo 'ip_list=${{ inputs.fleet_ips }}'
-            echo "proxmox_ve_username=\"${PROXMOX_VE_USERNAME:-admin}\""
-            echo "proxmox_ve_password=\"${PROXMOX_VE_PASSWORD:-password}\""
+            echo "proxmox_ve_username=\"${{ secrets.proxmox_ve_username }}\""
+            echo "proxmox_ve_password=\"${{ secrets.proxmox_ve_password }}\""
             printf '\n'
           } >> input.tfvars
           echo "✓ Terraform variables configured"
@@ -304,9 +298,7 @@ jobs:
             cat /tmp/terraform-external-debug.log || true
           fi
 
-          echo "=========================================="
-          echo "Infrastructure Provisioning Complete"
-          echo "=========================================="
+          echo "::endgroup::"
 
           # Output terraform values
           {
@@ -349,7 +341,7 @@ jobs:
 
       - name: Slack message failure
         uses: slackapi/slack-github-action@v2
-        if: failure()
+        if: failure() && inputs.enable_slack_notifications
         with:
           method: chat.postMessage
           payload: |
@@ -365,9 +357,7 @@ jobs:
         run: |
           # shellcheck disable=SC2086
           set -eo pipefail
-          echo "=========================================="
-          echo "Setup Ansible Environment"
-          echo "=========================================="
+          echo "::group::Setup Ansible Environment"
 
           echo "=== Prepare ansible inventory ==="
           . .ci-venv/bin/activate
@@ -408,9 +398,7 @@ jobs:
           deactivate
           echo "✓ Ansible playbooks downloaded"
 
-          echo "=========================================="
-          echo "Ansible Environment Setup Complete"
-          echo "=========================================="
+          echo "::endgroup::"
 
           # Output target directory
           echo "target_dir=${install_infra_dir}" >> "$GITHUB_OUTPUT"
@@ -421,9 +409,7 @@ jobs:
         shell: bash
         run: |
           set -eo pipefail
-          echo "=========================================="
-          echo "Ansible Install Platform"
-          echo "=========================================="
+          echo "::group::Ansible Install Platform"
 
           echo "=== Configure SSH ==="
           echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
@@ -511,13 +497,12 @@ jobs:
           execution_status=$?
           deactivate
 
-          echo "=========================================="
           if [ $execution_status -eq 0 ]; then
             echo "✓ Ansible install platform completed successfully"
           else
             echo "✗ Ansible install platform failed with status $execution_status"
           fi
-          echo "=========================================="
+          echo "::endgroup::"
 
           exit $execution_status
 
@@ -526,9 +511,7 @@ jobs:
         shell: bash
         run: |
           set -eo pipefail
-          echo "=========================================="
-          echo "Configure Remote Environment"
-          echo "=========================================="
+          echo "::group::Configure Remote Environment"
 
           echo "=== Setup SSH connection ==="
           ssh-keygen -f ~/.ssh/known_hosts -R ${{ steps.infra_provision.outputs.host_ip }} || true
@@ -564,9 +547,7 @@ jobs:
           echo "✓ Robot JSON configs transferred"
 
           echo ""
-          echo "=========================================="
-          echo "✓ Remote environment configured"
-          echo "=========================================="
+          echo "::endgroup::"
 
   Fleet-Tests-Execution:
     runs-on: ip-${{ inputs.proxmox_cluster_name }}-queuer
@@ -693,9 +674,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          echo "=========================================="
-          echo "Collect QA Artifacts"
-          echo "=========================================="
+          echo "::group::Collect QA Artifacts"
 
           echo "=== Download provisioned inventory ==="
           mkdir -p ./
@@ -739,9 +718,7 @@ jobs:
 
           deactivate
 
-          echo "=========================================="
-          echo "✓ Artifact collection complete"
-          echo "=========================================="
+          echo "::endgroup::"
 
       - name: Stash Fleet QA artifacts
         if: always()
@@ -765,7 +742,7 @@ jobs:
 
       - name: Slack message for execution
         uses: slackapi/slack-github-action@v2
-        if: always()
+        if: always() && inputs.enable_slack_notifications
         with:
           method: chat.postMessage
           payload: |
@@ -788,9 +765,7 @@ jobs:
         shell: bash
         run: |
           set -eo pipefail
-          echo "=========================================="
-          echo "Setup Teardown Environment"
-          echo "=========================================="
+          echo "::group::Setup Teardown Environment"
 
           echo "=== Download provisioning artifacts ==="
           mkdir -p ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
@@ -802,9 +777,7 @@ jobs:
           echo "Preparing: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_infra_env_configs }}"
           echo "✓ Teardown environment ready"
 
-          echo "=========================================="
-          echo "✓ Setup complete"
-          echo "=========================================="
+          echo "::endgroup::"
 
       - name: Download Provision Infra Dir
         uses: actions/download-artifact@v4
@@ -859,7 +832,7 @@ jobs:
 
       - name: Slack message for teardown
         uses: slackapi/slack-github-action@v2
-        if: always()
+        if: always() && inputs.enable_slack_notifications
         with:
           method: chat.postMessage
           payload: |
@@ -881,9 +854,7 @@ jobs:
         shell: bash
         run: |
           set -eo pipefail
-          echo "=========================================="
-          echo "Report Job Status"
-          echo "=========================================="
+          echo "::group::Report Job Status"
 
           echo "=== Get job information ==="
           # shellcheck disable=SC2086
@@ -902,15 +873,13 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "✓ Status messages prepared"
 
-          echo "=========================================="
-          echo "✓ Status reporting ready"
-          echo "=========================================="
+          echo "::endgroup::"
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
       - name: Send Success Notification
         uses: slackapi/slack-github-action@v2
-        if: success()
+        if: success() && inputs.enable_slack_notifications
         with:
           method: chat.postMessage
           payload: |
@@ -923,7 +892,7 @@ jobs:
 
       - name: Send Failure Notification
         uses: slackapi/slack-github-action@v2
-        if: failure()
+        if: failure() && inputs.enable_slack_notifications
         with:
           method: chat.postMessage
           payload: |
