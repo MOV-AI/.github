@@ -95,10 +95,11 @@ jobs:
 
       - name: Update/upgrade host packages
         run: |
+          export DEBIAN_FRONTEND=noninteractive
           while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
           sudo apt-get update
           while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
-          sudo apt-get upgrade -y
+          sudo apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -y
 
       - name: Setup environment
         shell: bash
