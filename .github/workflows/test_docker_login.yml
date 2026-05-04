@@ -9,9 +9,6 @@ jobs:
   Test-Docker-Login:
     runs-on: simul-mary-queuer
     steps:
-      - name: Cleanup Workspace
-        uses: rtCamp/action-cleanup@master
-
       - name: Checkout
         uses: actions/checkout@v6
 
