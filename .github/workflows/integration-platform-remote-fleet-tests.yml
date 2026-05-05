@@ -60,10 +60,6 @@ on:
         required: false
         type: string
         default: 'C02PB9A9F45' # rnd-platform
-      enable_slack_notifications:
-        required: false
-        type: boolean
-        default: false
 
     secrets:
       auto_commit_user:
@@ -191,6 +187,7 @@ jobs:
         id: infra_setup
         shell: bash
         run: |
+          # shellcheck disable=SC2129
           set -eo pipefail
           echo "::group::Setup Infrastructure Configuration"
 
@@ -236,6 +233,7 @@ jobs:
           echo "::endgroup::"
 
           # Output variables
+          # shellcheck disable=SC2129
           echo "env_configs_dir=${env_configs_dir}" >> "$GITHUB_OUTPUT"
           echo "provision_infra_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
           echo "manager_prefix=${local_manager_prefix}" >> "$GITHUB_OUTPUT"
@@ -248,6 +246,7 @@ jobs:
         shell: bash
         run: |
           set -eo pipefail
+          # shellcheck disable=SC2129
           echo "::group::Provision & Gather Infrastructure"
 
           echo "=== Configure SSH ==="
@@ -261,6 +260,8 @@ jobs:
           node_list_str=${multiply_node::-1}
           var_file_arg='-var-file=../${{ steps.infra_setup.outputs.env_configs_dir }}/hel/${{ inputs.proxmox_cluster_name }}_fleet_test.tfvars'
 
+          # Grouped redirect for terraform input file (not GITHUB_OUTPUT)
+          # shellcheck disable=SC2129
           {
             echo "proxmox_host_list=[${node_list_str}]"
             echo "fleet_peer_nr=${{ inputs.fleet_number_members }}"
@@ -342,7 +343,7 @@ jobs:
 
       - name: Slack message failure
         uses: slackapi/slack-github-action@v2
-        if: failure() && inputs.enable_slack_notifications
+        if: failure() && inputs.slack_channel != ''
         with:
           method: chat.postMessage
           payload: |
@@ -570,6 +571,7 @@ jobs:
         shell: bash
         id: tests_setup
         run: |
+          # shellcheck disable=SC2129
           ssh ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
             set -e
             echo "=========================================="
@@ -739,7 +741,7 @@ jobs:
 
       - name: Slack message for execution
         uses: slackapi/slack-github-action@v2
-        if: always() && inputs.enable_slack_notifications
+        if: always() && inputs.slack_channel != ''
         with:
           method: chat.postMessage
           payload: |
@@ -827,7 +829,7 @@ jobs:
 
       - name: Slack message for teardown
         uses: slackapi/slack-github-action@v2
-        if: always() && inputs.enable_slack_notifications
+        if: always() && inputs.slack_channel != ''
         with:
           method: chat.postMessage
           payload: |
@@ -872,7 +874,7 @@ jobs:
 
       - name: Send Success Notification
         uses: slackapi/slack-github-action@v2
-        if: success() && inputs.enable_slack_notifications
+        if: success() && inputs.slack_channel != ''
         with:
           method: chat.postMessage
           payload: |
@@ -885,7 +887,7 @@ jobs:
 
       - name: Send Failure Notification
         uses: slackapi/slack-github-action@v2
-        if: failure() && inputs.enable_slack_notifications
+        if: failure() && inputs.slack_channel != ''
         with:
           method: chat.postMessage
           payload: |
