@@ -461,16 +461,19 @@ jobs:
 
           echo ""
           echo "=== Setup Ansible vault ==="
-          VAULT_FILE="$(pwd)/playbooks/.vault-password-file"
-          echo "test-vault-password-123456789" > "$VAULT_FILE"
-          cat > playbooks/group_vars/fleet/vault.yml << 'EOF'
+          VAULT_DIR="$(pwd)/.vault"
+          VAULT_PASSWORD_FILE="$VAULT_DIR/.vault-password-file"
+          VAULT_FILE="$VAULT_DIR/fleet.yml"
+          mkdir -p "$VAULT_DIR"
+          echo "${{ secrets.FLEET_PASSWORD}}" > "$VAULT_PASSWORD_FILE"
+          cat > "$VAULT_FILE" << 'EOF'
           ---
-          vault_proxycerts_supervisor_password: "admin123"
-          vault_proxycerts_ca_passphrase: "TestCAPassphrase456!@#"
+          vault_proxycerts_supervisor_password: "${{ secrets.FLEET_PASSWORD}}"
+          vault_proxycerts_ca_passphrase: "${{ secrets.FLEET_PASSWORD}}"
           vault_movai_fleet_docker_password: "${{ secrets.registry_password }}"
           vault_movai_fleet_admin_password: "${{ secrets.FLEET_PASSWORD}}"
           EOF
-          ansible-vault encrypt playbooks/group_vars/fleet/vault.yml --vault-password-file "$VAULT_FILE"
+          ansible-vault encrypt "$VAULT_FILE" --vault-password-file "$VAULT_PASSWORD_FILE"
           echo "✓ Vault configured"
 
           echo ""
@@ -484,6 +487,7 @@ jobs:
             -i ../staging/provisioned_inventory.yml \
             --key-file ~/.ssh/aws_slave.pem \
             --extra-vars=@"$(pwd)/.."/product-manifest.yaml \
+            --extra-vars=@"$VAULT_FILE" \
             -e "movai_fleet_name=$FLEET_NAME" \
             -e "movai_fleet_staging_path=$STAGING_PATH" \
             -e "movai_fleet_docker_registry=$MID_REGISTRY" \
@@ -494,7 +498,7 @@ jobs:
             -e "{\"fleet_domain_dns\": [ \"10.26.0.3\", \"10.26.1.3\", \"1.1.1.1\" ]}" \
             -e "{\"movai_fleet_extra_hosts\": [ \"10.26.0.2    registry.hel.mov.ai traefik\", \"$(cat ../staging/manager_private_ip.txt)   manager registry.manager manager.$FLEET_ORGANIZATION registry.manager.$FLEET_ORGANIZATION ${{ steps.infra_setup.outputs.manager_prefix }}\" ]}" \
             --limit 'fleet' \
-            --vault-password-file "$VAULT_FILE" \
+            --vault-password-file "$VAULT_PASSWORD_FILE" \
             --skip-tags "ufw,hardening"
           execution_status=$?
           deactivate
