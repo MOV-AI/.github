@@ -61,7 +61,7 @@ on:
       provision_tf_env_version:
         required: false
         type: string
-        default: "0.1.0-17"
+        default: "0.2.0-6"
       provision_infra_repo:
         required: false
         type: string
