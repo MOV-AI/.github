@@ -491,7 +491,7 @@ jobs:
             -e "movai_fleet_name=$FLEET_NAME" \
             -e "movai_fleet_staging_path=$STAGING_PATH" \
             -e "movai_fleet_docker_registry=$MID_REGISTRY" \
-            -e "movai_fleet_manager_enable_docker_proxy=true" \
+            -e "movai_fleet_manager_enable_docker_proxy=false" \
             -e "fleet__orga=$FLEET_ORGANIZATION" \
             -e "{\"fleet__redis_masters_fqdn\": [$(cat ../staging/manager_private_ip.txt)]}" \
             -e "{\"fleet_manager_san\": [ \"DNS:$(cat ../staging/manager_private_ip.txt)\", \"DNS:registry.manager\", \"DNS:manager.$FLEET_ORGANIZATION\" ]}" \
