@@ -61,7 +61,7 @@ on:
       provision_tf_env_version:
         required: false
         type: string
-        default: "0.2.0-6"
+        default: "0.2.0-7"
       provision_infra_repo:
         required: false
         type: string
@@ -140,7 +140,7 @@ env:
   XRAY_SECRET: ${{ secrets.xray_secret}}
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
-  PROVISIONING_ENV_VERSION: 0.2.0-6
+  PROVISIONING_ENV_VERSION: 0.2.0-7
   PROVISIONING_ENV_REPO: devops-tf-env-conf
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.0.0-17"
