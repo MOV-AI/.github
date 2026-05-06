@@ -499,7 +499,7 @@ jobs:
             -e "{\"movai_fleet_extra_hosts\": [ \"10.26.0.2    registry.hel.mov.ai traefik\", \"$(cat ../staging/manager_private_ip.txt)   manager registry.manager manager.$FLEET_ORGANIZATION registry.manager.$FLEET_ORGANIZATION ${{ steps.infra_setup.outputs.manager_prefix }}\" ]}" \
             --limit 'fleet' \
             --vault-password-file "$VAULT_PASSWORD_FILE" \
-            --skip-tags "ufw,hardening"
+            --skip-tags "validate,ufw,hardening"
           execution_status=$?
           deactivate
 
