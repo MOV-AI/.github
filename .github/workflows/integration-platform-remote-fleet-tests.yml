@@ -465,13 +465,13 @@ jobs:
           VAULT_PASSWORD_FILE="$VAULT_DIR/.vault-password-file"
           VAULT_FILE="$VAULT_DIR/fleet.yml"
           mkdir -p "$VAULT_DIR"
-          echo "${{ secrets.FLEET_PASSWORD}}" > "$VAULT_PASSWORD_FILE"
+          echo "${{ secrets.fleet_password}}" > "$VAULT_PASSWORD_FILE"
           cat > "$VAULT_FILE" << 'EOF'
           ---
-          vault_proxycerts_supervisor_password: "${{ secrets.FLEET_PASSWORD}}"
-          vault_proxycerts_ca_passphrase: "${{ secrets.FLEET_PASSWORD}}"
+          vault_proxycerts_supervisor_password: "${{ secrets.fleet_password}}"
+          vault_proxycerts_ca_passphrase: "${{ secrets.fleet_password}}"
           vault_movai_fleet_docker_password: "${{ secrets.registry_password }}"
-          vault_movai_fleet_admin_password: "${{ secrets.FLEET_PASSWORD}}"
+          vault_movai_fleet_admin_password: "${{ secrets.fleet_password}}"
           EOF
           ansible-vault encrypt "$VAULT_FILE" --vault-password-file "$VAULT_PASSWORD_FILE"
           echo "✓ Vault configured"
