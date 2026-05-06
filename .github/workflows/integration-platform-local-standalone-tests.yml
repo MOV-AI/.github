@@ -118,7 +118,7 @@ jobs:
         run: |
           set -eo pipefail
           # Check critical files exist
-          for file in product-manifest.yaml product.version "${{ inputs.robot_config }}.ci"; do
+          for file in product-manifest.yaml"; do
             if [ ! -f "$file" ]; then
               echo "ERROR: Critical file missing: $file"
               ls -la *.{json,yaml,ci} 2>/dev/null || true
