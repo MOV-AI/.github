@@ -64,7 +64,7 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_access_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_access_key }}
   AWS_DEFAULT_REGION: "us-east-1"
-  REGISTRY: registry.cloud.mov.ai
+  REGISTRY: registry.lis.mov.ai
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.0.0-17"
   PROVISION_INFRA_DIR: "provision_scripts"
