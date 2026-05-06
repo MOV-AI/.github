@@ -409,65 +409,65 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
-  # Validation-UI-Tests:
-  #   needs: [Build-backend]
-  #   uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/ansible_vault
-  #   secrets: inherit
-  #   with:
-  #     collect_deployable_artifacts: true
-  #     test_infra_key: "ui_tests"
-  #     slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-  #     backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-  #     test_timeout: 120
-  #     pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json'
-  #     xray_label: "UI_Automation"
-  #     slack_channel: ${{ inputs.slack_channel }}
+  Validation-UI-Tests:
+    needs: [Build-backend]
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/ansible_vault
+    secrets: inherit
+    with:
+      collect_deployable_artifacts: true
+      test_infra_key: "ui_tests"
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+      test_timeout: 120
+      pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json'
+      xray_label: "UI_Automation"
+      slack_channel: ${{ inputs.slack_channel }}
 
-  # Validation-Install-Tests:
-  #   needs: [Build-backend]
-  #   uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/ansible_vault
-  #   secrets: inherit
-  #   with:
-  #     test_infra_key: "install_tests"
-  #     slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-  #     backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-  #     test_timeout: 30
-  #     pytest_args: '-k "$test_set" --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --jira_report'
-  #     slack_channel: ${{ inputs.slack_channel }}
+  Validation-Install-Tests:
+    needs: [Build-backend]
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/ansible_vault
+    secrets: inherit
+    with:
+      test_infra_key: "install_tests"
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+      test_timeout: 30
+      pytest_args: '-k "$test_set" --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --jira_report'
+      slack_channel: ${{ inputs.slack_channel }}
 
-  # Validation-API-Tests:
-  #   needs: [Build-backend]
-  #   uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/ansible_vault
-  #   secrets: inherit
-  #   with:
-  #     test_infra_key: "api_tests"
-  #     slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-  #     backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-  #     test_timeout: 30
-  #     pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
-  #     slack_channel: ${{ inputs.slack_channel }}
+  Validation-API-Tests:
+    needs: [Build-backend]
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/ansible_vault
+    secrets: inherit
+    with:
+      test_infra_key: "api_tests"
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+      test_timeout: 30
+      pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
+      slack_channel: ${{ inputs.slack_channel }}
 
-  # Validation-Flow-Tests:
-  #   needs: [Build-backend]
-  #   uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/ansible_vault
-  #   secrets: inherit
-  #   with:
-  #     test_infra_key: "flow_tests"
-  #     slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-  #     backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-  #     test_timeout: 30
-  #     pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
-  #     slack_channel: ${{ inputs.slack_channel }}
+  Validation-Flow-Tests:
+    needs: [Build-backend]
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/ansible_vault
+    secrets: inherit
+    with:
+      test_infra_key: "flow_tests"
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+      test_timeout: 30
+      pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
+      slack_channel: ${{ inputs.slack_channel }}
 
-  # Validations-Finish:
-  #   needs: [Build-backend, Validation-UI-Tests, Validation-Install-Tests, Validation-API-Tests, Validation-Flow-Tests]
-  #   runs-on: ubuntu-22.04
-  #   outputs:
-  #     slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-  #     backend_image: ${{ needs.Build-backend.outputs.backend_image }}
-  #   steps:
-  #     - name: Pass through
-  #       run: echo "Pass"
+  Validations-Finish:
+    needs: [Build-backend, Validation-UI-Tests, Validation-Install-Tests, Validation-API-Tests, Validation-Flow-Tests]
+    runs-on: ubuntu-22.04
+    outputs:
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+      backend_image: ${{ needs.Build-backend.outputs.backend_image }}
+    steps:
+      - name: Pass through
+        run: echo "Pass"
 
   Fleet-Validations:
     needs: [Validate-bootstrap-configs, Build-backend]
@@ -490,452 +490,452 @@ jobs:
       proxmox_cluster_name: ${{ inputs.proxmox_cluster_name }}
       with_fleet_tests: ${{ inputs.with_fleet_tests }}
 
-  # Build-Simulator:
-  #   needs: [Validate-bootstrap-configs]
-  #   runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
-  #   env:
-  #     DISTRO: noetic
-  #   outputs:
-  #     slack_thread_id: ${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id }}
+  Build-Simulator:
+    needs: [Validate-bootstrap-configs]
+    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    env:
+      DISTRO: noetic
+    outputs:
+      slack_thread_id: ${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id }}
 
-  #   steps:
-  #     - name: Cleanup Workspace
-  #       uses: rtCamp/action-cleanup@master
+    steps:
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
 
-  #     - name: Checkout
-  #       uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v6
 
-  #     - name: Agent info
-  #       id: agent_info
-  #       run: |
-  #         echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
+      - name: Agent info
+        id: agent_info
+        run: |
+          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
 
-  #     - name: Setup CI Scripts in .ci-venv
-  #       shell: bash
-  #       run: |
-  #         python3 -m venv .ci-venv --clear
-  #         . .ci-venv/bin/activate
-  #         [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-  #         python3 -m pip install --upgrade pyOpenSSL cryptography
-  #         python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+      - name: Setup CI Scripts in .ci-venv
+        shell: bash
+        run: |
+          python3 -m venv .ci-venv --clear
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install --upgrade pyOpenSSL cryptography
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
-  #     - name: unstash sim_configs
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: sim_configs
-  #         path: simulator_artifacts
+      - name: unstash sim_configs
+        uses: actions/download-artifact@v4
+        with:
+          name: sim_configs
+          path: simulator_artifacts
 
-  #     - name: Prepare Skip variables
-  #       id: pre_simulator_build
-  #       run: |
-  #         if [ ! -f "simulator_artifacts/version" ]; then
-  #           echo "skip_simulator_build=true" >> $GITHUB_OUTPUT
-  #         else
-  #           echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
-  #         fi
+      - name: Prepare Skip variables
+        id: pre_simulator_build
+        run: |
+          if [ ! -f "simulator_artifacts/version" ]; then
+            echo "skip_simulator_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
+          fi
 
-  #     - name: Lint docker image
-  #       if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
-  #       shell: bash
-  #       run: |
-  #         docker run --rm -i -e HADOLINT_FAILURE_THRESHOLD=error hadolint/hadolint < docker/$DISTRO/Dockerfile-simulator
+      - name: Lint docker image
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+        shell: bash
+        run: |
+          docker run --rm -i -e HADOLINT_FAILURE_THRESHOLD=error hadolint/hadolint < docker/$DISTRO/Dockerfile-simulator
 
-  #     - name: Download models
-  #       if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
-  #       shell: bash
-  #       run: |
-  #         . .ci-venv/bin/activate
-  #         integration-pipeline fetch_simulator_models \
-  #               --manifest_platform_base_key product_components \
-  #               --gh_api_user $GITHUB_API_USR \
-  #               --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
-  #               --target_dir "./models"
-  #         deactivate
-  #         if [ ! -d ./models ]; then mkdir -p ./models; fi
+      - name: Download models
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+        shell: bash
+        run: |
+          . .ci-venv/bin/activate
+          integration-pipeline fetch_simulator_models \
+                --manifest_platform_base_key product_components \
+                --gh_api_user $GITHUB_API_USR \
+                --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
+                --target_dir "./models"
+          deactivate
+          if [ ! -d ./models ]; then mkdir -p ./models; fi
 
-  #     - name: Login to Private Registry
-  #       if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
-  #       uses: docker/login-action@v3
-  #       with:
-  #         username: ${{ secrets.registry_user }}
-  #         password: ${{ secrets.registry_password }}
-  #         registry: ${{ env.REGISTRY }}
+      - name: Login to Private Registry
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.REGISTRY }}
 
-  #     - name: Prepare docker build variables
-  #       if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
-  #       id: pre_build
-  #       run: |
-  #         echo "image_name=$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
-  #         echo "base_name=$(cat simulator_artifacts/simulator_base.ci)" >> $GITHUB_OUTPUT
+      - name: Prepare docker build variables
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+        id: pre_build
+        run: |
+          echo "image_name=$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
+          echo "base_name=$(cat simulator_artifacts/simulator_base.ci)" >> $GITHUB_OUTPUT
 
-  #     - name: Build with args and push
-  #       if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
-  #       uses: docker/build-push-action@v5
-  #       with:
-  #         context: .
-  #         platforms: linux/amd64
-  #         file: docker/${{ env.DISTRO }}/Dockerfile-simulator
-  #         push: true
-  #         tags: "${{ env.REGISTRY }}/qa/${{ steps.pre_build.outputs.image_name }}"
-  #         pull: true
-  #         build-args: |
-  #           BASE_IMAGE=${{ steps.pre_build.outputs.base_name }}
-  #           CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
+      - name: Build with args and push
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64
+          file: docker/${{ env.DISTRO }}/Dockerfile-simulator
+          push: true
+          tags: "${{ env.REGISTRY }}/qa/${{ steps.pre_build.outputs.image_name }}"
+          pull: true
+          build-args: |
+            BASE_IMAGE=${{ steps.pre_build.outputs.base_name }}
+            CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
 
-  #     - name: Collect Installed components
-  #       if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
-  #       shell: bash
-  #       run: |
-  #         . .ci-venv/bin/activate
-  #         cd simulator_artifacts
-  #         integration-pipeline publish_simulator_state_artifacts \
-  #               --product_name ${{ inputs.product_name }} \
-  #               --branch ${GITHUB_REF#refs/heads/}
-  #         deactivate
+      - name: Collect Installed components
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+        shell: bash
+        run: |
+          . .ci-venv/bin/activate
+          cd simulator_artifacts
+          integration-pipeline publish_simulator_state_artifacts \
+                --product_name ${{ inputs.product_name }} \
+                --branch ${GITHUB_REF#refs/heads/}
+          deactivate
 
-  #     - name: Get current job id
-  #       if: always()
-  #       shell: bash
-  #       id: job_info
-  #       run: |
-  #         job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
-  #         job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-  #         echo "$job_id"
-  #         echo "$job_html_url"
-  #         echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.gh_token }}
+      - name: Get current job id
+        if: always()
+        shell: bash
+        id: job_info
+        run: |
+          job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
+          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
+          echo "$job_id"
+          echo "$job_html_url"
+          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
 
-  #     - name: Prepare slack variables
-  #       if: always()
-  #       id: pre_slack_result
-  #       run: |
-  #         MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
-  #         MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
-  #         echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-  #         echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+      - name: Prepare slack variables
+        if: always()
+        id: pre_slack_result
+        run: |
+          MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
+          MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
+          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
-  #     - name: Slack message success
-  #       uses: slackapi/slack-github-action@v2
-  #       with:
-  #         method: chat.postMessage
-  #         payload: |
-  #           {
-  #             "channel": "${{ inputs.slack_channel }}",
-  #             "text": "${{ steps.pre_slack_result.outputs.msg }}",
-  #             "thread_ts": "${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id  }}"
-  #           }
-  #         token: ${{ secrets.slack_token_id }}
+      - name: Slack message success
+        uses: slackapi/slack-github-action@v2
+        with:
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg }}",
+              "thread_ts": "${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id  }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
-  #     - name: Slack message failure
-  #       uses: slackapi/slack-github-action@v2
-  #       if: failure()
-  #       with:
-  #         method: chat.postMessage
-  #         payload: |
-  #           {
-  #             "channel": "${{ inputs.slack_channel }}",
-  #             "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
-  #             "thread_ts": "${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id  }}"
-  #           }
-  #         token: ${{ secrets.slack_token_id }}
+      - name: Slack message failure
+        uses: slackapi/slack-github-action@v2
+        if: failure()
+        with:
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
+              "thread_ts": "${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id  }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
-  #     - name: pre-stash
-  #       shell: bash
-  #       run: |
-  #         echo "$REGISTRY/qa/$(cat simulator_artifacts/simulator_name.ci)" > simulator.image.artifact
+      - name: pre-stash
+        shell: bash
+        run: |
+          echo "$REGISTRY/qa/$(cat simulator_artifacts/simulator_name.ci)" > simulator.image.artifact
 
-  #     - name: Stash deploy_simulator_artifacts
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: deploy_simulator_artifacts
-  #         path: simulator.image.artifact
-  #         retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
+      - name: Stash deploy_simulator_artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy_simulator_artifacts
+          path: simulator.image.artifact
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
-  #     - name: Docker cleanups
-  #       if: always()
-  #       shell: bash
-  #       run: |
-  #         docker system prune -f
-  #         docker image prune --all -f
+      - name: Docker cleanups
+        if: always()
+        shell: bash
+        run: |
+          docker system prune -f
+          docker image prune --all -f
 
-  # Simulator-Validations:
-  #   needs: [Build-Simulator, Build-backend]
-  #   uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/ansible_vault
-  #   secrets: inherit
-  #   with:
-  #     test_infra_key: "simul_flow_tests"
-  #     slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
-  #     backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-  #     test_timeout: 30
-  #     pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
-  #     slack_channel: ${{ inputs.slack_channel }}
-  #     robot_config: 'basic-standalone-ignition-noetic.json'
+  Simulator-Validations:
+    needs: [Build-Simulator, Build-backend]
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/ansible_vault
+    secrets: inherit
+    with:
+      test_infra_key: "simul_flow_tests"
+      slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+      test_timeout: 30
+      pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
+      slack_channel: ${{ inputs.slack_channel }}
+      robot_config: 'basic-standalone-ignition-noetic.json'
 
-  # Robotic-Stack-Integration:
-  #   needs: [Simulator-Validations, Build-backend, Build-Simulator]
-  #   uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@feat/ansible_vault
-  #   secrets: inherit
-  #   with:
-  #     product_name: ${{ inputs.product_name }}
-  #     slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
-  #     slack_channel: ${{ inputs.slack_channel }}
-  #     cluster: ${{ inputs.cluster }}
-  #     debug_simulation_tests_keep_alive: ${{ inputs.debug_simulation_tests_keep_alive }}
-  #     backend_name: ${{ needs.Build-backend.outputs.backend_image }}
-  #     simulation_qa_key: ${{ inputs.simulation_qa_key }}
-  #     simulation_qa_version: ${{ inputs.simulation_qa_version }}
+  Robotic-Stack-Integration:
+    needs: [Simulator-Validations, Build-backend, Build-Simulator]
+    uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@feat/ansible_vault
+    secrets: inherit
+    with:
+      product_name: ${{ inputs.product_name }}
+      slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
+      slack_channel: ${{ inputs.slack_channel }}
+      cluster: ${{ inputs.cluster }}
+      debug_simulation_tests_keep_alive: ${{ inputs.debug_simulation_tests_keep_alive }}
+      backend_name: ${{ needs.Build-backend.outputs.backend_image }}
+      simulation_qa_key: ${{ inputs.simulation_qa_key }}
+      simulation_qa_version: ${{ inputs.simulation_qa_version }}
 
-  # publish:
-  #   needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
-  #   runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
-  #   outputs:
-  #     slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
-  #   steps:
-  #     - name: Cleanup Workspace
-  #       uses: rtCamp/action-cleanup@master
+  publish:
+    needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
+    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    outputs:
+      slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
+    steps:
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
 
-  #     - name: Checkout
-  #       uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v6
 
-  #     - name: Agent info
-  #       id: agent_info
-  #       run: |
-  #         echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
+      - name: Agent info
+        id: agent_info
+        run: |
+          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
 
-  #     - name: unstash robot_configs
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: robot_configs
-  #         path: .
+      - name: unstash robot_configs
+        uses: actions/download-artifact@v4
+        with:
+          name: robot_configs
+          path: .
 
-  #     - name: unstash raised_meta
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: raised_meta
-  #         path: platform_configs
+      - name: unstash raised_meta
+        uses: actions/download-artifact@v4
+        with:
+          name: raised_meta
+          path: platform_configs
 
-  #     - name: unstash deploy_artifacts_noetic
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: deploy_artifacts_noetic
-  #         path: artifacts
+      - name: unstash deploy_artifacts_noetic
+        uses: actions/download-artifact@v4
+        with:
+          name: deploy_artifacts_noetic
+          path: artifacts
 
-  #     - name: unstash deploy_simulator_artifacts
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: deploy_simulator_artifacts
-  #         path: .
+      - name: unstash deploy_simulator_artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: deploy_simulator_artifacts
+          path: .
 
-  #     - name: Login to ${{ env.REGISTRY }} Registry
-  #       uses: docker/login-action@v3
-  #       with:
-  #         username: ${{ secrets.registry_user }}
-  #         password: ${{ secrets.registry_password }}
-  #         registry: ${{ env.REGISTRY }}
+      - name: Login to ${{ env.REGISTRY }} Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.REGISTRY }}
 
-  #     - name: Login to ${{ env.PUSH_REGISTRY }} Registry
-  #       uses: docker/login-action@v3
-  #       with:
-  #         username: ${{ secrets.registry_user }}
-  #         password: ${{ secrets.registry_password }}
-  #         registry: ${{ env.PUSH_REGISTRY }}
+      - name: Login to ${{ env.PUSH_REGISTRY }} Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.PUSH_REGISTRY }}
 
-  #     - name: Setup CI Scripts in .ci-venv
-  #       shell: bash
-  #       run: |
-  #         python3 -m venv .ci-venv --clear --system-site-packages
-  #         . .ci-venv/bin/activate
-  #         [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-  #         python3 -m pip install --upgrade pyOpenSSL cryptography
-  #         python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-  #         python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
+      - name: Setup CI Scripts in .ci-venv
+        shell: bash
+        run: |
+          python3 -m venv .ci-venv --clear --system-site-packages
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install --upgrade pyOpenSSL cryptography
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
-  #     - name: Publish and create release
-  #       id: prepare_publish
-  #       shell: bash
-  #       run: |
-  #         set -m
-  #         set -e
-  #         . .ci-venv/bin/activate
-  #         git config --global --add safe.directory $(pwd)
-  #         git config --global user.name '${{ secrets.auto_commit_user }}'
-  #         git config --global user.email '${{ secrets.auto_commit_mail }}'
-  #         git config --global user.password ${{ secrets.auto_commit_pwd }}
+      - name: Publish and create release
+        id: prepare_publish
+        shell: bash
+        run: |
+          set -m
+          set -e
+          . .ci-venv/bin/activate
+          git config --global --add safe.directory $(pwd)
+          git config --global user.name '${{ secrets.auto_commit_user }}'
+          git config --global user.email '${{ secrets.auto_commit_mail }}'
+          git config --global user.password ${{ secrets.auto_commit_pwd }}
 
-  #         cp ./platform_configs/product.version product.version
-  #         cp ./platform_configs/product-manifest.yaml product-manifest.yaml
+          cp ./platform_configs/product.version product.version
+          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
 
-  #         mkdir -p deployment_artifacts
-  #         package-deployer join --dploy_workspace "$(pwd)/artifacts"
-  #         integration-pipeline get_image_list_from_manifest --manifest_platform_base_key product_components --docker_registry $REGISTRY
-  #         cp ./*.json deployment_artifacts
-  #         cp artifacts/merged.dploy deployment_artifacts/deployable.dploy
-  #         echo -e "$(cat ./artifacts/product.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
-  #         echo "${{env.REGISTRY}}/qa/${{ needs.Validations-Finish.outputs.backend_image }}" >> deployment_artifacts/product.image.artifact
-  #         deactivate
+          mkdir -p deployment_artifacts
+          package-deployer join --dploy_workspace "$(pwd)/artifacts"
+          integration-pipeline get_image_list_from_manifest --manifest_platform_base_key product_components --docker_registry $REGISTRY
+          cp ./*.json deployment_artifacts
+          cp artifacts/merged.dploy deployment_artifacts/deployable.dploy
+          echo -e "$(cat ./artifacts/product.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
+          echo "${{env.REGISTRY}}/qa/${{ needs.Validations-Finish.outputs.backend_image }}" >> deployment_artifacts/product.image.artifact
+          deactivate
 
-  #         source="${{env.REGISTRY}}/ci/${{ needs.Validations-Finish.outputs.backend_image }}"
-  #         target="${{env.PUSH_REGISTRY}}/qa/${{ needs.Validations-Finish.outputs.backend_image }}"
-  #         docker pull $source
-  #         echo "tagging $source as $target"
-  #         docker tag $source $target
-  #         docker push $target
+          source="${{env.REGISTRY}}/ci/${{ needs.Validations-Finish.outputs.backend_image }}"
+          target="${{env.PUSH_REGISTRY}}/qa/${{ needs.Validations-Finish.outputs.backend_image }}"
+          docker pull $source
+          echo "tagging $source as $target"
+          docker tag $source $target
+          docker push $target
 
-  #         cp product.version deployment_artifacts
-  #         cp product-manifest.yaml deployment_artifacts
-  #         product_version=$(cat product.version)
+          cp product.version deployment_artifacts
+          cp product-manifest.yaml deployment_artifacts
+          product_version=$(cat product.version)
 
-  #         # danger zone. Everything will be deleted.
-  #         mv product-manifest.yaml product-manifest.yaml.bck
+          # danger zone. Everything will be deleted.
+          mv product-manifest.yaml product-manifest.yaml.bck
 
-  #         git restore product.version
-  #         git restore product-manifest.yaml
-  #         git pull
+          git restore product.version
+          git restore product-manifest.yaml
+          git pull
 
-  #         # get previous version so we can generate the release report
-  #         echo "previous_version=$(cat product.version)" >> $GITHUB_OUTPUT
+          # get previous version so we can generate the release report
+          echo "previous_version=$(cat product.version)" >> $GITHUB_OUTPUT
 
-  #         # write the raised version to be committed
-  #         echo "$product_version" > product.version
+          # write the raised version to be committed
+          echo "$product_version" > product.version
 
-  #         git add product.version
-  #         git commit -m "[skip actions] Automatic Raise"
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.gh_token }}
+          git add product.version
+          git commit -m "[skip actions] Automatic Raise"
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
 
-  #     - name: Prepare raise variables
-  #       id: pre_raise
-  #       run: |
-  #         echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+      - name: Prepare raise variables
+        id: pre_raise
+        run: |
+          echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
-  #     - name: Raise App version
-  #       uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
-  #       with:
-  #         token: ${{ secrets.auto_commit_pwd }}
-  #         git_user_email: ${{ secrets.auto_commit_mail }}
-  #         git_user_name: ${{ secrets.auto_commit_user }}
-  #         branch: ${{ steps.pre_raise.outputs.branch }}
-  #         repository: ${{ github.repository }}
+      - name: Raise App version
+        uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
+        with:
+          token: ${{ secrets.auto_commit_pwd }}
+          git_user_email: ${{ secrets.auto_commit_mail }}
+          git_user_name: ${{ secrets.auto_commit_user }}
+          branch: ${{ steps.pre_raise.outputs.branch }}
+          repository: ${{ github.repository }}
 
-  #     - name: Github Publish
-  #       shell: bash
-  #       run: |
-  #         commit_hash=$(git log --format="%H" -n 1)
-  #         product_version=$(cat product.version)
-  #         previous_version_option=""
-  #         if gh release view ${{ steps.prepare_publish.outputs.previous_version }}  &>/dev/null; then
-  #           previous_version_option="--notes-start-tag ${{ steps.prepare_publish.outputs.previous_version }}"
-  #         fi
-  #         gh release create -p --generate-notes $previous_version_option --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
-  #         # add all files in the deployment_artifacts folder
-  #         find deployment_artifacts -type f -exec gh release upload $product_version {} \;
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.gh_token }}
+      - name: Github Publish
+        shell: bash
+        run: |
+          commit_hash=$(git log --format="%H" -n 1)
+          product_version=$(cat product.version)
+          previous_version_option=""
+          if gh release view ${{ steps.prepare_publish.outputs.previous_version }}  &>/dev/null; then
+            previous_version_option="--notes-start-tag ${{ steps.prepare_publish.outputs.previous_version }}"
+          fi
+          gh release create -p --generate-notes $previous_version_option --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
+          # add all files in the deployment_artifacts folder
+          find deployment_artifacts -type f -exec gh release upload $product_version {} \;
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
 
-  #     - name: Update release notes
-  #       shell: bash
-  #       run: |
-  #         # release version
-  #         product_version=$(cat product.version)
+      - name: Update release notes
+        shell: bash
+        run: |
+          # release version
+          product_version=$(cat product.version)
 
-  #         # get existent release body
-  #         ORIGINAL_RN=$(gh release view "${product_version}" --json body | jq -r .body)
-  #         echo -e "ORIGINAL_RN:\n ${ORIGINAL_RN}"
+          # get existent release body
+          ORIGINAL_RN=$(gh release view "${product_version}" --json body | jq -r .body)
+          echo -e "ORIGINAL_RN:\n ${ORIGINAL_RN}"
 
-  #         # get release PRs
-  #         PRS=$(echo "${ORIGINAL_RN}" | sed -rn "s/.* by @.* in https:\/\/github\.com\/${{ github.repository_owner }}\/${{ github.event.repository.name }}\/pull\/([0-9]+).*/\1/p" | tr '\n' ' ')
-  #         # change to array
-  #         PRS=($PRS)
-  #         echo "Found the following PRs: ${PRS[*]}"
+          # get release PRs
+          PRS=$(echo "${ORIGINAL_RN}" | sed -rn "s/.* by @.* in https:\/\/github\.com\/${{ github.repository_owner }}\/${{ github.event.repository.name }}\/pull\/([0-9]+).*/\1/p" | tr '\n' ' ')
+          # change to array
+          PRS=($PRS)
+          echo "Found the following PRs: ${PRS[*]}"
 
-  #         # new release notes file
-  #         rm -rf notes.txt
+          # new release notes file
+          rm -rf notes.txt
 
-  #         # What's Changed - with info from PRs
-  #         echo "## What's Changed" >> notes.txt
+          # What's Changed - with info from PRs
+          echo "## What's Changed" >> notes.txt
 
-  #         if [ ${#PRS[@]} -eq 0 ]; then
-  #             # no PRs exist
-  #             echo "No relevant changes." >> notes.txt
-  #         else
-  #             # PRs exist
-  #             for pr in "${PRS[@]}"; do
-  #                 gh pr view "${pr}" --json body | jq -r .body >> notes.txt
-  #             done
-  #         fi
-  #         echo "" >> notes.txt
+          if [ ${#PRS[@]} -eq 0 ]; then
+              # no PRs exist
+              echo "No relevant changes." >> notes.txt
+          else
+              # PRs exist
+              for pr in "${PRS[@]}"; do
+                  gh pr view "${pr}" --json body | jq -r .body >> notes.txt
+              done
+          fi
+          echo "" >> notes.txt
 
-  #         # PRs
-  #         echo "## PRs" >> notes.txt
-  #         if [ ${#PRS[@]} -eq 0 ]; then
-  #             # no PRs exist
-  #             echo "No PRs." >> notes.txt
-  #         else
-  #             # PRs exist
-  #             echo "${ORIGINAL_RN}" | grep "\* .* by @.* in https://github.com/${{ github.repository_owner }}/" >> notes.txt
-  #         fi
-  #         echo "" >> notes.txt
+          # PRs
+          echo "## PRs" >> notes.txt
+          if [ ${#PRS[@]} -eq 0 ]; then
+              # no PRs exist
+              echo "No PRs." >> notes.txt
+          else
+              # PRs exist
+              echo "${ORIGINAL_RN}" | grep "\* .* by @.* in https://github.com/${{ github.repository_owner }}/" >> notes.txt
+          fi
+          echo "" >> notes.txt
 
-  #         ## Diff
-  #         echo "## Diff" >> notes.txt
-  #         echo "${ORIGINAL_RN}" | grep "\*\*Full Changelog\*\*" >> notes.txt
+          ## Diff
+          echo "## Diff" >> notes.txt
+          echo "${ORIGINAL_RN}" | grep "\*\*Full Changelog\*\*" >> notes.txt
 
-  #         # set new release notes
-  #         gh release edit "${product_version}" --notes-file notes.txt
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.gh_token }}
+          # set new release notes
+          gh release edit "${product_version}" --notes-file notes.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
 
-  #     - name: Prepare slack variables
-  #       if: always()
-  #       id: pre_slack
-  #       run: |
-  #         MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-  #         echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+      - name: Prepare slack variables
+        if: always()
+        id: pre_slack
+        run: |
+          MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
 
-  #     - name: Slack message
-  #       uses: slackapi/slack-github-action@v2
-  #       with:
-  #         method: chat.update
-  #         payload: |
-  #           {
-  #             "channel": "${{ inputs.slack_channel }}",
-  #             "text": "${{ steps.pre_slack.outputs.msg }}",
-  #             "ts": "${{ needs.Validations-Finish.outputs.slack_thread_id }}"
-  #           }
-  #         token: ${{ secrets.slack_token_id }}
+      - name: Slack message
+        uses: slackapi/slack-github-action@v2
+        with:
+          method: chat.update
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack.outputs.msg }}",
+              "ts": "${{ needs.Validations-Finish.outputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
-  # Run-Status:
-  #   runs-on: ubuntu-22.04
-  #   needs: [publish, Validate-bootstrap-configs]
-  #   if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled'  || needs.publish.result == 'skipped') }}
-  #   steps:
-  #     - name: unstash raised_meta
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: raised_meta
-  #         path: platform_configs
+  Run-Status:
+    runs-on: ubuntu-22.04
+    needs: [publish, Validate-bootstrap-configs]
+    if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled'  || needs.publish.result == 'skipped') }}
+    steps:
+      - name: unstash raised_meta
+        uses: actions/download-artifact@v4
+        with:
+          name: raised_meta
+          path: platform_configs
 
-  #     - name: Copy product configs
-  #       shell: bash
-  #       run: |
-  #         cp ./platform_configs/product.version product.version
-  #         cp ./platform_configs/product-manifest.yaml product-manifest.yaml
+      - name: Copy product configs
+        shell: bash
+        run: |
+          cp ./platform_configs/product.version product.version
+          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
 
-  #     - name: Prepare slack variables
-  #       id: pre_slack
-  #       run: |
-  #         MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is unstable (or cancelled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-  #         echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+      - name: Prepare slack variables
+        id: pre_slack
+        run: |
+          MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is unstable (or cancelled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
 
-  #     - name: Slack message
-  #       uses: slackapi/slack-github-action@v2
-  #       with:
-  #         method: chat.update
-  #         payload: |
-  #           {
-  #             "channel": "${{ inputs.slack_channel }}",
-  #             "text": "${{ steps.pre_slack.outputs.msg_error }}",
-  #             "ts": "${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id }}"
-  #           }
-  #         token: ${{ secrets.slack_token_id }}
+      - name: Slack message
+        uses: slackapi/slack-github-action@v2
+        with:
+          method: chat.update
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack.outputs.msg_error }}",
+              "ts": "${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}

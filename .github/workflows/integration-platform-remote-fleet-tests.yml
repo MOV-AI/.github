@@ -153,9 +153,8 @@ jobs:
         run: |
           # shellcheck disable=SC2086
           set -eo pipefail
-          echo "::group::Setup CI Environment"
 
-          echo "=== Create CI Scripts venv ==="
+          echo "::group::Create CI Scripts venv"
           python3 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
@@ -163,13 +162,11 @@ jobs:
           python3 -m pip install "integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION" --ignore-installed
           deactivate
           echo "✓ CI venv created and configured"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Verify Python environment ==="
+          echo "::group::Verify Python environment"
           python3.10 --version || python3 --version
           echo "✓ Python environment ready"
-
-          echo ""
           echo "::endgroup::"
 
       - name: Download Robot Configs
@@ -189,9 +186,7 @@ jobs:
         run: |
           # shellcheck disable=SC2129
           set -eo pipefail
-          echo "::group::Setup Infrastructure Configuration"
-
-          echo "=== Download environment configs ==="
+          echo "::group::Download environment configs"
           . .ci-venv/bin/activate
           env_configs_dir=infra_env_configs
           env_configs_version=${{ env.PROVISIONING_ENV_VERSION }}
@@ -202,9 +197,9 @@ jobs:
           integration-pipeline fetch_by_tag --repo "$env_configs_repo_name" --version "$env_configs_version" --gh_api_user "$GITHUB_API_USR" --gh_api_pwd "${{ secrets.auto_commit_pwd }}" --target_dir "$env_configs_dir"
           ls -la "$env_configs_dir"
           echo "✓ Environment configs downloaded"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Download terraform provisioner ==="
+          echo "::group::Download terraform provisioner"
           provision_infra_dir=provision_scripts
           provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
           provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
@@ -215,9 +210,9 @@ jobs:
           ls -la "$provision_infra_dir"
           deactivate
           echo "✓ Terraform provisioner downloaded"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Define instance names ==="
+          echo "::group::Define instance names"
           branch="${GITHUB_REF#refs/heads/}"
           branch="${branch//./-}"
           local_manager_prefix="ip-${branch}-manager"
@@ -229,7 +224,6 @@ jobs:
           echo "Worker: $local_worker_prefix"
           echo "Total resources: $total_resources"
           echo "✓ Instance names defined"
-
           echo "::endgroup::"
 
           # Output variables
@@ -247,15 +241,13 @@ jobs:
         run: |
           set -eo pipefail
           # shellcheck disable=SC2129
-          echo "::group::Provision & Gather Infrastructure"
-
-          echo "=== Configure SSH ==="
+          echo "::group::Configure SSH"
           echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
           sudo chmod 600 ~/.ssh/aws_slave.pem
           echo "✓ SSH key configured"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Generate terraform variables ==="
+          echo "::group::Generate terraform variables"
           multiply_node=$(printf '"${{ inputs.proxmox_cluster_name }}",%.0s' {1..${{ steps.infra_setup.outputs.total_resources }}})
           node_list_str=${multiply_node::-1}
           var_file_arg='-var-file=../${{ steps.infra_setup.outputs.env_configs_dir }}/hel/${{ inputs.proxmox_cluster_name }}_fleet_test.tfvars'
@@ -274,9 +266,9 @@ jobs:
             printf '\n'
           } >> input.tfvars
           echo "✓ Terraform variables configured"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Terraform initialization & provisioning ==="
+          echo "::group::Terraform initialization & provisioning"
           echo "File args: $var_file_arg"
           echo "Input vars: $(cat input.tfvars)"
           terraform init -backend-config="key=${{ inputs.proxmox_cluster_name }}-fleet-${{ steps.infra_setup.outputs.manager_prefix }}.tfstate"
@@ -285,9 +277,9 @@ jobs:
           # shellcheck disable=SC2086
           terraform refresh $var_file_arg -var-file=input.tfvars
           echo "✓ Infrastructure provisioned"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Gather terraform outputs ==="
+          echo "::group::Gather terraform outputs"
           ip=$(terraform output manager_ip_address)
           user=$(terraform output user)
           members=$(terraform output peers_ip_addresses | xargs | sed 's/,$//')
@@ -297,11 +289,8 @@ jobs:
           echo "✓ Terraform outputs gathered"
 
           if [ -f /tmp/terraform-external-debug.log ]; then
-            echo ""
-            echo "=== Terraform debug log (if exists) ==="
             cat /tmp/terraform-external-debug.log || true
           fi
-
           echo "::endgroup::"
 
           # Output terraform values
@@ -359,9 +348,7 @@ jobs:
         run: |
           # shellcheck disable=SC2086
           set -eo pipefail
-          echo "::group::Setup Ansible Environment"
-
-          echo "=== Prepare ansible inventory ==="
+          echo "::group::Prepare ansible inventory"
           . .ci-venv/bin/activate
           cp "${{ steps.infra_setup.outputs.provision_infra_dir }}/provisioned_inventory.yml" staging/provisioned_inventory.yml
 
@@ -378,9 +365,9 @@ jobs:
           # shellcheck disable=SC2086
           integration-pipeline get_yml_value --file staging/provisioned_inventory.yml --key fleet.children.managers.hosts.manager.ansible_host --output_file ./staging/manager_private_ip.txt
           echo "✓ Ansible inventory prepared"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Download ansible playbooks ==="
+          echo "::group::Download ansible playbooks"
           install_key=ansible_deploy
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
 
@@ -399,7 +386,6 @@ jobs:
           ls -la "$install_infra_dir"
           deactivate
           echo "✓ Ansible playbooks downloaded"
-
           echo "::endgroup::"
 
           # Output target directory
@@ -411,30 +397,28 @@ jobs:
         shell: bash
         run: |
           set -eo pipefail
-          echo "::group::Ansible Install Platform"
-
-          echo "=== Configure SSH ==="
+          echo "::group::Configure SSH"
           echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
           sudo chmod 600 ~/.ssh/aws_slave.pem
           while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
           echo "✓ SSH configured"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Setup Python & Ansible ==="
+          echo "::group::Setup Python & Ansible"
           python3.10 -m venv ansible-venv
           source ansible-venv/bin/activate
           python3.10 -m pip install -qq -r requirements.txt
           ansible-galaxy install -r requirements.yml --timeout 120
           echo "✓ Python venv and Ansible ready"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Configure known hosts ==="
+          echo "::group::Configure known hosts"
           touch ~/.ssh/known_hosts
           sudo chmod 600 ~/.ssh/known_hosts
           echo "✓ Known hosts configured"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Retag Docker images on fleet hosts ==="
+          echo "::group::Retag Docker images on fleet hosts"
           echo "Peer ips: ${{ steps.infra_provision.outputs.fleet_ips }}"
           members=("manager")
           for i in $(seq 0 $(( ${{ inputs.fleet_number_members}} - 1 ))); do
@@ -458,9 +442,9 @@ jobs:
             ansible "$fleet_host" -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker tag \"$SOURCE_TAG\" \"$TARGET_TAG_MID_REGISTRY\""
           done
           echo "✓ Docker images retagged"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Setup Ansible vault ==="
+          echo "::group::Setup Ansible vault"
           VAULT_DIR="$(pwd)/.vault"
           VAULT_PASSWORD_FILE="$VAULT_DIR/.vault-password-file"
           VAULT_FILE="$VAULT_DIR/fleet.yml"
@@ -475,9 +459,9 @@ jobs:
           EOF
           ansible-vault encrypt "$VAULT_FILE" --vault-password-file "$VAULT_PASSWORD_FILE"
           echo "✓ Vault configured"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Execute Ansible playbook ==="
+          echo "::group::Execute Ansible playbook"
           STAGING_PATH="$(pwd)/.staging"
           FLEET_NAME="eefleet"
           FLEET_ORGANIZATION="${{ inputs.proxmox_cluster_name }}.lab"
@@ -517,15 +501,13 @@ jobs:
         shell: bash
         run: |
           set -eo pipefail
-          echo "::group::Configure Remote Environment"
-
-          echo "=== Setup SSH connection ==="
+          echo "::group::Setup SSH connection"
           ssh-keygen -f ~/.ssh/known_hosts -R ${{ steps.infra_provision.outputs.host_ip }} || true
           ssh-keyscan -H ${{ steps.infra_provision.outputs.host_ip }} >> ~/.ssh/known_hosts || true
           echo "✓ SSH connection configured"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Initialize remote workspace ==="
+          echo "::group::Initialize remote workspace"
           ssh ${{ steps.infra_provision.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
             set -e
             echo "Waiting for cloud-init..."
@@ -535,15 +517,15 @@ jobs:
             mkdir -p ./${{ env.REMOTE_WORKSPACE_PATH }}
             echo "✓ Workspace initialized"
           '
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Install CI Scripts on remote ==="
+          echo "::group::Install CI Scripts on remote"
           ssh ${{ steps.infra_provision.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no \
             "set -e ; python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION"
           echo "✓ CI Scripts installed"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Transfer configuration files ==="
+          echo "::group::Transfer configuration files"
           scp -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no product-manifest.yaml \
             ${{ steps.infra_provision.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/product-manifest.yaml
           echo "✓ Product manifest transferred"
@@ -551,8 +533,6 @@ jobs:
           scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ./*.json* \
             "${{ steps.infra_provision.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/"
           echo "✓ Robot JSON configs transferred"
-
-          echo ""
           echo "::endgroup::"
 
   Fleet-Tests-Execution:
@@ -578,9 +558,6 @@ jobs:
           # shellcheck disable=SC2129
           ssh ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
             set -e
-            echo "=========================================="
-            echo "Setup QA Tests: ${{ matrix.fleet_test_name }}"
-            echo "=========================================="
 
             tests_dir="fleet_${{ matrix.fleet_test_name }}"
             qa_key=${{ matrix.fleet_test_name }}
@@ -588,7 +565,7 @@ jobs:
             mkdir -p ${{ env.REMOTE_WORKSPACE_PATH }}
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            echo "=== Extract test metadata ==="
+            echo "::group::Extract test metadata"
             rm -f /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt
             export PATH="$HOME/.local/bin:$PATH"
 
@@ -605,16 +582,16 @@ jobs:
             echo "Test version: $tests_version"
             echo "Test repo: $tests_repo_name"
             echo "✓ Test metadata extracted"
+            echo "::endgroup::"
 
-            echo ""
-            echo "=== Download test repository ==="
+            echo "::group::Download test repository"
             rm -rf $tests_repo_name
             integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user ${{ env.GITHUB_API_USR }} --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
             ls -la $tests_dir
             echo "✓ Test repository downloaded"
+            echo "::endgroup::"
 
-            echo ""
-            echo "=== Setup test environment ==="
+            echo "::group::Setup test environment"
             pushd "${tests_dir}"
             python3 -m venv test-venv --clear
             . test-venv/bin/activate
@@ -628,10 +605,7 @@ jobs:
             deactivate
             popd
             echo "✓ Test environment prepared"
-
-            echo "=========================================="
-            echo "✓ QA test setup complete"
-            echo "=========================================="
+            echo "::endgroup::"
           '
           rm -f /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt /tmp/test_args.txt /tmp/test_exec_dir.txt
           # shellcheck disable=SC2086,SC2129
@@ -679,9 +653,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          echo "::group::Collect QA Artifacts"
-
-          echo "=== Download provisioned inventory ==="
+          echo "::group::Download provisioned inventory"
           mkdir -p ./
           # Download from artifact API or skip if not available
           python3.10 --version || python3 --version
@@ -690,17 +662,17 @@ jobs:
           # Note: Inventory should be available from previous provisioning job artifacts
           # In workflow execution, it's typically downloaded via artifact action
           echo "✓ Inventory prepared"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Setup Ansible environment ==="
+          echo "::group::Setup Ansible environment"
           python3.10 -m venv ansible-venv
           source ansible-venv/bin/activate
           python3.10 -m pip install -qq -r requirements.txt || true
           ansible-galaxy install -r requirements.yml --timeout 120 || true
           echo "✓ Ansible environment ready"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Collect fleet host logs ==="
+          echo "::group::Collect fleet host logs"
           rm -rf "$QA_ARTIFACTS_PATH"
           mkdir -p "$QA_ARTIFACTS_PATH/"
 
@@ -712,18 +684,16 @@ jobs:
             ansible "$fleet_host" -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u docker --boot --lines=all' > "$QA_ARTIFACTS_PATH/$fleet_host-all-docker.log" || true
           done
           echo "✓ Host logs collected"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Collect test artifacts ==="
+          echo "::group::Collect test artifacts"
           # shellcheck disable=SC2086
           scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no \
             "${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.tests_dir }}/tests_artifacts" \
             "$QA_ARTIFACTS_PATH/" || echo "⚠ No test artifacts found"
           echo "✓ Test artifacts collected"
-
-          deactivate
-
           echo "::endgroup::"
+          deactivate
 
       - name: Stash Fleet QA artifacts
         if: always()
@@ -768,9 +738,7 @@ jobs:
         shell: bash
         run: |
           set -eo pipefail
-          echo "::group::Setup Teardown Environment"
-
-          echo "=== Download provisioning artifacts ==="
+          echo "::group::Download provisioning artifacts"
           mkdir -p ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
           mkdir -p ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_infra_env_configs }}
 
@@ -779,7 +747,6 @@ jobs:
           echo "Preparing: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}"
           echo "Preparing: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_infra_env_configs }}"
           echo "✓ Teardown environment ready"
-
           echo "::endgroup::"
 
       - name: Download Provision Infra Dir
@@ -855,24 +822,22 @@ jobs:
         shell: bash
         run: |
           set -eo pipefail
-          echo "::group::Report Job Status"
-
-          echo "=== Get job information ==="
+          echo "::group::Get job information"
           # shellcheck disable=SC2086
           job_html_url=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs" | jq -r '.jobs | map(select(.name | contains("Fleet-Tests-Teardown"))) | .[0].html_url')
           echo "Job URL: $job_html_url"
           echo "job_url=$job_html_url" >> "$GITHUB_OUTPUT"
           echo "✓ Job information retrieved"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Prepare status messages ==="
+          echo "::group::Prepare status messages"
           MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
           MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed - Details: $job_html_url"
           echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
           echo "msg_error=${MESSAGE_ERR}" >> "$GITHUB_OUTPUT"
           echo "✓ Status messages prepared"
-
           echo "::endgroup::"
+
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 

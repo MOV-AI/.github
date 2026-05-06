@@ -138,15 +138,11 @@ jobs:
           agent_ip=$(hostname -I | awk '{print $1}')
           echo "agent_ip=${agent_ip}" | tee -a $GITHUB_OUTPUT
 
-      - name: Install Dependencies
+      - name: Install CI Scripts & Setup Environment"
         shell: bash
         run: |
           set -eo pipefail
-          echo "=========================================="
-          echo "Install CI Scripts & Setup Environment"
-          echo "=========================================="
-
-          echo "=== Create CI Scripts venv ==="
+          echo "::group::Create CI Scripts venv"
           python3 -m venv .ci-venv --clear --system-site-packages
           . .ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
@@ -154,6 +150,7 @@ jobs:
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
           python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
           echo "✓ CI Scripts venv ready"
+          echo "::endgroup::"
 
       - name: Download Robot Configs
         uses: actions/download-artifact@v4
@@ -164,7 +161,6 @@ jobs:
       - name: Patch Config Paths
         shell: bash
         run: |
-          echo "=== Patch robot_configs paths ==="
           find -L . -type f -name '*.json.ci' -exec \
             sed -i "s;/__w;$(pwd)/../..;g" {} \
            \;
@@ -220,64 +216,50 @@ jobs:
         shell: bash
         run: |
           set -eo pipefail
-          echo "=========================================="
-          echo "Configure Test Environment"
-          echo "=========================================="
-
           . test-venv/bin/activate
           export PATH="$HOME/.local/bin:$PATH"
 
           if [ "${{ inputs.test_infra_key }}" = "ui_tests" ]; then
-            echo "=== UI Tests Configuration ==="
+            echo "::group::UI Tests Configuration"
             xray download ${{ steps.infra_tests_setup.outputs.test_set }}
             xray compare ./tests/feature/
             echo "✓ UI tests configured"
+            echo "::endgroup::"
           elif [ "${{ inputs.test_infra_key }}" = "install_tests" ]; then
-            echo "=== Install Tests Configuration ==="
+            echo "::group::Install Tests Configuration"
             python3 testcasemanagement/testcase_importer.py --target "${{ steps.infra_tests_setup.outputs.test_set }}"
             python3 testcasemanagement/feature_file_processor.py --validate
             echo "✓ Install tests configured"
+            echo "::endgroup::"
           fi
-
           deactivate
 
-      - name: Docker Setup
+      - name: Docker Registry & Image Setup
         shell: bash
         run: |
           set -eo pipefail
-          echo "=========================================="
-          echo "Docker Registry & Image Setup"
-          echo "=========================================="
-
-          echo "=== Login to ${{ env.REGISTRY }} ==="
+          echo "::group::Login to ${{ env.REGISTRY }}"
           echo "${{ secrets.registry_password }}" | docker login -u "${{ secrets.registry_user }}" --password-stdin "${{ env.REGISTRY }}"
           echo "✓ Logged in to registry"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Pull and tag backend image ==="
+          echo "::group::Pull and tag backend image"
           backend_image=${{ inputs.backend_image_name_and_tag }}
           docker rmi "${{ env.REGISTRY }}/ci/$backend_image" -f || true
           docker pull "${{ env.REGISTRY }}/ci/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
           echo "✓ Images pulled and tagged"
+          echo "::endgroup::"
 
-          echo "=========================================="
-          echo "✓ Docker setup complete"
-          echo "=========================================="
-
-
-      - name: Prepare System
+      - name: Prepare System for Tests
         id: system_prep
         shell: bash
         run: |
           set -eo pipefail
-          echo "=========================================="
-          echo "Prepare System for Tests"
-          echo "=========================================="
 
           if [ "${{ inputs.test_infra_key }}" != "install_tests" ]; then
-            echo "=== Install Platform ==="
+            echo "::group::Install Platform"
             timeout 30 movai-cli remove --all || true
 
             rm -rf artifacts
@@ -300,9 +282,9 @@ jobs:
             chmod +x ./QuickStart_$(cat quickstart_version).bash
             ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
             echo "✓ Platform installed"
+            echo "::endgroup::"
 
-            echo ""
-            echo "=== Configure Robots ==="
+            echo "::group::Configure Robots"
             MOVAI_USER="ci"
             MOVAI_PWD="4Iva6UHAQq9DGITj"
             for robot in $(movai-cli robots list); do
@@ -311,9 +293,9 @@ jobs:
             echo "movai_user=${MOVAI_USER}" >> $GITHUB_OUTPUT
             echo "movai_pwd=${MOVAI_PWD}" >> $GITHUB_OUTPUT
             echo "✓ Robots configured"
+            echo "::endgroup::"
 
-            echo ""
-            echo "=== Install mobtest ==="
+            echo "::group::Install mobtest"
             container_id=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace-.*)")
             docker exec -t "$container_id" bash -c '
               set -e
@@ -322,18 +304,16 @@ jobs:
               mobtest proj /opt/ros/noetic/share/
             '
             echo "✓ mobtest installed and configured"
+            echo "::endgroup::"
 
           else
-            echo "=== Prepare for Install Tests ==="
+            echo "::group::Prepare for Install Tests"
             sudo rm -rf $USERSPACE_FOLDER_PATH || true
             sudo mkdir -p $USERSPACE_FOLDER_PATH/automated_install
             sudo chmod 777 -R $USERSPACE_FOLDER_PATH
             echo "✓ Install tests environment prepared"
+            echo "::endgroup::"
           fi
-
-          echo "=========================================="
-          echo "✓ System preparation complete"
-          echo "=========================================="
 
       - name: Run tests
         timeout-minutes: ${{ inputs.test_timeout }}
@@ -396,31 +376,25 @@ jobs:
             }
           token: ${{ secrets.slack_token_id }}
 
-      - name: Prepare Notifications
+      - name: Prepare Notification Messages
         if: always()
         id: pre_slack_result
         shell: bash
         run: |
-          echo "=========================================="
-          echo "Prepare Notification Messages"
-          echo "=========================================="
-
-          echo "=== Get Job Information ==="
+          echo "::group::Get Job Information"
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "Job URL: $job_html_url"
           echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Prepare Slack Messages ==="
+          echo "::group::Prepare Slack Messages"
           MESSAGE=":white_check_mark: ${{ github.job }}/${{inputs.test_infra_key}} (Attempt: #${{ github.run_attempt }}) job passed"
           MESSAGE_ERR=":x: ${{ github.job }}/${{inputs.test_infra_key}} (Attempt: #${{ github.run_attempt }}) job failed - Details: $job_html_url"
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
           echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+          echo "::endgroup::"
 
-          echo "=========================================="
-          echo "✓ Notifications prepared"
-          echo "=========================================="
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -457,46 +431,36 @@ jobs:
           TEST_INFRA_DIR: ${{ steps.infra_tests_setup.outputs.tests_dir }}
         run: |
           set +e
-          echo "=========================================="
-          echo "Collect Logs & Artifacts"
-          echo "=========================================="
 
-          echo "=== Docker Container Logs ==="
+          echo "::group::Docker Container Logs"
           containers=$(docker ps -a --format '{{.Names}}' 2>/dev/null)
           for container in $containers; do
             docker logs "${container}" &> "${container}.log" || true
           done || true
           echo "✓ Docker logs collected"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== System Logs ==="
+          echo "::group::System Logs"
           journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
           journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
           echo "✓ System logs collected"
+          echo "::endgroup::"
 
-          echo ""
-          echo "=== Test Artifacts ==="
+          echo "::group::Test Artifacts"
           rm -rf qa_artifacts
           mkdir -p qa_artifacts
           cp -r "${TEST_INFRA_DIR}"/*.{log,tar,json,html} ./qa_artifacts 2>/dev/null || true
           cp -r "${TEST_INFRA_DIR}"/tests_artifacts ./qa_artifacts || true
           echo "✓ Test artifacts collected"
+          echo "::endgroup::"
 
-          echo "=========================================="
-          echo "✓ Logs & artifacts collected"
-          echo "=========================================="
 
       - name: Collect Deployable Artifacts
         if: ${{ inputs.collect_deployable_artifacts }}
         shell: bash
         run: |
           set +e
-          echo "=========================================="
-          echo "Collect Deployable Artifacts"
-          echo "=========================================="
-
           mkdir -p artifacts
-
           used_images=($(docker images --format "{{.Repository}}:{{.Tag}}" | tr ' ' "\n"))
           for image in "${used_images[@]}"
           do
@@ -531,10 +495,6 @@ jobs:
           cp /tmp/deployable.dploy artifacts/host-noetic-deployable.dploy
           cp /tmp/undeployable.dploy artifacts/host-noetic-3rdParty.dploy
           echo "✓ Deployable artifacts collected"
-
-          echo "=========================================="
-          echo "✓ Done"
-          echo "=========================================="
 
       - name: Upload Deployable Artifacts
         if: ${{ inputs.collect_deployable_artifacts }}
