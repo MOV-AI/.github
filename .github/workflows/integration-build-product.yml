@@ -1790,7 +1790,7 @@ jobs:
           export PUBLIC_IP="$(hostname -I | cut -d " " -f1)"
           export SIMULATION_ID="CI"
           export ROBOTNAME="ci_${{ inputs.product_name }}"
-          export REGISTRY="{{ inputs.docker_registry }}"
+          export REGISTRY="${{ inputs.docker_registry }}"
           rm -rf userspace
 
           # Enable debug logs of movai-service
