@@ -444,7 +444,7 @@ jobs:
             if [[ "$PRODUCT_NAME" == "studio" ]]; then
               PRODUCT_NAME="solution"
             fi
-            export CONFIG_FILE_NAME="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
+            export CONFIG_FILE_NAME="product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
 
             cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/* ./ && sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
