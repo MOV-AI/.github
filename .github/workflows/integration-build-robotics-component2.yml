@@ -158,7 +158,7 @@ jobs:
 
           run_type="ci"
 
-          local_manager_prefix="ip-$run_type-${{ inputs.cluster }}-${{ inputs.component_name }}-$branch"
+          local_manager_prefix="ip-$run_type-${{ inputs.cluster }}-${{ inputs.component_name }}"
 
           tf_state="${{ inputs.cluster }}-sim-$local_manager_prefix"
           echo "tf_state = $tf_state"
