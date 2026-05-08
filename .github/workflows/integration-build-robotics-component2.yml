@@ -444,7 +444,7 @@ jobs:
             if [[ "$PRODUCT_NAME" == "studio" ]]; then
               PRODUCT_NAME="solution"
             fi
-            export CONFIG_FILE_NAME="product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
+            export CONFIG_FILE_NAME="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
 
             cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/* ./ && sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
@@ -453,6 +453,7 @@ jobs:
             export PUBLIC_IP="$(hostname -I | cut -d " " -f1)"
             export SIMULATION_ID="${{ env.SIMULATION_ID }}"
             export ROBOTNAME="ci_${{ inputs.component_name }}"
+            export REGISTRY="${{ env.REGISTRY }}"
             jq --version
             jq '\''.robot.name = "$ROBOTNAME"'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
 
