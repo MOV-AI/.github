@@ -498,18 +498,33 @@ jobs:
             cat install_list.apt
             cp install_list.apt ../
             cp ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/product/environment-manifest.yaml ./
-            echo "deb [arch=all] https://artifacts.cloud.mov.ai/repository/ppa-testing testing main">> /etc/apt/sources.list.d/movai_keep.list
-            echo "deb [arch=all,amd64] https://artifacts.cloud.mov.ai/repository/ppa-archive-focal-backup focal-backup main" >> /etc/apt/sources.list.d/movai.list
-            echo "deb [arch=all,amd64] https://artifacts.cloud.mov.ai/repository/ppa-ports-focal-backup ports-focal-backup main" >> /etc/apt/sources.list.d/movai.list
-            echo "deb https://artifacts.cloud.mov.ai/repository/ppa-proxy-ros-backup ros-backup main" >> /etc/apt/sources.list.d/movai.list
-            
+            echo "deb [arch=all] https://artifacts.cloud.mov.ai/repository/ppa-testing testing main">> movai_keep.list
+            echo "deb [arch=all,amd64] https://artifacts.cloud.mov.ai/repository/ppa-archive-focal-backup focal-backup main" >> movai.list
+            echo "deb [arch=all,amd64] https://artifacts.cloud.mov.ai/repository/ppa-ports-focal-backup ports-focal-backup main" >> movai.list
+            echo "deb https://artifacts.cloud.mov.ai/repository/ppa-proxy-ros-backup ros-backup main" >> movai.list
+
+            integration-pipeline get_yml_value --file /tmp/ci/environment-manifest.yaml --key runtime_environment.applications --output_file /tmp/ci/packages.apt
+            docker run \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
+              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              get_yml_value  \
+              --file ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product/environment-manifest.yaml \
+              --key runtime_environment.applications \
+              --output_file /tmp/ci/packages.apt
             container_id=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace-.*)")
             docker cp install_list.apt $container_id:/tmp/install_list.apt
-            docker cp ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product/environment-manifest.yaml $container_id:/tmp/environment-manifest.yaml
+            docker cp /tmp/ci/packages.apt $container_id:/tmp/packages.apt
             docker cp ros1 $container_id:/tmp/ros1
             docker cp artifacts/*.deb $container_id:/tmp/
-            docker exec -t "$container_id" bash -c '\''
+            docker exec -tu "$container_id" bash -c '\''
               ls /tmp
+              cp /tmp/movai_keep.list /etc/apt/sources.list.d/movai_keep.list
+              cp /tmp/movai.list /etc/apt/sources.list.d/movai.list
+              apt update
+              mobros install $(cat /tmp/ci/packages.apt| tr "\n" '\'' '\'') -y
+              rm /etc/apt/sources.list.d/movai.list
+              cd /tmp/ros1
+              mobros install $(cat /tmp/install_list.apt | tr "\n" '\'' '\'') -y
             '\''
             '
       - name: Remote - Run tests
