@@ -415,6 +415,8 @@ jobs:
             yq --version
             base_name=$(yq ".product_dependencies.platform_config.spawner_base_noetic.name" ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product/product-manifest.yaml)
             base_version=$(yq ".product_dependencies.platform_config.spawner_base_noetic.version" ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product/product-manifest.yaml)
+            base_name=${base_name//\"/}
+            base_version=${base_version//\"/}
             jq --version
             jq --arg image "$base_name" --arg version "$base_version" '\''.spawner.image = $image | .spawner.version = $version'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
             cat $CONFIG_FILE_NAME
