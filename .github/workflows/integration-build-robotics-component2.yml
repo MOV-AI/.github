@@ -494,6 +494,25 @@ jobs:
             cat install_list.apt
             cp install_list.apt ../
             '
+      - name: Remote - Run tests
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
+            . test-venv/bin/activate
+
+            cd stack_tests
+
+            pytest ${{ inputs.test_set }} \
+              --component-pkgs ../artifacts \
+              --movai-user ${{ steps.install.outputs.movai_user }} \
+              --movai-pw ${{ steps.install.outputs.movai_pwd }}
+
+            deactivate
+          '
 
       - name: Remote - Collect platform artifacts
         if: always()
