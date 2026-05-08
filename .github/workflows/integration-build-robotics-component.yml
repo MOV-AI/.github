@@ -29,7 +29,6 @@ on:
         default: false
         type: boolean
 
-
     secrets:
       auto_commit_user:
         required: true
@@ -296,11 +295,10 @@ jobs:
           token: ${{ secrets.slack_token_id }}
 
       - name: Download component artifacts for patching
-        if: inputs.download_artifact
         uses: actions/download-artifact@v4
         with:
-          name: component_artifacts
-          path: component_artifacts
+          name: packages
+          path: artifacts/
 
       - name: Remote - Move component artifacts
         shell: bash
