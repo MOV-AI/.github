@@ -32,10 +32,6 @@ on:
         required: false
         type: string
         default: "4.0.0.13"
-      robot_json:
-        required: false
-        type: string
-        default: "basic-standalone-noetic.json"
 
     secrets:
       auto_commit_user:
