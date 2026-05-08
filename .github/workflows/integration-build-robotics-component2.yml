@@ -28,7 +28,14 @@ on:
         required: false
         default: false
         type: boolean
-
+      ci_integration_scripts_version:
+        required: false
+        type: string
+        default: "4.0.0.13"
+      robot_json:
+        required: false
+        type: string
+        default: "basic-standalone-noetic.json"
 
     secrets:
       auto_commit_user:
@@ -55,11 +62,10 @@ on:
         required: true
 
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.13"
   GITHUB_API_USR: "OttoMation-Movai"
   USERSPACE_FOLDER_PATH: "$(pwd)/userspace"
   REMOTE_WORKSPACE_PATH: workspace
-  CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.0.0.31"
+  CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:${{ inputs.ci_integration_scripts_version}}"
   CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
   CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_access_key_id }}
@@ -86,8 +92,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-
-
       - name: Login to Private Registry
         uses: docker/login-action@v2
         with:
@@ -101,6 +105,7 @@ jobs:
           sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
           mkdir  -p ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
           sudo chmod -R 777 ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
 
       - name: Setup infra environment configs
         id: infra_env_configs_setup
@@ -296,11 +301,19 @@ jobs:
           token: ${{ secrets.slack_token_id }}
 
       - name: Download component artifacts for patching
-        if: inputs.download_artifact
         uses: actions/download-artifact@v4
         with:
-          name: component_artifacts
-          path: component_artifacts
+          name: packages
+          path: artifacts/
+
+      - name: Prepare component artifacts for transfer
+        shell: bash
+        run: |
+          cd artifacts
+          for deb in *.deb; do
+            dpkg-deb -f "$deb" Depends | tr ',' '\n' | grep '(=' | sed -E 's/[[:space:]]*\((=|>=|<=|<<|>>)\s*([^)]+)\)[[:space:]]*/=\2/'>dependencies.apt
+          done
+          cp ../regression_install_overwrites.yaml .
 
       - name: Remote - Move component artifacts
         shell: bash
@@ -388,6 +401,25 @@ jobs:
             sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
           '
+      
+      - name: Remote - Pre-Install switch base
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+            PRODUCT_NAME="$(echo ${{ inputs.vs_product_name }} | sed '\''s/^project-\(movai-\)\?//'\'' )"
+            if [[ "$PRODUCT_NAME" == "studio" ]]; then
+              PRODUCT_NAME="solution"
+            fi
+            export CONFIG_FILE_NAME="product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
+            yq --version
+            base_name=$(yq \'.product_dependencies.platform_config.spawner_base_noetic.name\' product/product-manifest.yaml)
+            base_version=$(yq \'.product_dependencies.platform_config.spawner_base_noetic.version\' product/product-manifest.yaml)
+            jq --version
+            jq --arg image $base_name --arg version $base_version '.spawner.image = $image" | .spawner.version = "$version"' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
+            cat $CONFIG_FILE_NAME
+          '
 
       - name: Remote - Install
         id: install
@@ -445,26 +477,23 @@ jobs:
           echo "movai_pwd=4Iva6UHAQq9DGITj" >> $GITHUB_OUTPUT
           echo "robot_name=ci_${{ inputs.component_name }}" >> $GITHUB_OUTPUT
 
-
-      - name: Remote - Run tests
+      - name: Remote - Patch with component and overwrites
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}/artifacts
+            docker run \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
+              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              overwrite_pkg_dependencies --file regression_install_overwrites.yaml \
+              --gh_api_user $GITHUB_API_USR \
+              --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
+              --ros_distro "ros1"
 
-            cd ${{ env.REMOTE_WORKSPACE_PATH }}
-
-            . test-venv/bin/activate
-
-            cd stack_tests
-
-            pytest ${{ inputs.test_set }} \
-              --component-pkgs ../artifacts \
-              --movai-user ${{ steps.install.outputs.movai_user }} \
-              --movai-pw ${{ steps.install.outputs.movai_pwd }}
-
-            deactivate
-          '
+            cat install_list.apt
+            cp install_list.apt ../
+            '
 
       - name: Remote - Collect platform artifacts
         if: always()
