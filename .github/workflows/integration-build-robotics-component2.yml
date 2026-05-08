@@ -411,9 +411,10 @@ jobs:
               PRODUCT_NAME="solution"
             fi
             export CONFIG_FILE_NAME="product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
+            ls ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/product
             yq --version
-            base_name=$(yq ".product_dependencies.platform_config.spawner_base_noetic.name" product/product-manifest.yaml)
-            base_version=$(yq ".product_dependencies.platform_config.spawner_base_noetic.version" product/product-manifest.yaml)
+            base_name=$(yq ".product_dependencies.platform_config.spawner_base_noetic.name" ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/product/product-manifest.yaml)
+            base_version=$(yq ".product_dependencies.platform_config.spawner_base_noetic.version" ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/product/product-manifest.yaml)
             jq --version
             jq --arg image $base_name --arg version $base_version '\''.spawner.image = $image" | .spawner.version = "$version"'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
             cat $CONFIG_FILE_NAME
