@@ -367,7 +367,7 @@ jobs:
             . test-venv/bin/activate
             python3 -m pip install -r $tests_dir/requirements.txt
             deactivate
-
+          
           '
 
       - name: Remote - fetch product version
@@ -416,7 +416,7 @@ jobs:
             base_name=$(yq ".product_dependencies.platform_config.spawner_base_noetic.name" ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product/product-manifest.yaml)
             base_version=$(yq ".product_dependencies.platform_config.spawner_base_noetic.version" ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product/product-manifest.yaml)
             jq --version
-            jq --arg image $base_name --arg version $base_version '\''.spawner.image = $image | .spawner.version = "$version"'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
+            jq --arg image "$base_name" --arg version "$base_version" '\''.spawner.image = $image | .spawner.version = $version'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
             cat $CONFIG_FILE_NAME
           '
 
@@ -483,7 +483,8 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
-            cd ${{ env.REMOTE_WORKSPACE_PATH }}/artifacts
+            cp -r artifacts ${{ env.REMOTE_WORKSPACE_PATH }}/
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
             docker run \
               -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
@@ -494,15 +495,20 @@ jobs:
 
             cat install_list.apt
             cp install_list.apt ../
-            
+            cp ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/product/environment-manifest.yaml ./
             echo "deb [arch=all] https://artifacts.cloud.mov.ai/repository/ppa-testing testing main">> /etc/apt/sources.list.d/movai_keep.list
             echo "deb [arch=all,amd64] https://artifacts.cloud.mov.ai/repository/ppa-archive-focal-backup focal-backup main" >> /etc/apt/sources.list.d/movai.list
             echo "deb [arch=all,amd64] https://artifacts.cloud.mov.ai/repository/ppa-ports-focal-backup ports-focal-backup main" >> /etc/apt/sources.list.d/movai.list
             echo "deb https://artifacts.cloud.mov.ai/repository/ppa-proxy-ros-backup ros-backup main" >> /etc/apt/sources.list.d/movai.list
+            
             container_id=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace-.*)")
             docker cp install_list.apt $container_id:/tmp/install_list.apt
-
-
+            docker cp ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product/environment-manifest.yaml $container_id:/tmp/environment-manifest.yaml
+            docker cp ros1 $container_id:/tmp/ros1
+            docker cp artifacts/*.deb $container_id:/tmp/
+            docker exec -t "$container_id" bash -c '\''
+              ls /tmp
+            '\''
             '
       - name: Remote - Run tests
         shell: bash
