@@ -404,7 +404,9 @@ jobs:
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
-            PRODUCT_NAME="$(echo ${{ inputs.vs_product_name }} | sed '\''s/^project-\(movai-\)\?//'\'' )"
+            PRODUCT_NAME="${{ inputs.vs_product_name }}"
+            PRODUCT_NAME="${PRODUCT_NAME#project-}"
+            PRODUCT_NAME="${PRODUCT_NAME#movai-}"
             if [[ "$PRODUCT_NAME" == "studio" ]]; then
               PRODUCT_NAME="solution"
             fi
@@ -433,7 +435,9 @@ jobs:
 
             export PATH="$HOME/.local/bin:$PATH"
 
-            PRODUCT_NAME="$(echo ${{ inputs.vs_product_name }} | sed '\''s/^project-\(movai-\)\?//'\'' )"
+            PRODUCT_NAME="${{ inputs.vs_product_name }}"
+            PRODUCT_NAME="${PRODUCT_NAME#project-}"
+            PRODUCT_NAME="${PRODUCT_NAME#movai-}"
             if [[ "$PRODUCT_NAME" == "studio" ]]; then
               PRODUCT_NAME="solution"
             fi
