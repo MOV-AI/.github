@@ -410,7 +410,7 @@ jobs:
             if [[ "$PRODUCT_NAME" == "studio" ]]; then
               PRODUCT_NAME="solution"
             fi
-            export CONFIG_FILE_NAME="product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
+            export CONFIG_FILE_NAME="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
             ls ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product
             yq --version
             base_name=$(yq ".product_dependencies.platform_config.spawner_base_noetic.name" ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product/product-manifest.yaml)
@@ -494,6 +494,11 @@ jobs:
 
             cat install_list.apt
             cp install_list.apt ../
+            echo "deb [arch=all] https://artifacts.cloud.mov.ai/repository/ppa-testing testing main">> /etc/apt/sources.list.d/movai_keep.list
+            echo "deb [arch=all,amd64] https://artifacts.cloud.mov.ai/repository/ppa-archive-focal-backup focal-backup main" >> /etc/apt/sources.list.d/movai.list
+            echo "deb [arch=all,amd64] https://artifacts.cloud.mov.ai/repository/ppa-ports-focal-backup ports-focal-backup main" >> /etc/apt/sources.list.d/movai.list
+            echo "deb https://artifacts.cloud.mov.ai/repository/ppa-proxy-ros-backup ros-backup main" >> /etc/apt/sources.list.d/movai.list
+
             '
       - name: Remote - Run tests
         shell: bash
