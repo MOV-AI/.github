@@ -457,7 +457,11 @@ jobs:
           rm -rf qa_artifacts
           mkdir -p qa_artifacts
           cp -r "${TEST_INFRA_DIR}"/*.{log,tar,json,html} ./qa_artifacts 2>/dev/null || true
-          cp -r "${TEST_INFRA_DIR}"/tests_artifacts ./qa_artifacts || true
+          if [ -d "${TEST_INFRA_DIR}/tests_artifacts" ]; then
+            cp -r "${TEST_INFRA_DIR}"/tests_artifacts ./qa_artifacts
+          else
+            echo "ℹ tests_artifacts directory not found"
+          fi
           echo "✓ Test artifacts collected"
           echo "::endgroup::"
 
