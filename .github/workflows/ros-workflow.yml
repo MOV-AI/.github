@@ -282,7 +282,7 @@ jobs:
 
     - name: Install Mobros
       run: |
-        python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-edge/simple --extra-index-url https://pypi.org/simple mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
+        python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-edge/simple --extra-index-url https://pypi.org/simple --no-deps mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
 
     - name: Setup link to Ros userspace
       run: |
@@ -399,7 +399,7 @@ jobs:
         run: |
           python3 -m pip install \
           -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple \
-          mobtest==${{ inputs.MOBTEST_VERSION }} --ignore-installed
+          --no-deps mobtest==${{ inputs.MOBTEST_VERSION }} --ignore-installed
 
       - name: Mobtest validations
         run: |
@@ -467,7 +467,7 @@ jobs:
         if: ${{ inputs.install_test }}
         run: |
           sudo apt update
-          python3 -m pip install mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
+          python3 -m pip install --no-deps mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
 
       - name: Install debian artifacts
         if: ${{ inputs.install_test }}
@@ -481,7 +481,7 @@ jobs:
         if: ${{ inputs.install_test }}
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ inputs.MOBTEST_VERSION }} --ignore-installed
+          python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple --no-deps mobtest==${{ inputs.MOBTEST_VERSION }} --ignore-installed
           mobtest proj /opt/ros/${{ matrix.distro }}/share/
 
   Package-Stack-Tests:
@@ -531,7 +531,7 @@ jobs:
         ls -la .
 
     - name: Install Mobros
-      run: python3 -m pip install mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
+      run: python3 -m pip install --no-deps mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
 
     - name: Raise version and validate Ros repository
       run: mobros raise --workspace="$(pwd)"
