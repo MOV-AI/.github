@@ -112,13 +112,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Download Robot Configs
+        uses: actions/download-artifact@v4
+        with:
+          name: robot_configs
+          path: .
+
       - name: Agent / Pipeline Initialization
         id: pipeline_init
         shell: bash
         run: |
           set -eo pipefail
           # Check critical files exist
-          for file in product-manifest.yaml"; do
+          config_file="${{ inputs.robot_config }}.ci"
+          for file in product-manifest.yaml "$config_file"; do
             if [ ! -f "$file" ]; then
               echo "ERROR: Critical file missing: $file"
               ls -la *.{json,yaml,ci} 2>/dev/null || true
@@ -136,6 +143,12 @@ jobs:
 
           # ===== Capture Agent IP for downstream steps =====
           agent_ip=$(hostname -I | awk '{print $1}')
+          if [ -z "$agent_ip" ]; then
+            echo "ERROR: Failed to determine agent IP"
+            hostname -I || true
+            exit 1
+          fi
+          echo "✓ Agent IP: $agent_ip"
           echo "agent_ip=${agent_ip}" | tee -a $GITHUB_OUTPUT
 
       - name: Install CI Scripts & Setup Environment"
@@ -151,12 +164,6 @@ jobs:
           python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
           echo "✓ CI Scripts venv ready"
           echo "::endgroup::"
-
-      - name: Download Robot Configs
-        uses: actions/download-artifact@v4
-        with:
-          name: robot_configs
-          path: .
 
       - name: Patch Config Paths
         shell: bash
