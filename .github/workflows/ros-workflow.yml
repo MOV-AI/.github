@@ -280,6 +280,8 @@ jobs:
             exit 1
         fi
 
+    # --no-deps is used because all dependencies are already installed and pinned in the Docker image including a setuptools version compatible with ROS2/colcon
+    # Reinstalling dependencies here may override that setup and break ROS2 builds
     - name: Install Mobros
       run: |
         python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-edge/simple --extra-index-url https://pypi.org/simple --no-deps mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
