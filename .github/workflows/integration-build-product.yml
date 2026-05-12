@@ -304,6 +304,41 @@ jobs:
           cp ci_artifacts/* ./simulator_artifacts
           fi
 
+      - name: Generate Multi-Workspace Artifacts
+        id: generate_meta
+        shell: bash
+        run: |
+          . ci_scripts/bin/activate
+
+          # Dynamically extract product names from the input JSON for each distro
+          ROS1_NAME=$(echo '${{ inputs.product_distro_list }}' | jq -r '.[] | select(.distro=="noetic") | .product_name // empty')
+          ROS2_NAME=$(echo '${{ inputs.product_distro_list }}' | jq -r '.[] | select(.distro=="humble") | .product_name // empty')
+
+          echo "Detected ROS1 Product: ${ROS1_NAME:-none}"
+          echo "Detected ROS2 Product: ${ROS2_NAME:-none}"
+
+          # Build override arguments dynamically
+          OVERRIDE_ARGS=""
+          [ -n "$ROS1_NAME" ] && OVERRIDE_ARGS="$OVERRIDE_ARGS --override_ros1_workspace ${ROS1_NAME}-noetic"
+          [ -n "$ROS2_NAME" ] && OVERRIDE_ARGS="$OVERRIDE_ARGS --override_ros2_workspace ${ROS2_NAME}-humble"
+
+          # Call the executer with the dynamic overrides
+          integration-pipeline generate_meta_artifacts \
+                --update_simulator \
+                --manifest_platform_base_key "product_dependencies" \
+                $OVERRIDE_ARGS
+
+          deactivate
+
+      - name: Stash All Robot Configs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}all_robot_configs
+          path: |
+            *.json
+            ci_artifacts/
+          retention-days: 5
+
       - name: Stash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
         uses: actions/upload-artifact@v4
@@ -413,15 +448,36 @@ jobs:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: platform_configs
 
-      - name: Generate product configs from manifest
+      - name: Unstash All Robot Configs
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}all_robot_configs
+          path: .
+
+      - name: Prepare docker build variables
+        id: pre_build
         shell: bash
         run: |
           cp ./platform_configs/product.version product.version
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
-          . .ci-venv/bin/activate
           cat product-manifest.yaml
-          integration-pipeline generate_meta_artifacts --update_simulator --override_ros1_workspace ${{ inputs.product_name }}-${{ matrix.workspace['distro'] }} --manifest_platform_base_key "product_dependencies"
-          deactivate
+
+          # Pattern: <service_name>_base_name_<distro>.ci
+          SERVICE_PATTERN=$(echo ${{ matrix.workspace['service'] }} | sed 's/-/_/g')
+          DISTRO=${{ matrix.workspace['distro'] }}
+          PRODUCT_NAME=${{ matrix.workspace['product_name'] }}
+
+          echo "base_name=$(cat ci_artifacts/${SERVICE_PATTERN}_base_name_${DISTRO}.ci)" >> $GITHUB_OUTPUT
+          echo "base_version=$(cat ci_artifacts/${SERVICE_PATTERN}_base_version_${DISTRO}.ci)" >> $GITHUB_OUTPUT
+          echo "raised_version=$(cat product.version)" >> $GITHUB_OUTPUT
+          echo "target_tag=${PRODUCT_NAME}-${DISTRO}" >> $GITHUB_OUTPUT
+
+          # Check if propagated project is false
+          if [ "${{ inputs.propagate_project }}" = "false" ];
+          then
+            mkdir -p dependency_version
+            cp ci_artifacts/${SERVICE_PATTERN}_base_version_${DISTRO}.ci dependency_version/base_version
+          fi
 
       - name: Update robot jsons to use ci project
         if: ${{ github.event_name == 'pull_request' }}
@@ -493,21 +549,6 @@ jobs:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
           registry: ${{ env.MID_REGISTRY }}
-
-      - name: Prepare docker build variables
-        id: pre_build
-        shell: bash
-        run: |
-          service_name_file_pattern=$(echo ${{ matrix.workspace['service'] }} | sed 's/-/_/g')
-          echo "base_name=$(cat ci_artifacts/${service_name_file_pattern}_base_name_${{ matrix.workspace['distro'] }}.ci)" >> $GITHUB_OUTPUT
-          echo "base_version=$(cat ci_artifacts/${service_name_file_pattern}_base_version_${{ matrix.workspace['distro'] }}.ci)" >> $GITHUB_OUTPUT
-          echo "raised_version=$(cat product.version)" >> $GITHUB_OUTPUT
-          # Check if propagated project is false
-          if [ "${{ inputs.propagate_project }}" = "false" ];
-          then
-            mkdir -p dependency_version
-            cp ci_artifacts/${service_name_file_pattern}_base_version_${{ matrix.workspace['distro'] }}.ci dependency_version/base_version
-          fi
 
       - name: Stash dependency_version
         if: ${{ inputs.propagate_project == false }}
