@@ -148,7 +148,6 @@ jobs:
           echo "ip=$(hostname -I | awk '{print $1}')" | tee "$GITHUB_OUTPUT"
 
       - name: Setup CI Environment
-        id: setup_python_3_10
         shell: bash
         run: |
           # shellcheck disable=SC2086
@@ -177,6 +176,7 @@ jobs:
 
       - name: Setup Python 3.10
         uses: actions/setup-python@v6
+        id: setup_python_3_10
         with:
           python-version: '3.10'
 
@@ -358,7 +358,7 @@ jobs:
             hosts:
               localhost:
                 ansible_connection: local
-                ansible_python_interpreter: ${{ steps.setup_python_3_10.outputs.python_path }}
+                ansible_python_interpreter: ${{ steps.setup_python_3_10.outputs.python-path }}
           EOF
 
           cat staging/provisioned_inventory.yml
@@ -671,14 +671,7 @@ jobs:
           echo "::group::Setup Ansible environment"
           python3.10 -m venv ansible-venv
           source ansible-venv/bin/activate
-          if [ -f requirements.txt ]; then
-            echo "Installing Ansible requirements from requirements.txt"
-            python3.10 -m pip install -qq -r requirements.txt
-          fi
-          if [ -f requirements.yml ]; then
-            echo "Installing Ansible Galaxy requirements from requirements.yml"
-            ansible-galaxy install -r requirements.yml --timeout 120
-          fi
+          python3.10 -m pip install -qq ansible==9.13.0
           echo "✓ Ansible environment ready"
           echo "::endgroup::"
 
