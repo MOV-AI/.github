@@ -488,27 +488,25 @@ jobs:
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
             docker run \
-              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
+              -v "./":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
-              overwrite_pkg_dependencies --file ./artifacts/regression_install_overwrites.yaml \
+              overwrite_pkg_dependencies --file ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/artifacts/regression_install_overwrites.yaml \
               --gh_api_user ${{ env.GITHUB_API_USR }} \
               --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
               --ros_distro "ros1"
 
             cat install_list.apt
             cp install_list.apt ../
-            cp ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/product/environment-manifest.yaml ./
             echo "deb [arch=all] https://artifacts.cloud.mov.ai/repository/ppa-testing testing main">> movai_keep.list
             echo "deb [arch=all,amd64] https://artifacts.cloud.mov.ai/repository/ppa-archive-focal-backup focal-backup main" >> movai.list
             echo "deb [arch=all,amd64] https://artifacts.cloud.mov.ai/repository/ppa-ports-focal-backup ports-focal-backup main" >> movai.list
             echo "deb https://artifacts.cloud.mov.ai/repository/ppa-proxy-ros-backup ros-backup main" >> movai.list
 
-            integration-pipeline get_yml_value --file /tmp/ci/environment-manifest.yaml --key runtime_environment.applications --output_file /tmp/ci/packages.apt
             docker run \
               -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               get_yml_value  \
-              --file ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product/environment-manifest.yaml \
+              --file ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/product/environment-manifest.yaml \
               --key runtime_environment.applications \
               --output_file /tmp/ci/packages.apt
             container_id=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace-.*)")
