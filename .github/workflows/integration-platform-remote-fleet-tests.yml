@@ -407,8 +407,12 @@ jobs:
           echo "::group::Setup Python & Ansible"
           python3.10 -m venv ansible-venv
           source ansible-venv/bin/activate
-          python3.10 -m pip install -qq -r requirements.txt
-          ansible-galaxy install -r requirements.yml --timeout 120
+          if [ -f requirements.txt ]; then
+            python3.10 -m pip install -qq -r requirements.txt
+          fi
+          if [ -f requirements.yml ]; then
+            ansible-galaxy install -r requirements.yml --timeout 120
+          fi
           echo "✓ Python venv and Ansible ready"
           echo "::endgroup::"
 
@@ -667,8 +671,12 @@ jobs:
           echo "::group::Setup Ansible environment"
           python3.10 -m venv ansible-venv
           source ansible-venv/bin/activate
-          python3.10 -m pip install -qq -r requirements.txt || true
-          ansible-galaxy install -r requirements.yml --timeout 120 || true
+          if [ -f requirements.txt ]; then
+            python3.10 -m pip install -qq -r requirements.txt
+          fi
+          if [ -f requirements.yml ]; then
+            ansible-galaxy install -r requirements.yml --timeout 120
+          fi
           echo "✓ Ansible environment ready"
           echo "::endgroup::"
 
@@ -676,12 +684,18 @@ jobs:
           rm -rf "$QA_ARTIFACTS_PATH"
           mkdir -p "$QA_ARTIFACTS_PATH/"
 
+          # Fail fast if inventory is missing
+          if [ ! -f ./provisioned_inventory.yml ]; then
+            echo "ERROR: provisioned_inventory.yml not found - cannot collect host logs"
+            exit 1
+          fi
+
           for fleet_host in "manager" "member0" "member1"; do
             echo "Collecting from $fleet_host..."
-            ansible "$fleet_host" -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u movai-service --since "1hour ago"' > "$QA_ARTIFACTS_PATH/$fleet_host.log" || true
-            ansible "$fleet_host" -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -a' > "$QA_ARTIFACTS_PATH/$fleet_host-docker_ps.log" || true
-            tail -n +2 "$QA_ARTIFACTS_PATH/$fleet_host-docker_ps.log"
-            ansible "$fleet_host" -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u docker --boot --lines=all' > "$QA_ARTIFACTS_PATH/$fleet_host-all-docker.log" || true
+            ansible "$fleet_host" -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u movai-service --since "1hour ago"' > "$QA_ARTIFACTS_PATH/$fleet_host.log"
+            ansible "$fleet_host" -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -a' > "$QA_ARTIFACTS_PATH/$fleet_host-docker_ps.log"
+            tail -n +2 "$QA_ARTIFACTS_PATH/$fleet_host-docker_ps.log" 2>/dev/null || true
+            ansible "$fleet_host" -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u docker --boot --lines=all' > "$QA_ARTIFACTS_PATH/$fleet_host-all-docker.log"
           done
           echo "✓ Host logs collected"
           echo "::endgroup::"
@@ -690,7 +704,7 @@ jobs:
           # shellcheck disable=SC2086
           scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no \
             "${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.tests_dir }}/tests_artifacts" \
-            "$QA_ARTIFACTS_PATH/" || echo "⚠ No test artifacts found"
+            "$QA_ARTIFACTS_PATH/" || { echo "ERROR: Failed to collect test artifacts"; exit 1; }
           echo "✓ Test artifacts collected"
           echo "::endgroup::"
           deactivate
