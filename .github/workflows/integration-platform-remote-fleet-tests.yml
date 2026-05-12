@@ -658,13 +658,13 @@ jobs:
         run: |
           set +e
           echo "::group::Download provisioned inventory"
-          mkdir -p ./
-          # Download from artifact API or skip if not available
           python3.10 --version || python3 --version
           echo "✓ Python environment ready"
 
-          # Note: Inventory should be available from previous provisioning job artifacts
-          # In workflow execution, it's typically downloaded via artifact action
+          if [ ! -f ./provisioned_inventory.yml ]; then
+            echo "ERROR: provisioned_inventory.yml not found - cannot collect host logs"
+            exit 1
+          fi
           echo "✓ Inventory prepared"
           echo "::endgroup::"
 
@@ -672,9 +672,11 @@ jobs:
           python3.10 -m venv ansible-venv
           source ansible-venv/bin/activate
           if [ -f requirements.txt ]; then
+            echo "Installing Ansible requirements from requirements.txt"
             python3.10 -m pip install -qq -r requirements.txt
           fi
           if [ -f requirements.yml ]; then
+            echo "Installing Ansible Galaxy requirements from requirements.yml"
             ansible-galaxy install -r requirements.yml --timeout 120
           fi
           echo "✓ Ansible environment ready"
@@ -683,12 +685,6 @@ jobs:
           echo "::group::Collect fleet host logs"
           rm -rf "$QA_ARTIFACTS_PATH"
           mkdir -p "$QA_ARTIFACTS_PATH/"
-
-          # Fail fast if inventory is missing
-          if [ ! -f ./provisioned_inventory.yml ]; then
-            echo "ERROR: provisioned_inventory.yml not found - cannot collect host logs"
-            exit 1
-          fi
 
           for fleet_host in "manager" "member0" "member1"; do
             echo "Collecting from $fleet_host..."
