@@ -283,6 +283,8 @@ jobs:
     - name: Install Mobros
       run: |
         python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-edge/simple --extra-index-url https://pypi.org/simple mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
+        # pin setuptools version after mobros install to preserve ROS2/colcon compatibility
+        python3 -m pip install --upgrade 'setuptools>=70.0,<80' jaraco-functools wheel
 
     - name: Setup link to Ros userspace
       run: |
@@ -363,6 +365,10 @@ jobs:
       with:
         name: packages
         path: artifacts
+
+    - name: Install Mobros
+      run: |
+        python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-edge/simple --extra-index-url https://pypi.org/simple mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
 
     - name: Check package is installable
       shell: bash
