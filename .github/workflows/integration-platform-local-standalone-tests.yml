@@ -434,11 +434,8 @@ jobs:
         if: always()
         working-directory: ${{ steps.infra_tests_setup.outputs.tests_dir }}
         shell: bash
-        env:
-          TEST_INFRA_DIR: ${{ steps.infra_tests_setup.outputs.tests_dir }}
         run: |
           set +e
-
           echo "::group::Docker Container Logs"
           containers=$(docker ps -a --format '{{.Names}}' 2>/dev/null)
           for container in $containers; do
@@ -456,15 +453,18 @@ jobs:
           echo "::group::Test Artifacts"
           rm -rf qa_artifacts
           mkdir -p qa_artifacts
-          cp -r "${TEST_INFRA_DIR}"/*.{log,tar,json,html} ./qa_artifacts 2>/dev/null || true
-          if [ -d "${TEST_INFRA_DIR}/tests_artifacts" ]; then
-            cp -r "${TEST_INFRA_DIR}"/tests_artifacts ./qa_artifacts
+          cp -rv ./*.{log,tar,json,html} ./qa_artifacts 2>/dev/null || true
+          if [ -d "./tests_artifacts" ]; then
+            cp -r "./tests_artifacts" ./qa_artifacts
           else
             echo "ℹ tests_artifacts directory not found"
           fi
-          echo "✓ Test artifacts collected"
+
+          echo "::group::list of files in current directory"
+          ls -la
           echo "::endgroup::"
 
+          echo "::endgroup::"
 
       - name: Collect Deployable Artifacts
         if: ${{ inputs.collect_deployable_artifacts }}
