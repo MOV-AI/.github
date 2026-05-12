@@ -459,11 +459,6 @@ jobs:
           else
             echo "ℹ tests_artifacts directory not found"
           fi
-
-          echo "::group::list of files in current directory"
-          ls -la
-          echo "::endgroup::"
-
           echo "::endgroup::"
 
       - name: Collect Deployable Artifacts
