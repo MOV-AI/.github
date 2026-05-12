@@ -487,10 +487,11 @@ jobs:
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
+            cp -r artifacts/regression_install_overwrites.yaml "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
             docker run \
-              -v "./":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
-              overwrite_pkg_dependencies --file ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/artifacts/regression_install_overwrites.yaml \
+              overwrite_pkg_dependencies --file ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/regression_install_overwrites.yaml \
               --gh_api_user ${{ env.GITHUB_API_USR }} \
               --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
               --ros_distro "ros1"
