@@ -486,7 +486,10 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
+            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
+            ls -la 
+            
             cp artifacts/regression_install_overwrites.yaml "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/regression_install_overwrites.yaml"
             ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
             docker run \
