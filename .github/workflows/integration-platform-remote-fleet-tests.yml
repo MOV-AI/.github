@@ -358,7 +358,6 @@ jobs:
             hosts:
               localhost:
                 ansible_connection: local
-                ansible_python_interpreter: ${{ steps.setup_python_3_10.outputs.python-path }}
           EOF
 
           cat staging/provisioned_inventory.yml
