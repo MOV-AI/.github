@@ -446,8 +446,7 @@ jobs:
             fi
             export CONFIG_FILE_NAME="product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
 
-            cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/* ./ && sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
-
+            cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/* ./
             export USERSPACE_FOLDER_PATH="${{ env.USERSPACE_FOLDER_PATH }}"
             sudo mkdir -p $USERSPACE_FOLDER_PATH/.git;sudo chown 1000:1000 $USERSPACE_FOLDER_PATH/ -Rf
             export PUBLIC_IP="$(hostname -I | cut -d " " -f1)"
