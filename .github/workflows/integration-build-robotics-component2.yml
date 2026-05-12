@@ -491,7 +491,7 @@ jobs:
               -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               overwrite_pkg_dependencies --file regression_install_overwrites.yaml \
-              --gh_api_user $GITHUB_API_USR \
+              --gh_api_user ${{ env.GITHUB_API_USR }} \
               --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
               --ros_distro "ros1"
 
