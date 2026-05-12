@@ -364,6 +364,10 @@ jobs:
         name: packages
         path: artifacts
 
+    - name: Install Mobros
+      run: |
+        python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-edge/simple --extra-index-url https://pypi.org/simple --no-deps mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
+
     - name: Check package is installable
       shell: bash
       run: |
