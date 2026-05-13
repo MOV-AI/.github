@@ -27,17 +27,21 @@ See [docs/workflows.md](docs/workflows.md) for detailed specifications, inputs, 
 
 | Workflow | Purpose |
 |----------|---------|
-| **Publish to Project Data Viewer** | Publishes data to the [project data viewer website](https://personal-7vf0v2cu.outsystemscloud.com/ProjectDataViewer5/) |
-| **Build Packer Images** | Builds ISO images for CICD using Packer, QEMU/KVM/Libvirt, and cloud-init |
-| **Build Docker Images** | Builds and publishes Docker images with static analysis, Snyk scanning, and optional multi-platform support |
 | **Build and Pack FE Packages** | Builds and packages frontend packages for the MOV.AI platform |
 | **Build and Pack Npm Components** | Builds and packages npm components for the MOV.AI platform |
 | **Build and Pack ROS Packages** | Builds and publishes ROS packages (Debian) for ROS 1 (Noetic) and ROS 2 (Humble) |
 | **Build and Validate Platform** | Builds and validates the MOV.AI platform |
+| **Build Docker Images** | Builds and publishes Docker images with static analysis, Snyk scanning, and optional multi-platform support |
+| **Build Packer Images** | Builds ISO images for CICD using Packer, QEMU/KVM/Libvirt, and cloud-init |
+| **Build Product** | Orchestrates complete product build pipeline including validation, workspace build, simulator setup, and testing |
 | **Build Product Composite** | Builds composite projects (multiple products/squads) |
-| **Build Product** | Builds individual projects for MOV.AI platform |
-| **Install Tests** | Runs QA install tests |
-| **UI Tests** | Runs UI tests |
+| **Generic Local Standalone Tests** | Runs QA tests on locally deployed platform instances (install tests, UI tests, etc.) |
+| **Generic Remote Fleet Tests** | Runs QA tests on provisioned remote fleet infrastructure with Terraform provisioning and Ansible deployment |
+| **Install Tests** | Runs QA install tests on platform deployments |
+| **Publish to Project Data Viewer** | Publishes data to the [project data viewer website](https://personal-7vf0v2cu.outsystemscloud.com/ProjectDataViewer5/) |
+| **Robotic Component Pipeline** | Builds and tests robotic stack components with remote provisioning and test execution |
+| **Robotic Tests** | Runs comprehensive robotic stack integration tests with simulator support |
+| **UI Tests** | Runs UI tests on platform instances |
 
 ## Composite Actions
 - **publish-to-nexus**: Publishes artifacts (Debian/RPM packages) to Nexus repository.

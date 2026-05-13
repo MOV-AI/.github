@@ -131,7 +131,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -190,7 +190,7 @@ jobs:
       package_version: ${{ steps.raise_version.outputs.py_pkg_version }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -285,7 +285,7 @@ jobs:
           verbose: 'true'
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install test requirements
         run: |
@@ -357,7 +357,7 @@ jobs:
       TOX_MARKER: "not simulatortest"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install test requirements
         run: |
@@ -423,7 +423,7 @@ jobs:
         password: ${{secrets.registry_password}}
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -701,7 +701,7 @@ jobs:
         password: ${{secrets.registry_password}}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download package artifacts
         uses: actions/download-artifact@v4
@@ -753,7 +753,7 @@ jobs:
         distro: ${{ fromJSON(inputs.distributions) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download pack artifacts
         uses: actions/download-artifact@v4
