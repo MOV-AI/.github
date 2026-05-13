@@ -131,9 +131,10 @@ env:
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
-  REGISTRY: ${{ inputs.docker_registry }}
   PUSH_REGISTRY: registry.cloud.mov.ai
-  MID_REGISTRY: registry.cloud.mov.ai
+  INTEGRATION_PIPELINE_MIRROR: ${{ inputs.docker_registry }}
+  INTEGRATION_PIPELINE_MIRROR_LOCAL_IP: 172.22.0.106
+  SIMULATION_MIRROR: registry.lis.mov.ai
   USERSPACE_FOLDER_PATH: /opt/movai/userspace
   REMOTE_WORKSPACE_PATH: workspace
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
@@ -557,26 +558,19 @@ jobs:
         run: |
           docker run --rm -i -e HADOLINT_FAILURE_THRESHOLD=error hadolint/hadolint < docker/${{ matrix.workspace['distro'] }}/Dockerfile
 
-      - name: Login to ${{ env.REGISTRY }} Registry
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.registry_user }}
-          password: ${{ secrets.registry_password }}
-          registry: ${{ env.REGISTRY }}
-
-      - name: Login to ${{ env.PUSH_REGISTRY }} Registry
+      - name: Login to Main Registry
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
           registry: ${{ env.PUSH_REGISTRY }}
 
-      - name: Login to ${{ env.MID_REGISTRY }} Registry
+      - name: Login to Integration Pipeline Registry
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
-          registry: ${{ env.MID_REGISTRY }}
+          registry: ${{ env.INTEGRATION_PIPELINE_MIRROR }}
 
       - name: Prepare docker build variables
         id: pre_build
@@ -602,7 +596,7 @@ jobs:
           echo "raised_version=$(cat product.version)" >> $GITHUB_OUTPUT
           echo "docker_image_name=$docker_image" >> $GITHUB_OUTPUT
           echo "service_name_file=$service_name_file" >> $GITHUB_OUTPUT
-          echo "docker_image_full_tag=${{ env.MID_REGISTRY }}/ci/$docker_image" >> $GITHUB_OUTPUT
+          echo "docker_image_full_tag=${{ env.INTEGRATION_PIPELINE_MIRROR }}/ci/$docker_image" >> $GITHUB_OUTPUT
 
           # Check if propagated project is false
           if [ "${{ inputs.propagate_project }}" = "false" ];
@@ -625,8 +619,8 @@ jobs:
       - name: Docker build
         shell: bash
         run: |
-          docker build --add-host ${{ env.REGISTRY }}:172.22.0.106 \
-            --build-arg DOCKER_REGISTRY=${{ env.REGISTRY }} \
+          docker build --add-host ${{ env.INTEGRATION_PIPELINE_MIRROR }}:${{ env.INTEGRATION_PIPELINE_MIRROR_LOCAL_IP }} \
+            --build-arg DOCKER_REGISTRY=${{ env.INTEGRATION_PIPELINE_MIRROR }} \
             --build-arg BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} \
             --build-arg TAG=${{ steps.pre_build.outputs.base_version }} \
             --build-arg CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }} \
@@ -738,37 +732,30 @@ jobs:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_${{ matrix.workspace['distro'] }}
           path: .
 
-      - name: Login to ${{ env.REGISTRY }} Registry
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.registry_user }}
-          password: ${{ secrets.registry_password }}
-          registry: ${{ env.REGISTRY }}
-
-      - name: Login to ${{ env.PUSH_REGISTRY }} Registry
+      - name: Login to Main Registry
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
           registry: ${{ env.PUSH_REGISTRY }}
 
-      - name: Login to ${{ env.MID_REGISTRY }} Registry
+      - name: Login to Integration Pipeline Registry
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
-          registry: ${{ env.MID_REGISTRY }}
+          registry: ${{ env.INTEGRATION_PIPELINE_MIRROR }}
 
       - name: Docker load workspace image
         shell: bash
         run: |
           docker pull "${{ needs.Build-Workspace.outputs.docker_image_full_tag }}:${{ needs.Build-Workspace.outputs.raised_version }}"
-          docker tag "${{ needs.Build-Workspace.outputs.docker_image_full_tag }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ needs.Build-Workspace.outputs.docker_image_name }}:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker tag "${{ needs.Build-Workspace.outputs.docker_image_full_tag }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.INTEGRATION_PIPELINE_MIRROR }}/qa/${{ needs.Build-Workspace.outputs.docker_image_name }}:${{ needs.Build-Workspace.outputs.raised_version }}"
           docker tag "${{ needs.Build-Workspace.outputs.docker_image_full_tag }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ needs.Build-Workspace.outputs.docker_image_name }}:${{ needs.Build-Workspace.outputs.raised_version }}"
           # if event is pr create ci tags
           if [ "${{ github.event_name }}" = "pull_request" ];
           then
-            docker tag "${{ needs.Build-Workspace.outputs.docker_image_full_tag }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.REGISTRY }}/ci/${{ needs.Build-Workspace.outputs.docker_image_name }}:${{ needs.Build-Workspace.outputs.raised_version }}"
+            docker tag "${{ needs.Build-Workspace.outputs.docker_image_full_tag }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.INTEGRATION_PIPELINE_MIRROR }}/ci/${{ needs.Build-Workspace.outputs.docker_image_name }}:${{ needs.Build-Workspace.outputs.raised_version }}"
             docker tag "${{ needs.Build-Workspace.outputs.docker_image_full_tag }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ needs.Build-Workspace.outputs.docker_image_name }}:${{ needs.Build-Workspace.outputs.raised_version }}"
           fi
           docker images
@@ -858,7 +845,7 @@ jobs:
           docker ps -a
 
           # Get container ID - support both spawner and ros1-workspace/ros2-workspace names
-          container_id=$(docker ps -q -f "ancestor=${{ env.REGISTRY }}/qa/${{ needs.Build-Workspace.outputs.docker_image_name }}:$(cat product.version)")
+          container_id=$(docker ps -q -f "ancestor=${{ env.INTEGRATION_PIPELINE_MIRROR }}/qa/${{ needs.Build-Workspace.outputs.docker_image_name }}:$(cat product.version)")
 
           docker exec -t "$container_id" bash -c '
             set -e
@@ -1064,7 +1051,7 @@ jobs:
           else
             echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
           fi
-          echo "image_name=${{ env.REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
+          echo "image_name=${{ env.INTEGRATION_PIPELINE_MIRROR }}/ci/$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
 
       - name: Lint docker image
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
@@ -1085,14 +1072,6 @@ jobs:
           deactivate
           if [ ! -d ./models ]; then mkdir -p ./models; fi
 
-      - name: Login to ${{ env.REGISTRY }} Registry
-        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.registry_user }}
-          password: ${{ secrets.registry_password }}
-          registry: ${{ env.REGISTRY }}
-
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
         uses: docker/login-action@v3
@@ -1101,19 +1080,19 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.PUSH_REGISTRY }}
 
-      - name: Login to ${{ env.MID_REGISTRY }} Registry
+      - name: Login to ${{ env.INTEGRATION_PIPELINE_MIRROR }} Registry
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
-          registry: ${{ env.MID_REGISTRY }}
+          registry: ${{ env.INTEGRATION_PIPELINE_MIRROR }}
 
       - name: Prepare docker build variables
         if: ${{ inputs.with_simulation == 'true' }}
         id: pre_build
         run: |
-          push_name_tmp=$(echo "${{ steps.pre_simulator_build.outputs.image_name }}" | sed "s-${{ env.REGISTRY }}-${{ env.MID_REGISTRY }}-g")
+          push_name_tmp=${{ steps.pre_simulator_build.outputs.image_name }}
           echo "base_name=$(cat simulator_artifacts/simulator_base.ci)" >> $GITHUB_OUTPUT
           echo "push_name=$push_name_tmp" >> $GITHUB_OUTPUT
 
@@ -1124,7 +1103,7 @@ jobs:
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true'}}
         shell: bash
         run: |
-          docker build --add-host ${{ env.REGISTRY }}:172.22.0.106 \
+          docker build --add-host ${{ env.INTEGRATION_PIPELINE_MIRROR }}:${{ env.INTEGRATION_PIPELINE_MIRROR_LOCAL_IP }} \
             --build-arg BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} \
             --build-arg CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }} \
             --file docker/${{ env.DISTRO }}/Dockerfile-simulator \
@@ -1258,13 +1237,13 @@ jobs:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_${{ matrix.workspace['distro'] }}
           path: .
 
-      - name: Login to ${{ env.REGISTRY }} Registry
+      - name: Login to ${{ env.PUSH_REGISTRY }} Registry
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ env.PUSH_REGISTRY }}
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
@@ -1274,38 +1253,38 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.PUSH_REGISTRY }}
 
-      - name: Login to ${{ env.MID_REGISTRY }} Registry
+      - name: Login to ${{ env.INTEGRATION_PIPELINE_MIRROR }} Registry
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
-          registry: ${{ env.MID_REGISTRY }}
+          registry: ${{ env.INTEGRATION_PIPELINE_MIRROR }}
 
       - name: Docker load spawner image
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         shell: bash
         run: |
-          docker pull "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
-          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
-          docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker pull "${{ env.INTEGRATION_PIPELINE_MIRROR }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker tag "${{ env.INTEGRATION_PIPELINE_MIRROR }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker tag "${{ env.INTEGRATION_PIPELINE_MIRROR }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
           # if event is pr create ci tags
           if [ "${{ github.event_name }}" = "pull_request" ];
           then
-            docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
-            docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
+            docker tag "${{ env.INTEGRATION_PIPELINE_MIRROR }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
+            docker tag "${{ env.INTEGRATION_PIPELINE_MIRROR }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
           fi
 
       - name: Docker load simulator image
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         shell: bash
         run: |
-          promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.MID_REGISTRY }}-${{ env.REGISTRY }}-g")
-          promoted_name_push=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.MID_REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
+          promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.INTEGRATION_PIPELINE_MIRROR }}-${{ env.PUSH_REGISTRY }}-g")
+          promoted_name_push=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.INTEGRATION_PIPELINE_MIRROR }}-${{ env.PUSH_REGISTRY }}-g")
           # if event is pr create ci tags
           if [ "${{ github.event_name }}" = "pull_request" ];
           then
-            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-${{ env.MID_REGISTRY }}-${{ env.REGISTRY }}-g")
-            promoted_name_push=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-${{ env.MID_REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
+            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-${{ env.INTEGRATION_PIPELINE_MIRROR }}-${{ env.PUSH_REGISTRY }}-g")
+            promoted_name_push=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-${{ env.INTEGRATION_PIPELINE_MIRROR }}-${{ env.PUSH_REGISTRY }}-g")
           fi
 
           docker pull "${{ needs.Build-Simulator.outputs.image_name }}"
@@ -1382,7 +1361,7 @@ jobs:
         shell: bash
         run: |
           sim_img_name="$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g")"
-          push_name=$(echo "$sim_img_name" | sed "s-${{ env.REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
+          push_name=$(echo "$sim_img_name" | sed "s-${{ env.INTEGRATION_PIPELINE_MIRROR }}-${{ env.PUSH_REGISTRY }}-g")
 
           echo "image_name=$push_name" >> $GITHUB_OUTPUT
 
@@ -1754,24 +1733,16 @@ jobs:
               "text": "${{ steps.nvidia_err_msg.outputs.msg_error }}"
             }
 
-      - name: Remote - Login to ${{ env.MID_REGISTRY }} Registry
+      - name: Remote - Login to Simulation Mirror Registry
         if: ${{ inputs.with_simulation_tests }}
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
-            docker login ${{ env.MID_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+            docker login ${{ env.SIMULATION_MIRROR }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
           '
 
-      - name: Remote - Login to ${{ env.REGISTRY }} Registry
-        if: ${{ inputs.with_simulation_tests }}
-        shell: bash
-        run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
-            set -e
-            docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
-          '
-      - name: Remote - Login to ${{ env.PUSH_REGISTRY }} Registry
+      - name: Remote - Login to Main Registry
         if: ${{ inputs.with_simulation_tests }}
         shell: bash
         run: |
@@ -1786,8 +1757,8 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
-            docker pull "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
-            docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
+            docker pull "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
+            docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.SIMULATION_MIRROR }}/qa/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
           '
 
       - name: Remote - Docker load simulator image
@@ -1796,7 +1767,7 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
 
-            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.MID_REGISTRY }}-${{ env.REGISTRY }}-g")
+            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.PUSH_REGISTRY }}-${{ env.SIMULATION_MIRROR }}-g")
             docker manifest inspect "$promoted_name"
             if [ $? -ne 0 ]; then
               set -e
@@ -1915,6 +1886,9 @@ jobs:
           sudo sh -c "echo MOVAI_SERVICE_LOGGER_LEVEL=DEBUG >> /etc/movai/config.env"
           sudo chmod -R +r /etc/movai
 
+          # Configure registry
+          jq '.registry = "${{ env.SIMULATION_MIRROR }}"' "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
+
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
           ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
@@ -1965,7 +1939,6 @@ jobs:
             fi
 
             extra_options=""
-
             if [ "${{ inputs.duration }}" != "UNDEFINED" ] ; then
               extra_options="--duration ${{ inputs.duration }}"
             fi
@@ -2004,13 +1977,10 @@ jobs:
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
 
             cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.simulator_tests_setup.outputs.target_dir }}
-
-            # for sanity
-            docker ps -a
-
-            for container in backend spawner ros1-workspace ros2-workspace orchestrator message-server; do
-             CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
-             docker logs "${CONTAINER_ID}" &> "${container}.log" || true
+            CONTAINERS=$(docker ps -a --format '{{.Names}}')
+            for container in ${CONTAINERS}; do
+              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
+              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
             done || true
 
             # movai-service
@@ -2321,13 +2291,13 @@ jobs:
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
           python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
-      - name: Login to ${{ env.MID_REGISTRY }} Registry
+      - name: Login to ${{ env.INTEGRATION_PIPELINE_MIRROR }} Registry
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
-          registry: ${{ env.MID_REGISTRY }}
+          registry: ${{ env.INTEGRATION_PIPELINE_MIRROR }}
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
@@ -2393,8 +2363,8 @@ jobs:
 
           for image in "${images[@]}"
           do
-            source=$(echo $image | sed "s-/qa/-/ci/-g" |  sed "s-${{ env.PUSH_REGISTRY }}-${{ env.MID_REGISTRY }}-g" )
-            target=$(echo $image | sed "s-${{ env.MID_REGISTRY }}-${{ env.PUSH_REGISTRY }}-g" )
+            source=$(echo $image | sed "s-/qa/-/ci/-g" |  sed "s-${{ env.PUSH_REGISTRY }}-${{ env.INTEGRATION_PIPELINE_MIRROR }}-g" )
+            target=$(echo $image | sed "s-${{ env.INTEGRATION_PIPELINE_MIRROR }}-${{ env.PUSH_REGISTRY }}-g" )
             docker pull $source
             echo "tagging $source as $target"
             docker tag $source $target

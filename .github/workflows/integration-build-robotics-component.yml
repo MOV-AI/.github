@@ -475,9 +475,8 @@ jobs:
             cd tests_artifacts
 
             # for sanity
-            docker ps -a
-
-            for container in backend spawner message-server monitoring redis-master redis-local influxdb haproxy; do
+            CONTAINERS=$(docker ps -a --format '{{.Names}}')
+            for container in ${CONTAINERS}; do
               CONTAINER_ID=$(docker ps -a --format '\''{{.Names}}'\'' --filter "name=^${container}-.*")
               docker logs "${CONTAINER_ID}" &> "${container}.log" || true
             done || true

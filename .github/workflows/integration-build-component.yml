@@ -272,18 +272,15 @@ jobs:
           cp -r "${TEST_INFRA_DIR}"/*.{log,tar,json,html} ./qa_artifacts 2>/dev/null || true
           cp -r "${TEST_INFRA_DIR}"/tests_artifacts ./qa_artifacts || true
 
-
       - name: Collect platform artifacts
         if: always()
         working-directory: platform_artifacts
         shell: bash
         run: |
-          # for sanity
-          docker ps -a
-
-          for container in backend spawner message-server monitoring redis-master redis-local influxdb haproxy; do
-             CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
-             docker logs "${CONTAINER_ID}" &> "${container}.log" || true
+          CONTAINERS=$(docker ps -a --format '{{.Names}}')
+          for container in ${CONTAINERS}; do
+            CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
+            docker logs "${CONTAINER_ID}" &> "${container}.log" || true
           done || true
 
           # movai-service

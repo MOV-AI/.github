@@ -437,8 +437,8 @@ jobs:
         run: |
           set +e
           echo "::group::Docker Container Logs"
-          containers=$(docker ps -a --format '{{.Names}}' 2>/dev/null)
-          for container in $containers; do
+          CONTAINERS=$(docker ps -a --format '{{.Names}}')
+          for container in ${CONTAINERS}; do
             docker logs "${container}" &> "${container}.log" || true
           done || true
           echo "✓ Docker logs collected"
