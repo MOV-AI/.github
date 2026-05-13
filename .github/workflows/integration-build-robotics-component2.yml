@@ -489,6 +489,7 @@ jobs:
             ls -la 
             
             cp artifacts/regression_install_overwrites.yaml "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/regression_install_overwrites.yaml"
+            cp artifacts/dependencies.apt "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/dependencies.apt"
             ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
             docker run \
               -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
