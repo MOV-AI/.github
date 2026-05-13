@@ -50,6 +50,11 @@ on:
         type: string
         default: "registry.hel.mov.ai"
         description: "Registry to pull images during build and tests. Should be running on proxmox cluster for optimal performance, but can be overridden for testing purposes"
+      docker_simulator_registry:
+        required: false
+        type: string
+        default: "registry.lis.mov.ai"
+        description: "Registry to pull images during simulation tests. Should be running in the lab optimal performance, but can be overridden for testing purposes"
       use_project_data_viewer:
         required: false
         type: boolean
@@ -135,7 +140,7 @@ env:
   PUSH_REGISTRY: registry.cloud.mov.ai
   INTEGRATION_PIPELINE_MIRROR: ${{ inputs.docker_registry }}
   INTEGRATION_PIPELINE_MIRROR_LOCAL_IP: 172.22.0.106
-  SIMULATION_MIRROR: registry.lis.mov.ai
+  SIMULATION_MIRROR: ${{ inputs.docker_simulator_registry }}
   USERSPACE_FOLDER_PATH: /opt/movai/userspace
   REMOTE_WORKSPACE_PATH: workspace
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
