@@ -1,2 +1,23 @@
 self-hosted-runner-labels:
   - infra-runner
+  - integration-pipeline
+  - integration-pipeline-hel0
+  - integration-pipeline-hel1
+  - qa-pipeline-hel0
+  - qa-pipeline-hel1
+  - ip-hel0-queuer
+  - ip-hel1-queuer
+  - packer-runner
+  - simul-mary-queuer
+  - simul-marvin-queuer
+  - simul-bb-8-queuer
+  - simul-bb-9-queuer
+  - oracle
+
+# Configure shellcheck to focus on critical issues
+shellcheck:
+  enable-all-rules: false
+  severity: error
+  shell-type: bash
+  exclude:
+    - SC2086
