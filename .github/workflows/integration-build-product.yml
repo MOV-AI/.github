@@ -257,6 +257,7 @@ jobs:
         env:
           HEAD_REF: ${{ github.head_ref }}
         run: |
+          set -x
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BRANCH_NAME="$HEAD_REF"
           elif [ "${{ inputs.is_nightly_run }}" = "true" ]; then
@@ -299,7 +300,7 @@ jobs:
                   --product_name ${{ inputs.product_name }} \
                   --branch "${BRANCH_NAME}" \
                   --update_simulator \
-                  --docker_registry ${{ env.INTEGRATION_PIPELINE_MIRROR }} "$tag_arg"
+                  --docker_registry ${{ env.INTEGRATION_PIPELINE_MIRROR }} $tag_arg
 
             mkdir simulator_artifacts
             cp ci_artifacts/* ./simulator_artifacts
