@@ -49,6 +49,7 @@ on:
         required: false
         type: string
         default: "registry.hel.mov.ai"
+        description: "Registry to pull images during build and tests. Should be running on proxmox cluster for optimal performance, but can be overridden for testing purposes"
       use_project_data_viewer:
         required: false
         type: boolean
