@@ -499,8 +499,8 @@ jobs:
               --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
               --ros_distro "ros1"
 
-            cat ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/install_list.apt
-            cp ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/install_list.apt ./install_list.apt
+            cat ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/install_list.apt
+            cp $${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/install_list.apt ./install_list.apt
             cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/ros1 ./
             echo "deb [arch=all] https://artifacts.cloud.mov.ai/repository/ppa-testing testing main">> movai_keep.list
             echo "deb [arch=all,amd64] https://artifacts.cloud.mov.ai/repository/ppa-archive-focal-backup focal-backup main" >> movai.list
