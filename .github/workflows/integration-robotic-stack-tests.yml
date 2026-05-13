@@ -489,6 +489,9 @@ jobs:
             sudo sh -c "echo MOVAI_SERVICE_LOGGER_LEVEL=DEBUG >> /etc/movai/config.env"
             sudo chmod -R +r /etc/movai
 
+            # Configure registry
+            jq '.registry = "${{ env.REGISTRY }}"' "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
+
             wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
             chmod +x ./QuickStart_$(cat quickstart_version).bash
             ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
