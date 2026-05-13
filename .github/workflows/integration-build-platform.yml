@@ -51,6 +51,11 @@ on:
         type: boolean
         default: false
         description: Flag if we want the fleet job to run platform UI Fleet tests
+      with_robotic_stack_tests:
+        required: false
+        type: boolean
+        default: true
+        description: Flag to enable/disable the Robotic Stack Integration tests
       provision_tf_env_repo:
         required: false
         type: string
@@ -670,6 +675,7 @@ jobs:
       robot_config: 'basic-standalone-ignition-noetic.json'
 
   Robotic-Stack-Integration:
+    if: ${{ inputs.with_robotic_stack_tests }}
     needs: [Simulator-Validations, Build-backend, Build-Simulator]
     uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@v3
     secrets: inherit
