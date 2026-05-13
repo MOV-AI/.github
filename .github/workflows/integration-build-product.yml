@@ -277,16 +277,16 @@ jobs:
           source ci_scripts/bin/activate
 
           merge_manifest_args=" --dependency_name product-platform"
-          merge_manifest_args="$merge_manifest_args" --gh_api_user "$GITHUB_API_USR"
-          merge_manifest_args="$merge_manifest_args" --gh_api_pwd ${{ secrets.auto_commit_pwd }}"
-          merge_manifest_args="$merge_manifest_args" --auto_fetch"
+          merge_manifest_args="$merge_manifest_args --gh_api_user "$GITHUB_API_USR"
+          merge_manifest_args="$merge_manifest_args --gh_api_pwd ${{ secrets.auto_commit_pwd }}"
+          merge_manifest_args="$merge_manifest_args --auto_fetch"
 
           if [ "${{ inputs.is_external_project }}" = "true" ]; then
-            merge_manifest_args="$merge_manifest_args" --merge_sub_prod_dep_keys platform_config,platform_components,installion"
+            merge_manifest_args="$merge_manifest_args --merge_sub_prod_dep_keys platform_config,platform_components,installion"
           fi
 
           if [ "${{ inputs.with_simulation }}" = "false" ]; then
-            merge_manifest_args="$merge_manifest_args" --forward_sim"
+            merge_manifest_args="$merge_manifest_args --forward_sim"
           fi
 
           integration-pipeline merge_manifest_dependency "$merge_manifest_args"
