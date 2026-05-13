@@ -277,7 +277,7 @@ jobs:
           source ci_scripts/bin/activate
 
           merge_manifest_args=" --dependency_name product-platform"
-          merge_manifest_args="$merge_manifest_args --gh_api_user "$GITHUB_API_USR"
+          merge_manifest_args="$merge_manifest_args --gh_api_user $GITHUB_API_USR"
           merge_manifest_args="$merge_manifest_args --gh_api_pwd ${{ secrets.auto_commit_pwd }}"
           merge_manifest_args="$merge_manifest_args --auto_fetch"
 
