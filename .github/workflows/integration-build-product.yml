@@ -2287,7 +2287,7 @@ jobs:
 
           integration-pipeline patch_manifest_with_spawner
           cat product-manifest.yaml
-          cp product-manifest.yaml deployment_artifacts
+          cp *.yaml deployment_artifacts
           cp metadata.tar.gz deployment_artifacts
 
           product_version=$(cat product.version)
