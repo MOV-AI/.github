@@ -61,7 +61,7 @@ env:
   GITHUB_API_USR: "OttoMation-Movai"
   USERSPACE_FOLDER_PATH: "$(pwd)/userspace"
   REMOTE_WORKSPACE_PATH: workspace
-  CI_INTEGRATION_CONTAINER_VERSION: "registry.lis.mov.ai/ci/ci-tools:${{ inputs.ci_integration_scripts_version}}"
+  CI_INTEGRATION_CONTAINER_VERSION: "registry.lis.mov.ai/qa/ci-tools:${{ inputs.ci_integration_scripts_version}}"
   CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
   CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_access_key_id }}
