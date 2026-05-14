@@ -32,7 +32,12 @@ on:
         required: false
         type: string
         default: "4.0.0.13"
-
+      generated_image_name:
+        required: false
+        type: string
+      generated_image_tag:
+        required: false
+        type: string
     secrets:
       auto_commit_user:
         required: true
@@ -68,6 +73,7 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_access_key }}
   AWS_DEFAULT_REGION: "us-east-1"
   REGISTRY: "registry.lis.mov.ai"
+  REGISTRY_PUSH: "registry.cloud.mov.ai"
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.0.0-18"
   PROVISION_INFRA_DIR: "provision_scripts"
@@ -587,7 +593,22 @@ jobs:
             pwd
             ls -la
           '
-
+      - name: Remote - Collect ros1-workspace
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+            container_id=$(docker ps --format "{{.Names}}" --filter "name=(^spawner-.*|^ros1-workspace-.*)")
+            docker exec -t "$container_id" bash -c '\''
+            ls $MOVAI_HOME
+            rm $MOVAI_HOME/.first_run_metadata
+            '\''
+            movai-cli stop "ci_${{ inputs.component_name }}"
+            sleep 2
+            docker commit ${container_id} ${{ env.REGISTRY_PUSH }}/ci/custom-ros1-workspace:${{ inputs.generated_image_tag }}
+            docker push ${{ env.REGISTRY_PUSH }}/ci/${{ inputs.generated_image_name }}:${{ inputs.generated_image_tag }}
+          '
       - name: Remote - Move test artifacts
         if: always()
         shell: bash
