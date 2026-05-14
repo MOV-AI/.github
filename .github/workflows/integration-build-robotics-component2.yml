@@ -456,10 +456,7 @@ jobs:
             jq --version
             jq '\''.robot.name = "$ROBOTNAME"'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
             # keep the firmware in a file to be installed later
-            jq --rawfile fw firmware.apt '\''
-              .spawner.firmware =
-                ($fw | split("\n") | map(select(length > 0)))
-            '\'' $CONFIG_FILE_NAME
+            jq -r '.spawner.firmware[]' $CONFIG_FILE_NAME > firmware.apt
             cat firmware.apt
             jq '\''.spawner.firmware = []'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
             # Enable debug logs of movai-service
