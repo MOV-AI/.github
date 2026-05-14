@@ -47,7 +47,9 @@ on:
       overwrite_slack_channel:
         required: false
         type: string
-        default: "C050L85R6VC"
+        default: "C05K2KF1UP8"
+      # development slack channel
+      #default: "C05K2KF1UP8"
       docker_registry:
         required: false
         type: string
@@ -1275,7 +1277,6 @@ jobs:
         run: |
           sim_img_name="$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g")"
           push_name=$(echo "$sim_img_name" | sed "s-${{ env.REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
-
           echo "image_name=$push_name" >> $GITHUB_OUTPUT
 
       - name: Collect Installed components
