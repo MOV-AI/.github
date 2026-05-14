@@ -1661,6 +1661,16 @@ jobs:
             set -e
             docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
           '
+
+      - name: Remote - Login to ${{ env.PUSH_REGISTRY }} Registry
+        if: ${{ inputs.with_simulation_tests }}
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            docker login ${{ env.PUSH_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+          '
+
       - name: Remote - Login to ${{ env.SIM_MIRROR_REGISTRY }} Registry
         if: ${{ inputs.with_simulation_tests }}
         shell: bash
