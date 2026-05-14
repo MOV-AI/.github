@@ -1178,12 +1178,11 @@ jobs:
         run: |
           docker pull "${{ env.IP_MIRROR_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
           docker tag "${{ env.IP_MIRROR_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-          docker tag "${{ env.IP_MIRROR_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.SIM_MIRROR_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
           # if event is pr create ci tags
           if [ "${{ github.event_name }}" = "pull_request" ];
           then
             docker tag "${{ env.IP_MIRROR_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-            docker tag "${{ env.IP_MIRROR_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.SIM_MIRROR_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
+
           fi
 
       - name: Docker load simulator image
@@ -1684,7 +1683,7 @@ jobs:
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
             docker pull "${{ env.IP_MIRROR_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}"
-            docker tag "${{ env.IP_MIRROR_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}"
+            docker tag "${{ env.IP_MIRROR_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.SIM_MIRROR_REGISTRY }}/qa/${{ inputs.product_name }}-noetic:${{ needs.Build-Spawner.outputs.raised_version }}"
           '
 
       - name: Remote - Docker load simulator image
@@ -1693,7 +1692,7 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
 
-            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.IP_MIRROR_REGISTRY }}-${{ env.REGISTRY }}-g")
+            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.IP_MIRROR_REGISTRY }}-${{ env.SIM_MIRROR_REGISTRY }}-g")
             docker manifest inspect "$promoted_name"
             if [ $? -ne 0 ]; then
               set -e
