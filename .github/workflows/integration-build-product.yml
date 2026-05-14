@@ -159,7 +159,7 @@ env:
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   TIMEOUT: 720
-  PROVISIONING_ENV_CONF: "0.2.0-6"
+  PROVISIONING_ENV_CONF: "0.2.0-8"
 
 jobs:
   Compute-timeout:
@@ -192,7 +192,7 @@ jobs:
           echo "jobtimeout=$calc_jobtimeout" >> $GITHUB_OUTPUT
 
   Validate-boostrap-configs:
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    runs-on: integration-pipeline
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
       credentials:
@@ -385,7 +385,7 @@ jobs:
     strategy:
       matrix:
         distro: ${{ fromJSON(inputs.ros_distro) }}
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    runs-on: integration-pipeline
     outputs:
       raised_version: ${{ steps.pre_build.outputs.raised_version }}
       slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
@@ -893,7 +893,7 @@ jobs:
 
   Build-Simulator:
     needs: [Validate-boostrap-configs, Build-Spawner]
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    runs-on: integration-pipeline
     env:
       DISTRO: noetic
     outputs:
@@ -1157,13 +1157,13 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.REGISTRY }}
 
-      - name: Login to ${{ env.SIM_MIRROR_REGISTRY }} Registry
+      - name: Login to ${{ env.PUSH_REGISTRY }} Registry
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
-          registry: ${{ env.SIM_MIRROR_REGISTRY }}
+          registry: ${{ env.PUSH_REGISTRY }}
 
       - name: Login to ${{ env.IP_MIRROR_REGISTRY }} Registry
         uses: docker/login-action@v3
@@ -2142,7 +2142,7 @@ jobs:
 
   publish:
     needs: [Validate-boostrap-configs, Install-Robot, Install-Simulator-Robot, Validation-Simulator-Tests]
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    runs-on: integration-pipeline
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
