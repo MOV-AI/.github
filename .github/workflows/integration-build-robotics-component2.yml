@@ -608,7 +608,7 @@ jobs:
             '\''
             movai-cli stop "ci_${{ inputs.component_name }}"
             sleep 2
-            docker commit ${container_id} ${{ env.REGISTRY_PUSH }}/ci/custom-ros1-workspace:${{ inputs.generated_image_tag }}
+            docker commit ${container_id} ${{ env.REGISTRY_PUSH }}/ci/${{ inputs.generated_image_name }}:${{ inputs.generated_image_tag }}
             docker push ${{ env.REGISTRY_PUSH }}/ci/${{ inputs.generated_image_name }}:${{ inputs.generated_image_tag }}
           '
       - name: Remote - Move test artifacts
