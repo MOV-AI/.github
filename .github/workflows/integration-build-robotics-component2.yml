@@ -526,11 +526,12 @@ jobs:
               cp /tmp/movai_keep.list /etc/apt/sources.list.d/movai_keep.list
               cp /tmp/movai.list /etc/apt/sources.list.d/movai.list
               apt update
-              mobros install $(cat /tmp/ci/packages.apt| tr "\n" " ") -y
+              mobros install $(cat /tmp/packages.apt| tr "\n" " ") -y
               rm /etc/apt/sources.list.d/movai.list
               cd /tmp/ros1
               apt update
               mobros install $(cat /tmp/install_list.apt | tr "\n" " ") -y
+              dpkg -i --force-all /tmp/*.deb
             '\''
             '
       - name: Remote - Run tests
