@@ -455,7 +455,12 @@ jobs:
             export REGISTRY="${{ env.REGISTRY }}"
             jq --version
             jq '\''.robot.name = "$ROBOTNAME"'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
-            jq -c '\''.spawner.firmware'\'' firmware.json
+            # keep the firmware in a file to be installed later
+            jq --rawfile fw firmware.apt '\''
+              .spawner.firmware =
+                ($fw | split("\n") | map(select(length > 0)))
+            '\'' $CONFIG_FILE_NAME
+            cat firmware.apt
             jq '\''.spawner.firmware = []'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
             # Enable debug logs of movai-service
             sudo mkdir -p /etc/movai/
@@ -523,6 +528,7 @@ jobs:
             docker cp artifacts/*.deb $container_id:/tmp/
             docker cp movai_keep.list $container_id:/tmp/movai_keep.list
             docker cp movai.list $container_id:/tmp/movai.list
+            docker cp firmware.apt $container_id:/tmp/firmware.apt
             docker exec -tu root "$container_id" bash -c '\''
               ls /tmp
               cp /tmp/movai_keep.list /etc/apt/sources.list.d/movai_keep.list
@@ -533,13 +539,9 @@ jobs:
               cd /tmp/ros1
               apt update
               mobros install $(cat /tmp/install_list.apt | tr "\n" " ") -y
+              mobros install $(cat /tmp/firmware.apt | tr "\n" " ") -y
               dpkg -i --force-all /tmp/*.deb
             '\''
-            movai-cli stop "ci_${{ inputs.component_name }}"
-            sleep 2
-            movai-cli start "ci_${{ inputs.component_name }}"
-            sleep 10
-            movai-cli all "ci_${{ inputs.component_name }}"
             '
       - name: Remote - Run tests
         shell: bash
