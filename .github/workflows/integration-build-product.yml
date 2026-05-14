@@ -1190,18 +1190,15 @@ jobs:
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         shell: bash
         run: |
-          promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.IP_MIRROR_REGISTRY }}-${{ env.REGISTRY }}-g")
-          promoted_name_sim=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.IP_MIRROR_REGISTRY }}-${{ env.SIM_MIRROR_REGISTRY }}-g")
+          promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.PUSH_REGISTRY }}-${{ env.IP_MIRROR_REGISTRY }}-g")
           # if event is pr create ci tags
           if [ "${{ github.event_name }}" = "pull_request" ];
           then
-            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-${{ env.IP_MIRROR_REGISTRY }}-${{ env.REGISTRY }}-g")
-            promoted_name_sim=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-${{ env.IP_MIRROR_REGISTRY }}-${{ env.SIM_MIRROR_REGISTRY }}-g")
+            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-${{ env.PUSH_REGISTRY }}-${{ env.IP_MIRROR_REGISTRY }}-g")
           fi
 
           docker pull "${{ needs.Build-Simulator.outputs.image_name }}"
           docker tag "${{ needs.Build-Simulator.outputs.image_name }}" $promoted_name
-          docker tag "${{ needs.Build-Simulator.outputs.image_name }}" $promoted_name_sim
 
       - name: Installation
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
