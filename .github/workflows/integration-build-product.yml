@@ -1692,7 +1692,7 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
 
-            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.IP_MIRROR_REGISTRY }}-${{ env.SIM_MIRROR_REGISTRY }}-g")
+            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.PUSH_REGISTRY }}-${{ env.SIM_MIRROR_REGISTRY }}-g")
             docker manifest inspect "$promoted_name"
             if [ $? -ne 0 ]; then
               set -e
