@@ -455,7 +455,8 @@ jobs:
             export REGISTRY="${{ env.REGISTRY }}"
             jq --version
             jq '\''.robot.name = "$ROBOTNAME"'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
-
+            jq -c '\''.spawner.firmware'\'' firmware.json
+            jq '\''.spawner.firmware = []'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
             # Enable debug logs of movai-service
             sudo mkdir -p /etc/movai/
             sudo sh -c "echo MOVAI_SERVICE_LOGGER_LEVEL=DEBUG >> /etc/movai/config.env"
@@ -504,6 +505,7 @@ jobs:
             cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/ros1 ./
             echo "deb [arch=all] https://artifacts.cloud.mov.ai/repository/ppa-testing testing main">> movai_keep.list
             echo "deb [arch=all,amd64] https://artifacts.cloud.mov.ai/repository/ppa-archive-focal-backup focal-backup main" >> movai.list
+            
             echo "deb [arch=all,amd64] https://artifacts.cloud.mov.ai/repository/ppa-ports-focal-backup ports-focal-backup main" >> movai.list
             echo "deb https://artifacts.cloud.mov.ai/repository/ppa-proxy-ros-backup ros-backup main" >> movai.list
             docker run \
@@ -533,6 +535,11 @@ jobs:
               mobros install $(cat /tmp/install_list.apt | tr "\n" " ") -y
               dpkg -i --force-all /tmp/*.deb
             '\''
+            movai-cli stop "ci_${{ inputs.component_name }}"
+            sleep 2
+            movai-cli start "ci_${{ inputs.component_name }}"
+            sleep 10
+            movai-cli all "ci_${{ inputs.component_name }}"
             '
       - name: Remote - Run tests
         shell: bash
