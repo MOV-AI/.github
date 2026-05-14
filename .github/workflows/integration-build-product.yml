@@ -1225,9 +1225,6 @@ jobs:
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
           deactivate
 
-          # Configure registry
-          jq '.registry = "${{ env.SIMULATION_MIRROR }}"' "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
-
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
           ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
@@ -1664,13 +1661,13 @@ jobs:
             set -e
             docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
           '
-      - name: Remote - Login to ${{ env.PUSH_REGISTRY }} Registry
+      - name: Remote - Login to ${{ env.SIM_MIRROR_REGISTRY }} Registry
         if: ${{ inputs.with_simulation_tests }}
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
-            docker login ${{ env.PUSH_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+            docker login ${{ env.SIM_MIRROR_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
           '
 
       - name: Remote - Docker load spawner image
@@ -1801,13 +1798,16 @@ jobs:
           export PUBLIC_IP="$(hostname -I | cut -d " " -f1)"
           export SIMULATION_ID="CI"
           export ROBOTNAME="ci_${{ inputs.product_name }}"
-          export REGISTRY="${{ inputs.docker_registry }}"
+          export REGISTRY="${{ env.SIM_MIRROR_REGISTRY }}"
           rm -rf userspace
 
           # Enable debug logs of movai-service
           sudo mkdir -p /etc/movai/
           sudo sh -c "echo MOVAI_SERVICE_LOGGER_LEVEL=DEBUG >> /etc/movai/config.env"
           sudo chmod -R +r /etc/movai
+
+          # Configure registry
+          jq '.registry = "${{ env.SIM_MIRROR_REGISTRY }}"' "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
 
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
