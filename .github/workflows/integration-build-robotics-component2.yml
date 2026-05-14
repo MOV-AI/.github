@@ -593,8 +593,10 @@ jobs:
             pwd
             ls -la
           '
+
       - name: Remote - Collect ros1-workspace
         shell: bash
+        if: always()
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
