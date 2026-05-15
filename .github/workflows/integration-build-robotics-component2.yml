@@ -438,6 +438,7 @@ jobs:
             export PRODUCT_REPO="${{ inputs.vs_product_name }}"
             export PRODUCT_VERSION="${{ inputs.vs_product_version_pattern }}"
             export CI_TOOLS_EXEC_FOLDER="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
+            sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
             bash pre_install_platform.bash
           '
