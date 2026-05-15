@@ -1182,8 +1182,9 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ];
           then
             docker tag "${{ env.IP_MIRROR_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}" "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.distro }}:${{ needs.Build-Spawner.outputs.raised_version }}"
-
           fi
+          # print out docker images for debug purposes
+          docker images
 
       - name: Docker load simulator image
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
@@ -1198,6 +1199,8 @@ jobs:
 
           docker pull "${{ needs.Build-Simulator.outputs.image_name }}"
           docker tag "${{ needs.Build-Simulator.outputs.image_name }}" $promoted_name
+          # print out docker images for debug purposes
+          docker images
 
       - name: Installation
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
