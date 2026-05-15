@@ -377,6 +377,7 @@ jobs:
           '
 
       - name: Remote - fetch product version
+        if: false
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
@@ -422,6 +423,9 @@ jobs:
               PRODUCT_NAME="solution"
             fi
             export CONFIG_FILE_NAME="product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
+
+            cp artifacts/*.deb ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+            cp artifacts/regression_install_overwrites.yaml "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/regression_install_overwrites.yaml"
 
             echo "Printing content of execution folder"
             ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
