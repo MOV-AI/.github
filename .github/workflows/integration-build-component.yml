@@ -22,6 +22,14 @@ on:
         required: false
         type: number
         default: 60
+      ci_integration_scripts_version:
+        required: false
+        type: string
+        default: "4.0.0.13"
+      robot_json:
+        required: false
+        type: string
+        default: "basic-standalone-noetic.json"
 
     secrets:
       auto_commit_user:
@@ -62,7 +70,7 @@ jobs:
         run: |
           python3 -m venv ci_scripts --clear
           source ci_scripts/bin/activate
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install integration-pipeline==${{ inputs.ci_integration_scripts_version }} --ignore-installed
           deactivate
 
       - name: Download component artifacts for patching
@@ -93,11 +101,7 @@ jobs:
         run: |
           PRODUCT=${{ inputs.vs_product_name }}
           QUICKSTART_VERSION=$(cat product/quickstart_version.txt)
-          if [[ "$PRODUCT" == *"ee-project-platform"* ]]; then
-            CONFIG_FILE_NAME=basic-standalone-noetic.json
-          else
-            CONFIG_FILE_NAME=spawner-${{ inputs.vs_product_name }}-noetic.json
-          fi
+          CONFIG_FILE_NAME=${{ inputs.robot_json }}
           echo "product/$CONFIG_FILE_NAME" > product/robot.json
 
       - name: pre-install patch
