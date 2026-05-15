@@ -506,13 +506,16 @@ jobs:
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
+            echo "Printing content of execution folder"
+            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
             # Inputs pre_install_platform.bash
             export GITHUB_API_USR=${{ secrets.auto_commit_user }}
             export GITHUB_API_PWD=${{ secrets.auto_commit_pwd }}
             export CI_TOOLS=${{ env.CI_INTEGRATION_CONTAINER_VERSION }}
             export CI_TOOLS_EXEC_FOLDER="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
 
-            bash pre_install_platform.bash
+            bash post_install_platform.bash
           '
 
       - name: Remote - Patch with component and overwrites
