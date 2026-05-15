@@ -403,29 +403,39 @@ jobs:
             sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
           '
-      
-      - name: Remote - Pre-Install switch base
+
+      - name: Copy pre-install
+        shell: bash
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no .github/workflows/pre_install_platform.bash ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
+
+      - name: Remote - Pre-Install
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
             PRODUCT_NAME="${{ inputs.vs_product_name }}"
             PRODUCT_NAME="${PRODUCT_NAME#project-}"
             PRODUCT_NAME="${PRODUCT_NAME#movai-}"
             if [[ "$PRODUCT_NAME" == "studio" ]]; then
               PRODUCT_NAME="solution"
             fi
-            export CONFIG_FILE_NAME="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
-            ls ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product
-            yq --version
-            base_name=$(yq ".product_dependencies.platform_config.spawner_base_noetic.name" ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product/product-manifest.yaml)
-            base_version=$(yq ".product_dependencies.platform_config.spawner_base_noetic.version" ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product/product-manifest.yaml)
-            base_name=${base_name//\"/}
-            base_version=${base_version//\"/}
-            jq --version
-            jq --arg image "$base_name" --arg version "$base_version" '\''.spawner.image = $image | .spawner.version = $version'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
-            cat $CONFIG_FILE_NAME
+            export CONFIG_FILE_NAME="product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
+
+            echo "Printing content of execution folder"
+            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
+            # Inputs pre_install_platform.bash
+            export GITHUB_API_USR=${{ secrets.auto_commit_user }}
+            export GITHUB_API_PWD=${{ secrets.auto_commit_pwd }}
+            export LOCAL_MAIN_DEB="true"
+            export CI_TOOLS=${{ env.CI_INTEGRATION_CONTAINER_VERSION }}
+            export PRODUCT_REPO="${{ inputs.vs_product_name }}"
+            export PRODUCT_VERSION="${{ inputs.vs_product_version_pattern }}"
+            export CI_TOOLS_EXEC_FOLDER="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
+
+            bash pre_install_platform.bash
           '
 
       - name: Remote - Install
@@ -461,10 +471,6 @@ jobs:
             export REGISTRY="${{ env.REGISTRY }}"
             jq --version
             jq '\''.robot.name = "$ROBOTNAME"'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
-            # keep the firmware in a file to be installed later
-            jq -r '.spawner.firmware[]' $CONFIG_FILE_NAME > firmware.apt
-            cat firmware.apt
-            jq '\''.spawner.firmware = []'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
             # Enable debug logs of movai-service
             sudo mkdir -p /etc/movai/
             sudo sh -c "echo MOVAI_SERVICE_LOGGER_LEVEL=DEBUG >> /etc/movai/config.env"
@@ -489,7 +495,28 @@ jobs:
           echo "movai_pwd=4Iva6UHAQq9DGITj" >> $GITHUB_OUTPUT
           echo "robot_name=ci_${{ inputs.component_name }}" >> $GITHUB_OUTPUT
 
+      - name: Copy post-install
+        shell: bash
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no .github/workflows/post_install_platform.bash ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
+
+      - name: Remote - Post-Install
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
+            # Inputs pre_install_platform.bash
+            export GITHUB_API_USR=${{ secrets.auto_commit_user }}
+            export GITHUB_API_PWD=${{ secrets.auto_commit_pwd }}
+            export CI_TOOLS=${{ env.CI_INTEGRATION_CONTAINER_VERSION }}
+            export CI_TOOLS_EXEC_FOLDER="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
+
+            bash pre_install_platform.bash
+          '
+
       - name: Remote - Patch with component and overwrites
+        if: false
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
@@ -544,6 +571,7 @@ jobs:
               mobros install $(cat /tmp/install_list.apt | tr "\n" " ") -y
               mobros install $(cat /tmp/firmware.apt | tr "\n" " ") -y
               dpkg -i --force-all /tmp/*.deb
+              sudo apt remove ros-noetic-movai-autonomy-pack -y
             '\''
             '
       - name: Remote - Run tests
