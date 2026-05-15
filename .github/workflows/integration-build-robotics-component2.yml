@@ -376,35 +376,6 @@ jobs:
           
           '
 
-      - name: Remote - fetch product version
-        if: false
-        shell: bash
-        run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
-            set -e
-            cd ${{ env.REMOTE_WORKSPACE_PATH }}
-
-            product_dir=${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product
-
-            rm -rf $product_dir
-            mkdir -p $product_dir
-            sudo chmod -R 777 $product_dir
-
-            docker run -u root \
-              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
-              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
-              fetch_product_by_version \
-              --product_version_search ${{ inputs.vs_product_version_pattern}} \
-              --repo ${{ inputs.vs_product_name }} \
-              --gh_api_user ${{ secrets.auto_commit_user }} \
-              --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
-              --target_dir ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/product
-
-            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
-            sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
-
-          '
-
       - name: Copy pre-install
         shell: bash
         run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no .github/workflows/pre_install_platform.bash ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
@@ -523,65 +494,6 @@ jobs:
             bash post_install_platform.bash
           '
 
-      - name: Remote - Patch with component and overwrites
-        if: false
-        shell: bash
-        run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
-            set -e
-            cd ${{ env.REMOTE_WORKSPACE_PATH }}
-            ls -la 
-            
-            cp artifacts/regression_install_overwrites.yaml "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/regression_install_overwrites.yaml"
-            cp artifacts/dependencies.apt "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/dependencies.apt"
-            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
-            docker run \
-              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
-              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
-              overwrite_pkg_dependencies --file ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/regression_install_overwrites.yaml \
-              --gh_api_user ${{ env.GITHUB_API_USR }} \
-              --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-              --ros_distro "ros1"
-            sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
-            cat ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/install_list.apt
-            cp ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/install_list.apt ./install_list.apt
-            cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/ros1 ./
-            echo "deb [arch=all] https://artifacts.cloud.mov.ai/repository/ppa-testing testing main">> movai_keep.list
-            echo "deb [arch=all,amd64] https://artifacts.cloud.mov.ai/repository/ppa-archive-focal-backup focal-backup main" >> movai.list
-            
-            echo "deb [arch=all,amd64] https://artifacts.cloud.mov.ai/repository/ppa-ports-focal-backup ports-focal-backup main" >> movai.list
-            echo "deb https://artifacts.cloud.mov.ai/repository/ppa-proxy-ros-backup ros-backup main" >> movai.list
-            docker run \
-              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
-              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
-              get_yml_value  \
-              --file ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/product/environment-manifest.yaml \
-              --key runtime_environment.applications \
-              --output_file ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/packages.apt
-            sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
-            container_id=$(docker ps --format "{{.Names}}" --filter "name=(^spawner-.*|^ros1-workspace-.*)")
-            docker cp install_list.apt $container_id:/tmp/install_list.apt
-            docker cp ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/packages.apt $container_id:/tmp/packages.apt
-            docker cp ros1 $container_id:/tmp/ros1
-            docker cp artifacts/*.deb $container_id:/tmp/
-            docker cp movai_keep.list $container_id:/tmp/movai_keep.list
-            docker cp movai.list $container_id:/tmp/movai.list
-            docker cp firmware.apt $container_id:/tmp/firmware.apt
-            docker exec -tu root "$container_id" bash -c '\''
-              ls /tmp
-              cp /tmp/movai_keep.list /etc/apt/sources.list.d/movai_keep.list
-              cp /tmp/movai.list /etc/apt/sources.list.d/movai.list
-              apt update
-              mobros install $(cat /tmp/packages.apt| tr "\n" " ") -y
-              rm /etc/apt/sources.list.d/movai.list
-              cd /tmp/ros1
-              apt update
-              mobros install $(cat /tmp/install_list.apt | tr "\n" " ") -y
-              mobros install $(cat /tmp/firmware.apt | tr "\n" " ") -y
-              dpkg -i --force-all /tmp/*.deb
-              sudo apt remove ros-noetic-movai-autonomy-pack -y
-            '\''
-            '
       - name: Remote - Run tests
         shell: bash
         run: |
