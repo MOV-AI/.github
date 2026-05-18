@@ -477,8 +477,7 @@ jobs:
             # for sanity
             CONTAINERS=$(docker ps -a --format '{{.Names}}')
             for container in ${CONTAINERS}; do
-              CONTAINER_ID=$(docker ps -a --format '\''{{.Names}}'\'' --filter "name=^${container}-.*")
-              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
+              docker logs "${container}" &> "${container}.log" || true
             done || true
 
             # movai-service

@@ -684,6 +684,11 @@ jobs:
             ansible "$fleet_host" -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -a' > "$QA_ARTIFACTS_PATH/$fleet_host-docker_ps.log"
             tail -n +2 "$QA_ARTIFACTS_PATH/$fleet_host-docker_ps.log" 2>/dev/null || true
             ansible "$fleet_host" -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u docker --boot --lines=all' > "$QA_ARTIFACTS_PATH/$fleet_host-all-docker.log"
+            # fetch all docker containers logs using ansible and docker logs command, redirecting each container logs to a separate file
+            containers=$(ansible "$fleet_host" -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -a --format "{{.Names}}"') || true
+            for container in $containers; do
+              ansible "$fleet_host" -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker logs $container > "$QA_ARTIFACTS_PATH/$fleet_host-$container.log"'
+            done
           done
           echo "✓ Host logs collected"
           echo "::endgroup::"
