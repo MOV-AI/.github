@@ -76,6 +76,7 @@ jobs:
     secrets:
       auto_commit_user: ${{ secrets.auto_commit_user }}
       auto_commit_mail: ${{ secrets.auto_commit_mail }}
+      auto_commit_password: ${{ secrets.auto_commit_password }}
       registry_user: ${{ secrets.registry_user }}
       registry_password: ${{ secrets.registry_password }}
       nexus_publisher_user: ${{ secrets.nexus_publisher_user }}
