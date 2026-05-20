@@ -76,7 +76,7 @@ env:
   PROVISION_INFRA_VERSION: "2.0.0-17"
   PROVISION_INFRA_DIR: "provision_scripts"
   PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISIONING_ENV_CONF_VERSION: "0.2.0-6"
+  PROVISIONING_ENV_CONF_VERSION: "0.2.0-7"
   PROVISION_ENV_CONF_DIR: "infra_env_configs"
   SIMULATION_ID: CI
   SLACK_CHANNEL: "G0102LEV1CL"
@@ -401,7 +401,7 @@ jobs:
             sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
           '
-      
+
       - name: Remote - Pre-Install switch base
         shell: bash
         run: |
