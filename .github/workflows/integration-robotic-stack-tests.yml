@@ -94,7 +94,7 @@ env:
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISIONING_ENV_CONF_VERSION: "0.2.0-6"
+  PROVISIONING_ENV_CONF_VERSION: "0.2.0-7"
   PROVISION_ENV_CONF_DIR: "infra_env_configs"
 
 jobs:
@@ -525,9 +525,15 @@ jobs:
 
             CONTAINER_ID=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace-.*)")
 
+
             mkdir -p firmwares/
             cp ./*.apt firmwares/
-            docker cp firmwares/ $CONTAINER_ID:/tmp/
+            # Use docker exec/tee to copy files into the container, avoiding docker cp path escape issues
+            docker exec -t $CONTAINER_ID mkdir -p /tmp/firmwares
+            for f in firmwares/*; do
+              fname=$(basename "$f")
+              cat "$f" | docker exec -i $CONTAINER_ID tee "/tmp/firmwares/$fname" > /dev/null
+            done
 
             # Install system requirements
             docker exec -t -u root $CONTAINER_ID bash -c "\
@@ -548,7 +554,11 @@ jobs:
             docker restart $CONTAINER_ID
 
             # Reinforce the container with the firmware packages as /tmp/ is deleted on restart
-            docker cp firmwares/ $CONTAINER_ID:/tmp/
+            docker exec -t $CONTAINER_ID mkdir -p /tmp/firmwares
+            for f in firmwares/*; do
+              fname=$(basename "$f")
+              cat "$f" | docker exec -i $CONTAINER_ID tee "/tmp/firmwares/$fname" > /dev/null
+            done
 
             # Install firmware packages to transform spawner -> studio and then studio -> Project specific
             docker exec -t -u root $CONTAINER_ID bash -c "\
