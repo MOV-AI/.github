@@ -171,7 +171,7 @@ jobs:
 
   Slack-Message-On-Failure:
     runs-on: ubuntu-22.04
-    needs:  [Validate-features, Run-Tests]
+    needs:  [Validate-features, Install-Tests]
     if: always()
     steps:
       - name: Prepare slack variables
@@ -183,7 +183,7 @@ jobs:
           echo "msg_error=$MESSAGE_ERR" >> $GITHUB_OUTPUT
 
       - name: Slack message success
-        if: ${{ inputs.nightly && ( needs.Validate-features.result == 'success' && needs.Run-Tests.result == 'success' ) }}
+        if: ${{ inputs.nightly && ( needs.Validate-features.result == 'success' && needs.Install-Tests.result == 'success' ) }}
         uses: slackapi/slack-github-action@v1.23.0
         with:
           channel-id: ${{ inputs.slack_channel_nightly_msg }}
@@ -192,10 +192,10 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Slack message failure
-        if: ${{ inputs.nightly && ( needs.Validate-features.result == 'failure' || needs.Run-Tests.result == 'failure' ) }}
+        if: ${{ inputs.nightly && ( needs.Validate-features.result == 'failure' || needs.Install-Tests.result == 'failure' ) }}
         uses: slackapi/slack-github-action@v1.23.0
         with:
-          channel-id: 'C02PB9A9F45'
+          channel-id: ${{ inputs.slack_channel_nightly_msg }}
           slack-message: ${{ steps.pre_slack.outputs.msg_error }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
