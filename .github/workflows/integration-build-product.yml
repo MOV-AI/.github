@@ -774,6 +774,7 @@ jobs:
             mkdir /tmp/proj_metadata
             echo "Scans finished. Starting backup of metadata"
             python3 -m tools.backup -p /tmp/proj_metadata/ -m /tmp/manifest.txt -a export -i
+            tar czf /tmp/proj_metadata.tar.gz -C /tmp proj_metadata
             echo "backup of metadata finished"
           ' || true
             echo "export finished"
@@ -782,8 +783,7 @@ jobs:
             docker cp $container_id:/tmp/apt_packages.json artifacts/${{ inputs.product_name }}-${{ matrix.distro }}-apt_packages.json
 
             mkdir -p metadata_artifact tmp_meta
-            docker cp $container_id:/tmp/proj_metadata/ ./
-            tar cvzf ./metadata_artifact/metadata.tar.gz ./proj_metadata
+            docker cp $container_id:/tmp/proj_metadata.tar.gz ./metadata_artifact/metadata.tar.gz
             CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.distro }}.json
 
             echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.distro }}:$(cat product.version)">artifacts/product-${{ matrix.distro }}.image.artifact
@@ -1295,10 +1295,10 @@ jobs:
             } >> /tmp/manifest.txt
             mkdir /tmp/proj_metadata
             python3 -m tools.backup -p /tmp/proj_metadata/ -m /tmp/manifest.txt -a export -i
+            tar czf /tmp/proj_metadata.tar.gz -C /tmp proj_metadata
           ' || true
             mkdir -p metadata_artifact tmp_meta
-            docker cp $container_id:/tmp/proj_metadata/ ./
-            tar cvzf ./metadata_artifact/sim_metadata.tar.gz ./proj_metadata
+            docker cp $container_id:/tmp/proj_metadata.tar.gz ./metadata_artifact/sim_metadata.tar.gz
 
       - name: stash Sim project metadata
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
@@ -2239,7 +2239,7 @@ jobs:
           registry: ${{ env.PUSH_REGISTRY }}
 
       - name: Publish simulator state
-        if: ${{ needs.Install-Simulator-Robot.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' && github.event_name != 'pull_request' }}
+        if: ${{ needs.Install-Simulator-Robot.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' && inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
         shell: bash
         run: |
           . .ci-venv/bin/activate
