@@ -171,6 +171,8 @@ jobs:
           export CONFIG_FILE_NAME=$(cat product/robot.json)
           export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
           export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
+          export GITHUB_API_USR=${{ secrets.auto_commit_user }}
+          export GITHUB_API_PWD=${{ secrets.auto_commit_pwd }}
           mkdir -p test_artifacts
           if test -f .github/workflows/test_setup.bash; then
             echo "Running tests setup"
