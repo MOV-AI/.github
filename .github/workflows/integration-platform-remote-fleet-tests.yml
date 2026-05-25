@@ -651,6 +651,14 @@ jobs:
         with:
           python-version: '3.10'
 
+      - name: Checkout shared workflow scripts
+        if: always()
+        uses: actions/checkout@v6
+        with:
+          repository: MOV-AI/.github
+          ref: fix/DP-2115 # todo: update to v3
+          path: .shared-github
+
       - name: Collect QA Artifacts
         if: always()
         shell: bash
@@ -676,29 +684,18 @@ jobs:
 
           echo "::group::Collect fleet host logs"
           rm -rf "$QA_ARTIFACTS_PATH"
-          mkdir -p "$QA_ARTIFACTS_PATH/"
+          mkdir -p "$QA_ARTIFACTS_PATH"
 
-          for fleet_host in "manager" "member0" "member1"; do
-            echo "Collecting from $fleet_host..."
-            ansible "$fleet_host" -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u movai-service --since "1hour ago"' > "$QA_ARTIFACTS_PATH/$fleet_host.log"
-            ansible "$fleet_host" -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -a' > "$QA_ARTIFACTS_PATH/$fleet_host-docker_ps.log"
-            tail -n +2 "$QA_ARTIFACTS_PATH/$fleet_host-docker_ps.log" 2>/dev/null || true
-            ansible "$fleet_host" -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u docker --boot --lines=all' > "$QA_ARTIFACTS_PATH/$fleet_host-all-docker.log"
-            # fetch all docker containers logs using ansible and docker logs command, redirecting each container logs to a separate file
-            containers=$(ansible "$fleet_host" -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -a --format "{{.Names}}"') || true
-            for container in $containers; do
-              ansible "$fleet_host" -i ./provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker logs $container > "$QA_ARTIFACTS_PATH/$fleet_host-$container.log"'
-            done
-          done
-          echo "✓ Host logs collected"
+          chmod +x ./.shared-github/fetch_logs.bash
+          ./.shared-github/fetch_logs.bash ./provisioned_inventory.yml "$QA_ARTIFACTS_PATH"
           echo "::endgroup::"
 
           echo "::group::Collect test artifacts"
           # shellcheck disable=SC2086
           scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no \
             "${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.tests_dir }}/tests_artifacts" \
-            "$QA_ARTIFACTS_PATH/" || { echo "ERROR: Failed to collect test artifacts"; exit 1; }
-          echo "✓ Test artifacts collected"
+            "$QA_ARTIFACTS_PATH/" || echo "WARN: Failed to collect test artifacts"
+          echo "✓ Test artifacts collection completed"
           echo "::endgroup::"
           deactivate
 

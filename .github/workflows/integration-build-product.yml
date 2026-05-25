@@ -1943,7 +1943,7 @@ jobs:
 
             cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.simulator_tests_setup.outputs.target_dir }}
             CONTAINERS=$(docker ps -a --format '{{.Names}}')
-            for container in ${CONTAINERS}; do
+            for container in "${CONTAINERS}"; do
               docker logs "${container}" &> "${container}.log" || true
             done || true
 

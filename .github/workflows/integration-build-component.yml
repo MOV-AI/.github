@@ -278,7 +278,7 @@ jobs:
         shell: bash
         run: |
           CONTAINERS=$(docker ps -a --format '{{.Names}}')
-          for container in ${CONTAINERS}; do
+          for container in "${CONTAINERS}"; do
             docker logs "${container}" &> "${container}.log" || true
           done || true
 
