@@ -549,6 +549,37 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
 
+    - name: Filter Release Notes
+      if: ${{ inputs.deploy }}
+      shell: bash
+      run: |
+        product_version="${{ steps.bump.outputs.current_version }}"
+
+        # Get the current release notes
+        current_notes=$(gh release view "$product_version" --json body --jq .body)
+
+        # Filter out unwanted PR messages and patterns
+        filtered_notes=$(echo "$current_notes" | \
+          grep -v -i "Temporary PR to bypass branch protection" | \
+          grep -v -i "Auto-merging after creation" | \
+          grep -v -i "Automated PR for" | \
+          grep -v -i "Automatic update" | \
+          grep -v -i "\[skip" | \
+          grep -v "^\* $" | \
+          sed '/^$/N;/^\n$/!P;D')
+
+        # If filtering removed everything or resulted in empty content, keep original
+        if [ -z "$(echo "$filtered_notes" | grep -v '^[[:space:]]*$')" ]; then
+          echo "No content left after filtering, keeping original release notes"
+        else
+          # Update the release with filtered notes
+          echo "$filtered_notes" > /tmp/filtered_notes.txt
+          gh release edit "$product_version" --notes-file /tmp/filtered_notes.txt
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.gh_token }}
+      continue-on-error: true
+
   Release:
     strategy:
       matrix:

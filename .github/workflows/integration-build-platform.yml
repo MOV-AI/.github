@@ -857,9 +857,23 @@ jobs:
               # no PRs exist
               echo "No relevant changes." >> notes.txt
           else
-              # PRs exist
+              # PRs exist - filter out unwanted messages
               for pr in "${PRS[@]}"; do
-                  gh pr view "${pr}" --json body | jq -r .body >> notes.txt
+                  pr_body=$(gh pr view "${pr}" --json body | jq -r .body)
+
+                  # Filter out unwanted patterns
+                  filtered_body=$(echo "$pr_body" | \
+                    grep -v -i "Temporary PR to bypass branch protection" | \
+                    grep -v -i "Auto-merging after creation" | \
+                    grep -v -i "Automated PR for" | \
+                    grep -v -i "Automatic update" | \
+                    grep -v -i "\[skip" | \
+                    sed '/^[[:space:]]*$/d')
+
+                  # Only add if there's content left after filtering
+                  if [ -n "$filtered_body" ]; then
+                    echo "$filtered_body" >> notes.txt
+                  fi
               done
           fi
           echo "" >> notes.txt
@@ -870,8 +884,18 @@ jobs:
               # no PRs exist
               echo "No PRs." >> notes.txt
           else
-              # PRs exist
-              echo "${ORIGINAL_RN}" | grep "\* .* by @.* in https://github.com/${{ github.repository_owner }}/" >> notes.txt
+              # PRs exist - also filter here
+              pr_list=$(echo "${ORIGINAL_RN}" | grep "\* .* by @.* in https://github.com/${{ github.repository_owner }}/" | \
+                grep -v -i "Temporary PR to bypass branch protection" | \
+                grep -v -i "Auto-merging after creation" | \
+                grep -v -i "Automated PR for" | \
+                grep -v -i "Automatic update")
+
+              if [ -n "$pr_list" ]; then
+                echo "$pr_list" >> notes.txt
+              else
+                echo "No relevant PRs to display." >> notes.txt
+              fi
           fi
           echo "" >> notes.txt
 
