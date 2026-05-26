@@ -1748,6 +1748,7 @@ jobs:
           echo "Display detected (dinamic) is $DISPLAY"
           export DISPLAY=":0"
           echo "Display detected is $DISPLAY"
+          export REGISTRY="${{ env.REGISTRY }}"
 
           cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
