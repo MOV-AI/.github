@@ -656,7 +656,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: MOV-AI/.github
-          ref: fix/DP-2115 # todo: update to v3
+          ref: v3
           path: .shared-github
 
       - name: Collect QA Artifacts

@@ -473,7 +473,7 @@ jobs:
 
   Fleet-Validations:
     needs: [Validate-bootstrap-configs, Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@fix/DP-2115
+    uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@v3
     secrets: inherit
     with:
       collect_deployable_artifacts: true
