@@ -689,8 +689,8 @@ jobs:
           rm -rf "$QA_ARTIFACTS_PATH"
           mkdir -p "$QA_ARTIFACTS_PATH"
 
-          chmod +x ./.shared-github/fetch_logs.bash
-          ./.shared-github/fetch_logs.bash ./provisioned_inventory.yml "$QA_ARTIFACTS_PATH"
+          chmod +x ./.shared-github/.github/scripts/scp_collect_logs.bash
+          ./.shared-github/.github/scripts/scp_collect_logs.bash ./provisioned_inventory.yml "$QA_ARTIFACTS_PATH"
           echo "::endgroup::"
 
           echo "::group::Collect test artifacts"
