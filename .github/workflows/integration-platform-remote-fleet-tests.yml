@@ -676,6 +676,9 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::Setup Ansible environment"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
+          chmod 600 ~/.ssh/aws_slave.pem
           python3.10 -m venv ansible-venv
           source ansible-venv/bin/activate
           python3.10 -m pip install -qq ansible==9.13.0

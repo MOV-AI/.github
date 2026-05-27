@@ -9,6 +9,7 @@ set -euo pipefail
 # Environment variables:
 #   HOSTS                  Space-separated host aliases (default: auto-discover fleet group, fallback manager member0 member1)
 #   REMOTE_BASE            Base directory on remote hosts (default: /tmp/qa_logs)
+#   SSH_KEY                SSH private key path for scp (default: ~/.ssh/aws_slave.pem)
 #   SSH_TARGET_USER        If set, scp uses SSH_TARGET_USER@<host>
 #   STRICT_HOST_KEY_CHECK  yes/no (default: no)
 #   LOG_WINDOW             journalctl window (default: 1hour ago)
@@ -16,9 +17,19 @@ set -euo pipefail
 INVENTORY="${1:-./staging/provisioned_inventory.yml}"
 OUTPUT_DIR="${2:-./qa_artifacts_test}"
 REMOTE_BASE="${REMOTE_BASE:-/tmp/qa_logs}"
+SSH_KEY="${SSH_KEY:-$HOME/.ssh/aws_slave.pem}"
 SSH_TARGET_USER="${SSH_TARGET_USER:-}"
 STRICT_HOST_KEY_CHECK="${STRICT_HOST_KEY_CHECK:-no}"
 LOG_WINDOW="${LOG_WINDOW:-1hour ago}"
+
+expand_path() {
+	local p="$1"
+	if [[ "$p" == ~* ]]; then
+		echo "$HOME${p:1}"
+	else
+		echo "$p"
+	fi
+}
 
 log() {
 	echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
@@ -28,6 +39,12 @@ run_ansible() {
 	local host="$1"
 	local cmd="$2"
 	ansible "$host" -i "$INVENTORY" -m shell -a "$cmd"
+}
+
+inventory_var() {
+	local host="$1"
+	local key="$2"
+	ansible-inventory -i "$INVENTORY" --host "$host" 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('$key',''))" 2>/dev/null || true
 }
 
 mkdir -p "$OUTPUT_DIR"
@@ -110,19 +127,45 @@ for host in $HOSTS; do
 
 	echo "host=$host containers_total=$container_total containers_failed=$container_failed remote_dir=$remote_dir" >> "$OUTPUT_DIR/host_summary.log"
 
-	target_host="$host"
-	if [[ -n "$SSH_TARGET_USER" ]]; then
-		target_host="$SSH_TARGET_USER@$host"
+	target_host="$(inventory_var "$host" "ansible_host")"
+	[[ -z "$target_host" ]] && target_host="$host"
+
+	target_user="$SSH_TARGET_USER"
+	if [[ -z "$target_user" ]]; then
+		target_user="$(inventory_var "$host" "ansible_user")"
 	fi
+	if [[ -z "$target_user" ]]; then
+		target_user="$(inventory_var "$host" "ansible_ssh_user")"
+	fi
+
+	target_port="$(inventory_var "$host" "ansible_port")"
+	target_key="$SSH_KEY"
+	if [[ -z "$target_key" || ! -f "$target_key" ]]; then
+		target_key="$(inventory_var "$host" "ansible_ssh_private_key_file")"
+	fi
+	target_key="$(expand_path "$target_key")"
 
 	mkdir -p "$OUTPUT_DIR/$host"
 	log "==> [$host] fetch logs with scp from: $target_host"
 
-	scp -o "StrictHostKeyChecking=$STRICT_HOST_KEY_CHECK" -r \
-		"$target_host:$REMOTE_BASE/$host/" \
+	remote_spec="$target_host:$REMOTE_BASE/$host/"
+	if [[ -n "$target_user" ]]; then
+		remote_spec="$target_user@$target_host:$REMOTE_BASE/$host/"
+	fi
+
+	scp_opts=("-o" "StrictHostKeyChecking=$STRICT_HOST_KEY_CHECK")
+	if [[ -n "$target_port" ]]; then
+		scp_opts+=("-P" "$target_port")
+	fi
+	if [[ -n "$target_key" && -f "$target_key" ]]; then
+		scp_opts+=("-i" "$target_key")
+	fi
+
+	scp "${scp_opts[@]}" -r \
+		"$remote_spec" \
 		"$OUTPUT_DIR/$host/" >> "$OUTPUT_DIR/scp_fetch.log" 2>> "$OUTPUT_DIR/scp_fetch.err" || \
 		{
-			echo "scp fetch failed on host=$host" >> "$FAILURES_FILE"
+			echo "scp fetch failed on host=$host remote=$remote_spec key=${target_key:-none}" >> "$FAILURES_FILE"
 			host_failed=1
 		}
 
