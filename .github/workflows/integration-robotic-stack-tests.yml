@@ -33,6 +33,11 @@ on:
         type: string
         default: ""
         description: Version of the simulator tests to run. If not provided, the version will be taken from the product manifest.
+      apt_region:
+        required: false
+        type: string
+        default: "fr"
+        description: Region for APT package manager.
 
     secrets:
       auto_commit_user:
@@ -212,6 +217,7 @@ jobs:
           echo 'pool="IP-Temp-VMs"'>>input.tfvars
           echo 'proxmox_ve_username="${{ secrets.proxmox_ve_sim_username }}"'>>input.tfvars
           echo 'proxmox_ve_password="${{ secrets.proxmox_ve_sim_password }}"'>>input.tfvars
+          echo 'apt_region="${{ inputs.apt_region }}"'>>input.tfvars
           echo "\n">>input
 
           echo "File args: $var_file_arg"
