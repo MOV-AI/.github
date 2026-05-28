@@ -437,7 +437,7 @@ jobs:
       shell: bash
       run: |
         commit_hash=$(git log --format="%H" -n 1)
-        product_version=${{ steps.vars-after-raise.outputs.ros_pkg_version }}
+        product_version=${{ steps.vars-after-raise.outputs.npm_pkg_version }}
 
         # get previous release tag
         previous_tag=$(gh release list \
@@ -467,7 +467,7 @@ jobs:
     - name: Filter Release Notes
       shell: bash
       run: |
-        product_version=${{ steps.vars-after-raise.outputs.ros_pkg_version }}
+        product_version=${{ steps.vars-after-raise.outputs.npm_pkg_version }}
 
         # Get the current release notes
         current_notes=$(gh release view "$product_version" --json body --jq .body)
