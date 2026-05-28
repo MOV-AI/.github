@@ -398,6 +398,12 @@ jobs:
       run: |
         echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
+    - name: Sync branch with remote before protected push
+      run: |
+        BRANCH="${{ steps.pre_raise.outputs.branch }}"
+        git fetch origin "$BRANCH"
+        git pull --rebase origin "$BRANCH"
+
     - name: Raise App version
       uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
       with:
