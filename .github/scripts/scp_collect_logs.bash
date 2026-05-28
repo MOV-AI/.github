@@ -148,9 +148,9 @@ for host in $HOSTS; do
 	mkdir -p "$OUTPUT_DIR/$host"
 	log "==> [$host] fetch logs with scp from: $target_host"
 
-	remote_spec="$target_host:$REMOTE_BASE/$host/."
+	remote_spec="$target_host:$REMOTE_BASE/$host/"
 	if [[ -n "$target_user" ]]; then
-		remote_spec="$target_user@$target_host:$REMOTE_BASE/$host/."
+		remote_spec="$target_user@$target_host:$REMOTE_BASE/$host/"
 	fi
 
 	scp_opts=("-o" "StrictHostKeyChecking=$STRICT_HOST_KEY_CHECK")
