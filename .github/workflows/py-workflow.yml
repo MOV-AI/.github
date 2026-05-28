@@ -552,7 +552,7 @@ jobs:
     - name: Filter Release Notes
       shell: bash
       run: |
-        product_version=${{ steps.vars-after-raise.outputs.ros_pkg_version }}
+        product_version="${{ steps.bump.outputs.current_version }}"
 
         current_notes=$(gh release view "$product_version" --json body --jq .body)
 
