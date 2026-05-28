@@ -50,6 +50,7 @@ env:
   USERSPACE_FOLDER_PATH: userspace
   REMOTE_WORKSPACE_PATH: workspace
   ARTIFACTS_RETENTION_DAYS: 15
+  REGISTRY: "registry.cloud.mov.ai"
   CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:${{ inputs.ci_integration_scripts_version}}"
   CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
   CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
@@ -105,6 +106,13 @@ jobs:
           QUICKSTART_VERSION=$(cat product/quickstart_version.txt)
           CONFIG_FILE_NAME=${{ inputs.robot_json }}
           echo "product/$CONFIG_FILE_NAME" > product/robot.json
+
+      - name: Login to ${{ env.REGISTRY }} Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.REGISTRY }}
 
       - name: pre-install patch
         shell: bash
