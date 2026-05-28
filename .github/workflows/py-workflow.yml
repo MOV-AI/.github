@@ -549,6 +549,28 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
 
+    - name: Filter Release Notes
+      shell: bash
+      run: |
+        product_version=${{ steps.vars-after-raise.outputs.ros_pkg_version }}
+
+        current_notes=$(gh release view "$product_version" --json body --jq .body)
+
+        filtered_notes=$(echo "$current_notes" | \
+          grep -v -E -i "Temporary PR:|Temporary PR to bypass branch protection")
+
+        # If filtering removed everything or resulted in empty content, keep original
+        if [ -z "$(echo "$filtered_notes" | grep -v '^[[:space:]]*$')" ]; then
+          echo "No content left after filtering, keeping original release notes"
+        else
+          # Update the release with filtered notes
+          echo "$filtered_notes" > /tmp/filtered_notes.txt
+          gh release edit "$product_version" --notes-file /tmp/filtered_notes.txt
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.gh_token }}
+      continue-on-error: true
+
   Release:
     strategy:
       matrix:

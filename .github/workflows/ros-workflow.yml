@@ -585,15 +585,53 @@ jobs:
       run: |
         commit_hash=$(git log --format="%H" -n 1)
         product_version=${{ steps.vars-after-raise.outputs.ros_pkg_version }}
+
+        # get previous release tag
+        previous_tag=$(gh release list \
+          --limit 2 \
+          --json tagName \
+          --jq '.[1].tagName')
+
+        echo "Previous tag: $previous_tag"
+
         previous_version_option=""
-        if gh release view ${{ steps.vars-after-raise.outputs.ros_pkg_version }} &>/dev/null; then
-          previous_version_option="--notes-start-tag ${{ steps.vars-after-raise.outputs.ros_pkg_version }}"
+        if [ -n "$previous_tag" ]; then
+          previous_version_option="--notes-start-tag $previous_tag"
         fi
-        gh release create -p --generate-notes $previous_version_option --target $commit_hash -t "Release of $product_version" $product_version
-        # add all files in the artifacts folder
-        find artifacts -type f -exec gh release upload $product_version {} \;
+
+        gh release create \
+          -p \
+          --generate-notes \
+          $previous_version_option \
+          --target "$commit_hash" \
+          -t "Release of $product_version" \
+          "$product_version"
+
+        find artifacts -type f -exec gh release upload "$product_version" {} \;
       env:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+    - name: Filter Release Notes
+      shell: bash
+      run: |
+        product_version=${{ steps.vars-after-raise.outputs.ros_pkg_version }}
+
+        current_notes=$(gh release view "$product_version" --json body --jq .body)
+
+        filtered_notes=$(echo "$current_notes" | \
+          grep -v -E -i "Temporary PR:|Temporary PR to bypass branch protection")
+
+        # If filtering removed everything or resulted in empty content, keep original
+        if [ -z "$(echo "$filtered_notes" | grep -v '^[[:space:]]*$')" ]; then
+          echo "No content left after filtering, keeping original release notes"
+        else
+          # Update the release with filtered notes
+          echo "$filtered_notes" > /tmp/filtered_notes.txt
+          gh release edit "$product_version" --notes-file /tmp/filtered_notes.txt
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.gh_token }}
+      continue-on-error: true
 
     - name: Propagate release
       if: ${{ inputs.propagate_to_projects }}
