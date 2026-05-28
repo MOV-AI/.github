@@ -806,13 +806,14 @@ jobs:
       - name: Filter Release Notes
         shell: bash
         run: |
-          product_version="${{ needs.Raise.outputs.package_version }}"
+          product_version=${{ steps.vars-after-raise.outputs.ros_pkg_version }}
 
           # Get the current release notes
           current_notes=$(gh release view "$product_version" --json body --jq .body)
 
           # Filter out unwanted PR messages and patterns
           filtered_notes=$(echo "$current_notes" | \
+            grep -v -E -i "Temporary PR:" | \
             grep -v -i "Temporary PR to bypass branch protection" | \
             grep -v -i "Auto-merging after creation" | \
             grep -v -i "Automated PR for" | \

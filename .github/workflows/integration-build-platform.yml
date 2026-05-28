@@ -863,6 +863,7 @@ jobs:
 
                   # Filter out unwanted patterns
                   filtered_body=$(echo "$pr_body" | \
+                    grep -v -E -i "Temporary PR:" | \
                     grep -v -i "Temporary PR to bypass branch protection" | \
                     grep -v -i "Auto-merging after creation" | \
                     grep -v -i "Automated PR for" | \
@@ -886,6 +887,7 @@ jobs:
           else
               # PRs exist - also filter here
               pr_list=$(echo "${ORIGINAL_RN}" | grep "\* .* by @.* in https://github.com/${{ github.repository_owner }}/" | \
+                grep -v -E -i "Temporary PR:" | \
                 grep -v -i "Temporary PR to bypass branch protection" | \
                 grep -v -i "Auto-merging after creation" | \
                 grep -v -i "Automated PR for" | \
