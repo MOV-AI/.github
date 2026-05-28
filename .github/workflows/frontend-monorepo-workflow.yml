@@ -402,7 +402,7 @@ jobs:
       run: |
         BRANCH="${{ steps.pre_raise.outputs.branch }}"
         git fetch origin "$BRANCH"
-        git pull --rebase origin "$BRANCH"
+        git pull origin "$BRANCH"
 
     - name: Raise App version
       uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
