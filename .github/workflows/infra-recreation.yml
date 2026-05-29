@@ -176,7 +176,7 @@ jobs:
           echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
           echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
           echo 'gh_runner_labels=["integration-pipeline-${{ matrix.node }}"]'>>input.tfvars
-          echo "\n">>input
+          echo "\n">>input.tfvars
 
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
@@ -321,9 +321,7 @@ jobs:
         var_file_arg="-var-file=${selected_var_file}"
         echo "Selected tfvars: ${selected_var_file}"
 
-
         echo "proxmox_host_list=[$node_list_str]">>input.tfvars
-
         echo 'gh_runner_nr="${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }}"'>>input.tfvars
         echo 'gh_runner_name_prefix="${{ env.NAMES_PREFIX }}${{ matrix.node }}-ip-runner"'>>input.tfvars
         echo "ip_list=[$ip_list_str]">>input.tfvars
@@ -333,7 +331,8 @@ jobs:
         echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
         echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
         echo 'gh_runner_labels=["integration-pipeline-${{ matrix.node }}","integration-pipeline"]'>>input.tfvars
-        echo "\n">>input
+        echo 'cloud_init_packages=["python3-dev"]'>>input.tfvars
+        echo "\n">>input.tfvars
 
         echo "File args: $var_file_arg"
         echo "Input File args: $(cat input.tfvars)"
@@ -490,7 +489,7 @@ jobs:
           echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
           echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
           echo 'gh_runner_labels=["qa-pipeline-${{ matrix.node }}"]'>>input.tfvars
-          echo "\n">>input
+          echo "\n">>input.tfvars
 
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
@@ -634,9 +633,7 @@ jobs:
         var_file_arg="-var-file=${selected_var_file}"
         echo "Selected tfvars: ${selected_var_file}"
 
-
         echo "proxmox_host_list=[$node_list_str]">>input.tfvars
-
         echo 'gh_runner_nr="${{ fromJson(inputs.INFRA_QA_CONFIGURATION)[matrix.node] }}"'>>input.tfvars
         echo 'gh_runner_name_prefix="${{ env.NAMES_PREFIX }}${{ matrix.node }}-qa-runner"'>>input.tfvars
         echo "ip_list=[$ip_list_str]">>input.tfvars
@@ -646,7 +643,8 @@ jobs:
         echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
         echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
         echo 'gh_runner_labels=["qa-pipeline-${{ matrix.node }}","qa-pipeline","qa-runner"]'>>input.tfvars
-        echo "\n">>input
+        echo 'cloud_init_packages=["python3-dev"]'>>input.tfvars
+        echo "\n">>input.tfvars
 
         echo "File args: $var_file_arg"
         echo "Input File args: $(cat input.tfvars)"
@@ -947,9 +945,7 @@ jobs:
         var_file_arg="-var-file=${selected_var_file}"
         echo "Selected tfvars: ${selected_var_file}"
 
-
         echo "proxmox_host_list=[$node_list_str]" >> input.tfvars
-
         echo 'gh_runner_nr="${{ fromJson(inputs.INFRA_ROBOTICS_SIM_CONFIGURATION)[matrix.node] }}"' >> input.tfvars
         echo 'gh_runner_name_prefix="${{ env.NAMES_PREFIX }}${{ matrix.node }}-robotics-sim-runner"' >> input.tfvars
         echo "ip_list=[$ip_list_str]" >> input.tfvars
@@ -959,6 +955,7 @@ jobs:
         echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"' >> input.tfvars
         echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"' >> input.tfvars
         echo 'gh_runner_labels=["robotics-sim-runner-${{ matrix.node }}","robotics-sim-runner"]' >> input.tfvars
+        echo 'cloud_init_packages=["python3-dev"]'>>input.tfvars
         echo "\n" >> input
 
         echo "File args: $var_file_arg"
@@ -1260,9 +1257,7 @@ jobs:
         var_file_arg="-var-file=${selected_var_file}"
         echo "Selected tfvars: ${selected_var_file}"
 
-
         echo "proxmox_host_list=[$node_list_str]" >> input.tfvars
-
         echo 'gh_runner_nr="${{ fromJson(inputs.INFRA_REDHAT_ORACLE_CONFIGURATION)[matrix.node] }}"' >> input.tfvars
         echo 'gh_runner_name_prefix="${{ env.NAMES_PREFIX }}${{ matrix.node }}-redhat-oracle-runner"' >> input.tfvars
         echo "ip_list=[$ip_list_str]" >> input.tfvars
@@ -1272,6 +1267,7 @@ jobs:
         echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"' >> input.tfvars
         echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"' >> input.tfvars
         echo 'gh_runner_labels=["redhat-oracle-runner-${{ matrix.node }}","redhat-oracle-runner"]' >> input.tfvars
+        echo 'cloud_init_packages=["python3-dev"]'>>input.tfvars
         echo "\n" >> input
 
         echo "File args: $var_file_arg"
@@ -1573,9 +1569,7 @@ jobs:
         var_file_arg="-var-file=${selected_var_file}"
         echo "Selected tfvars: ${selected_var_file}"
 
-
         echo "proxmox_host_list=[$node_list_str]" >> input.tfvars
-
         echo 'gh_runner_nr="${{ fromJson(inputs.INFRA_PACKER_CONFIGURATION)[matrix.node] }}"' >> input.tfvars
         echo 'gh_runner_name_prefix="${{ env.NAMES_PREFIX }}${{ matrix.node }}-packer-runner"' >> input.tfvars
         echo "ip_list=[$ip_list_str]" >> input.tfvars
@@ -1585,6 +1579,7 @@ jobs:
         echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"' >> input.tfvars
         echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"' >> input.tfvars
         echo 'gh_runner_labels=["packer-runner-${{ matrix.node }}","packer-runner"]' >> input.tfvars
+        echo 'cloud_init_packages=["python3-dev"]'>>input.tfvars
         echo "\n" >> input
 
         echo "File args: $var_file_arg"
