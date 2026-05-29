@@ -42,18 +42,18 @@ on:
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.31"
   PROVISION_INFRA_REPO: "devops-tf-bpg-runners"
-  PROVISION_INFRA_VERSION: "fix/DP-2026"
+  PROVISION_INFRA_VERSION: "0.1.0-1"
   PROVISION_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISION_ENV_CONF_VERSION: "fix/IT-68_remove_qemu-guest-agent-install"
+  PROVISION_ENV_CONF_VERSION: "0.2.2-1"
   PROVISION_POOL: "GithubRunners"
-  SLACK_CHANNEL: "C05K2KF1UP8" #G0102LEV1CL"
-  NAMES_PREFIX: "temp-" # temporary to avoid conflicts with existing runners, can be removed once we are ready to switch to the new infrastructure
-  #INFRA_NODES: '["hel0", "hel1"]'
-  #INFRA_IP_CONFIGURATION: '{"hel0": 0,"hel1": 4}'
-  #INFRA_QA_CONFIGURATION: '{"hel0": 0,"hel1": 1}'
-  #INFRA_ROBOTICS_SIM_CONFIGURATION: '{"hel0": 1,"hel1": 1}'
-  #INFRA_REDHAT_ORACLE_CONFIGURATION: '{"hel0": 1,"hel1": 1}'
-  #INFRA_PACKER_CONFIGURATION: '{"hel0": 1,"hel1": 1}'
+  SLACK_CHANNEL: "G0102LEV1CL"
+  NAMES_PREFIX: "ng-" # temporary to avoid conflicts with existing runners, can be removed once we validated new infrastructure
+  # INFRA_NODES: '["hel0", "hel1"]'
+  # INFRA_IP_CONFIGURATION: '{"hel0": 2,"hel1": 8}'
+  # INFRA_QA_CONFIGURATION: '{"hel0": 1,"hel1": 2}'
+  # INFRA_ROBOTICS_SIM_CONFIGURATION: '{"hel0": 1,"hel1": 1}'
+  # INFRA_REDHAT_ORACLE_CONFIGURATION: '{"hel0": 1,"hel1": 1}'
+  # INFRA_PACKER_CONFIGURATION: '{"hel0": 1,"hel1": 1}'
 
 jobs:
   Slack-thread:
