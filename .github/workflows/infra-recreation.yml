@@ -154,7 +154,15 @@ jobs:
           node_list_str=${multiply_node::-1}
           multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }}})
           ip_list_str=${multiply_ips::-1}
-          var_file_arg='-var-file=../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars'
+          desired_profile='gh_runner'
+          base_var_dir="../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel"
+          selected_var_file="${base_var_dir}/${{ matrix.node }}_${desired_profile}.tfvars"
+          if [[ ! -f "${selected_var_file}" ]]; then
+            echo "Missing tfvars file: ${selected_var_file}" >&2
+            exit 1
+          fi
+          var_file_arg="-var-file=${selected_var_file}"
+          echo "Selected tfvars: ${selected_var_file}"
 
           {
             echo "proxmox_host_list=[$node_list_str]"
@@ -303,7 +311,15 @@ jobs:
         node_list_str=${multiply_node::-1}
         multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }}})
         ip_list_str=${multiply_ips::-1}
-        var_file_arg='-var-file=../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars'
+        desired_profile='gh_runner'
+        base_var_dir="../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel"
+        selected_var_file="${base_var_dir}/${{ matrix.node }}_${desired_profile}.tfvars"
+        if [[ ! -f "${selected_var_file}" ]]; then
+          echo "Missing tfvars file: ${selected_var_file}" >&2
+          exit 1
+        fi
+        var_file_arg="-var-file=${selected_var_file}"
+        echo "Selected tfvars: ${selected_var_file}"
 
 
         echo "proxmox_host_list=[$node_list_str]">>input.tfvars
@@ -452,7 +468,15 @@ jobs:
           node_list_str=${multiply_node::-1}
           multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_QA_CONFIGURATION)[matrix.node] }}})
           ip_list_str=${multiply_ips::-1}
-          var_file_arg='-var-file=../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars'
+          desired_profile='gh_runner'
+          base_var_dir="../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel"
+          selected_var_file="${base_var_dir}/${{ matrix.node }}_${desired_profile}.tfvars"
+          if [[ ! -f "${selected_var_file}" ]]; then
+            echo "Missing tfvars file: ${selected_var_file}" >&2
+            exit 1
+          fi
+          var_file_arg="-var-file=${selected_var_file}"
+          echo "Selected tfvars: ${selected_var_file}"
 
 
           echo "proxmox_host_list=[$node_list_str]">>input.tfvars
@@ -600,7 +624,15 @@ jobs:
         node_list_str=${multiply_node::-1}
         multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_QA_CONFIGURATION)[matrix.node] }}})
         ip_list_str=${multiply_ips::-1}
-        var_file_arg='-var-file=../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars'
+        desired_profile='gh_runner'
+        base_var_dir="../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel"
+        selected_var_file="${base_var_dir}/${{ matrix.node }}_${desired_profile}.tfvars"
+        if [[ ! -f "${selected_var_file}" ]]; then
+          echo "Missing tfvars file: ${selected_var_file}" >&2
+          exit 1
+        fi
+        var_file_arg="-var-file=${selected_var_file}"
+        echo "Selected tfvars: ${selected_var_file}"
 
 
         echo "proxmox_host_list=[$node_list_str]">>input.tfvars
@@ -749,7 +781,15 @@ jobs:
           node_list_str=${multiply_node::-1}
           multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_ROBOTICS_SIM_CONFIGURATION)[matrix.node] }}})
           ip_list_str=${multiply_ips::-1}
-          var_file_arg='-var-file=../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars'
+          desired_profile='gh_sim_runner'
+          base_var_dir="../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel"
+          selected_var_file="${base_var_dir}/${{ matrix.node }}_${desired_profile}.tfvars"
+          if [[ ! -f "${selected_var_file}" ]]; then
+            echo "Missing tfvars file: ${selected_var_file}" >&2
+            exit 1
+          fi
+          var_file_arg="-var-file=${selected_var_file}"
+          echo "Selected tfvars: ${selected_var_file}"
 
 
           echo "proxmox_host_list=[$node_list_str]" >> input.tfvars
@@ -897,7 +937,15 @@ jobs:
         node_list_str=${multiply_node::-1}
         multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_ROBOTICS_SIM_CONFIGURATION)[matrix.node] }}})
         ip_list_str=${multiply_ips::-1}
-        var_file_arg='-var-file=../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars'
+        desired_profile='gh_sim_runner'
+        base_var_dir="../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel"
+        selected_var_file="${base_var_dir}/${{ matrix.node }}_${desired_profile}.tfvars"
+        if [[ ! -f "${selected_var_file}" ]]; then
+          echo "Missing tfvars file: ${selected_var_file}" >&2
+          exit 1
+        fi
+        var_file_arg="-var-file=${selected_var_file}"
+        echo "Selected tfvars: ${selected_var_file}"
 
 
         echo "proxmox_host_list=[$node_list_str]" >> input.tfvars
@@ -1046,7 +1094,15 @@ jobs:
           node_list_str=${multiply_node::-1}
           multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_REDHAT_ORACLE_CONFIGURATION)[matrix.node] }}})
           ip_list_str=${multiply_ips::-1}
-          var_file_arg='-var-file=../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars'
+          desired_profile='gh_redhat_oracle_runner'
+          base_var_dir="../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel"
+          selected_var_file="${base_var_dir}/${{ matrix.node }}_${desired_profile}.tfvars"
+          if [[ ! -f "${selected_var_file}" ]]; then
+            echo "Missing tfvars file: ${selected_var_file}" >&2
+            exit 1
+          fi
+          var_file_arg="-var-file=${selected_var_file}"
+          echo "Selected tfvars: ${selected_var_file}"
 
 
           echo "proxmox_host_list=[$node_list_str]" >> input.tfvars
@@ -1194,7 +1250,15 @@ jobs:
         node_list_str=${multiply_node::-1}
         multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_REDHAT_ORACLE_CONFIGURATION)[matrix.node] }}})
         ip_list_str=${multiply_ips::-1}
-        var_file_arg='-var-file=../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars'
+        desired_profile='gh_redhat_oracle_runner'
+        base_var_dir="../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel"
+        selected_var_file="${base_var_dir}/${{ matrix.node }}_${desired_profile}.tfvars"
+        if [[ ! -f "${selected_var_file}" ]]; then
+          echo "Missing tfvars file: ${selected_var_file}" >&2
+          exit 1
+        fi
+        var_file_arg="-var-file=${selected_var_file}"
+        echo "Selected tfvars: ${selected_var_file}"
 
 
         echo "proxmox_host_list=[$node_list_str]" >> input.tfvars
@@ -1343,7 +1407,15 @@ jobs:
           node_list_str=${multiply_node::-1}
           multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_PACKER_CONFIGURATION)[matrix.node] }}})
           ip_list_str=${multiply_ips::-1}
-          var_file_arg='-var-file=../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars'
+          desired_profile='gh_packer_runner'
+          base_var_dir="../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel"
+          selected_var_file="${base_var_dir}/${{ matrix.node }}_${desired_profile}.tfvars"
+          if [[ ! -f "${selected_var_file}" ]]; then
+            echo "Missing tfvars file: ${selected_var_file}" >&2
+            exit 1
+          fi
+          var_file_arg="-var-file=${selected_var_file}"
+          echo "Selected tfvars: ${selected_var_file}"
 
 
           echo "proxmox_host_list=[$node_list_str]" >> input.tfvars
@@ -1491,7 +1563,15 @@ jobs:
         node_list_str=${multiply_node::-1}
         multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_PACKER_CONFIGURATION)[matrix.node] }}})
         ip_list_str=${multiply_ips::-1}
-        var_file_arg='-var-file=../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars'
+        desired_profile='gh_packer_runner'
+        base_var_dir="../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel"
+        selected_var_file="${base_var_dir}/${{ matrix.node }}_${desired_profile}.tfvars"
+        if [[ ! -f "${selected_var_file}" ]]; then
+          echo "Missing tfvars file: ${selected_var_file}" >&2
+          exit 1
+        fi
+        var_file_arg="-var-file=${selected_var_file}"
+        echo "Selected tfvars: ${selected_var_file}"
 
 
         echo "proxmox_host_list=[$node_list_str]" >> input.tfvars
