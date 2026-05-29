@@ -176,7 +176,7 @@ jobs:
           echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
           echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
           echo 'gh_runner_labels=["integration-pipeline-${{ matrix.node }}"]'>>input.tfvars
-          echo "\n">>input.tfvars
+
 
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
@@ -332,7 +332,7 @@ jobs:
         echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
         echo 'gh_runner_labels=["integration-pipeline-${{ matrix.node }}","integration-pipeline"]'>>input.tfvars
         echo 'cloud_init_packages=["python3-dev"]'>>input.tfvars
-        echo "\n">>input.tfvars
+
 
         echo "File args: $var_file_arg"
         echo "Input File args: $(cat input.tfvars)"
@@ -489,7 +489,7 @@ jobs:
           echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
           echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
           echo 'gh_runner_labels=["qa-pipeline-${{ matrix.node }}"]'>>input.tfvars
-          echo "\n">>input.tfvars
+
 
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
@@ -644,7 +644,7 @@ jobs:
         echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
         echo 'gh_runner_labels=["qa-pipeline-${{ matrix.node }}","qa-pipeline","qa-runner"]'>>input.tfvars
         echo 'cloud_init_packages=["python3-dev"]'>>input.tfvars
-        echo "\n">>input.tfvars
+
 
         echo "File args: $var_file_arg"
         echo "Input File args: $(cat input.tfvars)"
