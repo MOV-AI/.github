@@ -73,9 +73,6 @@ runs:
         BRANCH="${{ inputs.branch }}"
         REPO="${{ inputs.repository }}"
 
-        echo "Updating apt package lists..."
-        sudo apt-get update
-
         echo "Checking branch protection configuration..."
 
         # Check for rulesets
