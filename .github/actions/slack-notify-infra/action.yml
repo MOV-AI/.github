@@ -1,0 +1,74 @@
+name: 'Send Slack Notification for Infrastructure Job'
+description: 'Sends Slack notifications for infrastructure jobs (success/failure) with job URL and thread support'
+
+inputs:
+  message:
+    description: 'Success message to send to Slack'
+    required: true
+  message_error:
+    description: 'Error message to send to Slack (shown on failure)'
+    required: true
+  slack_token:
+    description: 'Slack API token'
+    required: true
+  slack_channel:
+    description: 'Slack channel ID'
+    required: true
+  slack_thread_id:
+    description: 'Slack thread timestamp to reply to (optional; if empty, creates top-level message)'
+    required: false
+    default: ''
+  gh_api_token:
+    description: 'GitHub API token for retrieving job details'
+    required: true
+  job_name:
+    description: 'GitHub job name (used to filter jobs)'
+    required: true
+  repository:
+    description: 'Repository name in format owner/repo'
+    required: true
+  run_id:
+    description: 'GitHub workflow run ID'
+    required: true
+  run_attempt:
+    description: 'GitHub workflow run attempt number'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Get current job id
+      if: always()
+      shell: bash
+      id: job_info
+      run: |
+        job_html_url=$(gh api repos/${{ inputs.repository }}/actions/runs/${{ inputs.run_id }}/attempts/${{ inputs.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ inputs.job_name }}"))) | .[0].html_url')
+        echo "job_url=${job_html_url}" | tee >> $GITHUB_OUTPUT
+      env:
+        GITHUB_TOKEN: ${{ inputs.gh_api_token }}
+
+    - name: Send Slack success message
+      if: ${{ success() && always() }}
+      uses: slackapi/slack-github-action@v2
+      with:
+        method: chat.postMessage
+        token: ${{ inputs.slack_token }}
+        payload: |
+          {
+            "channel": "${{ inputs.slack_channel }}",
+            "text": "${{ inputs.message }}\n  Details: ${{ steps.job_info.outputs.job_url }}",
+            "thread_ts": "${{ inputs.slack_thread_id }}"
+          }
+
+    - name: Send Slack failure message
+      if: ${{ failure() && always() }}
+      uses: slackapi/slack-github-action@v2
+      with:
+        method: chat.postMessage
+        token: ${{ inputs.slack_token }}
+        payload: |
+          {
+            "channel": "${{ inputs.slack_channel }}",
+            "text": "${{ inputs.message_error }}\n  Details: ${{ steps.job_info.outputs.job_url }}",
+            "thread_ts": "${{ inputs.slack_thread_id }}"
+          }

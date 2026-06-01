@@ -1,0 +1,110 @@
+name: "Terraform Apply with Cleanup"
+description: "Run terraform apply and automatically destroy on failure"
+
+inputs:
+  working_directory:
+    description: "Terraform working directory"
+    required: true
+  backend_key:
+    description: "S3 backend state key (e.g., ng-hel0-ip-runners.tfstate)"
+    required: true
+  tfvars_file:
+    description: "Path to profile-specific tfvars file"
+    required: true
+  input_tfvars:
+    description: "Path to generated input.tfvars"
+    required: true
+  action_type:
+    description: "Type of action: apply or destroy"
+    required: true
+    default: "apply"
+  aws_access_key_id:
+    description: "AWS access key for Terraform backend"
+    required: true
+  aws_secret_access_key:
+    description: "AWS secret access key for Terraform backend"
+    required: true
+
+outputs:
+  apply_status:
+    description: "Status of terraform apply/destroy (success or failed_with_cleanup)"
+    value: ${{ steps.apply.outputs.status }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Terraform apply/destroy
+      id: apply
+      working-directory: ${{ inputs.working_directory }}
+      shell: bash
+      run: |
+        set +e
+        APPLY_EXIT=0
+        STATUS="success"
+
+        # Determine action
+        if [[ "${{ inputs.action_type }}" == "destroy" ]]; then
+          echo "🗑️  Running terraform destroy..."
+          terraform destroy -auto-approve \
+            -var-file=${{ inputs.tfvars_file }} \
+            -var-file=${{ inputs.input_tfvars }} 2>&1 | tee apply.log
+          APPLY_EXIT=$?
+        else
+          echo "🏗️  Running terraform apply..."
+          terraform apply -auto-approve tfplan 2>&1 | tee apply.log
+          APPLY_EXIT=$?
+        fi
+
+        if [[ $APPLY_EXIT -eq 0 ]]; then
+          echo "✓ Terraform ${{ inputs.action_type }} completed successfully"
+        else
+          echo "❌ Terraform ${{ inputs.action_type }} failed (exit code: $APPLY_EXIT)"
+          echo "Attempting automatic cleanup (destroy)..."
+          STATUS="failed_with_cleanup"
+
+          # Automatic destroy on apply failure
+          if [[ "${{ inputs.action_type }}" != "destroy" ]]; then
+            terraform destroy -auto-approve \
+              -var-file=${{ inputs.tfvars_file }} \
+              -var-file=${{ inputs.input_tfvars }} 2>&1 | tee cleanup.log || true
+            echo "⚠️  Cleanup destroy completed (status code ignored)"
+
+            # Append cleanup log to apply log for reference
+            echo "" >> apply.log
+            echo "--- Automatic Cleanup Attempt ---" >> apply.log
+            cat cleanup.log >> apply.log || true
+          fi
+        fi
+
+        echo "status=$STATUS" >> $GITHUB_OUTPUT
+        exit $APPLY_EXIT
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        AWS_DEFAULT_REGION: "us-east-1"
+
+    - name: Refresh Terraform state
+      if: always()
+      working-directory: ${{ inputs.working_directory }}
+      shell: bash
+      run: |
+        terraform refresh \
+          -var-file=${{ inputs.tfvars_file }} \
+          -var-file=${{ inputs.input_tfvars }} 2>&1 | tail -20
+        echo "✓ Terraform state refreshed"
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        AWS_DEFAULT_REGION: "us-east-1"
+      continue-on-error: true
+
+    - name: Log apply summary
+      if: always()
+      working-directory: ${{ inputs.working_directory }}
+      shell: bash
+      run: |
+        echo "Apply status: ${{ steps.apply.outputs.status }}"
+        if [[ -f apply.log ]]; then
+          echo "--- Apply output (last 30 lines) ---"
+          tail -30 apply.log
+        fi

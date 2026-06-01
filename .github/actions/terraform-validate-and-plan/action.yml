@@ -1,0 +1,93 @@
+name: "Terraform Validate and Plan"
+description: "Run terraform init, validate, and plan with warn-only on issues"
+
+inputs:
+  working_directory:
+    description: "Terraform working directory"
+    required: true
+  backend_key:
+    description: "S3 backend state key (e.g., ng-hel0-ip-runners.tfstate)"
+    required: true
+  tfvars_file:
+    description: "Path to profile-specific tfvars file"
+    required: true
+  input_tfvars:
+    description: "Path to generated input.tfvars"
+    required: true
+  aws_access_key_id:
+    description: "AWS access key for Terraform backend"
+    required: true
+  aws_secret_access_key:
+    description: "AWS secret access key for Terraform backend"
+    required: true
+
+outputs:
+  plan_exit_code:
+    description: "Exit code from terraform plan (0 = no changes, 1 = error, 2 = changes)"
+    value: ${{ steps.plan.outputs.plan_exit_code }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Terraform init
+      working-directory: ${{ inputs.working_directory }}
+      shell: bash
+      run: |
+        terraform init -backend-config="key=${{ inputs.backend_key }}" 2>&1
+        echo "✓ Terraform initialized"
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        AWS_DEFAULT_REGION: "us-east-1"
+
+    - name: Terraform validate
+      id: validate
+      working-directory: ${{ inputs.working_directory }}
+      shell: bash
+      run: |
+        if terraform validate 2>&1 | tee validate.log; then
+          echo "✓ Terraform validation passed"
+        else
+          echo "⚠️  Terraform validation issues detected (non-blocking)"
+          cat validate.log
+        fi
+
+    - name: Terraform plan
+      id: plan
+      working-directory: ${{ inputs.working_directory }}
+      shell: bash
+      run: |
+        PLAN_EXIT=0
+        terraform plan \
+          -var-file=${{ inputs.tfvars_file }} \
+          -var-file=${{ inputs.input_tfvars }} \
+          -out=tfplan 2>&1 | tee plan.log || PLAN_EXIT=$?
+
+        # Exit code 0 = no changes, 1 = error, 2 = changes detected
+        # We warn on all but don't fail
+        if [[ $PLAN_EXIT -eq 0 ]]; then
+          echo "✓ Terraform plan: no changes detected"
+        elif [[ $PLAN_EXIT -eq 1 ]]; then
+          echo "⚠️  Terraform plan reported errors (review before apply):"
+          cat plan.log
+        elif [[ $PLAN_EXIT -eq 2 ]]; then
+          echo "✓ Terraform plan: changes will be applied"
+          cat plan.log
+        fi
+
+        echo "plan_exit_code=$PLAN_EXIT" >> $GITHUB_OUTPUT
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        AWS_DEFAULT_REGION: "us-east-1"
+
+    - name: Log plan summary
+      if: always()
+      working-directory: ${{ inputs.working_directory }}
+      shell: bash
+      run: |
+        echo "Plan exit code: ${{ steps.plan.outputs.plan_exit_code }}"
+        if [[ -f plan.log ]]; then
+          echo "--- Plan output ---"
+          tail -20 plan.log
+        fi

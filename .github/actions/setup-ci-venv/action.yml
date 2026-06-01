@@ -1,0 +1,74 @@
+name: "Setup CI Virtual Environment"
+description: "Create Python venv and install integration-pipeline with caching support"
+
+inputs:
+  ci_integration_scripts_version:
+    description: "Version of integration-pipeline to install"
+    required: true
+  pip_conf_index_url:
+    description: "Primary pip index URL"
+    required: false
+    default: "https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/simple"
+  pip_conf_extra_index_url:
+    description: "Extra pip index URL"
+    required: false
+    default: "https://pypi.org/simple"
+
+outputs:
+  venv_path:
+    description: "Path to the created virtual environment"
+    value: ".ci-venv"
+  venv_cache_key:
+    description: "Cache key used for this venv"
+    value: ${{ steps.venv_cache.outputs.cache_key }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Determine Python version for cache key
+      id: python_version
+      shell: bash
+      run: |
+        PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}' | cut -d. -f1,2)
+        echo "version=${PYTHON_VERSION}" >> $GITHUB_OUTPUT
+
+    - name: Cache venv directory
+      id: venv_cache
+      uses: actions/cache@v4
+      with:
+        path: .ci-venv
+        key: ${{ runner.os }}-ci-venv-py${{ steps.python_version.outputs.version }}-${{ inputs.ci_integration_scripts_version }}-${{ hashFiles('ci-requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-ci-venv-py${{ steps.python_version.outputs.version }}-${{ inputs.ci_integration_scripts_version }}-
+          ${{ runner.os }}-ci-venv-py${{ steps.python_version.outputs.version }}-
+
+    - name: Setup pip configuration
+      shell: bash
+      run: |
+        cat << EOF | sudo tee /etc/pip.conf
+        [global]
+        index-url = ${{ inputs.pip_conf_index_url }}
+        extra-index-url = ${{ inputs.pip_conf_extra_index_url }}
+        trusted-host = artifacts.cloud.mov.ai
+                      pypi.org
+        EOF
+        cat /etc/pip.conf
+
+    - name: Create virtual environment (cache miss)
+      if: steps.venv_cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        python3 -m venv .ci-venv --clear --system-site-packages
+        . .ci-venv/bin/activate
+        python3 -m pip install --upgrade pip
+        python3 -m pip install pyOpenSSL
+        [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+        python3 -m pip install integration-pipeline==${{ inputs.ci_integration_scripts_version }} --ignore-installed
+
+    - name: Verify venv (cache hit)
+      if: steps.venv_cache.outputs.cache-hit == 'true'
+      shell: bash
+      run: |
+        . .ci-venv/bin/activate
+        integration-pipeline --version
+        echo "✓ Virtual environment restored from cache"

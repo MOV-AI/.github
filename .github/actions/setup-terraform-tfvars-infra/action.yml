@@ -1,0 +1,99 @@
+name: "Setup Terraform tfvars for Infrastructure"
+description: "Generate runner-profile-specific tfvars file for Terraform provisioning"
+
+inputs:
+  runner_configuration:
+    description: "Runner configuration mapping (e.g., '{hel0: 2, hel1: 8}')"
+    required: true
+  runner_profile:
+    description: "Runner profile name (e.g., gh_runner, gh_sim_runner, gh_redhat_oracle_runner, gh_packer_runner)"
+    required: true
+  node:
+    description: "Current node (e.g., hel0, hel1)"
+    required: true
+  env_conf_repo:
+    description: "Environment configuration repository directory"
+    required: true
+  names_prefix:
+    description: "Name prefix for runners (e.g., ng-)"
+    required: true
+  runner_type_label:
+    description: "Runner type label (e.g., ip-runner, qa-runner, robotics-sim-runner, redhat-oracle-runner, packer-runner)"
+    required: true
+  provision_pool:
+    description: "Proxmox resource pool name"
+    required: true
+  proxmox_ve_username:
+    description: "Proxmox username"
+    required: true
+  proxmox_ve_password:
+    description: "Proxmox password"
+    required: true
+  gh_access_token:
+    description: "GitHub access token for runner registration"
+    required: true
+  extra_cloud_init_packages:
+    description: "Extra cloud-init packages (comma-separated, optional)"
+    required: false
+    default: ""
+
+outputs:
+  tfvars_file:
+    description: "Path to generated tfvars file"
+    value: input.tfvars
+
+runs:
+  using: "composite"
+  steps:
+    - name: Generate tfvars
+      shell: bash
+      run: |
+        set -e
+
+        # Parse runner count from configuration
+        RUNNER_COUNT=$(echo "${{ inputs.runner_configuration }}" | jq -r ".${{ inputs.node }}")
+        if [[ -z "$RUNNER_COUNT" || "$RUNNER_COUNT" == "null" ]]; then
+          echo "❌ Failed: node ${{ inputs.node }} not found in runner configuration" >&2
+          exit 1
+        fi
+
+        # Check tfvars file exists
+        TFVARS_FILE="${{ inputs.env_conf_repo }}/hel/${{ inputs.node }}_${{ inputs.runner_profile }}.tfvars"
+        if [[ ! -f "$TFVARS_FILE" ]]; then
+          echo "❌ Failed: profile tfvars file not found: $TFVARS_FILE" >&2
+          exit 1
+        fi
+
+        # Create node and IP lists
+        NODES=$(printf '"${{ inputs.node }}",%.0s' {1..$RUNNER_COUNT})
+        NODE_LIST=[${NODES::-1}]
+        IPS=$(printf '"dhcp",%.0s' {1..$RUNNER_COUNT})
+        IP_LIST=[${IPS::-1}]
+
+        # Build input.tfvars
+        cat > input.tfvars << EOF
+        proxmox_host_list=$NODE_LIST
+        gh_runner_nr=$RUNNER_COUNT
+        gh_runner_name_prefix="${{ inputs.names_prefix }}${{ inputs.node }}-${{ inputs.runner_type_label }}"
+        ip_list=$IP_LIST
+        tags=["${{ inputs.runner_type_label }}"]
+        pool="${{ inputs.provision_pool }}"
+        proxmox_ve_username="${{ inputs.proxmox_ve_username }}"
+        proxmox_ve_password="${{ inputs.proxmox_ve_password }}"
+        gh_access_token="${{ inputs.gh_access_token }}"
+        gh_runner_labels=["${{ inputs.runner_type_label }}-${{ inputs.node }}", "${{ inputs.runner_type_label }}"]
+        EOF
+
+        # Add extra packages if provided
+        if [[ -n "${{ inputs.extra_cloud_init_packages }}" ]]; then
+          PACKAGES=$(echo "${{ inputs.extra_cloud_init_packages }}" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | paste -sd ',' - | sed 's/,/","/g')
+          echo 'cloud_init_packages=["'$PACKAGES'"]' >> input.tfvars
+        fi
+
+        echo "" >> input.tfvars
+
+        # Log result
+        echo "✓ Terraform tfvars generated for ${{ inputs.runner_profile }} on ${{ inputs.node }}"
+        echo "  Runners: $RUNNER_COUNT"
+        echo "  Profile file: $TFVARS_FILE"
+        wc -l input.tfvars

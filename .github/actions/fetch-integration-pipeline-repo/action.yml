@@ -1,0 +1,73 @@
+name: "Fetch Integration Pipeline Repository"
+description: "Generic action to fetch versioned repositories using integration-pipeline CLI"
+
+inputs:
+  repo_name:
+    description: "Repository name to fetch (e.g., devops-tf-env-conf)"
+    required: true
+  repo_version:
+    description: "Repository version/tag to fetch"
+    required: true
+  target_dir:
+    description: "Target directory where repository will be fetched"
+    required: true
+  gh_api_user:
+    description: "GitHub API username for authentication"
+    required: true
+  gh_api_pwd:
+    description: "GitHub API token/password for authentication"
+    required: true
+  venv_path:
+    description: "Path to Python virtual environment (optional, if not provided assumes already activated)"
+    required: false
+    default: ""
+
+outputs:
+  target_dir:
+    description: "Directory where repository was fetched"
+    value: ${{ inputs.target_dir }}
+  repo_hash:
+    description: "Hash of fetched repository for tracking"
+    value: ${{ steps.fetch_repo.outputs.repo_hash }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Fetch repository via integration-pipeline
+      id: fetch_repo
+      shell: bash
+      run: |
+        # Activate venv if provided
+        if [[ -n "${{ inputs.venv_path }}" && -f "${{ inputs.venv_path }}/bin/activate" ]]; then
+          . "${{ inputs.venv_path }}/bin/activate"
+        fi
+
+        # Clean target directory
+        rm -rf "${{ inputs.target_dir }}"
+
+        # Fetch repository
+        integration-pipeline fetch_by_tag \
+          --repo "${{ inputs.repo_name }}" \
+          --version "${{ inputs.repo_version }}" \
+          --gh_api_user "${{ inputs.gh_api_user }}" \
+          --gh_api_pwd "${{ inputs.gh_api_pwd }}" \
+          --target_dir "${{ inputs.target_dir }}"
+
+        # Verify directory exists and is not empty
+        if [[ ! -d "${{ inputs.target_dir }}" ]]; then
+          echo "❌ Failed: target directory not created" >&2
+          exit 1
+        fi
+
+        if [[ -z "$(ls -A "${{ inputs.target_dir }}")" ]]; then
+          echo "❌ Failed: target directory is empty" >&2
+          exit 1
+        fi
+
+        # Compute hash for caching/tracking
+        REPO_HASH=$(find "${{ inputs.target_dir }}" -type f -exec md5sum {} + | awk '{print $1}' | sort | md5sum | awk '{print $1}')
+        echo "repo_hash=${REPO_HASH}" >> $GITHUB_OUTPUT
+
+        # Log success
+        echo "✓ Repository fetched: ${{ inputs.repo_name }} @ ${{ inputs.repo_version }}"
+        ls -la "${{ inputs.target_dir }}"

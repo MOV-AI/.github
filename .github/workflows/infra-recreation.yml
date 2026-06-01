@@ -83,6 +83,8 @@ jobs:
   Destroy-IP-Runners:
     needs: Slack-thread
     runs-on: infra-runner
+    env:
+      PROXMOX_HOST: "https://${{ matrix.node }}.mov.ai:8006"
     strategy:
       fail-fast: false
       matrix:
@@ -91,154 +93,105 @@ jobs:
       slack_thread_id: ${{ needs.Slack-thread.outputs.slack_thread_id }}
 
     steps:
-      - name: Setup CI Scripts in .ci-venv
-        shell: bash
-        run: |
-          cat << EOF | sudo tee /etc/pip.conf
-          [global]
-          index-url = https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/simple
-          extra-index-url = https://pypi.org/simple
-          trusted-host = artifacts.cloud.mov.ai
-                        pypi.org
-          EOF
-          cat /etc/pip.conf
-          python3 -m venv .ci-venv --clear --system-site-packages # needed for apt dependencies
-          . .ci-venv/bin/activate
-          python3 -m pip install pyOpenSSL --upgrade pip
-          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+      - name: Cache Terraform providers
+        uses: actions/cache@v4
+        with:
+          path: .terraform
+          key: ${{ runner.os }}-tf-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-tf-providers-
 
-      - name: Setup env conf
+      - name: Setup CI virtual environment
+        uses: ./.github/actions/setup-ci-venv
+        with:
+          ci_integration_scripts_version: ${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
+
+      - name: Fetch environment configuration
         id: provision_infra_env_conf
-        shell: bash
-        run: |
-          . .ci-venv/bin/activate
-          provision_infra_dir=${{ env.PROVISION_ENV_CONF_REPO }}
-          provision_infra_version=${{ env.PROVISION_ENV_CONF_VERSION }}
-          provision_infra_repo_name=${{ env.PROVISION_ENV_CONF_REPO }}
+        uses: ./.github/actions/fetch-integration-pipeline-repo
+        with:
+          repo_name: ${{ env.PROVISION_ENV_CONF_REPO }}
+          repo_version: ${{ env.PROVISION_ENV_CONF_VERSION }}
+          target_dir: ${{ env.PROVISION_ENV_CONF_REPO }}
+          gh_api_user: ${{ secrets.auto_commit_user }}
+          gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+          venv_path: ".ci-venv"
 
-          rm -rf $provision_infra_dir
-          integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-            --version $provision_infra_version \
-            --gh_api_user ${{ secrets.auto_commit_user }} \
-            --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-            --target_dir $provision_infra_dir
-
-          ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-      - name: Setup terraform proxmox provisioner
+      - name: Fetch Terraform provisioner
         id: provision_infra_setup
+        uses: ./.github/actions/fetch-integration-pipeline-repo
+        with:
+          repo_name: ${{ env.PROVISION_INFRA_REPO }}
+          repo_version: ${{ env.PROVISION_INFRA_VERSION }}
+          target_dir: ${{ env.PROVISION_INFRA_REPO }}
+          gh_api_user: ${{ secrets.auto_commit_user }}
+          gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+          venv_path: ".ci-venv"
+
+      - name: Setup Terraform variables for destroy
+        uses: ./.github/actions/setup-terraform-tfvars-infra
+        with:
+          runner_configuration: ${{ toJson(inputs.INFRA_IP_CONFIGURATION) }}
+          runner_profile: "gh_runner"
+          node: ${{ matrix.node }}
+          env_conf_repo: ${{ steps.provision_infra_env_conf.outputs.target_dir }}
+          names_prefix: ${{ env.NAMES_PREFIX }}
+          runner_type_label: "ip-runner"
+          provision_pool: ${{ env.PROVISION_POOL }}
+          proxmox_ve_username: ${{ secrets.proxmox_ve_username }}
+          proxmox_ve_password: ${{ secrets.proxmox_ve_password }}
+          gh_access_token: ${{ secrets.auto_commit_pwd }}
+
+      - name: Terraform destroy
+        uses: ./.github/actions/terraform-apply-with-cleanup-infra
+        with:
+          working_directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+          backend_key: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-ip-runners.tfstate
+          tfvars_file: ${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars
+          input_tfvars: input.tfvars
+          action_type: "destroy"
+          aws_access_key_id: ${{ secrets.aws_key_id }}
+          aws_secret_access_key: ${{ secrets.aws_secret_key_id }}
+
+      - name: Verify VMs destroyed
+        uses: ./.github/actions/verify-vm-status-infra
+        with:
+          action_type: "destroyed"
+          proxmox_host: ${{ env.PROXMOX_HOST }}
+          proxmox_username: ${{ secrets.proxmox_ve_username }}
+          proxmox_password: ${{ secrets.proxmox_ve_password }}
+          vm_name_prefix: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-ip-runner
+          node_name: ${{ matrix.node }}
+          expected_count: ${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }}
+
+      - name: Setup SSH key for next provisioning step
         shell: bash
         run: |
-          . .ci-venv/bin/activate
-          provision_infra_dir=${{ env.PROVISION_INFRA_REPO }}
-          provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
-          provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
-
-          rm -rf $provision_infra_dir
-          integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-            --version $provision_infra_version \
-            --gh_api_user ${{ secrets.auto_commit_user }} \
-            --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-            --target_dir $provision_infra_dir
-
-          ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-      - name: Destroy remote vms (Proxmox)
-        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
-        shell: bash
-        run: |
-          multiply_node=$(printf '"${{ matrix.node }}",%.0s' {1..${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }}})
-          node_list_str=${multiply_node::-1}
-          multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }}})
-          ip_list_str=${multiply_ips::-1}
-          desired_profile='gh_runner'
-          base_var_dir="../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel"
-          selected_var_file="${base_var_dir}/${{ matrix.node }}_${desired_profile}.tfvars"
-          if [[ ! -f "${selected_var_file}" ]]; then
-            echo "Missing tfvars file: ${selected_var_file}" >&2
-            exit 1
-          fi
-          var_file_arg="-var-file=${selected_var_file}"
-          echo "Selected tfvars: ${selected_var_file}"
-
-          {
-            echo "proxmox_host_list=[$node_list_str]"
-            echo 'gh_runner_nr="${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }}"'
-            echo 'gh_runner_name_prefix="${{ env.NAMES_PREFIX }}${{ matrix.node }}-ip-runner"'
-          } >> input.tfvars
-          echo "ip_list=[$ip_list_str]">>input.tfvars
-          echo 'tags=["ip-runner"]'>>input.tfvars
-          echo 'pool="${{ env.PROVISION_POOL }}"'>>input.tfvars
-          echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
-          echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
-          echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
-          echo 'gh_runner_labels=["integration-pipeline-${{ matrix.node }}"]'>>input.tfvars
-
-
-          echo "File args: $var_file_arg"
-          echo "Input File args: $(cat input.tfvars)"
-          terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-ip-runners.tfstate"
-          terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
-          terraform refresh $var_file_arg -var-file=input.tfvars
-
+          mkdir -p ~/.ssh
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
           sudo chmod 600 ~/.ssh/ci_priv_key.pem
+          echo "✓ SSH key configured"
 
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
-          AWS_DEFAULT_REGION: "us-east-1"
-
-      - name: Get current job id
+      - name: Send Slack notification
         if: always()
-        shell: bash
-        id: job_info
-        run: |
-          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
-
-      - name: Prepare slack variables
-        if: ${{ always() }}
-        id: pre_slack
-        run: |
-          MESSAGE=":white_check_mark: ${{ github.job }} ${{ matrix.node }} IP runners destroyed (Attempt: #${{ github.run_attempt }})"
-          MESSAGE_ERR=":x: ${{ github.job }} ${{ matrix.node }} Failed to destroy IP runners (Attempt: #${{ github.run_attempt }})"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
-
-      - name: Send Slack Message
-        uses: slackapi/slack-github-action@v2
+        uses: ./.github/actions/slack-notify-infra
         with:
-          method: chat.postMessage
-          token: ${{ secrets.slack_token_id }}
-          payload: |
-            {
-              "channel": "${{ env.SLACK_CHANNEL }}",
-              "text": "${{ steps.pre_slack.outputs.msg }}",
-              "thread_ts": "${{ needs.Slack-thread.outputs.slack_thread_id }}"
-            }
-
-      - name: Send Slack Message
-        uses: slackapi/slack-github-action@v2
-        if: ${{ failure() }}
-        with:
-          method: chat.postMessage
-          token: ${{ secrets.slack_token_id }}
-          payload: |
-            {
-              "channel": "${{ env.SLACK_CHANNEL }}",
-              "text": "${{ steps.pre_slack.outputs.msg_error }}",
-              "thread_ts": "${{ needs.Slack-thread.outputs.slack_thread_id }}"
-            }
+          message: ":white_check_mark: ${{ github.job }} ${{ matrix.node }} IP runners destroyed (Attempt: #${{ github.run_attempt }})"
+          message_error: ":x: ${{ github.job }} ${{ matrix.node }} Failed to destroy IP runners (Attempt: #${{ github.run_attempt }})"
+          slack_token: ${{ secrets.slack_token_id }}
+          slack_channel: ${{ env.SLACK_CHANNEL }}
+          slack_thread_id: ${{ needs.Slack-thread.outputs.slack_thread_id }}
+          gh_api_token: ${{ secrets.auto_commit_pwd }}
+          job_name: ${{ github.job }}
+          repository: ${{ github.repository }}
+          run_id: ${{ github.run_id }}
+          run_attempt: ${{ github.run_attempt }}
 
   Provision-IP-Runners:
     needs: [Destroy-IP-Runners]
     runs-on: infra-runner
+    env:
+      PROXMOX_HOST: "https://${{ matrix.node }}.mov.ai:8006"
     strategy:
       fail-fast: false
       matrix:
@@ -247,154 +200,116 @@ jobs:
       slack_thread_id: ${{ needs.Destroy-IP-Runners.outputs.slack_thread_id }}
 
     steps:
+    - name: Cache Terraform providers
+      uses: actions/cache@v4
+      with:
+        path: .terraform
+        key: ${{ runner.os }}-tf-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
+        restore-keys: |
+          ${{ runner.os }}-tf-providers-
 
-    - name: Setup CI Scripts in .ci-venv
-      shell: bash
-      run: |
-        cat << EOF | sudo tee /etc/pip.conf
-        [global]
-        index-url = https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/simple
-        extra-index-url = https://pypi.org/simple
-        trusted-host = artifacts.cloud.mov.ai
-                      pypi.org
-        EOF
-        cat /etc/pip.conf
-        python3 -m venv .ci-venv --clear --system-site-packages # needed for apt dependencies
-        . .ci-venv/bin/activate
-        python3 -m pip install pyOpenSSL --upgrade pip
-        [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-        python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+    - name: Setup CI virtual environment
+      uses: ./.github/actions/setup-ci-venv
+      with:
+        ci_integration_scripts_version: ${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
 
-    - name: Setup env conf
+    - name: Fetch environment configuration
       id: provision_infra_env_conf
-      shell: bash
-      run: |
-        . .ci-venv/bin/activate
-        provision_infra_dir=${{ env.PROVISION_ENV_CONF_REPO }}
-        provision_infra_version=${{ env.PROVISION_ENV_CONF_VERSION }}
-        provision_infra_repo_name=${{ env.PROVISION_ENV_CONF_REPO }}
+      uses: ./.github/actions/fetch-integration-pipeline-repo
+      with:
+        repo_name: ${{ env.PROVISION_ENV_CONF_REPO }}
+        repo_version: ${{ env.PROVISION_ENV_CONF_VERSION }}
+        target_dir: ${{ env.PROVISION_ENV_CONF_REPO }}
+        gh_api_user: ${{ secrets.auto_commit_user }}
+        gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+        venv_path: ".ci-venv"
 
-        rm -rf $provision_infra_dir
-        integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-          --version $provision_infra_version \
-          --gh_api_user ${{ secrets.auto_commit_user }} \
-          --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-          --target_dir $provision_infra_dir
-
-        ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-    - name: Setup terraform proxmox provisioner
+    - name: Fetch Terraform provisioner
       id: provision_infra_setup
+      uses: ./.github/actions/fetch-integration-pipeline-repo
+      with:
+        repo_name: ${{ env.PROVISION_INFRA_REPO }}
+        repo_version: ${{ env.PROVISION_INFRA_VERSION }}
+        target_dir: ${{ env.PROVISION_INFRA_REPO }}
+        gh_api_user: ${{ secrets.auto_commit_user }}
+        gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+        venv_path: ".ci-venv"
+
+    - name: Setup Terraform variables for provision
+      uses: ./.github/actions/setup-terraform-tfvars-infra
+      with:
+        runner_configuration: ${{ toJson(inputs.INFRA_IP_CONFIGURATION) }}
+        runner_profile: "gh_runner"
+        node: ${{ matrix.node }}
+        env_conf_repo: ${{ steps.provision_infra_env_conf.outputs.target_dir }}
+        names_prefix: ${{ env.NAMES_PREFIX }}
+        runner_type_label: "ip-runner"
+        provision_pool: ${{ env.PROVISION_POOL }}
+        proxmox_ve_username: ${{ secrets.proxmox_ve_username }}
+        proxmox_ve_password: ${{ secrets.proxmox_ve_password }}
+        gh_access_token: ${{ secrets.auto_commit_pwd }}
+        extra_cloud_init_packages: "python3-dev"
+
+    - name: Terraform validate and plan for provision
+      uses: ./.github/actions/terraform-validate-and-plan
+      with:
+        working_directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        backend_key: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-ip-runners.tfstate
+        tfvars_file: ${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars
+        input_tfvars: input.tfvars
+        aws_access_key_id: ${{ secrets.aws_key_id }}
+        aws_secret_access_key: ${{ secrets.aws_secret_key_id }}
+
+    - name: Terraform apply for provision
+      uses: ./.github/actions/terraform-apply-with-cleanup-infra
+      with:
+        working_directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        backend_key: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-ip-runners.tfstate
+        tfvars_file: ${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars
+        input_tfvars: input.tfvars
+        action_type: "apply"
+        aws_access_key_id: ${{ secrets.aws_key_id }}
+        aws_secret_access_key: ${{ secrets.aws_secret_key_id }}
+
+    - name: Verify VMs provisioned
+      uses: ./.github/actions/verify-vm-status-infra
+      with:
+        action_type: "provisioned"
+        proxmox_host: ${{ env.PROXMOX_HOST }}
+        proxmox_username: ${{ secrets.proxmox_ve_username }}
+        proxmox_password: ${{ secrets.proxmox_ve_password }}
+        vm_name_prefix: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-ip-runner
+        node_name: ${{ matrix.node }}
+        expected_count: ${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }}
+
+    - name: Setup SSH key for runner registration
       shell: bash
       run: |
-        . .ci-venv/bin/activate
-        provision_infra_dir=${{ env.PROVISION_INFRA_REPO }}
-        provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
-        provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
-
-        rm -rf $provision_infra_dir
-        integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-          --version $provision_infra_version \
-          --gh_api_user ${{ secrets.auto_commit_user }} \
-          --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-          --target_dir $provision_infra_dir
-
-        ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-    - name: Provision remote vms (Proxmox)
-      working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
-      shell: bash
-      run: |
-        multiply_node=$(printf '"${{ matrix.node }}",%.0s' {1..${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }}})
-        node_list_str=${multiply_node::-1}
-        multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }}})
-        ip_list_str=${multiply_ips::-1}
-        desired_profile='gh_runner'
-        base_var_dir="../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel"
-        selected_var_file="${base_var_dir}/${{ matrix.node }}_${desired_profile}.tfvars"
-        if [[ ! -f "${selected_var_file}" ]]; then
-          echo "Missing tfvars file: ${selected_var_file}" >&2
-          exit 1
-        fi
-        var_file_arg="-var-file=${selected_var_file}"
-        echo "Selected tfvars: ${selected_var_file}"
-
-        echo "proxmox_host_list=[$node_list_str]">>input.tfvars
-        echo 'gh_runner_nr="${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }}"'>>input.tfvars
-        echo 'gh_runner_name_prefix="${{ env.NAMES_PREFIX }}${{ matrix.node }}-ip-runner"'>>input.tfvars
-        echo "ip_list=[$ip_list_str]">>input.tfvars
-        echo 'tags=["ip-runner"]'>>input.tfvars
-        echo 'pool="${{ env.PROVISION_POOL }}"'>>input.tfvars
-        echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
-        echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
-        echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
-        echo 'gh_runner_labels=["integration-pipeline-${{ matrix.node }}","integration-pipeline"]'>>input.tfvars
-        echo 'cloud_init_packages=["python3-dev"]'>>input.tfvars
-
-
-        echo "File args: $var_file_arg"
-        echo "Input File args: $(cat input.tfvars)"
-        terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-ip-runners.tfstate"
-        terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
-        terraform refresh $var_file_arg -var-file=input.tfvars
-
+        mkdir -p ~/.ssh
         echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
         sudo chmod 600 ~/.ssh/ci_priv_key.pem
+        echo "✓ SSH key configured"
 
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
-        AWS_DEFAULT_REGION: "us-east-1"
-
-    - name: Get current job id
+    - name: Send Slack notification
       if: always()
-      shell: bash
-      id: job_info
-      run: |
-        job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-        echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
-      env:
-        GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
-
-    - name: Prepare slack variables
-      if: ${{ always() }}
-      id: pre_slack
-      run: |
-        MESSAGE=":white_check_mark: ${{ github.job }} ${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }} IP runners provisioned successfully in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
-        MESSAGE_ERR=":x: ${{ github.job }} Failed to provision IP runners in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
-        echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-        echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
-
-    - name: Send Slack Message
-      uses: slackapi/slack-github-action@v2
+      uses: ./.github/actions/slack-notify-infra
       with:
-        method: chat.postMessage
-        token: ${{ secrets.slack_token_id }}
-        payload: |
-          {
-            "channel": "${{ env.SLACK_CHANNEL }}",
-            "text": "${{ steps.pre_slack.outputs.msg }}",
-            "thread_ts": "${{ needs.Destroy-IP-Runners.outputs.slack_thread_id }}"
-          }
-
-    - name: Send Slack Message
-      uses: slackapi/slack-github-action@v2
-      if: ${{ failure() }}
-      with:
-        method: chat.postMessage
-        token: ${{ secrets.slack_token_id }}
-        payload: |
-          {
-            "channel": "${{ env.SLACK_CHANNEL }}",
-            "text": "${{ steps.pre_slack.outputs.msg_error }}",
-            "thread_ts": "${{ needs.Destroy-IP-Runners.outputs.slack_thread_id }}"
-          }
+        message: ":white_check_mark: ${{ github.job }} ${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }} IP runners provisioned successfully in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
+        message_error: ":x: ${{ github.job }} Failed to provision IP runners in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
+        slack_token: ${{ secrets.slack_token_id }}
+        slack_channel: ${{ env.SLACK_CHANNEL }}
+        slack_thread_id: ${{ needs.Destroy-IP-Runners.outputs.slack_thread_id }}
+        gh_api_token: ${{ secrets.auto_commit_pwd }}
+        job_name: ${{ github.job }}
+        repository: ${{ github.repository }}
+        run_id: ${{ github.run_id }}
+        run_attempt: ${{ github.run_attempt }}
 
   Destroy-QA-Runners:
     needs: Slack-thread
     runs-on: infra-runner
+    env:
+      PROXMOX_HOST: "https://${{ matrix.node }}.mov.ai:8006"
     strategy:
       fail-fast: false
       matrix:
@@ -403,155 +318,105 @@ jobs:
       slack_thread_id: ${{ needs.Slack-thread.outputs.slack_thread_id }}
 
     steps:
+      - name: Cache Terraform providers
+        uses: actions/cache@v4
+        with:
+          path: .terraform
+          key: ${{ runner.os }}-tf-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-tf-providers-
 
-      - name: Setup CI Scripts in .ci-venv
-        shell: bash
-        run: |
-          cat << EOF | sudo tee /etc/pip.conf
-          [global]
-          index-url = https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/simple
-          extra-index-url = https://pypi.org/simple
-          trusted-host = artifacts.cloud.mov.ai
-                        pypi.org
-          EOF
-          cat /etc/pip.conf
-          python3 -m venv .ci-venv --clear --system-site-packages # needed for apt dependencies
-          . .ci-venv/bin/activate
-          python3 -m pip install pyOpenSSL --upgrade pip
-          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+      - name: Setup CI virtual environment
+        uses: ./.github/actions/setup-ci-venv
+        with:
+          ci_integration_scripts_version: ${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
 
-      - name: Setup env conf
+      - name: Fetch environment configuration
         id: provision_infra_env_conf
-        shell: bash
-        run: |
-          . .ci-venv/bin/activate
-          provision_infra_dir=${{ env.PROVISION_ENV_CONF_REPO }}
-          provision_infra_version=${{ env.PROVISION_ENV_CONF_VERSION }}
-          provision_infra_repo_name=${{ env.PROVISION_ENV_CONF_REPO }}
+        uses: ./.github/actions/fetch-integration-pipeline-repo
+        with:
+          repo_name: ${{ env.PROVISION_ENV_CONF_REPO }}
+          repo_version: ${{ env.PROVISION_ENV_CONF_VERSION }}
+          target_dir: ${{ env.PROVISION_ENV_CONF_REPO }}
+          gh_api_user: ${{ secrets.auto_commit_user }}
+          gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+          venv_path: ".ci-venv"
 
-          rm -rf $provision_infra_dir
-          integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-            --version $provision_infra_version \
-            --gh_api_user ${{ secrets.auto_commit_user }} \
-            --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-            --target_dir $provision_infra_dir
-
-          ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-      - name: Setup terraform proxmox provisioner
+      - name: Fetch Terraform provisioner
         id: provision_infra_setup
+        uses: ./.github/actions/fetch-integration-pipeline-repo
+        with:
+          repo_name: ${{ env.PROVISION_INFRA_REPO }}
+          repo_version: ${{ env.PROVISION_INFRA_VERSION }}
+          target_dir: ${{ env.PROVISION_INFRA_REPO }}
+          gh_api_user: ${{ secrets.auto_commit_user }}
+          gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+          venv_path: ".ci-venv"
+
+      - name: Setup Terraform variables for destroy
+        uses: ./.github/actions/setup-terraform-tfvars-infra
+        with:
+          runner_configuration: ${{ toJson(inputs.INFRA_QA_CONFIGURATION) }}
+          runner_profile: "gh_runner"
+          node: ${{ matrix.node }}
+          env_conf_repo: ${{ steps.provision_infra_env_conf.outputs.target_dir }}
+          names_prefix: ${{ env.NAMES_PREFIX }}
+          runner_type_label: "qa-runner"
+          provision_pool: ${{ env.PROVISION_POOL }}
+          proxmox_ve_username: ${{ secrets.proxmox_ve_username }}
+          proxmox_ve_password: ${{ secrets.proxmox_ve_password }}
+          gh_access_token: ${{ secrets.auto_commit_pwd }}
+
+      - name: Terraform destroy
+        uses: ./.github/actions/terraform-apply-with-cleanup-infra
+        with:
+          working_directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+          backend_key: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-qa-runners.tfstate
+          tfvars_file: ${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars
+          input_tfvars: input.tfvars
+          action_type: "destroy"
+          aws_access_key_id: ${{ secrets.aws_key_id }}
+          aws_secret_access_key: ${{ secrets.aws_secret_key_id }}
+
+      - name: Verify VMs destroyed
+        uses: ./.github/actions/verify-vm-status-infra
+        with:
+          action_type: "destroyed"
+          proxmox_host: ${{ env.PROXMOX_HOST }}
+          proxmox_username: ${{ secrets.proxmox_ve_username }}
+          proxmox_password: ${{ secrets.proxmox_ve_password }}
+          vm_name_prefix: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-qa-runner
+          node_name: ${{ matrix.node }}
+          expected_count: ${{ fromJson(inputs.INFRA_QA_CONFIGURATION)[matrix.node] }}
+
+      - name: Setup SSH key for next provisioning step
         shell: bash
         run: |
-          . .ci-venv/bin/activate
-          provision_infra_dir=${{ env.PROVISION_INFRA_REPO }}
-          provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
-          provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
-
-          rm -rf $provision_infra_dir
-          integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-            --version $provision_infra_version \
-            --gh_api_user ${{ secrets.auto_commit_user }} \
-            --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-            --target_dir $provision_infra_dir
-
-          ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-      - name: Destroy remote vms (Proxmox)
-        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
-        shell: bash
-        run: |
-          multiply_node=$(printf '"${{ matrix.node }}",%.0s' {1..${{ fromJson(inputs.INFRA_QA_CONFIGURATION)[matrix.node] }}})
-          node_list_str=${multiply_node::-1}
-          multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_QA_CONFIGURATION)[matrix.node] }}})
-          ip_list_str=${multiply_ips::-1}
-          desired_profile='gh_runner'
-          base_var_dir="../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel"
-          selected_var_file="${base_var_dir}/${{ matrix.node }}_${desired_profile}.tfvars"
-          if [[ ! -f "${selected_var_file}" ]]; then
-            echo "Missing tfvars file: ${selected_var_file}" >&2
-            exit 1
-          fi
-          var_file_arg="-var-file=${selected_var_file}"
-          echo "Selected tfvars: ${selected_var_file}"
-
-
-          echo "proxmox_host_list=[$node_list_str]">>input.tfvars
-
-          echo 'gh_runner_nr="${{ fromJson(inputs.INFRA_QA_CONFIGURATION)[matrix.node] }}"'>>input.tfvars
-          echo 'gh_runner_name_prefix="${{ env.NAMES_PREFIX }}${{ matrix.node }}-qa-runner"'>>input.tfvars
-          echo "ip_list=[$ip_list_str]">>input.tfvars
-          echo 'tags=["ip-runner"]'>>input.tfvars
-          echo 'pool="${{ env.PROVISION_POOL }}"'>>input.tfvars
-          echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
-          echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
-          echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
-          echo 'gh_runner_labels=["qa-pipeline-${{ matrix.node }}"]'>>input.tfvars
-
-
-          echo "File args: $var_file_arg"
-          echo "Input File args: $(cat input.tfvars)"
-          terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-qa-runners.tfstate"
-          terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
-          terraform refresh $var_file_arg -var-file=input.tfvars
-
+          mkdir -p ~/.ssh
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
           sudo chmod 600 ~/.ssh/ci_priv_key.pem
+          echo "✓ SSH key configured"
 
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
-          AWS_DEFAULT_REGION: "us-east-1"
-
-      - name: Get current job id
+      - name: Send Slack notification
         if: always()
-        shell: bash
-        id: job_info
-        run: |
-          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
-
-      - name: Prepare slack variables
-        if: ${{ always() }}
-        id: pre_slack
-        run: |
-          MESSAGE=":white_check_mark: ${{ github.job }} ${{ matrix.node }} QA runners destroyed (Attempt: #${{ github.run_attempt }})"
-          MESSAGE_ERR=":x: ${{ github.job }} ${{ matrix.node }} Failed to destroy QA runners (Attempt: #${{ github.run_attempt }})"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
-
-      - name: Send Slack Message
-        uses: slackapi/slack-github-action@v2
+        uses: ./.github/actions/slack-notify-infra
         with:
-          method: chat.postMessage
-          token: ${{ secrets.slack_token_id }}
-          payload: |
-            {
-              "channel": "${{ env.SLACK_CHANNEL }}",
-              "text": "${{ steps.pre_slack.outputs.msg }}",
-              "thread_ts": "${{ needs.Slack-thread.outputs.slack_thread_id }}"
-            }
-
-      - name: Send Slack Message
-        uses: slackapi/slack-github-action@v2
-        if: ${{ failure() }}
-        with:
-          method: chat.postMessage
-          token: ${{ secrets.slack_token_id }}
-          payload: |
-            {
-              "channel": "${{ env.SLACK_CHANNEL }}",
-              "text": "${{ steps.pre_slack.outputs.msg_error }}",
-              "thread_ts": "${{ needs.Slack-thread.outputs.slack_thread_id }}"
-            }
+          message: ":white_check_mark: ${{ github.job }} ${{ matrix.node }} QA runners destroyed (Attempt: #${{ github.run_attempt }})"
+          message_error: ":x: ${{ github.job }} ${{ matrix.node }} Failed to destroy QA runners (Attempt: #${{ github.run_attempt }})"
+          slack_token: ${{ secrets.slack_token_id }}
+          slack_channel: ${{ env.SLACK_CHANNEL }}
+          slack_thread_id: ${{ needs.Slack-thread.outputs.slack_thread_id }}
+          gh_api_token: ${{ secrets.auto_commit_pwd }}
+          job_name: ${{ github.job }}
+          repository: ${{ github.repository }}
+          run_id: ${{ github.run_id }}
+          run_attempt: ${{ github.run_attempt }}
 
   Provision-QA-Runners:
     needs: [Destroy-QA-Runners]
     runs-on: infra-runner
+    env:
+      PROXMOX_HOST: "https://${{ matrix.node }}.mov.ai:8006"
     strategy:
       fail-fast: false
       matrix:
@@ -559,154 +424,116 @@ jobs:
     outputs:
       slack_thread_id: ${{ needs.Destroy-QA-Runners.outputs.slack_thread_id }}
     steps:
+    - name: Cache Terraform providers
+      uses: actions/cache@v4
+      with:
+        path: .terraform
+        key: ${{ runner.os }}-tf-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
+        restore-keys: |
+          ${{ runner.os }}-tf-providers-
 
-    - name: Setup CI Scripts in .ci-venv
-      shell: bash
-      run: |
-        cat << EOF | sudo tee /etc/pip.conf
-        [global]
-        index-url = https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/simple
-        extra-index-url = https://pypi.org/simple
-        trusted-host = artifacts.cloud.mov.ai
-                      pypi.org
-        EOF
-        cat /etc/pip.conf
-        python3 -m venv .ci-venv --clear --system-site-packages # needed for apt dependencies
-        . .ci-venv/bin/activate
-        python3 -m pip install pyOpenSSL --upgrade pip
-        [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-        python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+    - name: Setup CI virtual environment
+      uses: ./.github/actions/setup-ci-venv
+      with:
+        ci_integration_scripts_version: ${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
 
-    - name: Setup env conf
+    - name: Fetch environment configuration
       id: provision_infra_env_conf
-      shell: bash
-      run: |
-        . .ci-venv/bin/activate
-        provision_infra_dir=${{ env.PROVISION_ENV_CONF_REPO }}
-        provision_infra_version=${{ env.PROVISION_ENV_CONF_VERSION }}
-        provision_infra_repo_name=${{ env.PROVISION_ENV_CONF_REPO }}
+      uses: ./.github/actions/fetch-integration-pipeline-repo
+      with:
+        repo_name: ${{ env.PROVISION_ENV_CONF_REPO }}
+        repo_version: ${{ env.PROVISION_ENV_CONF_VERSION }}
+        target_dir: ${{ env.PROVISION_ENV_CONF_REPO }}
+        gh_api_user: ${{ secrets.auto_commit_user }}
+        gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+        venv_path: ".ci-venv"
 
-        rm -rf $provision_infra_dir
-        integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-          --version $provision_infra_version \
-          --gh_api_user ${{ secrets.auto_commit_user }} \
-          --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-          --target_dir $provision_infra_dir
-
-        ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-    - name: Setup terraform proxmox provisioner
+    - name: Fetch Terraform provisioner
       id: provision_infra_setup
+      uses: ./.github/actions/fetch-integration-pipeline-repo
+      with:
+        repo_name: ${{ env.PROVISION_INFRA_REPO }}
+        repo_version: ${{ env.PROVISION_INFRA_VERSION }}
+        target_dir: ${{ env.PROVISION_INFRA_REPO }}
+        gh_api_user: ${{ secrets.auto_commit_user }}
+        gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+        venv_path: ".ci-venv"
+
+    - name: Setup Terraform variables for provision
+      uses: ./.github/actions/setup-terraform-tfvars-infra
+      with:
+        runner_configuration: ${{ toJson(inputs.INFRA_QA_CONFIGURATION) }}
+        runner_profile: "gh_runner"
+        node: ${{ matrix.node }}
+        env_conf_repo: ${{ steps.provision_infra_env_conf.outputs.target_dir }}
+        names_prefix: ${{ env.NAMES_PREFIX }}
+        runner_type_label: "qa-runner"
+        provision_pool: ${{ env.PROVISION_POOL }}
+        proxmox_ve_username: ${{ secrets.proxmox_ve_username }}
+        proxmox_ve_password: ${{ secrets.proxmox_ve_password }}
+        gh_access_token: ${{ secrets.auto_commit_pwd }}
+        extra_cloud_init_packages: "python3-dev"
+
+    - name: Terraform validate and plan for provision
+      uses: ./.github/actions/terraform-validate-and-plan
+      with:
+        working_directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        backend_key: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-qa-runners.tfstate
+        tfvars_file: ${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars
+        input_tfvars: input.tfvars
+        aws_access_key_id: ${{ secrets.aws_key_id }}
+        aws_secret_access_key: ${{ secrets.aws_secret_key_id }}
+
+    - name: Terraform apply for provision
+      uses: ./.github/actions/terraform-apply-with-cleanup-infra
+      with:
+        working_directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        backend_key: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-qa-runners.tfstate
+        tfvars_file: ${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_runner.tfvars
+        input_tfvars: input.tfvars
+        action_type: "apply"
+        aws_access_key_id: ${{ secrets.aws_key_id }}
+        aws_secret_access_key: ${{ secrets.aws_secret_key_id }}
+
+    - name: Verify VMs provisioned
+      uses: ./.github/actions/verify-vm-status-infra
+      with:
+        action_type: "provisioned"
+        proxmox_host: ${{ env.PROXMOX_HOST }}
+        proxmox_username: ${{ secrets.proxmox_ve_username }}
+        proxmox_password: ${{ secrets.proxmox_ve_password }}
+        vm_name_prefix: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-qa-runner
+        node_name: ${{ matrix.node }}
+        expected_count: ${{ fromJson(inputs.INFRA_QA_CONFIGURATION)[matrix.node] }}
+
+    - name: Setup SSH key for runner registration
       shell: bash
       run: |
-        . .ci-venv/bin/activate
-        provision_infra_dir=${{ env.PROVISION_INFRA_REPO }}
-        provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
-        provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
-
-        rm -rf $provision_infra_dir
-        integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-          --version $provision_infra_version \
-          --gh_api_user ${{ secrets.auto_commit_user }} \
-          --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-          --target_dir $provision_infra_dir
-
-        ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-    - name: Provision remote vms (Proxmox)
-      working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
-      shell: bash
-      run: |
-        multiply_node=$(printf '"${{ matrix.node }}",%.0s' {1..${{ fromJson(inputs.INFRA_QA_CONFIGURATION)[matrix.node] }}})
-        node_list_str=${multiply_node::-1}
-        multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_QA_CONFIGURATION)[matrix.node] }}})
-        ip_list_str=${multiply_ips::-1}
-        desired_profile='gh_runner'
-        base_var_dir="../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel"
-        selected_var_file="${base_var_dir}/${{ matrix.node }}_${desired_profile}.tfvars"
-        if [[ ! -f "${selected_var_file}" ]]; then
-          echo "Missing tfvars file: ${selected_var_file}" >&2
-          exit 1
-        fi
-        var_file_arg="-var-file=${selected_var_file}"
-        echo "Selected tfvars: ${selected_var_file}"
-
-        echo "proxmox_host_list=[$node_list_str]">>input.tfvars
-        echo 'gh_runner_nr="${{ fromJson(inputs.INFRA_QA_CONFIGURATION)[matrix.node] }}"'>>input.tfvars
-        echo 'gh_runner_name_prefix="${{ env.NAMES_PREFIX }}${{ matrix.node }}-qa-runner"'>>input.tfvars
-        echo "ip_list=[$ip_list_str]">>input.tfvars
-        echo 'tags=["ip-runner"]'>>input.tfvars
-        echo 'pool="${{ env.PROVISION_POOL }}"'>>input.tfvars
-        echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
-        echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
-        echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"'>>input.tfvars
-        echo 'gh_runner_labels=["qa-pipeline-${{ matrix.node }}","qa-pipeline","qa-runner"]'>>input.tfvars
-        echo 'cloud_init_packages=["python3-dev"]'>>input.tfvars
-
-
-        echo "File args: $var_file_arg"
-        echo "Input File args: $(cat input.tfvars)"
-        terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-qa-runners.tfstate"
-        terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
-        terraform refresh $var_file_arg -var-file=input.tfvars
-
+        mkdir -p ~/.ssh
         echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
         sudo chmod 600 ~/.ssh/ci_priv_key.pem
+        echo "✓ SSH key configured"
 
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
-        AWS_DEFAULT_REGION: "us-east-1"
-
-    - name: Get current job id
+    - name: Send Slack notification
       if: always()
-      shell: bash
-      id: job_info
-      run: |
-        job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-        echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
-      env:
-        GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
-
-    - name: Prepare slack variables
-      if: ${{ always() }}
-      id: pre_slack
-      run: |
-        MESSAGE=":white_check_mark: ${{ github.job }} ${{ fromJson(inputs.INFRA_QA_CONFIGURATION)[matrix.node] }} QA runners provisioned successfully in ${{matrix.node}}! (Attempt: #${{ github.run_attempt }})"
-        MESSAGE_ERR=":x: ${{ github.job }} Failed to provision QA runners in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
-        echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-        echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
-
-    - name: Send Slack Message
-      uses: slackapi/slack-github-action@v2
+      uses: ./.github/actions/slack-notify-infra
       with:
-        method: chat.postMessage
-        token: ${{ secrets.slack_token_id }}
-        payload: |
-          {
-            "channel": "${{ env.SLACK_CHANNEL }}",
-            "text": "${{ steps.pre_slack.outputs.msg }}",
-            "thread_ts": "${{ needs.Destroy-QA-Runners.outputs.slack_thread_id }}"
-          }
-
-    - name: Send Slack Message
-      uses: slackapi/slack-github-action@v2
-      if: ${{ failure() }}
-      with:
-        method: chat.postMessage
-        token: ${{ secrets.slack_token_id }}
-        payload: |
-          {
-            "channel": "${{ env.SLACK_CHANNEL }}",
-            "text": "${{ steps.pre_slack.outputs.msg_error }}",
-            "thread_ts": "${{ needs.Destroy-QA-Runners.outputs.slack_thread_id }}"
-          }
+        message: ":white_check_mark: ${{ github.job }} ${{ fromJson(inputs.INFRA_QA_CONFIGURATION)[matrix.node] }} QA runners provisioned successfully in ${{matrix.node}}! (Attempt: #${{ github.run_attempt }})"
+        message_error: ":x: ${{ github.job }} Failed to provision QA runners in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
+        slack_token: ${{ secrets.slack_token_id }}
+        slack_channel: ${{ env.SLACK_CHANNEL }}
+        slack_thread_id: ${{ needs.Destroy-QA-Runners.outputs.slack_thread_id }}
+        gh_api_token: ${{ secrets.auto_commit_pwd }}
+        job_name: ${{ github.job }}
+        repository: ${{ github.repository }}
+        run_id: ${{ github.run_id }}
+        run_attempt: ${{ github.run_attempt }}
 
   Destroy-Robotics-Sim-Runners:
     needs: Slack-thread
     runs-on: infra-runner
+    env:
+      PROXMOX_HOST: "https://${{ matrix.node }}.mov.ai:8006"
     strategy:
       fail-fast: false
       matrix:
@@ -715,61 +542,40 @@ jobs:
       slack_thread_id: ${{ needs.Slack-thread.outputs.slack_thread_id }}
 
     steps:
+      - name: Cache Terraform providers
+        uses: actions/cache@v4
+        with:
+          path: .terraform
+          key: ${{ runner.os }}-tf-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-tf-providers-
 
-      - name: Setup CI Scripts in .ci-venv
-        shell: bash
-        run: |
-          cat << EOF | sudo tee /etc/pip.conf
-          [global]
-          index-url = https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/simple
-          extra-index-url = https://pypi.org/simple
-          trusted-host = artifacts.cloud.mov.ai
-                        pypi.org
-          EOF
-          cat /etc/pip.conf
-          python3 -m venv .ci-venv --clear --system-site-packages # needed for apt dependencies
-          . .ci-venv/bin/activate
-          python3 -m pip install pyOpenSSL --upgrade pip
-          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+      - name: Setup CI virtual environment
+        uses: ./.github/actions/setup-ci-venv
+        with:
+          ci_integration_scripts_version: ${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
 
-      - name: Setup env conf
+      - name: Fetch environment configuration
         id: provision_infra_env_conf
-        shell: bash
-        run: |
-          . .ci-venv/bin/activate
-          provision_infra_dir=${{ env.PROVISION_ENV_CONF_REPO }}
-          provision_infra_version=${{ env.PROVISION_ENV_CONF_VERSION }}
-          provision_infra_repo_name=${{ env.PROVISION_ENV_CONF_REPO }}
+        uses: ./.github/actions/fetch-integration-pipeline-repo
+        with:
+          repo_name: ${{ env.PROVISION_ENV_CONF_REPO }}
+          repo_version: ${{ env.PROVISION_ENV_CONF_VERSION }}
+          target_dir: ${{ env.PROVISION_ENV_CONF_REPO }}
+          gh_api_user: ${{ secrets.auto_commit_user }}
+          gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+          venv_path: ".ci-venv"
 
-          rm -rf $provision_infra_dir
-          integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-            --version $provision_infra_version \
-            --gh_api_user ${{ secrets.auto_commit_user }} \
-            --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-            --target_dir $provision_infra_dir
-
-          ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-      - name: Setup terraform proxmox provisioner
+      - name: Fetch Terraform provisioner
         id: provision_infra_setup
-        shell: bash
-        run: |
-          . .ci-venv/bin/activate
-          provision_infra_dir=${{ env.PROVISION_INFRA_REPO }}
-          provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
-          provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
-
-          rm -rf $provision_infra_dir
-          integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-            --version $provision_infra_version \
-            --gh_api_user ${{ secrets.auto_commit_user }} \
-            --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-            --target_dir $provision_infra_dir
-
-          ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+        uses: ./.github/actions/fetch-integration-pipeline-repo
+        with:
+          repo_name: ${{ env.PROVISION_INFRA_REPO }}
+          repo_version: ${{ env.PROVISION_INFRA_VERSION }}
+          target_dir: ${{ env.PROVISION_INFRA_REPO }}
+          gh_api_user: ${{ secrets.auto_commit_user }}
+          gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+          venv_path: ".ci-venv"
 
       - name: Destroy remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -817,53 +623,26 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
           AWS_DEFAULT_REGION: "us-east-1"
 
-      - name: Get current job id
+      - name: Send Slack notification
         if: always()
-        shell: bash
-        id: job_info
-        run: |
-          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
-
-      - name: Prepare slack variables
-        if: ${{ always() }}
-        id: pre_slack
-        run: |
-          MESSAGE=":white_check_mark: ${{ github.job }} ${{ matrix.node }} Robotics Sim runners destroyed (Attempt: #${{ github.run_attempt }})"
-          MESSAGE_ERR=":x: ${{ github.job }} ${{ matrix.node }} Failed to destroy Robotics Sim runners (Attempt: #${{ github.run_attempt }})"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
-
-      - name: Send Slack Message
-        uses: slackapi/slack-github-action@v2
+        uses: ./.github/actions/slack-notify-infra
         with:
-          method: chat.postMessage
-          token: ${{ secrets.slack_token_id }}
-          payload: |
-            {
-              "channel": "${{ env.SLACK_CHANNEL }}",
-              "text": "${{ steps.pre_slack.outputs.msg }}",
-              "thread_ts": "${{ needs.Slack-thread.outputs.slack_thread_id }}"
-            }
-
-      - name: Send Slack Message
-        uses: slackapi/slack-github-action@v2
-        if: ${{ failure() }}
-        with:
-          method: chat.postMessage
-          token: ${{ secrets.slack_token_id }}
-          payload: |
-            {
-              "channel": "${{ env.SLACK_CHANNEL }}",
-              "text": "${{ steps.pre_slack.outputs.msg_error }}",
-              "thread_ts": "${{ needs.Slack-thread.outputs.slack_thread_id }}"
-            }
+          message: ":white_check_mark: ${{ github.job }} ${{ matrix.node }} Robotics Sim runners destroyed (Attempt: #${{ github.run_attempt }})"
+          message_error: ":x: ${{ github.job }} ${{ matrix.node }} Failed to destroy Robotics Sim runners (Attempt: #${{ github.run_attempt }})"
+          slack_token: ${{ secrets.slack_token_id }}
+          slack_channel: ${{ env.SLACK_CHANNEL }}
+          slack_thread_id: ${{ needs.Slack-thread.outputs.slack_thread_id }}
+          gh_api_token: ${{ secrets.auto_commit_pwd }}
+          job_name: ${{ github.job }}
+          repository: ${{ github.repository }}
+          run_id: ${{ github.run_id }}
+          run_attempt: ${{ github.run_attempt }}
 
   Provision-Robotics-Sim-Runners:
     needs: [Destroy-Robotics-Sim-Runners]
     runs-on: infra-runner
+    env:
+      PROXMOX_HOST: "https://${{ matrix.node }}.mov.ai:8006"
     strategy:
       fail-fast: false
       matrix:
@@ -871,154 +650,116 @@ jobs:
     outputs:
       slack_thread_id: ${{ needs.Destroy-Robotics-Sim-Runners.outputs.slack_thread_id }}
     steps:
+    - name: Cache Terraform providers
+      uses: actions/cache@v4
+      with:
+        path: .terraform
+        key: ${{ runner.os }}-tf-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
+        restore-keys: |
+          ${{ runner.os }}-tf-providers-
 
-    - name: Setup CI Scripts in .ci-venv
-      shell: bash
-      run: |
-        cat << EOF | sudo tee /etc/pip.conf
-        [global]
-        index-url = https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/simple
-        extra-index-url = https://pypi.org/simple
-        trusted-host = artifacts.cloud.mov.ai
-                      pypi.org
-        EOF
-        cat /etc/pip.conf
-        python3 -m venv .ci-venv --clear --system-site-packages # needed for apt dependencies
-        . .ci-venv/bin/activate
-        python3 -m pip install pyOpenSSL --upgrade pip
-        [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-        python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+    - name: Setup CI virtual environment
+      uses: ./.github/actions/setup-ci-venv
+      with:
+        ci_integration_scripts_version: ${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
 
-    - name: Setup env conf
+    - name: Fetch environment configuration
       id: provision_infra_env_conf
-      shell: bash
-      run: |
-        . .ci-venv/bin/activate
-        provision_infra_dir=${{ env.PROVISION_ENV_CONF_REPO }}
-        provision_infra_version=${{ env.PROVISION_ENV_CONF_VERSION }}
-        provision_infra_repo_name=${{ env.PROVISION_ENV_CONF_REPO }}
+      uses: ./.github/actions/fetch-integration-pipeline-repo
+      with:
+        repo_name: ${{ env.PROVISION_ENV_CONF_REPO }}
+        repo_version: ${{ env.PROVISION_ENV_CONF_VERSION }}
+        target_dir: ${{ env.PROVISION_ENV_CONF_REPO }}
+        gh_api_user: ${{ secrets.auto_commit_user }}
+        gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+        venv_path: ".ci-venv"
 
-        rm -rf $provision_infra_dir
-        integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-          --version $provision_infra_version \
-          --gh_api_user ${{ secrets.auto_commit_user }} \
-          --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-          --target_dir $provision_infra_dir
-
-        ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-    - name: Setup terraform proxmox provisioner
+    - name: Fetch Terraform provisioner
       id: provision_infra_setup
+      uses: ./.github/actions/fetch-integration-pipeline-repo
+      with:
+        repo_name: ${{ env.PROVISION_INFRA_REPO }}
+        repo_version: ${{ env.PROVISION_INFRA_VERSION }}
+        target_dir: ${{ env.PROVISION_INFRA_REPO }}
+        gh_api_user: ${{ secrets.auto_commit_user }}
+        gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+        venv_path: ".ci-venv"
+
+    - name: Setup Terraform variables for provision
+      uses: ./.github/actions/setup-terraform-tfvars-infra
+      with:
+        runner_configuration: ${{ toJson(inputs.INFRA_ROBOTICS_SIM_CONFIGURATION) }}
+        runner_profile: "gh_sim_runner"
+        node: ${{ matrix.node }}
+        env_conf_repo: ${{ steps.provision_infra_env_conf.outputs.target_dir }}
+        names_prefix: ${{ env.NAMES_PREFIX }}
+        runner_type_label: "robotics-sim-runner"
+        provision_pool: ${{ env.PROVISION_POOL }}
+        proxmox_ve_username: ${{ secrets.proxmox_ve_username }}
+        proxmox_ve_password: ${{ secrets.proxmox_ve_password }}
+        gh_access_token: ${{ secrets.auto_commit_pwd }}
+        extra_cloud_init_packages: "python3-dev"
+
+    - name: Terraform validate and plan for provision
+      uses: ./.github/actions/terraform-validate-and-plan
+      with:
+        working_directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        backend_key: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-robotics-sim-runners.tfstate
+        tfvars_file: ${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_sim_runner.tfvars
+        input_tfvars: input.tfvars
+        aws_access_key_id: ${{ secrets.aws_key_id }}
+        aws_secret_access_key: ${{ secrets.aws_secret_key_id }}
+
+    - name: Terraform apply for provision
+      uses: ./.github/actions/terraform-apply-with-cleanup-infra
+      with:
+        working_directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        backend_key: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-robotics-sim-runners.tfstate
+        tfvars_file: ${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_sim_runner.tfvars
+        input_tfvars: input.tfvars
+        action_type: "apply"
+        aws_access_key_id: ${{ secrets.aws_key_id }}
+        aws_secret_access_key: ${{ secrets.aws_secret_key_id }}
+
+    - name: Verify VMs provisioned
+      uses: ./.github/actions/verify-vm-status-infra
+      with:
+        action_type: "provisioned"
+        proxmox_host: ${{ env.PROXMOX_HOST }}
+        proxmox_username: ${{ secrets.proxmox_ve_username }}
+        proxmox_password: ${{ secrets.proxmox_ve_password }}
+        vm_name_prefix: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-robotics-sim-runner
+        node_name: ${{ matrix.node }}
+        expected_count: ${{ fromJson(inputs.INFRA_ROBOTICS_SIM_CONFIGURATION)[matrix.node] }}
+
+    - name: Setup SSH key for runner registration
       shell: bash
       run: |
-        . .ci-venv/bin/activate
-        provision_infra_dir=${{ env.PROVISION_INFRA_REPO }}
-        provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
-        provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
-
-        rm -rf $provision_infra_dir
-        integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-          --version $provision_infra_version \
-          --gh_api_user ${{ secrets.auto_commit_user }} \
-          --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-          --target_dir $provision_infra_dir
-
-        ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-    - name: Provision remote vms (Proxmox)
-      working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
-      shell: bash
-      run: |
-        multiply_node=$(printf '"${{ matrix.node }}",%.0s' {1..${{ fromJson(inputs.INFRA_ROBOTICS_SIM_CONFIGURATION)[matrix.node] }}})
-        node_list_str=${multiply_node::-1}
-        multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_ROBOTICS_SIM_CONFIGURATION)[matrix.node] }}})
-        ip_list_str=${multiply_ips::-1}
-        desired_profile='gh_sim_runner'
-        base_var_dir="../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel"
-        selected_var_file="${base_var_dir}/${{ matrix.node }}_${desired_profile}.tfvars"
-        if [[ ! -f "${selected_var_file}" ]]; then
-          echo "Missing tfvars file: ${selected_var_file}" >&2
-          exit 1
-        fi
-        var_file_arg="-var-file=${selected_var_file}"
-        echo "Selected tfvars: ${selected_var_file}"
-
-        echo "proxmox_host_list=[$node_list_str]" >> input.tfvars
-        echo 'gh_runner_nr="${{ fromJson(inputs.INFRA_ROBOTICS_SIM_CONFIGURATION)[matrix.node] }}"' >> input.tfvars
-        echo 'gh_runner_name_prefix="${{ env.NAMES_PREFIX }}${{ matrix.node }}-robotics-sim-runner"' >> input.tfvars
-        echo "ip_list=[$ip_list_str]" >> input.tfvars
-        echo 'tags=["robotics-sim-runner"]' >> input.tfvars
-        echo 'pool="${{ env.PROVISION_POOL }}"' >> input.tfvars
-        echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"' >> input.tfvars
-        echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"' >> input.tfvars
-        echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"' >> input.tfvars
-        echo 'gh_runner_labels=["robotics-sim-runner-${{ matrix.node }}","robotics-sim-runner"]' >> input.tfvars
-        echo 'cloud_init_packages=["python3-dev"]'>>input.tfvars
-        echo "\n" >> input
-
-        echo "File args: $var_file_arg"
-        echo "Input File args: $(cat input.tfvars)"
-        terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-robotics-sim-runners.tfstate"
-        terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
-        terraform refresh $var_file_arg -var-file=input.tfvars
-
+        mkdir -p ~/.ssh
         echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
         sudo chmod 600 ~/.ssh/ci_priv_key.pem
+        echo "✓ SSH key configured"
 
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
-        AWS_DEFAULT_REGION: "us-east-1"
-
-    - name: Get current job id
+    - name: Send Slack notification
       if: always()
-      shell: bash
-      id: job_info
-      run: |
-        job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-        echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
-      env:
-        GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
-
-    - name: Prepare slack variables
-      if: ${{ always() }}
-      id: pre_slack
-      run: |
-        MESSAGE=":white_check_mark: ${{ github.job }} ${{ fromJson(inputs.INFRA_ROBOTICS_SIM_CONFIGURATION)[matrix.node] }} Robotics Sim runners provisioned successfully in ${{matrix.node}}! (Attempt: #${{ github.run_attempt }})"
-        MESSAGE_ERR=":x: ${{ github.job }} Failed to provision Robotics Sim runners in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
-        echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-        echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
-
-    - name: Send Slack Message
-      uses: slackapi/slack-github-action@v2
+      uses: ./.github/actions/slack-notify-infra
       with:
-        method: chat.postMessage
-        token: ${{ secrets.slack_token_id }}
-        payload: |
-          {
-            "channel": "${{ env.SLACK_CHANNEL }}",
-            "text": "${{ steps.pre_slack.outputs.msg }}",
-            "thread_ts": "${{ needs.Destroy-Robotics-Sim-Runners.outputs.slack_thread_id }}"
-          }
-
-    - name: Send Slack Message
-      uses: slackapi/slack-github-action@v2
-      if: ${{ failure() }}
-      with:
-        method: chat.postMessage
-        token: ${{ secrets.slack_token_id }}
-        payload: |
-          {
-            "channel": "${{ env.SLACK_CHANNEL }}",
-            "text": "${{ steps.pre_slack.outputs.msg_error }}",
-            "thread_ts": "${{ needs.Destroy-Robotics-Sim-Runners.outputs.slack_thread_id }}"
-          }
+        message: ":white_check_mark: ${{ github.job }} ${{ fromJson(inputs.INFRA_ROBOTICS_SIM_CONFIGURATION)[matrix.node] }} Robotics Sim runners provisioned successfully in ${{matrix.node}}! (Attempt: #${{ github.run_attempt }})"
+        message_error: ":x: ${{ github.job }} Failed to provision Robotics Sim runners in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
+        slack_token: ${{ secrets.slack_token_id }}
+        slack_channel: ${{ env.SLACK_CHANNEL }}
+        slack_thread_id: ${{ needs.Destroy-Robotics-Sim-Runners.outputs.slack_thread_id }}
+        gh_api_token: ${{ secrets.auto_commit_pwd }}
+        job_name: ${{ github.job }}
+        repository: ${{ github.repository }}
+        run_id: ${{ github.run_id }}
+        run_attempt: ${{ github.run_attempt }}
 
   Destroy-Redhat-Oracle-Runners:
     needs: Slack-thread
     runs-on: infra-runner
+    env:
+      PROXMOX_HOST: "https://${{ matrix.node }}.mov.ai:8006"
     strategy:
       fail-fast: false
       matrix:
@@ -1027,61 +768,40 @@ jobs:
       slack_thread_id: ${{ needs.Slack-thread.outputs.slack_thread_id }}
 
     steps:
+      - name: Cache Terraform providers
+        uses: actions/cache@v4
+        with:
+          path: .terraform
+          key: ${{ runner.os }}-tf-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-tf-providers-
 
-      - name: Setup CI Scripts in .ci-venv
-        shell: bash
-        run: |
-          cat << EOF | sudo tee /etc/pip.conf
-          [global]
-          index-url = https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/simple
-          extra-index-url = https://pypi.org/simple
-          trusted-host = artifacts.cloud.mov.ai
-                        pypi.org
-          EOF
-          cat /etc/pip.conf
-          python3 -m venv .ci-venv --clear --system-site-packages # needed for apt dependencies
-          . .ci-venv/bin/activate
-          python3 -m pip install pyOpenSSL --upgrade pip
-          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+      - name: Setup CI virtual environment
+        uses: ./.github/actions/setup-ci-venv
+        with:
+          ci_integration_scripts_version: ${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
 
-      - name: Setup env conf
+      - name: Fetch environment configuration
         id: provision_infra_env_conf
-        shell: bash
-        run: |
-          . .ci-venv/bin/activate
-          provision_infra_dir=${{ env.PROVISION_ENV_CONF_REPO }}
-          provision_infra_version=${{ env.PROVISION_ENV_CONF_VERSION }}
-          provision_infra_repo_name=${{ env.PROVISION_ENV_CONF_REPO }}
+        uses: ./.github/actions/fetch-integration-pipeline-repo
+        with:
+          repo_name: ${{ env.PROVISION_ENV_CONF_REPO }}
+          repo_version: ${{ env.PROVISION_ENV_CONF_VERSION }}
+          target_dir: ${{ env.PROVISION_ENV_CONF_REPO }}
+          gh_api_user: ${{ secrets.auto_commit_user }}
+          gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+          venv_path: ".ci-venv"
 
-          rm -rf $provision_infra_dir
-          integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-            --version $provision_infra_version \
-            --gh_api_user ${{ secrets.auto_commit_user }} \
-            --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-            --target_dir $provision_infra_dir
-
-          ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-      - name: Setup terraform proxmox provisioner
+      - name: Fetch Terraform provisioner
         id: provision_infra_setup
-        shell: bash
-        run: |
-          . .ci-venv/bin/activate
-          provision_infra_dir=${{ env.PROVISION_INFRA_REPO }}
-          provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
-          provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
-
-          rm -rf $provision_infra_dir
-          integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-            --version $provision_infra_version \
-            --gh_api_user ${{ secrets.auto_commit_user }} \
-            --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-            --target_dir $provision_infra_dir
-
-          ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+        uses: ./.github/actions/fetch-integration-pipeline-repo
+        with:
+          repo_name: ${{ env.PROVISION_INFRA_REPO }}
+          repo_version: ${{ env.PROVISION_INFRA_VERSION }}
+          target_dir: ${{ env.PROVISION_INFRA_REPO }}
+          gh_api_user: ${{ secrets.auto_commit_user }}
+          gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+          venv_path: ".ci-venv"
 
       - name: Destroy remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -1129,53 +849,26 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
           AWS_DEFAULT_REGION: "us-east-1"
 
-      - name: Get current job id
+      - name: Send Slack notification
         if: always()
-        shell: bash
-        id: job_info
-        run: |
-          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
-
-      - name: Prepare slack variables
-        if: ${{ always() }}
-        id: pre_slack
-        run: |
-          MESSAGE=":white_check_mark: ${{ github.job }} ${{ matrix.node }} Redhat Oracle runners destroyed (Attempt: #${{ github.run_attempt }})"
-          MESSAGE_ERR=":x: ${{ github.job }} ${{ matrix.node }} Failed to destroy Redhat Oracle runners (Attempt: #${{ github.run_attempt }})"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
-
-      - name: Send Slack Message
-        uses: slackapi/slack-github-action@v2
+        uses: ./.github/actions/slack-notify-infra
         with:
-          method: chat.postMessage
-          token: ${{ secrets.slack_token_id }}
-          payload: |
-            {
-              "channel": "${{ env.SLACK_CHANNEL }}",
-              "text": "${{ steps.pre_slack.outputs.msg }}",
-              "thread_ts": "${{ needs.Slack-thread.outputs.slack_thread_id }}"
-            }
-
-      - name: Send Slack Message
-        uses: slackapi/slack-github-action@v2
-        if: ${{ failure() }}
-        with:
-          method: chat.postMessage
-          token: ${{ secrets.slack_token_id }}
-          payload: |
-            {
-              "channel": "${{ env.SLACK_CHANNEL }}",
-              "text": "${{ steps.pre_slack.outputs.msg_error }}",
-              "thread_ts": "${{ needs.Slack-thread.outputs.slack_thread_id }}"
-            }
+          message: ":white_check_mark: ${{ github.job }} ${{ matrix.node }} Redhat Oracle runners destroyed (Attempt: #${{ github.run_attempt }})"
+          message_error: ":x: ${{ github.job }} ${{ matrix.node }} Failed to destroy Redhat Oracle runners (Attempt: #${{ github.run_attempt }})"
+          slack_token: ${{ secrets.slack_token_id }}
+          slack_channel: ${{ env.SLACK_CHANNEL }}
+          slack_thread_id: ${{ needs.Slack-thread.outputs.slack_thread_id }}
+          gh_api_token: ${{ secrets.auto_commit_pwd }}
+          job_name: ${{ github.job }}
+          repository: ${{ github.repository }}
+          run_id: ${{ github.run_id }}
+          run_attempt: ${{ github.run_attempt }}
 
   Provision-Redhat-Oracle-Runners:
     needs: [Destroy-Redhat-Oracle-Runners]
     runs-on: infra-runner
+    env:
+      PROXMOX_HOST: "https://${{ matrix.node }}.mov.ai:8006"
     strategy:
       fail-fast: false
       matrix:
@@ -1184,153 +877,116 @@ jobs:
       slack_thread_id: ${{ needs.Destroy-Redhat-Oracle-Runners.outputs.slack_thread_id }}
     steps:
 
-    - name: Setup CI Scripts in .ci-venv
-      shell: bash
-      run: |
-        cat << EOF | sudo tee /etc/pip.conf
-        [global]
-        index-url = https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/simple
-        extra-index-url = https://pypi.org/simple
-        trusted-host = artifacts.cloud.mov.ai
-                      pypi.org
-        EOF
-        cat /etc/pip.conf
-        python3 -m venv .ci-venv --clear --system-site-packages # needed for apt dependencies
-        . .ci-venv/bin/activate
-        python3 -m pip install pyOpenSSL --upgrade pip
-        [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-        python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+    - name: Cache Terraform providers
+      uses: actions/cache@v4
+      with:
+        path: .terraform
+        key: ${{ runner.os }}-tf-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
+        restore-keys: |
+          ${{ runner.os }}-tf-providers-
 
-    - name: Setup env conf
+    - name: Setup CI virtual environment
+      uses: ./.github/actions/setup-ci-venv
+      with:
+        ci_integration_scripts_version: ${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
+
+    - name: Fetch environment configuration
       id: provision_infra_env_conf
-      shell: bash
-      run: |
-        . .ci-venv/bin/activate
-        provision_infra_dir=${{ env.PROVISION_ENV_CONF_REPO }}
-        provision_infra_version=${{ env.PROVISION_ENV_CONF_VERSION }}
-        provision_infra_repo_name=${{ env.PROVISION_ENV_CONF_REPO }}
+      uses: ./.github/actions/fetch-integration-pipeline-repo
+      with:
+        repo_name: ${{ env.PROVISION_ENV_CONF_REPO }}
+        repo_version: ${{ env.PROVISION_ENV_CONF_VERSION }}
+        target_dir: ${{ env.PROVISION_ENV_CONF_REPO }}
+        gh_api_user: ${{ secrets.auto_commit_user }}
+        gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+        venv_path: ".ci-venv"
 
-        rm -rf $provision_infra_dir
-        integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-          --version $provision_infra_version \
-          --gh_api_user ${{ secrets.auto_commit_user }} \
-          --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-          --target_dir $provision_infra_dir
-
-        ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-    - name: Setup terraform proxmox provisioner
+    - name: Fetch Terraform provisioner
       id: provision_infra_setup
+      uses: ./.github/actions/fetch-integration-pipeline-repo
+      with:
+        repo_name: ${{ env.PROVISION_INFRA_REPO }}
+        repo_version: ${{ env.PROVISION_INFRA_VERSION }}
+        target_dir: ${{ env.PROVISION_INFRA_REPO }}
+        gh_api_user: ${{ secrets.auto_commit_user }}
+        gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+        venv_path: ".ci-venv"
+
+    - name: Setup Terraform variables for provision
+      uses: ./.github/actions/setup-terraform-tfvars-infra
+      with:
+        runner_configuration: ${{ toJson(inputs.INFRA_REDHAT_ORACLE_CONFIGURATION) }}
+        runner_profile: "gh_redhat_oracle_runner"
+        node: ${{ matrix.node }}
+        env_conf_repo: ${{ steps.provision_infra_env_conf.outputs.target_dir }}
+        names_prefix: ${{ env.NAMES_PREFIX }}
+        runner_type_label: "redhat-oracle-runner"
+        provision_pool: ${{ env.PROVISION_POOL }}
+        proxmox_ve_username: ${{ secrets.proxmox_ve_username }}
+        proxmox_ve_password: ${{ secrets.proxmox_ve_password }}
+        gh_access_token: ${{ secrets.auto_commit_pwd }}
+        extra_cloud_init_packages: "python3-dev"
+
+    - name: Terraform validate and plan for provision
+      uses: ./.github/actions/terraform-validate-and-plan
+      with:
+        working_directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        backend_key: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-redhat-oracle-runners.tfstate
+        tfvars_file: ${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_redhat_oracle_runner.tfvars
+        input_tfvars: input.tfvars
+        aws_access_key_id: ${{ secrets.aws_key_id }}
+        aws_secret_access_key: ${{ secrets.aws_secret_key_id }}
+
+    - name: Terraform apply for provision
+      uses: ./.github/actions/terraform-apply-with-cleanup-infra
+      with:
+        working_directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        backend_key: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-redhat-oracle-runners.tfstate
+        tfvars_file: ${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_redhat_oracle_runner.tfvars
+        input_tfvars: input.tfvars
+        action_type: "apply"
+        aws_access_key_id: ${{ secrets.aws_key_id }}
+        aws_secret_access_key: ${{ secrets.aws_secret_key_id }}
+
+    - name: Verify VMs provisioned
+      uses: ./.github/actions/verify-vm-status-infra
+      with:
+        action_type: "provisioned"
+        proxmox_host: ${{ env.PROXMOX_HOST }}
+        proxmox_username: ${{ secrets.proxmox_ve_username }}
+        proxmox_password: ${{ secrets.proxmox_ve_password }}
+        vm_name_prefix: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-redhat-oracle-runner
+        node_name: ${{ matrix.node }}
+        expected_count: ${{ fromJson(inputs.INFRA_REDHAT_ORACLE_CONFIGURATION)[matrix.node] }}
+
+    - name: Setup SSH key for runner registration
       shell: bash
       run: |
-        . .ci-venv/bin/activate
-        provision_infra_dir=${{ env.PROVISION_INFRA_REPO }}
-        provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
-        provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
-
-        rm -rf $provision_infra_dir
-        integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-          --version $provision_infra_version \
-          --gh_api_user ${{ secrets.auto_commit_user }} \
-          --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-          --target_dir $provision_infra_dir
-
-        ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-    - name: Provision remote vms (Proxmox)
-      working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
-      shell: bash
-      run: |
-        multiply_node=$(printf '"${{ matrix.node }}",%.0s' {1..${{ fromJson(inputs.INFRA_REDHAT_ORACLE_CONFIGURATION)[matrix.node] }}})
-        node_list_str=${multiply_node::-1}
-        multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_REDHAT_ORACLE_CONFIGURATION)[matrix.node] }}})
-        ip_list_str=${multiply_ips::-1}
-        desired_profile='gh_redhat_oracle_runner'
-        base_var_dir="../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel"
-        selected_var_file="${base_var_dir}/${{ matrix.node }}_${desired_profile}.tfvars"
-        if [[ ! -f "${selected_var_file}" ]]; then
-          echo "Missing tfvars file: ${selected_var_file}" >&2
-          exit 1
-        fi
-        var_file_arg="-var-file=${selected_var_file}"
-        echo "Selected tfvars: ${selected_var_file}"
-
-        echo "proxmox_host_list=[$node_list_str]" >> input.tfvars
-        echo 'gh_runner_nr="${{ fromJson(inputs.INFRA_REDHAT_ORACLE_CONFIGURATION)[matrix.node] }}"' >> input.tfvars
-        echo 'gh_runner_name_prefix="${{ env.NAMES_PREFIX }}${{ matrix.node }}-redhat-oracle-runner"' >> input.tfvars
-        echo "ip_list=[$ip_list_str]" >> input.tfvars
-        echo 'tags=["redhat-oracle-runner"]' >> input.tfvars
-        echo 'pool="${{ env.PROVISION_POOL }}"' >> input.tfvars
-        echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"' >> input.tfvars
-        echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"' >> input.tfvars
-        echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"' >> input.tfvars
-        echo 'gh_runner_labels=["redhat-oracle-runner-${{ matrix.node }}","redhat-oracle-runner"]' >> input.tfvars
-        echo 'cloud_init_packages=["python3-dev"]'>>input.tfvars
-        echo "\n" >> input
-
-        echo "File args: $var_file_arg"
-        echo "Input File args: $(cat input.tfvars)"
-        terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-redhat-oracle-runners.tfstate"
-        terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
-        terraform refresh $var_file_arg -var-file=input.tfvars
-
+        mkdir -p ~/.ssh
         echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
         sudo chmod 600 ~/.ssh/ci_priv_key.pem
+        echo "✓ SSH key configured"
 
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
-        AWS_DEFAULT_REGION: "us-east-1"
-
-    - name: Get current job id
+    - name: Send Slack notification
       if: always()
-      shell: bash
-      id: job_info
-      run: |
-        job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-        echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
-      env:
-        GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
-
-    - name: Prepare slack variables
-      if: ${{ always() }}
-      id: pre_slack
-      run: |
-        MESSAGE=":white_check_mark: ${{ github.job }} ${{ fromJson(inputs.INFRA_REDHAT_ORACLE_CONFIGURATION)[matrix.node] }} Redhat Oracle runners provisioned successfully in ${{matrix.node}}! (Attempt: #${{ github.run_attempt }})"
-        MESSAGE_ERR=":x: ${{ github.job }} Failed to provision Redhat Oracle runners in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
-        echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-        echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
-
-    - name: Send Slack Message
-      uses: slackapi/slack-github-action@v2
+      uses: ./.github/actions/slack-notify-infra
       with:
-        method: chat.postMessage
-        token: ${{ secrets.slack_token_id }}
-        payload: |
-          {
-            "channel": "${{ env.SLACK_CHANNEL }}",
-            "text": "${{ steps.pre_slack.outputs.msg }}",
-            "thread_ts": "${{ needs.Destroy-Redhat-Oracle-Runners.outputs.slack_thread_id }}"
-          }
-
-    - name: Send Slack Message
-      uses: slackapi/slack-github-action@v2
-      if: ${{ failure() }}
-      with:
-        method: chat.postMessage
-        token: ${{ secrets.slack_token_id }}
-        payload: |
-          {
-            "channel": "${{ env.SLACK_CHANNEL }}",
-            "text": "${{ steps.pre_slack.outputs.msg_error }}",
-            "thread_ts": "${{ needs.Destroy-Redhat-Oracle-Runners.outputs.slack_thread_id }}"
-          }
+        message: ":white_check_mark: ${{ github.job }} ${{ fromJson(inputs.INFRA_REDHAT_ORACLE_CONFIGURATION)[matrix.node] }} Redhat Oracle runners provisioned successfully in ${{matrix.node}}! (Attempt: #${{ github.run_attempt }})"
+        message_error: ":x: ${{ github.job }} Failed to provision Redhat Oracle runners in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
+        slack_token: ${{ secrets.slack_token_id }}
+        slack_channel: ${{ env.SLACK_CHANNEL }}
+        slack_thread_id: ${{ needs.Destroy-Redhat-Oracle-Runners.outputs.slack_thread_id }}
+        gh_api_token: ${{ secrets.auto_commit_pwd }}
+        job_name: ${{ github.job }}
+        repository: ${{ github.repository }}
+        run_id: ${{ github.run_id }}
+        run_attempt: ${{ github.run_attempt }}
 
   Destroy-Packer-Runners:
     needs: Slack-thread
     runs-on: infra-runner
+    env:
+      PROXMOX_HOST: "https://${{ matrix.node }}.mov.ai:8006"
     strategy:
       fail-fast: false
       matrix:
@@ -1340,60 +996,40 @@ jobs:
 
     steps:
 
-      - name: Setup CI Scripts in .ci-venv
-        shell: bash
-        run: |
-          cat << EOF | sudo tee /etc/pip.conf
-          [global]
-          index-url = https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/simple
-          extra-index-url = https://pypi.org/simple
-          trusted-host = artifacts.cloud.mov.ai
-                        pypi.org
-          EOF
-          cat /etc/pip.conf
-          python3 -m venv .ci-venv --clear --system-site-packages # needed for apt dependencies
-          . .ci-venv/bin/activate
-          python3 -m pip install pyOpenSSL --upgrade pip
-          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+      - name: Cache Terraform providers
+        uses: actions/cache@v4
+        with:
+          path: .terraform
+          key: ${{ runner.os }}-tf-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-tf-providers-
 
-      - name: Setup env conf
+      - name: Setup CI virtual environment
+        uses: ./.github/actions/setup-ci-venv
+        with:
+          ci_integration_scripts_version: ${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
+
+      - name: Fetch environment configuration
         id: provision_infra_env_conf
-        shell: bash
-        run: |
-          . .ci-venv/bin/activate
-          provision_infra_dir=${{ env.PROVISION_ENV_CONF_REPO }}
-          provision_infra_version=${{ env.PROVISION_ENV_CONF_VERSION }}
-          provision_infra_repo_name=${{ env.PROVISION_ENV_CONF_REPO }}
+        uses: ./.github/actions/fetch-integration-pipeline-repo
+        with:
+          repo_name: ${{ env.PROVISION_ENV_CONF_REPO }}
+          repo_version: ${{ env.PROVISION_ENV_CONF_VERSION }}
+          target_dir: ${{ env.PROVISION_ENV_CONF_REPO }}
+          gh_api_user: ${{ secrets.auto_commit_user }}
+          gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+          venv_path: ".ci-venv"
 
-          rm -rf $provision_infra_dir
-          integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-            --version $provision_infra_version \
-            --gh_api_user ${{ secrets.auto_commit_user }} \
-            --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-            --target_dir $provision_infra_dir
-
-          ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-      - name: Setup terraform proxmox provisioner
+      - name: Fetch Terraform provisioner
         id: provision_infra_setup
-        shell: bash
-        run: |
-          . .ci-venv/bin/activate
-          provision_infra_dir=${{ env.PROVISION_INFRA_REPO }}
-          provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
-          provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
-
-          rm -rf $provision_infra_dir
-          integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-            --version $provision_infra_version \
-            --gh_api_user ${{ secrets.auto_commit_user }} \
-            --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-            --target_dir $provision_infra_dir
-
-          ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+        uses: ./.github/actions/fetch-integration-pipeline-repo
+        with:
+          repo_name: ${{ env.PROVISION_INFRA_REPO }}
+          repo_version: ${{ env.PROVISION_INFRA_VERSION }}
+          target_dir: ${{ env.PROVISION_INFRA_REPO }}
+          gh_api_user: ${{ secrets.auto_commit_user }}
+          gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+          venv_path: ".ci-venv"
 
       - name: Destroy remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -1441,53 +1077,26 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
           AWS_DEFAULT_REGION: "us-east-1"
 
-      - name: Get current job id
+      - name: Send Slack notification
         if: always()
-        shell: bash
-        id: job_info
-        run: |
-          job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
-
-      - name: Prepare slack variables
-        if: ${{ always() }}
-        id: pre_slack
-        run: |
-          MESSAGE=":white_check_mark: ${{ github.job }} ${{ matrix.node }} Packer runners destroyed (Attempt: #${{ github.run_attempt }})"
-          MESSAGE_ERR=":x: ${{ github.job }} ${{ matrix.node }} Failed to destroy Packer runners (Attempt: #${{ github.run_attempt }})"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
-
-      - name: Send Slack Message
-        uses: slackapi/slack-github-action@v2
+        uses: ./.github/actions/slack-notify-infra
         with:
-          method: chat.postMessage
-          token: ${{ secrets.slack_token_id }}
-          payload: |
-            {
-              "channel": "${{ env.SLACK_CHANNEL }}",
-              "text": "${{ steps.pre_slack.outputs.msg }}",
-              "thread_ts": "${{ needs.Slack-thread.outputs.slack_thread_id }}"
-            }
-
-      - name: Send Slack Message
-        uses: slackapi/slack-github-action@v2
-        if: ${{ failure() }}
-        with:
-          method: chat.postMessage
-          token: ${{ secrets.slack_token_id }}
-          payload: |
-            {
-              "channel": "${{ env.SLACK_CHANNEL }}",
-              "text": "${{ steps.pre_slack.outputs.msg_error }}",
-              "thread_ts": "${{ needs.Slack-thread.outputs.slack_thread_id }}"
-            }
+          message: ":white_check_mark: ${{ github.job }} ${{ matrix.node }} Packer runners destroyed (Attempt: #${{ github.run_attempt }})"
+          message_error: ":x: ${{ github.job }} ${{ matrix.node }} Failed to destroy Packer runners (Attempt: #${{ github.run_attempt }})"
+          slack_token: ${{ secrets.slack_token_id }}
+          slack_channel: ${{ env.SLACK_CHANNEL }}
+          slack_thread_id: ${{ needs.Slack-thread.outputs.slack_thread_id }}
+          gh_api_token: ${{ secrets.auto_commit_pwd }}
+          job_name: ${{ github.job }}
+          repository: ${{ github.repository }}
+          run_id: ${{ github.run_id }}
+          run_attempt: ${{ github.run_attempt }}
 
   Provision-Packer-Runners:
     needs: [Destroy-Packer-Runners]
     runs-on: infra-runner
+    env:
+      PROXMOX_HOST: "https://${{ matrix.node }}.mov.ai:8006"
     strategy:
       fail-fast: false
       matrix:
@@ -1496,149 +1105,110 @@ jobs:
       slack_thread_id: ${{ needs.Destroy-Packer-Runners.outputs.slack_thread_id }}
     steps:
 
-    - name: Setup CI Scripts in .ci-venv
-      shell: bash
-      run: |
-        cat << EOF | sudo tee /etc/pip.conf
-        [global]
-        index-url = https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/simple
-        extra-index-url = https://pypi.org/simple
-        trusted-host = artifacts.cloud.mov.ai
-                      pypi.org
-        EOF
-        cat /etc/pip.conf
-        python3 -m venv .ci-venv --clear --system-site-packages # needed for apt dependencies
-        . .ci-venv/bin/activate
-        python3 -m pip install pyOpenSSL --upgrade pip
-        [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-        python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+    - name: Cache Terraform providers
+      uses: actions/cache@v4
+      with:
+        path: .terraform
+        key: ${{ runner.os }}-tf-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
+        restore-keys: |
+          ${{ runner.os }}-tf-providers-
 
-    - name: Setup env conf
+    - name: Setup CI virtual environment
+      uses: ./.github/actions/setup-ci-venv
+      with:
+        ci_integration_scripts_version: ${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
+
+    - name: Fetch environment configuration
       id: provision_infra_env_conf
-      shell: bash
-      run: |
-        . .ci-venv/bin/activate
-        provision_infra_dir=${{ env.PROVISION_ENV_CONF_REPO }}
-        provision_infra_version=${{ env.PROVISION_ENV_CONF_VERSION }}
-        provision_infra_repo_name=${{ env.PROVISION_ENV_CONF_REPO }}
+      uses: ./.github/actions/fetch-integration-pipeline-repo
+      with:
+        repo_name: ${{ env.PROVISION_ENV_CONF_REPO }}
+        repo_version: ${{ env.PROVISION_ENV_CONF_VERSION }}
+        target_dir: ${{ env.PROVISION_ENV_CONF_REPO }}
+        gh_api_user: ${{ secrets.auto_commit_user }}
+        gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+        venv_path: ".ci-venv"
 
-        rm -rf $provision_infra_dir
-        integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-          --version $provision_infra_version \
-          --gh_api_user ${{ secrets.auto_commit_user }} \
-          --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-          --target_dir $provision_infra_dir
-
-        ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-    - name: Setup terraform proxmox provisioner
+    - name: Fetch Terraform provisioner
       id: provision_infra_setup
+      uses: ./.github/actions/fetch-integration-pipeline-repo
+      with:
+        repo_name: ${{ env.PROVISION_INFRA_REPO }}
+        repo_version: ${{ env.PROVISION_INFRA_VERSION }}
+        target_dir: ${{ env.PROVISION_INFRA_REPO }}
+        gh_api_user: ${{ secrets.auto_commit_user }}
+        gh_api_pwd: ${{ secrets.auto_commit_pwd }}
+        venv_path: ".ci-venv"
+
+    - name: Setup Terraform variables for provision
+      uses: ./.github/actions/setup-terraform-tfvars-infra
+      with:
+        runner_configuration: ${{ toJson(inputs.INFRA_PACKER_CONFIGURATION) }}
+        runner_profile: "gh_packer_runner"
+        node: ${{ matrix.node }}
+        env_conf_repo: ${{ steps.provision_infra_env_conf.outputs.target_dir }}
+        names_prefix: ${{ env.NAMES_PREFIX }}
+        runner_type_label: "packer-runner"
+        provision_pool: ${{ env.PROVISION_POOL }}
+        proxmox_ve_username: ${{ secrets.proxmox_ve_username }}
+        proxmox_ve_password: ${{ secrets.proxmox_ve_password }}
+        gh_access_token: ${{ secrets.auto_commit_pwd }}
+        extra_cloud_init_packages: "python3-dev"
+
+    - name: Terraform validate and plan for provision
+      uses: ./.github/actions/terraform-validate-and-plan
+      with:
+        working_directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        backend_key: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-packer-runners.tfstate
+        tfvars_file: ${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_packer_runner.tfvars
+        input_tfvars: input.tfvars
+        aws_access_key_id: ${{ secrets.aws_key_id }}
+        aws_secret_access_key: ${{ secrets.aws_secret_key_id }}
+
+    - name: Terraform apply for provision
+      uses: ./.github/actions/terraform-apply-with-cleanup-infra
+      with:
+        working_directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        backend_key: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-packer-runners.tfstate
+        tfvars_file: ${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel/${{ matrix.node }}_gh_packer_runner.tfvars
+        input_tfvars: input.tfvars
+        action_type: "apply"
+        aws_access_key_id: ${{ secrets.aws_key_id }}
+        aws_secret_access_key: ${{ secrets.aws_secret_key_id }}
+
+    - name: Verify VMs provisioned
+      uses: ./.github/actions/verify-vm-status-infra
+      with:
+        action_type: "provisioned"
+        proxmox_host: ${{ env.PROXMOX_HOST }}
+        proxmox_username: ${{ secrets.proxmox_ve_username }}
+        proxmox_password: ${{ secrets.proxmox_ve_password }}
+        vm_name_prefix: ${{ env.NAMES_PREFIX }}${{ matrix.node }}-packer-runner
+        node_name: ${{ matrix.node }}
+        expected_count: ${{ fromJson(inputs.INFRA_PACKER_CONFIGURATION)[matrix.node] }}
+
+    - name: Setup SSH key for runner registration
       shell: bash
       run: |
-        . .ci-venv/bin/activate
-        provision_infra_dir=${{ env.PROVISION_INFRA_REPO }}
-        provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
-        provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
-
-        rm -rf $provision_infra_dir
-        integration-pipeline fetch_by_tag --repo $provision_infra_repo_name \
-          --version $provision_infra_version \
-          --gh_api_user ${{ secrets.auto_commit_user }} \
-          --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-          --target_dir $provision_infra_dir
-
-        ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
-
-    - name: Provision remote vms (Proxmox)
-      working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
-      shell: bash
-      run: |
-        multiply_node=$(printf '"${{ matrix.node }}",%.0s' {1..${{ fromJson(inputs.INFRA_PACKER_CONFIGURATION)[matrix.node] }}})
-        node_list_str=${multiply_node::-1}
-        multiply_ips=$(printf '"dhcp",%.0s' {1..${{ fromJson(inputs.INFRA_PACKER_CONFIGURATION)[matrix.node] }}})
-        ip_list_str=${multiply_ips::-1}
-        desired_profile='gh_packer_runner'
-        base_var_dir="../${{ steps.provision_infra_env_conf.outputs.target_dir }}/hel"
-        selected_var_file="${base_var_dir}/${{ matrix.node }}_${desired_profile}.tfvars"
-        if [[ ! -f "${selected_var_file}" ]]; then
-          echo "Missing tfvars file: ${selected_var_file}" >&2
-          exit 1
-        fi
-        var_file_arg="-var-file=${selected_var_file}"
-        echo "Selected tfvars: ${selected_var_file}"
-
-        echo "proxmox_host_list=[$node_list_str]" >> input.tfvars
-        echo 'gh_runner_nr="${{ fromJson(inputs.INFRA_PACKER_CONFIGURATION)[matrix.node] }}"' >> input.tfvars
-        echo 'gh_runner_name_prefix="${{ env.NAMES_PREFIX }}${{ matrix.node }}-packer-runner"' >> input.tfvars
-        echo "ip_list=[$ip_list_str]" >> input.tfvars
-        echo 'tags=["packer-runner"]' >> input.tfvars
-        echo 'pool="${{ env.PROVISION_POOL }}"' >> input.tfvars
-        echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"' >> input.tfvars
-        echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"' >> input.tfvars
-        echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"' >> input.tfvars
-        echo 'gh_runner_labels=["packer-runner-${{ matrix.node }}","packer-runner"]' >> input.tfvars
-        echo 'cloud_init_packages=["python3-dev"]'>>input.tfvars
-        echo "\n" >> input
-
-        echo "File args: $var_file_arg"
-        echo "Input File args: $(cat input.tfvars)"
-        terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-packer-runners.tfstate"
-        terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
-        terraform refresh $var_file_arg -var-file=input.tfvars
-
+        mkdir -p ~/.ssh
         echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
         sudo chmod 600 ~/.ssh/ci_priv_key.pem
+        echo "✓ SSH key configured"
 
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
-        AWS_DEFAULT_REGION: "us-east-1"
-
-    - name: Get current job id
+    - name: Send Slack notification
       if: always()
-      shell: bash
-      id: job_info
-      run: |
-        job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-        echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
-      env:
-        GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
-
-    - name: Prepare slack variables
-      if: ${{ always() }}
-      id: pre_slack
-      run: |
-        MESSAGE=":white_check_mark: ${{ github.job }} ${{ fromJson(inputs.INFRA_PACKER_CONFIGURATION)[matrix.node] }} Packer runners provisioned successfully in ${{matrix.node}}! (Attempt: #${{ github.run_attempt }})"
-        MESSAGE_ERR=":x: ${{ github.job }} Failed to provision Packer runners in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
-        echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-        echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
-
-    - name: Send Slack Message
-      uses: slackapi/slack-github-action@v2
+      uses: ./.github/actions/slack-notify-infra
       with:
-        method: chat.postMessage
-        token: ${{ secrets.slack_token_id }}
-        payload: |
-          {
-            "channel": "${{ env.SLACK_CHANNEL }}",
-            "text": "${{ steps.pre_slack.outputs.msg }}",
-            "thread_ts": "${{ needs.Destroy-Packer-Runners.outputs.slack_thread_id }}"
-          }
-
-    - name: Send Slack Message
-      uses: slackapi/slack-github-action@v2
-      if: ${{ failure() }}
-      with:
-        method: chat.postMessage
-        token: ${{ secrets.slack_token_id }}
-        payload: |
-          {
-            "channel": "${{ env.SLACK_CHANNEL }}",
-            "text": "${{ steps.pre_slack.outputs.msg_error }}",
-            "thread_ts": "${{ needs.Destroy-Packer-Runners.outputs.slack_thread_id }}"
-          }
+        message: ":white_check_mark: ${{ github.job }} ${{ fromJson(inputs.INFRA_PACKER_CONFIGURATION)[matrix.node] }} Packer runners provisioned successfully in ${{matrix.node}}! (Attempt: #${{ github.run_attempt }})"
+        message_error: ":x: ${{ github.job }} Failed to provision Packer runners in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
+        slack_token: ${{ secrets.slack_token_id }}
+        slack_channel: ${{ env.SLACK_CHANNEL }}
+        slack_thread_id: ${{ needs.Destroy-Packer-Runners.outputs.slack_thread_id }}
+        gh_api_token: ${{ secrets.auto_commit_pwd }}
+        job_name: ${{ github.job }}
+        repository: ${{ github.repository }}
+        run_id: ${{ github.run_id }}
+        run_attempt: ${{ github.run_attempt }}
 
   Run-Status:
     needs: [Provision-IP-Runners, Provision-QA-Runners, Provision-Robotics-Sim-Runners, Provision-Redhat-Oracle-Runners, Provision-Packer-Runners]

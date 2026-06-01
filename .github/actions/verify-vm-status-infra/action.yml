@@ -1,0 +1,117 @@
+name: "Verify VM Status via Proxmox API"
+description: "Query Proxmox API to verify VM status post-provision/destroy (warn-only)"
+
+inputs:
+  action_type:
+    description: "Type of check: provisioned or destroyed"
+    required: true
+  proxmox_host:
+    description: "Proxmox host URL (e.g., https://proxmox.example.com:8006)"
+    required: true
+  proxmox_username:
+    description: "Proxmox username (format: user@pam or user@pve)"
+    required: true
+  proxmox_password:
+    description: "Proxmox password"
+    required: true
+  vm_name_prefix:
+    description: "VM name prefix to search for (e.g., ng-hel0-ip-runner)"
+    required: true
+  node_name:
+    description: "Node name (e.g., hel0, hel1)"
+    required: true
+  expected_count:
+    description: "Expected number of VMs for this node"
+    required: true
+  timeout_seconds:
+    description: "Timeout in seconds for API queries"
+    required: false
+    default: "30"
+
+outputs:
+  vm_count:
+    description: "Actual number of VMs found"
+    value: ${{ steps.verify.outputs.vm_count }}
+  vm_status:
+    description: "Status summary (running, stopped, mixed, not_found)"
+    value: ${{ steps.verify.outputs.vm_status }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Verify VM status
+      id: verify
+      shell: bash
+      timeout-minutes: 2
+      run: |
+        set +e
+
+        echo "Verifying VM status on Proxmox (${{ inputs.action_type }})..."
+        echo "  Prefix: ${{ inputs.vm_name_prefix }}"
+        echo "  Node: ${{ inputs.node_name }}"
+        echo "  Expected: ${{ inputs.expected_count }} VMs"
+
+        # Get Proxmox ticket
+        TICKET=$(curl -s --connect-timeout 5 --max-time ${{ inputs.timeout_seconds }} \
+          -d "username=${{ inputs.proxmox_username }}&password=${{ inputs.proxmox_password }}" \
+          "${{ inputs.proxmox_host }}/api2/json/access/ticket" 2>/dev/null | \
+          jq -r '.data.ticket' 2>/dev/null)
+
+        if [[ -z "$TICKET" || "$TICKET" == "null" ]]; then
+          echo "⚠️  Warning: Could not authenticate to Proxmox API (non-blocking)"
+          echo "vm_count=0" >> $GITHUB_OUTPUT
+          echo "vm_status=api_unreachable" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        # Query VMs on node
+        VM_LIST=$(curl -s --connect-timeout 5 --max-time ${{ inputs.timeout_seconds }} \
+          -H "Authorization: PVEAPIToken=$TICKET" \
+          "${{ inputs.proxmox_host }}/api2/json/nodes/${{ inputs.node_name }}/qemu" 2>/dev/null)
+
+        if [[ -z "$VM_LIST" || "$VM_LIST" == "null" ]]; then
+          echo "⚠️  Warning: Could not retrieve VM list from Proxmox (non-blocking)"
+          echo "vm_count=0" >> $GITHUB_OUTPUT
+          echo "vm_status=query_failed" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        # Filter VMs by prefix and count
+        VM_COUNT=$(echo "$VM_LIST" | jq -r "[.data[] | select(.name | startswith(\"${{ inputs.vm_name_prefix }}\"))] | length" 2>/dev/null || echo "0")
+
+        if [[ -z "$VM_COUNT" ]]; then
+          VM_COUNT=0
+        fi
+
+        echo "vm_count=$VM_COUNT" >> $GITHUB_OUTPUT
+
+        # Determine status
+        if [[ "${{ inputs.action_type }}" == "provisioned" ]]; then
+          if [[ "$VM_COUNT" -eq "${{ inputs.expected_count }}" ]]; then
+            echo "✓ All $VM_COUNT VMs found as expected"
+            echo "vm_status=running" >> $GITHUB_OUTPUT
+          elif [[ "$VM_COUNT" -lt "${{ inputs.expected_count }}" ]]; then
+            echo "⚠️  Warning: Only $VM_COUNT/${{ inputs.expected_count }} VMs found (may still be provisioning)"
+            echo "vm_status=provisioning" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️  Warning: Found $VM_COUNT VMs but expected ${{ inputs.expected_count }}"
+            echo "vm_status=count_mismatch" >> $GITHUB_OUTPUT
+          fi
+        elif [[ "${{ inputs.action_type }}" == "destroyed" ]]; then
+          if [[ "$VM_COUNT" -eq 0 ]]; then
+            echo "✓ All VMs destroyed as expected"
+            echo "vm_status=destroyed" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️  Warning: $VM_COUNT VMs still exist (may still be cleaning up)"
+            echo "vm_status=cleanup_pending" >> $GITHUB_OUTPUT
+          fi
+        fi
+      continue-on-error: true
+
+    - name: Log verification result
+      if: always()
+      shell: bash
+      run: |
+        echo "VM Count: ${{ steps.verify.outputs.vm_count }}"
+        echo "VM Status: ${{ steps.verify.outputs.vm_status }}"
+        echo "Note: VM status check is non-blocking; warnings are logged for reference only"
