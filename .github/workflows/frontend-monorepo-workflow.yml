@@ -93,7 +93,7 @@ jobs:
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.aws.cloud.mov.ai/qa/npm-buildserver:v1.0.0
+      image: registry.cloud.mov.ai/qa/npm-buildserver:1.1.1
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -299,7 +299,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs:  [Build]
     container:
-      image: registry.aws.cloud.mov.ai/qa/npm-buildserver:v1.0.0
+      image: registry.cloud.mov.ai/qa/npm-buildserver:1.1.1
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -497,7 +497,7 @@ jobs:
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.aws.cloud.mov.ai/qa/npm-buildserver:v1.0.0
+      image: registry.cloud.mov.ai/qa/npm-buildserver:1.1.1
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
