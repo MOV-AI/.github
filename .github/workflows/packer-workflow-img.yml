@@ -41,7 +41,7 @@ on:
         required: true
 
 env:
-  RUN_STAGING_DIR: "/home/devops/packer-ci/staging/${{ github.repository }}/${{ github.run_id}}/"
+  RUN_STAGING_DIR: "/media/nfs-share/devops-packer-img/${{ github.repository }}/${{ github.run_id}}/"
   PROXMOX_NFS_SERVER_PATH: "/media/nas-mary/template/iso"
   PROXMOX_NFS_SERVER_URL: "https://hel.mov.ai:8006/#v1:0:=storage%2Fhel%2Fnas-mary:4:5:=contentIso:::::"
   PACKER_GITHUB_API_TOKEN: ${{ secrets.packer_token_id }}
