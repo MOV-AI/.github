@@ -121,6 +121,16 @@ jobs:
           echo $RAISED_COMP_VERSION
           echo "raised_version=$RAISED_COMP_VERSION" >> $GITHUB_OUTPUT
 
+      - name: Reset SSH known_hosts for packer localhost forwards
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          touch ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          # Packer uses ephemeral localhost forwarded ports. On persistent runners,
+          # old entries can trigger host key mismatch and break ansible provisioning.
+          : > ~/.ssh/known_hosts
+
       - name: Packer build
         shell: bash
         run: |
