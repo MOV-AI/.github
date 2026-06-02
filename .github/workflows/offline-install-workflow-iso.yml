@@ -53,7 +53,7 @@ on:
       slack_token_id:
         required: False
 env:
-  RUN_STAGING_DIR: "/home/devops/iso-ci/staging/${{ github.repository }}/${{ github.run_id}}/"
+  RUN_STAGING_DIR: "/media/nfs-share/devops-packer-img/${{ github.repository }}/${{ github.run_id}}/"
   NFS_SERVER_PATH: "/media/nas-mary/template/iso/baremetal"
   NAS_URL: "https://s3.lis.mov.ai:8443/"
 
