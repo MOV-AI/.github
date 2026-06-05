@@ -30,6 +30,10 @@ on:
         required: false
         type: string
         default: "basic-standalone-noetic.json"
+      runner_label:
+        required: false
+        type: string
+        default: "integration-pipeline"
 
     secrets:
       auto_commit_user:
@@ -56,8 +60,21 @@ env:
   CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
 
 jobs:
+  Setup-Runner:
+    runs-on: ubuntu-latest
+    outputs:
+      runner_label: ${{ steps.set_runner_label.outputs.runner_label }}
+
+    steps:
+      - name: Set runner label
+        id: set_runner_label
+        shell: bash
+        run: |
+          echo "runner_label=${{ inputs.runner_label }}" >> $GITHUB_OUTPUT
+
   Platform-tests:
-    runs-on: integration-pipeline
+    needs: Setup-Runner
+    runs-on: ${{ needs.Setup-Runner.outputs.runner_label }}
 
     steps:
       - name: Checkout
