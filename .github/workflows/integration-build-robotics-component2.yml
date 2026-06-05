@@ -508,7 +508,7 @@ jobs:
 
             pytest ${{ inputs.test_set }} \
               --movai-user ${{ steps.install.outputs.movai_user }} \
-              --movai-pw ${{ steps.install.outputs.movai_pwd }}
+              --movai-pw ${{ steps.install.outputs.movai_pwd }} -s
 
             deactivate
           '

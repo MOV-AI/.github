@@ -78,7 +78,7 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   AWS_DEFAULT_REGION: "us-east-1"
   REGISTRY: registry.cloud.mov.ai
-  MID_REGISTRY: registry.hel.mov.ai
+  SIM_MIRROR_REGISTRY: registry.lis.mov.ai
   USERSPACE_FOLDER_PATH: /opt/userspace
   REMOTE_WORKSPACE_PATH: workspace
   SIMULATION_ID: CI
@@ -94,7 +94,7 @@ env:
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISIONING_ENV_CONF_VERSION: "0.2.0-6"
+  PROVISIONING_ENV_CONF_VERSION: "0.2.0-7"
   PROVISION_ENV_CONF_DIR: "infra_env_configs"
 
 jobs:
@@ -120,7 +120,7 @@ jobs:
             exit 1
           fi
 
-      - name: Login to Private Registry
+      - name: Login to Main Registry
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.registry_user }}
@@ -192,7 +192,6 @@ jobs:
           tf_state="${{ inputs.cluster }}-sim-$local_manager_prefix"
           echo "simul_prefix=${local_manager_prefix}" | tee >> $GITHUB_OUTPUT
           echo "tfstate_name=${tf_state}" | tee >> $GITHUB_OUTPUT
-
 
       - name: Provision remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -322,12 +321,20 @@ jobs:
               "text": "${{ steps.nvidia_err_msg.outputs.msg_error }}"
             }
 
-      - name: Remote - Login to Registry
+      - name: Remote - Login to Main Registry
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
             docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+          '
+
+      - name: Remote - Login to Simulation Registry
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            docker login ${{ env.SIM_MIRROR_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
           '
 
       - name: unstash robot_configs
@@ -441,7 +448,7 @@ jobs:
             set -e
             docker pull "${{ env.REGISTRY }}/ci/${{ inputs.backend_name }}"
             docker tag ${{ env.REGISTRY }}/ci/${{ inputs.backend_name }} ${{ env.REGISTRY }}/qa/${{ inputs.backend_name }}
-            docker tag ${{ env.REGISTRY }}/ci/${{ inputs.backend_name }} ${{ env.MID_REGISTRY }}/qa/${{ inputs.backend_name }}
+            docker tag ${{ env.REGISTRY }}/ci/${{ inputs.backend_name }} ${{ env.SIM_MIRROR_REGISTRY }}/qa/${{ inputs.backend_name }}
           '
 
       - name: Remote - Install
@@ -489,6 +496,9 @@ jobs:
             sudo sh -c "echo MOVAI_SERVICE_LOGGER_LEVEL=DEBUG >> /etc/movai/config.env"
             sudo chmod -R +r /etc/movai
 
+            # Configure registry
+            jq '.registry = "${{ env.SIM_MIRROR_REGISTRY }}"' "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
+
             wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
             chmod +x ./QuickStart_$(cat quickstart_version).bash
             ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
@@ -515,9 +525,15 @@ jobs:
 
             CONTAINER_ID=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace-.*)")
 
+
             mkdir -p firmwares/
             cp ./*.apt firmwares/
-            docker cp firmwares/ $CONTAINER_ID:/tmp/
+            # Use docker exec/tee to copy files into the container, avoiding docker cp path escape issues
+            docker exec -t $CONTAINER_ID mkdir -p /tmp/firmwares
+            for f in firmwares/*; do
+              fname=$(basename "$f")
+              cat "$f" | docker exec -i $CONTAINER_ID tee "/tmp/firmwares/$fname" > /dev/null
+            done
 
             # Install system requirements
             docker exec -t -u root $CONTAINER_ID bash -c "\
@@ -538,7 +554,11 @@ jobs:
             docker restart $CONTAINER_ID
 
             # Reinforce the container with the firmware packages as /tmp/ is deleted on restart
-            docker cp firmwares/ $CONTAINER_ID:/tmp/
+            docker exec -t $CONTAINER_ID mkdir -p /tmp/firmwares
+            for f in firmwares/*; do
+              fname=$(basename "$f")
+              cat "$f" | docker exec -i $CONTAINER_ID tee "/tmp/firmwares/$fname" > /dev/null
+            done
 
             # Install firmware packages to transform spawner -> studio and then studio -> Project specific
             docker exec -t -u root $CONTAINER_ID bash -c "\
@@ -592,7 +612,6 @@ jobs:
             deactivate
           '
 
-
       - name: Remote - Save docker container logs
         if: ${{ always() }}
         shell: bash
@@ -601,10 +620,8 @@ jobs:
 
             cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.simulator_tests_setup.outputs.target_dir }}
 
-            # for sanity
-            docker ps -a
-
-            for container in backend spawner message-server; do
+            CONTAINERS=$(docker ps -a --format '{{.Names}}')
+            for container in ${CONTAINERS}; do
               CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
               docker logs "${CONTAINER_ID}" &> "${container}.log" || true
             done || true

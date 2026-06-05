@@ -803,6 +803,32 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
+      - name: Filter Release Notes
+        shell: bash
+        run: |
+          product_version=${{ needs.Raise.outputs.package_version }}
+
+          # Get the current release notes
+          current_notes=$(gh release view "$product_version" --json body --jq .body)
+
+          filtered_notes=$(echo "$current_notes" | \
+            grep -v -E -i "Temporary PR:|Temporary PR to bypass branch protection" || true)
+
+          # Keep only non-empty lines for emptiness checks
+          non_empty_filtered=$(echo "$filtered_notes" | sed '/^[[:space:]]*$/d')
+
+          if [ -z "$non_empty_filtered" ]; then
+            echo "No relevant changes." > /tmp/filtered_notes.txt
+            gh release edit "$product_version" --notes-file /tmp/filtered_notes.txt
+          else
+            # Update the release with filtered notes
+            echo "$non_empty_filtered" > /tmp/filtered_notes.txt
+            gh release edit "$product_version" --notes-file /tmp/filtered_notes.txt
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
+        continue-on-error: true
+
   Github-Release-Packages-Upload:
     needs: [Raise, Github-Release]
     runs-on: ubuntu-22.04
