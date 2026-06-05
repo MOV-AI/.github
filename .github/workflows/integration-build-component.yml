@@ -163,6 +163,8 @@ jobs:
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
           export ROBOTNAME="ci_robot"
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
+          export DISPLAY=":0"
+          export SIMULATION_ID="ci_simulation"
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$QUICKSTART_VERSION.bash
           chmod +x ./QuickStart_$QUICKSTART_VERSION.bash
           ./QuickStart_$QUICKSTART_VERSION.bash --apps $(cat product/service_version.txt) $CONFIG_FILE_NAME
