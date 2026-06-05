@@ -42,12 +42,12 @@ on:
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.31"
   PROVISION_INFRA_REPO: "devops-tf-bpg-runners"
-  PROVISION_INFRA_VERSION: "0.1.0-1"
+  PROVISION_INFRA_VERSION: "feat/swap"
   PROVISION_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISION_ENV_CONF_VERSION: "0.2.2-3"
+  PROVISION_ENV_CONF_VERSION: "0.2.2-4"
   PROVISION_POOL: "GithubRunners"
   SLACK_CHANNEL: "G0102LEV1CL"
-  NAMES_PREFIX: "ng-" # temporary to avoid conflicts with existing runners, can be removed once we validated new infrastructure
+  NAMES_PREFIX: "temp-" # temporary to avoid conflicts with existing runners, can be removed once we validated new infrastructure
   # INFRA_NODES: '["hel0", "hel1"]'
   # INFRA_IP_CONFIGURATION: '{"hel0": 2,"hel1": 8}'
   # INFRA_QA_CONFIGURATION: '{"hel0": 1,"hel1": 2}'
