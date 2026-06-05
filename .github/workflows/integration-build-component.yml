@@ -125,7 +125,7 @@ jobs:
             export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
             export PRODUCT_REPO="${{ inputs.vs_product_name }}"
             export PRODUCT_VERSION="${{ inputs.vs_product_version_pattern }}"
-            export CONFIG_FILE_NAME="product/robot.json"
+            export CONFIG_FILE_NAME="$(cat product/robot.json)"
 
             cp -r component_artifacts/* ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
