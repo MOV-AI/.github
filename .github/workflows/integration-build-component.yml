@@ -117,7 +117,9 @@ jobs:
       - name: pre-install patch
         shell: bash
         run: |
-
+          sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+          mkdir  -p ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+          sudo chmod -R 777 ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
           if test -f .github/workflows/pre_install_platform.bash; then
 
             export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
