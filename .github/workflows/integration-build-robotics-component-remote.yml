@@ -31,7 +31,7 @@ on:
       ci_integration_scripts_version:
         required: false
         type: string
-        default: "4.0.0.13"
+        default: "4.2.0.1"
       generated_image_name:
         required: false
         type: string
