@@ -50,6 +50,10 @@ env:
   USERSPACE_FOLDER_PATH: userspace
   REMOTE_WORKSPACE_PATH: workspace
   ARTIFACTS_RETENTION_DAYS: 15
+  REGISTRY: "registry.cloud.mov.ai"
+  CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:${{ inputs.ci_integration_scripts_version}}"
+  CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
+  CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
 
 jobs:
   Platform-tests:
@@ -103,12 +107,37 @@ jobs:
           CONFIG_FILE_NAME=${{ inputs.robot_json }}
           echo "product/$CONFIG_FILE_NAME" > product/robot.json
 
+      - name: Login to ${{ env.REGISTRY }} Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.REGISTRY }}
+
       - name: pre-install patch
         shell: bash
         run: |
-          export CONFIG_FILE_NAME="$(cat product/robot.json)"
-          export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
+
           if test -f .github/workflows/pre_install_platform.bash; then
+
+            export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
+            export PRODUCT_REPO="${{ inputs.vs_product_name }}"
+            export PRODUCT_VERSION="${{ inputs.vs_product_version_pattern }}"
+            export CONFIG_FILE_NAME="product/robot.json"
+
+            cp -r artifacts. ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
+            echo "Printing content of execution folder"
+            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
+            # Inputs pre_install_platform.bash
+            export GITHUB_API_USR=${{ secrets.auto_commit_user }}
+            export GITHUB_API_PWD=${{ secrets.auto_commit_pwd }}
+            export LOCAL_MAIN_DEB="true"
+            export CI_TOOLS=${{ env.CI_INTEGRATION_CONTAINER_VERSION }}
+            export CI_TOOLS_EXEC_FOLDER="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
+            sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
             echo "Running pre-install patch"
             . .github/workflows/pre_install_platform.bash
           fi
@@ -149,10 +178,20 @@ jobs:
         shell: bash
         id: post_install
         run: |
-          export CONFIG_FILE_NAME=$(cat product/robot.json)
-          export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
-          export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
+
           if test -f .github/workflows/post_install_platform.bash; then
+            export CONFIG_FILE_NAME=product/robot.json
+            export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
+            export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
+            echo "Printing content of execution folder"
+            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
+            # Inputs pre_install_platform.bash
+            export GITHUB_API_USR=${{ secrets.auto_commit_user }}
+            export GITHUB_API_PWD=${{ secrets.auto_commit_pwd }}
+            export CI_TOOLS=${{ env.CI_INTEGRATION_CONTAINER_VERSION }}
+            export CI_TOOLS_EXEC_FOLDER="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
+
             echo "Running post-install patch"
             . .github/workflows/post_install_platform.bash
           fi
@@ -171,7 +210,11 @@ jobs:
           export CONFIG_FILE_NAME=$(cat product/robot.json)
           export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
           export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
-          mkdir -p test_artifacts
+          export GITHUB_API_USR=${{ secrets.auto_commit_user }}
+          export GITHUB_API_PWD=${{ secrets.auto_commit_pwd }}
+          export CI_TOOLS=${{ env.CI_INTEGRATION_CONTAINER_VERSION }}
+          export CI_TOOLS_EXEC_FOLDER="test_artifacts"
+          mkdir -p $CI_TOOLS_EXEC_FOLDER
           if test -f .github/workflows/test_setup.bash; then
             echo "Running tests setup"
             . .github/workflows/test_setup.bash
@@ -225,6 +268,8 @@ jobs:
           export CONFIG_FILE_NAME=$(cat product/robot.json)
           export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
           export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
+          export CI_TOOLS=${{ env.CI_INTEGRATION_CONTAINER_VERSION }}
+          export CI_TOOLS_EXEC_FOLDER="test_artifacts"
           if test -f .github/workflows/run_tests.bash; then
             echo "Running tests"
             . .github/workflows/run_tests.bash
