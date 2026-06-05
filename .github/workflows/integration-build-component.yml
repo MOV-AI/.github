@@ -30,6 +30,10 @@ on:
         required: false
         type: string
         default: "basic-standalone-noetic.json"
+      runner_label:
+        required: false
+        type: string
+        default: "integration-pipeline"
 
     secrets:
       auto_commit_user:
@@ -56,8 +60,21 @@ env:
   CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
 
 jobs:
+  Setup-Runner:
+    runs-on: ubuntu-latest
+    outputs:
+      runner_label: ${{ steps.set_runner_label.outputs.runner_label }}
+
+    steps:
+      - name: Set runner label
+        id: set_runner_label
+        shell: bash
+        run: |
+          echo "runner_label=${{ inputs.runner_label }}" >> $GITHUB_OUTPUT
+
   Platform-tests:
-    runs-on: integration-pipeline
+    needs: Setup-Runner
+    runs-on: ${{ needs.Setup-Runner.outputs.runner_label }}
 
     steps:
       - name: Checkout
@@ -117,9 +134,29 @@ jobs:
       - name: pre-install patch
         shell: bash
         run: |
-          export CONFIG_FILE_NAME="$(cat product/robot.json)"
-          export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
+          sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+          mkdir  -p ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+          sudo chmod -R 777 ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
           if test -f .github/workflows/pre_install_platform.bash; then
+
+            export COMPONENT_VERSION=$(cat component_artifacts/component_version.txt)
+            export PRODUCT_REPO="${{ inputs.vs_product_name }}"
+            export PRODUCT_VERSION="${{ inputs.vs_product_version_pattern }}"
+            export CONFIG_FILE_NAME="$(cat product/robot.json)"
+
+            cp -r component_artifacts/* ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
+            echo "Printing content of execution folder"
+            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
+            # Inputs pre_install_platform.bash
+            export GITHUB_API_USR=${{ secrets.auto_commit_user }}
+            export GITHUB_API_PWD=${{ secrets.auto_commit_pwd }}
+            export LOCAL_MAIN_DEB="true"
+            export CI_TOOLS=${{ env.CI_INTEGRATION_CONTAINER_VERSION }}
+            export CI_TOOLS_EXEC_FOLDER="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
+            sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
             echo "Running pre-install patch"
             . .github/workflows/pre_install_platform.bash
           fi
@@ -143,6 +180,8 @@ jobs:
           export USERSPACE_FOLDER_PATH="$(pwd)/userspace"
           export ROBOTNAME="ci_robot"
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
+          export DISPLAY=":0"
+          export SIMULATION_ID="ci_simulation"
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$QUICKSTART_VERSION.bash
           chmod +x ./QuickStart_$QUICKSTART_VERSION.bash
           ./QuickStart_$QUICKSTART_VERSION.bash --apps $(cat product/service_version.txt) $CONFIG_FILE_NAME
@@ -160,10 +199,20 @@ jobs:
         shell: bash
         id: post_install
         run: |
-          export CONFIG_FILE_NAME=$(cat product/robot.json)
-          export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
-          export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
+
           if test -f .github/workflows/post_install_platform.bash; then
+            export CONFIG_FILE_NAME=product/robot.json
+            export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
+            export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
+            echo "Printing content of execution folder"
+            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
+            # Inputs pre_install_platform.bash
+            export GITHUB_API_USR=${{ secrets.auto_commit_user }}
+            export GITHUB_API_PWD=${{ secrets.auto_commit_pwd }}
+            export CI_TOOLS=${{ env.CI_INTEGRATION_CONTAINER_VERSION }}
+            export CI_TOOLS_EXEC_FOLDER="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
+
             echo "Running post-install patch"
             . .github/workflows/post_install_platform.bash
           fi
