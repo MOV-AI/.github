@@ -44,8 +44,8 @@ runs:
         GH_TOKEN: ${{ inputs.token }}
       run: |
         # Authenticate gh explicitly to avoid runtime token discovery issues.
-        printf '%s' "$GH_TOKEN" | gh auth login --hostname github.com --with-token
-        gh auth status --hostname github.com
+        printf '%s' "$GH_TOKEN" | gh auth login --hostname github.com --with-token || true
+        gh auth status --hostname github.com || true
 
         git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/${{ inputs.repository }}.git
         git config --global user.email "${{ inputs.git_user_email }}"
