@@ -234,8 +234,8 @@ jobs:
           export GITHUB_API_USR=${{ secrets.auto_commit_user }}
           export GITHUB_API_PWD=${{ secrets.auto_commit_pwd }}
           export CI_TOOLS=${{ env.CI_INTEGRATION_CONTAINER_VERSION }}
-          export CI_TOOLS_EXEC_FOLDER="test_artifacts"
-          mkdir -p $CI_TOOLS_EXEC_FOLDER
+          export CI_TOOLS_EXEC_FOLDER="tests_workdir"
+          mkdir -p $CI_TOOLS_EXEC_FOLDER test_artifacts
           if test -f .github/workflows/test_setup.bash; then
             echo "Running tests setup"
             . .github/workflows/test_setup.bash
@@ -290,7 +290,7 @@ jobs:
           export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
           export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
           export CI_TOOLS=${{ env.CI_INTEGRATION_CONTAINER_VERSION }}
-          export CI_TOOLS_EXEC_FOLDER="test_artifacts"
+          export CI_TOOLS_EXEC_FOLDER="tests_workdir"
           if test -f .github/workflows/run_tests.bash; then
             echo "Running tests"
             . .github/workflows/run_tests.bash
@@ -318,10 +318,12 @@ jobs:
         if: ${{ inputs.test_infra_key == 'local' && always() }}
         shell: bash
         run: |
-          export CONFIG_FILE_NAME=$(cat product/robot.json)
-          export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
-          export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
           if test -f .github/workflows/collect_tests_artifacts.bash; then
+            export CONFIG_FILE_NAME=$(cat product/robot.json)
+            export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
+            export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
+            export CI_TOOLS_EXEC_FOLDER="tests_workdir"
+              
             echo "Collecting tests artifacts"
             . .github/workflows/collect_tests_artifacts.bash
           fi
@@ -383,6 +385,11 @@ jobs:
           path: qa_artifacts/*
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
+      - name: Remove robots
+        if: always()
+        shell: bash
+        run: |
+          timeout 30 movai-cli remove --all || true
       - name: Docker cleanups
         if: always()
         shell: bash
