@@ -125,7 +125,7 @@ jobs:
             export PRODUCT_VERSION="${{ inputs.vs_product_version_pattern }}"
             export CONFIG_FILE_NAME="product/robot.json"
 
-            cp -r artifacts. ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+            cp -r component_artifacts/* ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
             echo "Printing content of execution folder"
             ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
