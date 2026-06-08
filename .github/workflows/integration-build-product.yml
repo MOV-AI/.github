@@ -265,7 +265,7 @@ jobs:
 
           git config --global --add safe.directory $(pwd)
           git fetch
-          git checkout origin/$BRANCH_NAME -- product.version
+          git checkout origin/$BRANCH_NAME -- product.version .bumpversion.cfg
           cat product.version
           rm -rf simulator_artifacts ci_artifacts
 
