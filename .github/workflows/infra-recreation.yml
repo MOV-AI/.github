@@ -40,7 +40,7 @@ on:
         required: true
 
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.31"
+  CI_INTEGRATION_SCRIPTS_VERSION: "4.1.0.3"
   PROVISION_INFRA_REPO: "devops-tf-bpg-runners"
   PROVISION_INFRA_VERSION: "0.1.0-2"
   PROVISION_ENV_CONF_REPO: "devops-tf-env-conf"
