@@ -150,7 +150,7 @@ env:
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   TIMEOUT: 720
-  PROVISIONING_ENV_CONF: "0.2.0-6"
+  PROVISIONING_ENV_CONF: "0.2.0-7"
 
 jobs:
   Compute-timeout:
@@ -306,7 +306,7 @@ jobs:
 
       - name: Stash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts/*
@@ -350,7 +350,7 @@ jobs:
 
       - name: Send Slack Message
         if: ${{ github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         id: send-message
         with:
           method: chat.postMessage
@@ -364,7 +364,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Stash raised_meta
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}raised_meta
           path: platform_configs/*
@@ -408,7 +408,7 @@ jobs:
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: platform_configs
@@ -462,7 +462,7 @@ jobs:
           deactivate
 
       - name: Stash manifest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: product-manifest.yaml
@@ -511,7 +511,7 @@ jobs:
 
       - name: Stash dependency_version
         if: ${{ inputs.propagate_project == false }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}dependency_version
           path: dependency_version
@@ -556,7 +556,7 @@ jobs:
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -568,7 +568,7 @@ jobs:
             }
 
       - name: Slack message failure
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         if: ${{ failure() && github.event_name != 'pull_request' }}
         with:
           method: chat.postMessage
@@ -619,13 +619,13 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: .
 
       - name: unstash manifest
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
@@ -715,7 +715,7 @@ jobs:
       - name: Stash Install logs artifacts
         continue-on-error: true
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}install_logs
           path: install_logs/*
@@ -756,7 +756,7 @@ jobs:
 
       - name: Un stash dependency_version
         if: ${{ inputs.propagate_project == false }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}dependency_version
           path: dependency_version
@@ -805,7 +805,7 @@ jobs:
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -817,7 +817,7 @@ jobs:
             }
 
       - name: Slack message failure
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         if: ${{ failure() && github.event_name != 'pull_request' }}
         with:
           method: chat.postMessage
@@ -831,14 +831,14 @@ jobs:
 
       - name: Stash project metadata
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}project_metadata
           path: metadata_artifact/*
           retention-days: 3
 
       - name: Stash deploy_artifacts_noetic
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}deploy_artifacts_noetic
           path: artifacts/*
@@ -900,14 +900,14 @@ jobs:
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts
 
       - name: unstash manifest
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
@@ -1012,7 +1012,7 @@ jobs:
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -1024,7 +1024,7 @@ jobs:
             }
 
       - name: Slack message failure
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         if: ${{ failure() && github.event_name != 'pull_request' }}
         with:
           method: chat.postMessage
@@ -1096,21 +1096,21 @@ jobs:
 
       - name: unstash raised_meta
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: .
 
       - name: unstash manifest
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
 
       - name: unstash robot_jsons_${{ matrix.workspace['distro'] }}
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_${{ matrix.workspace['distro'] }}
           path: .
@@ -1151,6 +1151,8 @@ jobs:
             docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
             docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
           fi
+          # print out docker images for debug purposes
+          docker images
 
       - name: Docker load simulator image
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
@@ -1215,7 +1217,7 @@ jobs:
       - name: Stash Install simulator logs artifacts
         continue-on-error: true
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}install_simulator_logs
           path: install_logs/*
@@ -1240,7 +1242,6 @@ jobs:
         run: |
           sim_img_name="$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g")"
           push_name=$(echo "$sim_img_name" | sed "s-${{ env.REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
-
           echo "image_name=$push_name" >> $GITHUB_OUTPUT
 
       - name: Collect Installed components
@@ -1270,7 +1271,7 @@ jobs:
 
       - name: stash Sim project metadata
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}project_sim_metadata
           path: metadata_artifact/*
@@ -1298,7 +1299,7 @@ jobs:
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -1310,7 +1311,7 @@ jobs:
             }
 
       - name: Slack message failure
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         if: ${{ failure() && github.event_name != 'pull_request' }}
         with:
           method: chat.postMessage
@@ -1330,7 +1331,7 @@ jobs:
 
       - name: Stash deploy_simulator_artifacts
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}deploy_simulator_artifacts
           path: simulator.image.artifact
@@ -1395,28 +1396,28 @@ jobs:
 
       - name: unstash raised_meta
         if: ${{ inputs.with_simulation_tests }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: .
 
       - name: unstash manifest
         if: ${{ inputs.with_simulation_tests }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation_tests }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts
 
       - name: unstash robot_jsons_noetic
         if: ${{ inputs.with_simulation_tests }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_noetic
           path: .
@@ -1542,7 +1543,7 @@ jobs:
 
       - name: Slack message failure
         if: ${{ inputs.with_simulation_tests  && failure() && github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -1601,7 +1602,7 @@ jobs:
 
       - name: Slack message failure
         if: ${{ inputs.with_simulation_tests  && failure() && github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -1628,6 +1629,7 @@ jobs:
             set -e
             docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
           '
+
       - name: Remote - Login to ${{ env.PUSH_REGISTRY }} Registry
         if: ${{ inputs.with_simulation_tests }}
         shell: bash
@@ -1849,7 +1851,7 @@ jobs:
 
       - name: Stash simulation test outputs
         if: ${{ always() && inputs.with_simulation_tests && steps.simulation_tests.outputs.save_outputs == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim-outputs
           path: test-output.json
@@ -1942,7 +1944,7 @@ jobs:
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -1954,7 +1956,7 @@ jobs:
             }
 
       - name: Slack message failure
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         if: ${{ failure() && github.event_name != 'pull_request' }}
         with:
           method: chat.postMessage
@@ -2051,7 +2053,7 @@ jobs:
           echo "publish_url=$PUBLISH_URL" >> $GITHUB_OUTPUT
 
       - name: Slack message Artifact info
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         if: ${{ always() &&  inputs.with_simulation_tests && github.event_name != 'pull_request' }}
         with:
           method: chat.postMessage
@@ -2128,42 +2130,42 @@ jobs:
 
       - name: unstash raised_meta
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: platform_configs
 
       - name: unstash deploy_artifacts_noetic
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}deploy_artifacts_noetic
           path: artifacts
 
       - name: unstash manifest
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts
 
       - name: unstash project metadata
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}project_metadata
           path: .
 
       - name: unstash deploy_simulator_artifacts
         if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}deploy_simulator_artifacts
           path: .
@@ -2341,9 +2343,18 @@ jobs:
               # no PRs exist
               echo "No relevant changes." >> notes.txt
           else
-              # PRs exist
+                # PRs exist - filter out temporary PR messages
               for pr in "${PRS[@]}"; do
-                  gh pr view "${pr}" --json body | jq -r .body >> notes.txt
+                  pr_body=$(gh pr view "${pr}" --json body | jq -r .body)
+
+                  filtered_body=$(echo "$pr_body" | \
+                  grep -v -E -i "Temporary PR:|Temporary PR to bypass branch protection" | \
+                    sed '/^[[:space:]]*$/d' || true)
+
+                  # Only add if there's content left after filtering
+                  if [ -n "$filtered_body" ]; then
+                    echo "$filtered_body" >> notes.txt
+                  fi
               done
           fi
           echo "" >> notes.txt
@@ -2351,17 +2362,22 @@ jobs:
           # PRs
           echo "## PRs" >> notes.txt
           if [ ${#PRS[@]} -eq 0 ]; then
-              # no PRs exist
               echo "No PRs." >> notes.txt
           else
-              # PRs exist
-              echo "${ORIGINAL_RN}" | grep "\* .* by @.* in https://github.com/${{ github.repository_owner }}/" >> notes.txt
+              pr_list=$(echo "${ORIGINAL_RN}" | grep "\* .* by @.* in https://github.com/${{ github.repository_owner }}/" | \
+                grep -v -E -i "Temporary PR:|Temporary PR to bypass branch protection" || true)
+
+              if [ -n "$pr_list" ]; then
+                echo "$pr_list" >> notes.txt
+              else
+                echo "No relevant PRs to display." >> notes.txt
+              fi
           fi
           echo "" >> notes.txt
 
           ## Diff
           echo "## Diff" >> notes.txt
-          echo "${ORIGINAL_RN}" | grep "\*\*Full Changelog\*\*" >> notes.txt
+          echo "${ORIGINAL_RN}" | grep "\*\*Full Changelog\*\*" >> notes.txt || true
 
           # set new release notes
           gh release edit "${product_version}" --notes-file notes.txt
@@ -2394,7 +2410,7 @@ jobs:
           echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
 
       - name: Slack message
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         if: ${{ github.event_name != 'pull_request'}}
         with:
           method: chat.update
@@ -2413,7 +2429,7 @@ jobs:
     steps:
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: platform_configs
@@ -2438,7 +2454,7 @@ jobs:
 
       - name: Slack message
         if: ${{ github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         with:
           method: chat.update
           token: ${{ secrets.slack_token_id }}
