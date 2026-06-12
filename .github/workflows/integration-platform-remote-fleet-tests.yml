@@ -252,18 +252,24 @@ jobs:
 
       - name: Stash provision_infra_dir
         uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
         with:
           name: provision_infra_dir
           path: ${{ steps.provision_infra_setup.outputs.target_dir }}
 
       - name: Stash infra_env_configs
         uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
         with:
           name: infra_env_configs
           path: ${{ steps.infra_env_configs_setup.outputs.target_dir }}
 
       - name: Stash provisioned_inventory
         uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
         with:
           name: provisioned_inventory
           path: ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml
@@ -574,19 +580,21 @@ jobs:
 
       - name: Unstash provision_infra_dir
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: provision_infra_dir
           path: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
 
       - name: Unstash infra_env_configs
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: infra_env_configs
           path: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_infra_env_configs }}
 
       - name: Teardown remote vms (Proxmox)
         working-directory: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
-        if: ${{ ( !inputs.debug_fleet_keep_alive && success() ) || cancelled() || ( !inputs.debug_fleet_keep_alive && failure() ) }}
+        if: ${{ needs.Fleet-Tests-Provisioning.result != 'skipped' && ( ( !inputs.debug_fleet_keep_alive && success() ) || cancelled() || ( !inputs.debug_fleet_keep_alive && failure() ) ) }}
         shell: bash
         run: |
           set +e

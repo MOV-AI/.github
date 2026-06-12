@@ -48,10 +48,18 @@ on:
         required: false
         type: string
         default: "C050L85R6VC"
+      # development slack channel
+      #default: "C05K2KF1UP8"
       docker_registry:
         required: false
         type: string
         default: "registry.hel.mov.ai"
+        description: "Registry to pull images during build and tests. Should be running on proxmox cluster for optimal performance, but can be overridden for testing purposes"
+      docker_simulator_registry:
+        required: false
+        type: string
+        default: "registry.lis.mov.ai"
+        description: "Registry to pull images during simulation tests. Should be running in the lab optimal performance, but can be overridden for testing purposes"
       use_project_data_viewer:
         required: false
         type: boolean
@@ -136,7 +144,8 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   REGISTRY: ${{ inputs.docker_registry }}
   PUSH_REGISTRY: registry.cloud.mov.ai
-  MID_REGISTRY: registry.cloud.mov.ai
+  IP_MIRROR_REGISTRY: registry.hel.mov.ai
+  SIM_MIRROR_REGISTRY: ${{ inputs.docker_simulator_registry }}
   USERSPACE_FOLDER_PATH: /opt/movai/userspace
   REMOTE_WORKSPACE_PATH: workspace
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
@@ -150,7 +159,7 @@ env:
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   TIMEOUT: 720
-  PROVISIONING_ENV_CONF: "0.2.0-6"
+  PROVISIONING_ENV_CONF: "0.2.0-7"
 
 jobs:
   Compute-timeout:
@@ -306,7 +315,7 @@ jobs:
 
       - name: Stash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts/*
@@ -350,7 +359,7 @@ jobs:
 
       - name: Send Slack Message
         if: ${{ github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         id: send-message
         with:
           method: chat.postMessage
@@ -364,7 +373,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Stash raised_meta
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}raised_meta
           path: platform_configs/*
@@ -408,7 +417,7 @@ jobs:
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: platform_configs
@@ -462,7 +471,7 @@ jobs:
           deactivate
 
       - name: Stash manifest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: product-manifest.yaml
@@ -487,12 +496,12 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.PUSH_REGISTRY }}
 
-      - name: Login to ${{ env.MID_REGISTRY }} Registry
+      - name: Login to ${{ env.IP_MIRROR_REGISTRY }} Registry
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
-          registry: ${{ env.MID_REGISTRY }}
+          registry: ${{ env.IP_MIRROR_REGISTRY }}
 
       - name: Prepare docker build variables
         id: pre_build
@@ -511,7 +520,7 @@ jobs:
 
       - name: Stash dependency_version
         if: ${{ inputs.propagate_project == false }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}dependency_version
           path: dependency_version
@@ -556,7 +565,7 @@ jobs:
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -568,7 +577,7 @@ jobs:
             }
 
       - name: Slack message failure
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         if: ${{ failure() && github.event_name != 'pull_request' }}
         with:
           method: chat.postMessage
@@ -619,13 +628,13 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: .
 
       - name: unstash manifest
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
@@ -650,12 +659,12 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.PUSH_REGISTRY }}
 
-      - name: Login to ${{ env.MID_REGISTRY }} Registry
+      - name: Login to ${{ env.IP_MIRROR_REGISTRY }} Registry
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
-          registry: ${{ env.MID_REGISTRY }}
+          registry: ${{ env.IP_MIRROR_REGISTRY }}
 
       - name: Docker load spawner image
         shell: bash
@@ -715,7 +724,7 @@ jobs:
       - name: Stash Install logs artifacts
         continue-on-error: true
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}install_logs
           path: install_logs/*
@@ -756,7 +765,7 @@ jobs:
 
       - name: Un stash dependency_version
         if: ${{ inputs.propagate_project == false }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}dependency_version
           path: dependency_version
@@ -805,7 +814,7 @@ jobs:
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -817,7 +826,7 @@ jobs:
             }
 
       - name: Slack message failure
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         if: ${{ failure() && github.event_name != 'pull_request' }}
         with:
           method: chat.postMessage
@@ -831,14 +840,14 @@ jobs:
 
       - name: Stash project metadata
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}project_metadata
           path: metadata_artifact/*
           retention-days: 3
 
       - name: Stash deploy_artifacts_noetic
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}deploy_artifacts_noetic
           path: artifacts/*
@@ -900,14 +909,14 @@ jobs:
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts
 
       - name: unstash manifest
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
@@ -958,19 +967,19 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.PUSH_REGISTRY }}
 
-      - name: Login to ${{ env.MID_REGISTRY }} Registry
+      - name: Login to ${{ env.IP_MIRROR_REGISTRY }} Registry
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
-          registry: ${{ env.MID_REGISTRY }}
+          registry: ${{ env.IP_MIRROR_REGISTRY }}
 
       - name: Prepare docker build variables
         if: ${{ inputs.with_simulation == 'true' }}
         id: pre_build
         run: |
-          push_name_tmp=$(echo "${{ steps.pre_simulator_build.outputs.image_name }}" | sed "s-${{ env.REGISTRY }}-${{ env.MID_REGISTRY }}-g")
+          push_name_tmp=$(echo "${{ steps.pre_simulator_build.outputs.image_name }}" | sed "s-${{ env.REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
           echo "base_name=$(cat simulator_artifacts/simulator_base.ci)" >> $GITHUB_OUTPUT
           echo "push_name=$push_name_tmp" >> $GITHUB_OUTPUT
 
@@ -1012,7 +1021,7 @@ jobs:
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -1024,7 +1033,7 @@ jobs:
             }
 
       - name: Slack message failure
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         if: ${{ failure() && github.event_name != 'pull_request' }}
         with:
           method: chat.postMessage
@@ -1096,21 +1105,21 @@ jobs:
 
       - name: unstash raised_meta
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: .
 
       - name: unstash manifest
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
 
       - name: unstash robot_jsons_${{ matrix.workspace['distro'] }}
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_${{ matrix.workspace['distro'] }}
           path: .
@@ -1131,12 +1140,12 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.PUSH_REGISTRY }}
 
-      - name: Login to ${{ env.MID_REGISTRY }} Registry
+      - name: Login to ${{ env.IP_MIRROR_REGISTRY }} Registry
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
-          registry: ${{ env.MID_REGISTRY }}
+          registry: ${{ env.IP_MIRROR_REGISTRY }}
 
       - name: Docker load spawner image
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
@@ -1151,23 +1160,24 @@ jobs:
             docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
             docker tag "${{ env.MID_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
           fi
+          # print out docker images for debug purposes
+          docker images
 
       - name: Docker load simulator image
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         shell: bash
         run: |
-          promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.MID_REGISTRY }}-${{ env.REGISTRY }}-g")
-          promoted_name_push=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.MID_REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
+          promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.PUSH_REGISTRY }}-${{ env.IP_MIRROR_REGISTRY }}-g")
           # if event is pr create ci tags
           if [ "${{ github.event_name }}" = "pull_request" ];
           then
-            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-${{ env.MID_REGISTRY }}-${{ env.REGISTRY }}-g")
-            promoted_name_push=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-${{ env.MID_REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
+            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-${{ env.PUSH_REGISTRY }}-${{ env.IP_MIRROR_REGISTRY }}-g")
           fi
 
           docker pull "${{ needs.Build-Simulator.outputs.image_name }}"
           docker tag "${{ needs.Build-Simulator.outputs.image_name }}" $promoted_name
-          docker tag "${{ needs.Build-Simulator.outputs.image_name }}" $promoted_name_push
+          # print out docker images for debug purposes
+          docker images
 
       - name: Installation
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
@@ -1215,7 +1225,7 @@ jobs:
       - name: Stash Install simulator logs artifacts
         continue-on-error: true
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}install_simulator_logs
           path: install_logs/*
@@ -1240,7 +1250,6 @@ jobs:
         run: |
           sim_img_name="$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g")"
           push_name=$(echo "$sim_img_name" | sed "s-${{ env.REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
-
           echo "image_name=$push_name" >> $GITHUB_OUTPUT
 
       - name: Collect Installed components
@@ -1263,14 +1272,14 @@ jobs:
             } >> /tmp/manifest.txt
             mkdir /tmp/proj_metadata
             python3 -m tools.backup -p /tmp/proj_metadata/ -m /tmp/manifest.txt -a export -i
+            tar czf /tmp/proj_metadata.tar.gz -C /tmp proj_metadata
           ' || true
             mkdir -p metadata_artifact tmp_meta
-            docker cp $container_id:/tmp/proj_metadata/ ./
-            tar cvzf ./metadata_artifact/sim_metadata.tar.gz ./proj_metadata
+            docker cp $container_id:/tmp/proj_metadata.tar.gz ./metadata_artifact/sim_metadata.tar.gz
 
       - name: stash Sim project metadata
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}project_sim_metadata
           path: metadata_artifact/*
@@ -1298,7 +1307,7 @@ jobs:
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -1310,7 +1319,7 @@ jobs:
             }
 
       - name: Slack message failure
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         if: ${{ failure() && github.event_name != 'pull_request' }}
         with:
           method: chat.postMessage
@@ -1330,7 +1339,7 @@ jobs:
 
       - name: Stash deploy_simulator_artifacts
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}deploy_simulator_artifacts
           path: simulator.image.artifact
@@ -1395,28 +1404,28 @@ jobs:
 
       - name: unstash raised_meta
         if: ${{ inputs.with_simulation_tests }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: .
 
       - name: unstash manifest
         if: ${{ inputs.with_simulation_tests }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation_tests }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts
 
       - name: unstash robot_jsons_noetic
         if: ${{ inputs.with_simulation_tests }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_noetic
           path: .
@@ -1542,7 +1551,7 @@ jobs:
 
       - name: Slack message failure
         if: ${{ inputs.with_simulation_tests  && failure() && github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -1601,7 +1610,7 @@ jobs:
 
       - name: Slack message failure
         if: ${{ inputs.with_simulation_tests  && failure() && github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -1611,13 +1620,13 @@ jobs:
               "text": "${{ steps.nvidia_err_msg.outputs.msg_error }}"
             }
 
-      - name: Remote - Login to ${{ env.MID_REGISTRY }} Registry
+      - name: Remote - Login to ${{ env.IP_MIRROR_REGISTRY }} Registry
         if: ${{ inputs.with_simulation_tests }}
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
-            docker login ${{ env.MID_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+            docker login ${{ env.IP_MIRROR_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
           '
 
       - name: Remote - Login to ${{ env.REGISTRY }} Registry
@@ -1628,6 +1637,7 @@ jobs:
             set -e
             docker login ${{ env.REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
           '
+
       - name: Remote - Login to ${{ env.PUSH_REGISTRY }} Registry
         if: ${{ inputs.with_simulation_tests }}
         shell: bash
@@ -1635,6 +1645,15 @@ jobs:
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
             docker login ${{ env.PUSH_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+          '
+
+      - name: Remote - Login to ${{ env.SIM_MIRROR_REGISTRY }} Registry
+        if: ${{ inputs.with_simulation_tests }}
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            docker login ${{ env.SIM_MIRROR_REGISTRY }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
           '
 
       - name: Remote - Docker load spawner image
@@ -1653,7 +1672,7 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
 
-            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.MID_REGISTRY }}-${{ env.REGISTRY }}-g")
+            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.PUSH_REGISTRY }}-${{ env.SIM_MIRROR_REGISTRY }}-g")
             docker manifest inspect "$promoted_name"
             if [ $? -ne 0 ]; then
               set -e
@@ -1766,12 +1785,16 @@ jobs:
           export PUBLIC_IP="$(hostname -I | cut -d " " -f1)"
           export SIMULATION_ID="CI"
           export ROBOTNAME="ci_${{ inputs.product_name }}"
+          export REGISTRY="${{ env.SIM_MIRROR_REGISTRY }}"
           rm -rf userspace
 
           # Enable debug logs of movai-service
           sudo mkdir -p /etc/movai/
           sudo sh -c "echo MOVAI_SERVICE_LOGGER_LEVEL=DEBUG >> /etc/movai/config.env"
           sudo chmod -R +r /etc/movai
+
+          # Configure registry
+          jq '.registry = "${{ env.SIM_MIRROR_REGISTRY }}"' "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
 
           wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
           chmod +x ./QuickStart_$(cat quickstart_version).bash
@@ -1849,7 +1872,7 @@ jobs:
 
       - name: Stash simulation test outputs
         if: ${{ always() && inputs.with_simulation_tests && steps.simulation_tests.outputs.save_outputs == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim-outputs
           path: test-output.json
@@ -1942,7 +1965,7 @@ jobs:
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -1954,7 +1977,7 @@ jobs:
             }
 
       - name: Slack message failure
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         if: ${{ failure() && github.event_name != 'pull_request' }}
         with:
           method: chat.postMessage
@@ -2051,7 +2074,7 @@ jobs:
           echo "publish_url=$PUBLISH_URL" >> $GITHUB_OUTPUT
 
       - name: Slack message Artifact info
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         if: ${{ always() &&  inputs.with_simulation_tests && github.event_name != 'pull_request' }}
         with:
           method: chat.postMessage
@@ -2128,42 +2151,42 @@ jobs:
 
       - name: unstash raised_meta
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: platform_configs
 
       - name: unstash deploy_artifacts_noetic
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}deploy_artifacts_noetic
           path: artifacts
 
       - name: unstash manifest
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts
 
       - name: unstash project metadata
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}project_metadata
           path: .
 
       - name: unstash deploy_simulator_artifacts
         if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}deploy_simulator_artifacts
           path: .
@@ -2179,13 +2202,13 @@ jobs:
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
           python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
-      - name: Login to ${{ env.MID_REGISTRY }} Registry
+      - name: Login to ${{ env.IP_MIRROR_REGISTRY }} Registry
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
-          registry: ${{ env.MID_REGISTRY }}
+          registry: ${{ env.IP_MIRROR_REGISTRY }}
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
@@ -2196,7 +2219,7 @@ jobs:
           registry: ${{ env.PUSH_REGISTRY }}
 
       - name: Publish simulator state
-        if: ${{ needs.Install-Simulator-Robot.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' && github.event_name != 'pull_request' }}
+        if: ${{ needs.Install-Simulator-Robot.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' && inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
         shell: bash
         run: |
           . .ci-venv/bin/activate
@@ -2251,8 +2274,8 @@ jobs:
 
           for image in "${images[@]}"
           do
-            source=$(echo $image | sed "s-/qa/-/ci/-g" |  sed "s-${{ env.PUSH_REGISTRY }}-${{ env.MID_REGISTRY }}-g" )
-            target=$(echo $image | sed "s-${{ env.MID_REGISTRY }}-${{ env.PUSH_REGISTRY }}-g" )
+            source=$(echo $image | sed "s-/qa/-/ci/-g" |  sed "s-${{ env.PUSH_REGISTRY }}-${{ env.IP_MIRROR_REGISTRY }}-g" )
+            target=$(echo $image | sed "s-${{ env.IP_MIRROR_REGISTRY }}-${{ env.PUSH_REGISTRY }}-g" )
             docker pull $source
             echo "tagging $source as $target"
             docker tag $source $target
@@ -2260,7 +2283,7 @@ jobs:
           done
 
           cat product-manifest.yaml
-          cp product-manifest.yaml deployment_artifacts
+          cp *.yaml deployment_artifacts
           cp metadata.tar.gz deployment_artifacts
 
           product_version=$(cat product.version)
@@ -2341,9 +2364,18 @@ jobs:
               # no PRs exist
               echo "No relevant changes." >> notes.txt
           else
-              # PRs exist
+                # PRs exist - filter out temporary PR messages
               for pr in "${PRS[@]}"; do
-                  gh pr view "${pr}" --json body | jq -r .body >> notes.txt
+                  pr_body=$(gh pr view "${pr}" --json body | jq -r .body)
+
+                  filtered_body=$(echo "$pr_body" | \
+                  grep -v -E -i "Temporary PR:|Temporary PR to bypass branch protection" | \
+                    sed '/^[[:space:]]*$/d' || true)
+
+                  # Only add if there's content left after filtering
+                  if [ -n "$filtered_body" ]; then
+                    echo "$filtered_body" >> notes.txt
+                  fi
               done
           fi
           echo "" >> notes.txt
@@ -2351,17 +2383,22 @@ jobs:
           # PRs
           echo "## PRs" >> notes.txt
           if [ ${#PRS[@]} -eq 0 ]; then
-              # no PRs exist
               echo "No PRs." >> notes.txt
           else
-              # PRs exist
-              echo "${ORIGINAL_RN}" | grep "\* .* by @.* in https://github.com/${{ github.repository_owner }}/" >> notes.txt
+              pr_list=$(echo "${ORIGINAL_RN}" | grep "\* .* by @.* in https://github.com/${{ github.repository_owner }}/" | \
+                grep -v -E -i "Temporary PR:|Temporary PR to bypass branch protection" || true)
+
+              if [ -n "$pr_list" ]; then
+                echo "$pr_list" >> notes.txt
+              else
+                echo "No relevant PRs to display." >> notes.txt
+              fi
           fi
           echo "" >> notes.txt
 
           ## Diff
           echo "## Diff" >> notes.txt
-          echo "${ORIGINAL_RN}" | grep "\*\*Full Changelog\*\*" >> notes.txt
+          echo "${ORIGINAL_RN}" | grep "\*\*Full Changelog\*\*" >> notes.txt || true
 
           # set new release notes
           gh release edit "${product_version}" --notes-file notes.txt
@@ -2394,7 +2431,7 @@ jobs:
           echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
 
       - name: Slack message
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         if: ${{ github.event_name != 'pull_request'}}
         with:
           method: chat.update
@@ -2413,7 +2450,7 @@ jobs:
     steps:
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: platform_configs
@@ -2438,7 +2475,7 @@ jobs:
 
       - name: Slack message
         if: ${{ github.event_name != 'pull_request' }}
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v3
         with:
           method: chat.update
           token: ${{ secrets.slack_token_id }}
