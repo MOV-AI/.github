@@ -891,6 +891,7 @@ jobs:
             mkdir /tmp/proj_metadata
             echo "Scans finished. Starting backup of metadata"
             python3 -m tools.backup -p /tmp/proj_metadata/ -m /tmp/manifest.txt -a export -i
+            tar czf /tmp/proj_metadata.tar.gz -C /tmp proj_metadata
             echo "backup of metadata finished"
           ' || true
 
@@ -1415,10 +1416,10 @@ jobs:
             } >> /tmp/manifest.txt
             mkdir /tmp/proj_metadata
             python3 -m tools.backup -p /tmp/proj_metadata/ -m /tmp/manifest.txt -a export -i
+            tar czf /tmp/proj_metadata.tar.gz -C /tmp proj_metadata
           ' || true
             mkdir -p metadata_artifact tmp_meta
-            docker cp $container_id:/tmp/proj_metadata/ ./
-            tar cvzf ./metadata_artifact/sim_metadata.tar.gz ./proj_metadata
+            docker cp $container_id:/tmp/proj_metadata.tar.gz ./metadata_artifact/sim_metadata.tar.gz
 
       - name: stash Sim project metadata
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
@@ -2359,7 +2360,7 @@ jobs:
           registry: ${{ env.PUSH_REGISTRY }}
 
       - name: Publish simulator state
-        if: ${{ needs.Install-Simulator-Robot.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' && github.event_name != 'pull_request' }}
+        if: ${{ needs.Install-Simulator-Robot.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' && inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
         shell: bash
         run: |
           . .ci-venv/bin/activate
@@ -2504,9 +2505,18 @@ jobs:
               # no PRs exist
               echo "No relevant changes." >> notes.txt
           else
-              # PRs exist
+                # PRs exist - filter out temporary PR messages
               for pr in "${PRS[@]}"; do
-                  gh pr view "${pr}" --json body | jq -r .body >> notes.txt
+                  pr_body=$(gh pr view "${pr}" --json body | jq -r .body)
+
+                  filtered_body=$(echo "$pr_body" | \
+                  grep -v -E -i "Temporary PR:|Temporary PR to bypass branch protection" | \
+                    sed '/^[[:space:]]*$/d' || true)
+
+                  # Only add if there's content left after filtering
+                  if [ -n "$filtered_body" ]; then
+                    echo "$filtered_body" >> notes.txt
+                  fi
               done
           fi
           echo "" >> notes.txt
@@ -2514,17 +2524,22 @@ jobs:
           # PRs
           echo "## PRs" >> notes.txt
           if [ ${#PRS[@]} -eq 0 ]; then
-              # no PRs exist
               echo "No PRs." >> notes.txt
           else
-              # PRs exist
-              echo "${ORIGINAL_RN}" | grep "\* .* by @.* in https://github.com/${{ github.repository_owner }}/" >> notes.txt
+              pr_list=$(echo "${ORIGINAL_RN}" | grep "\* .* by @.* in https://github.com/${{ github.repository_owner }}/" | \
+                grep -v -E -i "Temporary PR:|Temporary PR to bypass branch protection" || true)
+
+              if [ -n "$pr_list" ]; then
+                echo "$pr_list" >> notes.txt
+              else
+                echo "No relevant PRs to display." >> notes.txt
+              fi
           fi
           echo "" >> notes.txt
 
           ## Diff
           echo "## Diff" >> notes.txt
-          echo "${ORIGINAL_RN}" | grep "\*\*Full Changelog\*\*" >> notes.txt
+          echo "${ORIGINAL_RN}" | grep "\*\*Full Changelog\*\*" >> notes.txt || true
 
           # set new release notes
           gh release edit "${product_version}" --notes-file notes.txt

@@ -856,9 +856,18 @@ jobs:
               # no PRs exist
               echo "No relevant changes." >> notes.txt
           else
-              # PRs exist
+              # PRs exist - filter out unwanted messages
               for pr in "${PRS[@]}"; do
-                  gh pr view "${pr}" --json body | jq -r .body >> notes.txt
+                  pr_body=$(gh pr view "${pr}" --json body | jq -r .body)
+
+                  filtered_body=$(echo "$pr_body" | \
+                  grep -v -E -i "Temporary PR:|Temporary PR to bypass branch protection" | \
+                    sed '/^[[:space:]]*$/d' || true)
+
+                  # Only add if there's content left after filtering
+                  if [ -n "$filtered_body" ]; then
+                    echo "$filtered_body" >> notes.txt
+                  fi
               done
           fi
           echo "" >> notes.txt
@@ -866,17 +875,22 @@ jobs:
           # PRs
           echo "## PRs" >> notes.txt
           if [ ${#PRS[@]} -eq 0 ]; then
-              # no PRs exist
               echo "No PRs." >> notes.txt
           else
-              # PRs exist
-              echo "${ORIGINAL_RN}" | grep "\* .* by @.* in https://github.com/${{ github.repository_owner }}/" >> notes.txt
+              pr_list=$(echo "${ORIGINAL_RN}" | grep "\* .* by @.* in https://github.com/${{ github.repository_owner }}/" | \
+                grep -v -E -i "Temporary PR:|Temporary PR to bypass branch protection" || true)
+
+              if [ -n "$pr_list" ]; then
+                echo "$pr_list" >> notes.txt
+              else
+                echo "No relevant PRs to display." >> notes.txt
+              fi
           fi
           echo "" >> notes.txt
 
           ## Diff
           echo "## Diff" >> notes.txt
-          echo "${ORIGINAL_RN}" | grep "\*\*Full Changelog\*\*" >> notes.txt
+          echo "${ORIGINAL_RN}" | grep "\*\*Full Changelog\*\*" >> notes.txt || true
 
           # set new release notes
           gh release edit "${product_version}" --notes-file notes.txt

@@ -31,12 +31,13 @@ on:
       ci_integration_scripts_version:
         required: false
         type: string
-        default: "4.0.0.13"
-      robot_json:
+        default: "4.2.0.2"
+      generated_image_name:
         required: false
         type: string
-        default: "basic-standalone-noetic.json"
-
+      generated_image_tag:
+        required: false
+        type: string
     secrets:
       auto_commit_user:
         required: true
@@ -65,18 +66,19 @@ env:
   GITHUB_API_USR: "OttoMation-Movai"
   USERSPACE_FOLDER_PATH: "$(pwd)/userspace"
   REMOTE_WORKSPACE_PATH: workspace
-  CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:${{ inputs.ci_integration_scripts_version}}"
+  CI_INTEGRATION_CONTAINER_VERSION: "registry.lis.mov.ai/qa/ci-tools:${{ inputs.ci_integration_scripts_version}}"
   CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
   CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_access_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_access_key }}
   AWS_DEFAULT_REGION: "us-east-1"
-  REGISTRY: registry.cloud.mov.ai
+  REGISTRY: "registry.lis.mov.ai"
+  REGISTRY_PUSH: "registry.cloud.mov.ai"
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-17"
+  PROVISION_INFRA_VERSION: "2.0.0-18"
   PROVISION_INFRA_DIR: "provision_scripts"
   PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISIONING_ENV_CONF_VERSION: "0.2.0-6"
+  PROVISIONING_ENV_CONF_VERSION: "0.2.0-7"
   PROVISION_ENV_CONF_DIR: "infra_env_configs"
   SIMULATION_ID: CI
   SLACK_CHANNEL: "G0102LEV1CL"
@@ -162,7 +164,7 @@ jobs:
 
           run_type="ci"
 
-          local_manager_prefix="ip-$run_type-${{ inputs.cluster }}-${{ inputs.component_name }}-$branch"
+          local_manager_prefix="ip-$run_type-${{ inputs.cluster }}-${{ inputs.component_name }}"
 
           tf_state="${{ inputs.cluster }}-sim-$local_manager_prefix"
           echo "tf_state = $tf_state"
@@ -371,54 +373,45 @@ jobs:
             . test-venv/bin/activate
             python3 -m pip install -r $tests_dir/requirements.txt
             deactivate
-
+          
           '
 
-      - name: Remote - fetch product version
+      - name: Copy pre-install
+        shell: bash
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no .github/workflows/pre_install_platform.bash ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
+
+      - name: Remote - Pre-Install
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            product_dir=${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product
-
-            rm -rf $product_dir
-            mkdir -p $product_dir
-            sudo chmod -R 777 $product_dir
-
-            docker run -u root \
-              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
-              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
-              fetch_product_by_version \
-              --product_version_search ${{ inputs.vs_product_version_pattern}} \
-              --repo ${{ inputs.vs_product_name }} \
-              --gh_api_user ${{ secrets.auto_commit_user }} \
-              --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
-              --target_dir ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/product
-
-            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
-            sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
-
-          '
-      
-      - name: Remote - Pre-Install switch base
-        shell: bash
-        run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
-            set -e
-            cd ${{ env.REMOTE_WORKSPACE_PATH }}
-            PRODUCT_NAME="$(echo ${{ inputs.vs_product_name }} | sed '\''s/^project-\(movai-\)\?//'\'' )"
+            PRODUCT_NAME="${{ inputs.vs_product_name }}"
+            PRODUCT_NAME="${PRODUCT_NAME#project-}"
+            PRODUCT_NAME="${PRODUCT_NAME#movai-}"
             if [[ "$PRODUCT_NAME" == "studio" ]]; then
               PRODUCT_NAME="solution"
             fi
             export CONFIG_FILE_NAME="product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
-            yq --version
-            base_name=$(yq \'.product_dependencies.platform_config.spawner_base_noetic.name\' product/product-manifest.yaml)
-            base_version=$(yq \'.product_dependencies.platform_config.spawner_base_noetic.version\' product/product-manifest.yaml)
-            jq --version
-            jq --arg image $base_name --arg version $base_version '.spawner.image = $image" | .spawner.version = "$version"' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
-            cat $CONFIG_FILE_NAME
+
+            cp artifacts/*.deb ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+            cp artifacts/regression_install_overwrites.yaml "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/regression_install_overwrites.yaml"
+
+            echo "Printing content of execution folder"
+            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
+            # Inputs pre_install_platform.bash
+            export GITHUB_API_USR=${{ secrets.auto_commit_user }}
+            export GITHUB_API_PWD=${{ secrets.auto_commit_pwd }}
+            export LOCAL_MAIN_DEB="true"
+            export CI_TOOLS=${{ env.CI_INTEGRATION_CONTAINER_VERSION }}
+            export PRODUCT_REPO="${{ inputs.vs_product_name }}"
+            export PRODUCT_VERSION="${{ inputs.vs_product_version_pattern }}"
+            export CI_TOOLS_EXEC_FOLDER="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
+            sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
+            bash pre_install_platform.bash
           '
 
       - name: Remote - Install
@@ -437,22 +430,23 @@ jobs:
 
             export PATH="$HOME/.local/bin:$PATH"
 
-            PRODUCT_NAME="$(echo ${{ inputs.vs_product_name }} | sed '\''s/^project-\(movai-\)\?//'\'' )"
+            PRODUCT_NAME="${{ inputs.vs_product_name }}"
+            PRODUCT_NAME="${PRODUCT_NAME#project-}"
+            PRODUCT_NAME="${PRODUCT_NAME#movai-}"
             if [[ "$PRODUCT_NAME" == "studio" ]]; then
               PRODUCT_NAME="solution"
             fi
             export CONFIG_FILE_NAME="product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
 
-            cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/* ./ && sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
-
+            cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/* ./
             export USERSPACE_FOLDER_PATH="${{ env.USERSPACE_FOLDER_PATH }}"
             sudo mkdir -p $USERSPACE_FOLDER_PATH/.git;sudo chown 1000:1000 $USERSPACE_FOLDER_PATH/ -Rf
             export PUBLIC_IP="$(hostname -I | cut -d " " -f1)"
             export SIMULATION_ID="${{ env.SIMULATION_ID }}"
             export ROBOTNAME="ci_${{ inputs.component_name }}"
+            export REGISTRY="${{ env.REGISTRY }}"
             jq --version
             jq '\''.robot.name = "$ROBOTNAME"'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
-
             # Enable debug logs of movai-service
             sudo mkdir -p /etc/movai/
             sudo sh -c "echo MOVAI_SERVICE_LOGGER_LEVEL=DEBUG >> /etc/movai/config.env"
@@ -477,23 +471,29 @@ jobs:
           echo "movai_pwd=4Iva6UHAQq9DGITj" >> $GITHUB_OUTPUT
           echo "robot_name=ci_${{ inputs.component_name }}" >> $GITHUB_OUTPUT
 
-      - name: Remote - Patch with component and overwrites
+      - name: Copy post-install
+        shell: bash
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no .github/workflows/post_install_platform.bash ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
+
+      - name: Remote - Post-Install
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
-            cd ${{ env.REMOTE_WORKSPACE_PATH }}/artifacts
-            docker run \
-              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
-              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
-              overwrite_pkg_dependencies --file regression_install_overwrites.yaml \
-              --gh_api_user $GITHUB_API_USR \
-              --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-              --ros_distro "ros1"
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            cat install_list.apt
-            cp install_list.apt ../
-            '
+            echo "Printing content of execution folder"
+            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
+            # Inputs pre_install_platform.bash
+            export GITHUB_API_USR=${{ secrets.auto_commit_user }}
+            export GITHUB_API_PWD=${{ secrets.auto_commit_pwd }}
+            export CI_TOOLS=${{ env.CI_INTEGRATION_CONTAINER_VERSION }}
+            export CI_TOOLS_EXEC_FOLDER="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
+
+            bash post_install_platform.bash
+          '
+
       - name: Remote - Run tests
         shell: bash
         run: |
@@ -507,9 +507,8 @@ jobs:
             cd stack_tests
 
             pytest ${{ inputs.test_set }} \
-              --component-pkgs ../artifacts \
               --movai-user ${{ steps.install.outputs.movai_user }} \
-              --movai-pw ${{ steps.install.outputs.movai_pwd }}
+              --movai-pw ${{ steps.install.outputs.movai_pwd }} -s
 
             deactivate
           '
@@ -542,6 +541,24 @@ jobs:
             ls -la
           '
 
+      - name: Remote - Collect ros1-workspace
+        shell: bash
+        if: always()
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+            container_id=$(docker ps --format "{{.Names}}" --filter "name=(^spawner-.*|^ros1-workspace-.*)")
+            docker exec -t "$container_id" bash -c '\''
+            ls $MOVAI_HOME
+            rm $MOVAI_HOME/.first_run_metadata
+            '\''
+            movai-cli stop "ci_${{ inputs.component_name }}"
+            sleep 2
+            docker commit ${container_id} ${{ env.REGISTRY_PUSH }}/ci/${{ inputs.generated_image_name }}:${{ inputs.generated_image_tag }}
+            docker login ${{ env.REGISTRY_PUSH }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+            docker push ${{ env.REGISTRY_PUSH }}/ci/${{ inputs.generated_image_name }}:${{ inputs.generated_image_tag }}
+          '
       - name: Remote - Move test artifacts
         if: always()
         shell: bash
