@@ -44,6 +44,8 @@ on:
         required: true
       sonar_token:
         required: true
+      slack_token_id:
+        required: true
 
 jobs:
   Validate-features:
