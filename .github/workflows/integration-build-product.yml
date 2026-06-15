@@ -6,7 +6,10 @@ on:
         required: true
         type: string
       product_distro_list:
-        required: true
+        required: false
+        type: string
+      ros_distro:
+        required: false
         type: string
       with_simulation:
         required: false
@@ -181,6 +184,50 @@ jobs:
           echo "Simulation tests job timeout $calc_jobtimeout"
           echo "timeout=$calc_timeout" >> $GITHUB_OUTPUT
           echo "jobtimeout=$calc_jobtimeout" >> $GITHUB_OUTPUT
+
+  Normalize-Distro-Input:
+    runs-on: integration-pipeline
+    outputs:
+      product_distro_list: ${{ steps.normalize.outputs.product_distro_list }}
+
+    steps:
+      - name: Validate and normalize distro input
+        id: normalize
+        shell: bash
+        run: |
+          PRODUCT_DISTRO_LIST='${{ inputs.product_distro_list }}'
+          ROS_DISTRO='${{ inputs.ros_distro }}'
+          PRODUCT_NAME='${{ inputs.product_name }}'
+
+          has_product_distro_list=false
+          has_ros_distro=false
+
+          [[ -n "$PRODUCT_DISTRO_LIST" ]] && has_product_distro_list=true
+          [[ -n "$ROS_DISTRO" ]] && has_ros_distro=true
+
+          if [[ "$has_product_distro_list" == true && "$has_ros_distro" == true ]]; then
+            echo "Both product_distro_list and ros_distro were provided. Ros_distro will be ignored."
+          fi
+
+          if [[ "$has_product_distro_list" == false && "$has_ros_distro" == false ]]; then
+            echo "One of product_distro_list or ros_distro must be provided"
+            exit 1
+          fi
+
+          if [[ "$has_ros_distro" == true ]]; then
+            NORMALIZED=$(jq -c \
+              --arg product "$PRODUCT_NAME" \
+              '[ .[] | {
+                  service: "ros1-workspace",
+                  distro: .,
+                  product_name: $product
+              } ]' <<< "$ROS_DISTRO")
+
+            echo "product_distro_list=$NORMALIZED" >> "$GITHUB_OUTPUT"
+            echo "$NORMALIZED"
+          else
+            echo "product_distro_list=$PRODUCT_DISTRO_LIST" >> "$GITHUB_OUTPUT"
+          fi
 
   Validate-boostrap-configs:
     runs-on: integration-pipeline
@@ -372,10 +419,10 @@ jobs:
           include-hidden-files: true
 
   Build-Workspace:
-    needs: [Validate-boostrap-configs]
+    needs: [Validate-boostrap-configs, Normalize-Distro-Input]
     strategy:
       matrix:
-        workspace: ${{ fromJSON(inputs.product_distro_list) }}
+        workspace: ${{ fromJSON(needs.Normalize-Distro-Input.outputs.product_distro_list) }}
     runs-on: integration-pipeline
     outputs:
       raised_version: ${{ steps.pre_build.outputs.raised_version }}
@@ -595,10 +642,10 @@ jobs:
           docker image prune --all -f
 
   Install-Robot:
-    needs: [Validate-boostrap-configs, Build-Workspace]
+    needs: [Validate-boostrap-configs, Normalize-Distro-Input, Build-Workspace]
     strategy:
       matrix:
-        workspace: ${{ fromJSON(inputs.product_distro_list) }}
+        workspace: ${{ fromJSON(needs.Normalize-Distro-Input.outputs.product_distro_list) }}
     runs-on: integration-pipeline
     steps:
       - uses: rtCamp/action-cleanup@master
@@ -1055,10 +1102,10 @@ jobs:
           fi
 
   Install-Simulator-Robot:
-    needs: [Validate-boostrap-configs, Build-Workspace, Build-Simulator]
+    needs: [Validate-boostrap-configs, Normalize-Distro-Input, Build-Workspace, Build-Simulator]
     strategy:
       matrix:
-        workspace: ${{ fromJSON(inputs.product_distro_list) }}
+        workspace: ${{ fromJSON(needs.Normalize-Distro-Input.outputs.product_distro_list) }}
     runs-on: integration-pipeline
     outputs:
       slack_thread_id: ${{ needs.Build-Workspace.outputs.slack_thread_id }}
