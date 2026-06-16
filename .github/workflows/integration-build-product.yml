@@ -467,7 +467,9 @@ jobs:
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
           . .ci-venv/bin/activate
           cat product-manifest.yaml
-          integration-pipeline generate_meta_artifacts --update_simulator --override_ros1_workspace ${{ inputs.product_name }}-${{ matrix.workspace['distro'] }} --manifest_platform_base_key "product_dependencies"
+          override_service=$(echo "${{ matrix.workspace['service'] }}" | tr '-' '_')
+          override_arg="--override_${override_service}"
+          integration-pipeline generate_meta_artifacts --update_simulator $override_arg ${{ inputs.product_name }}-${{ matrix.workspace['distro'] }} --manifest_platform_base_key "product_dependencies"
           deactivate
 
       - name: Update robot jsons to use ci project
