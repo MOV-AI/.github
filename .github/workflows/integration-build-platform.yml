@@ -273,7 +273,7 @@ jobs:
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
   Build-backend:
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    runs-on: integration-pipeline
     needs: [Validate-bootstrap-configs]
     outputs:
       slack_thread_id: ${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id }}
@@ -496,7 +496,7 @@ jobs:
 
   Build-Simulator:
     needs: [Validate-bootstrap-configs]
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    runs-on: integration-pipeline
     env:
       DISTRO: noetic
     outputs:
@@ -693,7 +693,7 @@ jobs:
 
   publish:
     needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    runs-on: integration-pipeline
     outputs:
       slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
     steps:
