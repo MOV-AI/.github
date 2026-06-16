@@ -623,7 +623,7 @@ jobs:
 
       - name: Slack message failure
         uses: slackapi/slack-github-action@v3
-        if: ${{ failure() && github.event_name != 'pull_request' }}
+        if: ${{ failure() && github.event_name != 'pull_request' && inputs.disable_slack_notifications == false }}
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -872,7 +872,7 @@ jobs:
 
       - name: Slack message failure
         uses: slackapi/slack-github-action@v3
-        if: ${{ failure() && github.event_name != 'pull_request' }}
+        if: ${{ failure() && github.event_name != 'pull_request' && inputs.disable_slack_notifications == false }}
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -1079,7 +1079,7 @@ jobs:
 
       - name: Slack message failure
         uses: slackapi/slack-github-action@v3
-        if: ${{ failure() && github.event_name != 'pull_request' }}
+        if: ${{ failure() && github.event_name != 'pull_request' && inputs.disable_slack_notifications == false }}
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -1366,7 +1366,7 @@ jobs:
 
       - name: Slack message failure
         uses: slackapi/slack-github-action@v3
-        if: ${{ failure() && github.event_name != 'pull_request' }}
+        if: ${{ failure() && github.event_name != 'pull_request' && inputs.disable_slack_notifications == false }}
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -2011,7 +2011,7 @@ jobs:
 
       - name: Slack message failure
         uses: slackapi/slack-github-action@v3
-        if: ${{ failure() && github.event_name != 'pull_request' }}
+        if: ${{ failure() && github.event_name != 'pull_request' && inputs.disable_slack_notifications == false }}
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -2465,7 +2465,7 @@ jobs:
 
       - name: Slack message
         uses: slackapi/slack-github-action@v3
-        if: ${{ github.event_name != 'pull_request'}}
+        if: ${{ github.event_name != 'pull_request' && inputs.disable_slack_notifications == false }}
         with:
           method: chat.update
           token: ${{ secrets.slack_token_id }}
