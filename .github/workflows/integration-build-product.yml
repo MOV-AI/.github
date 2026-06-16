@@ -218,7 +218,7 @@ jobs:
             NORMALIZED=$(jq -c \
               --arg product "$PRODUCT_NAME" \
               '[ .[] | {
-                  service: "ros1-workspace",
+                  service: "spawner",
                   distro: .,
                   product_name: $product
               } ]' <<< "$ROS_DISTRO")
