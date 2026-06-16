@@ -78,6 +78,11 @@ on:
         required: false
         type: string
         default: "simulator_tests"
+      disable_slack_notifications:
+        description: "Set to true to disable all Slack notifications"
+        required: false
+        type: boolean
+        default: false
 
     secrets:
       auto_commit_user:
@@ -396,7 +401,7 @@ jobs:
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
 
       - name: Send Slack Message
-        if: ${{ github.event_name != 'pull_request' }}
+        if: ${{ github.event_name != 'pull_request' && inputs.disable_slack_notifications == false }}
         uses: slackapi/slack-github-action@v3
         id: send-message
         with:
@@ -604,7 +609,7 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
       - name: Slack message success
-        if: ${{ github.event_name != 'pull_request' }}
+        if: ${{ github.event_name != 'pull_request' && inputs.disable_slack_notifications == false }}
         uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
@@ -853,7 +858,7 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
       - name: Slack message success
-        if: ${{ github.event_name != 'pull_request' }}
+        if: ${{ github.event_name != 'pull_request' && inputs.disable_slack_notifications == false }}
         uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
@@ -1060,7 +1065,7 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
       - name: Slack message success
-        if: ${{ github.event_name != 'pull_request' }}
+        if: ${{ github.event_name != 'pull_request' && inputs.disable_slack_notifications == false }}
         uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
@@ -1347,7 +1352,7 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
       - name: Slack message success
-        if: ${{ github.event_name != 'pull_request' }}
+        if: ${{ github.event_name != 'pull_request' && inputs.disable_slack_notifications == false }}
         uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
@@ -1591,7 +1596,7 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
 
       - name: Slack message failure
-        if: ${{ inputs.with_simulation_tests  && failure() && github.event_name != 'pull_request' }}
+        if: ${{ inputs.with_simulation_tests && failure() && github.event_name != 'pull_request' && inputs.disable_slack_notifications == false }}
         uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
@@ -1650,7 +1655,7 @@ jobs:
           '
 
       - name: Slack message failure
-        if: ${{ inputs.with_simulation_tests  && failure() && github.event_name != 'pull_request' }}
+        if: ${{ inputs.with_simulation_tests && failure() && github.event_name != 'pull_request' && inputs.disable_slack_notifications == false }}
         uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
@@ -1992,7 +1997,7 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
 
       - name: Slack message success
-        if: ${{ github.event_name != 'pull_request' }}
+        if: ${{ github.event_name != 'pull_request' && inputs.disable_slack_notifications == false }}
         uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
@@ -2103,7 +2108,7 @@ jobs:
 
       - name: Slack message Artifact info
         uses: slackapi/slack-github-action@v3
-        if: ${{ always() &&  inputs.with_simulation_tests && github.event_name != 'pull_request' }}
+        if: ${{ always() && inputs.with_simulation_tests && github.event_name != 'pull_request' && inputs.disable_slack_notifications == false }}
         with:
           method: chat.postMessage
           token: ${{ secrets.slack_token_id }}
@@ -2491,7 +2496,7 @@ jobs:
 
       - name: Prepare slack variables
         id: pre_slack
-        if: ${{ github.event_name != 'pull_request' }}
+        if: ${{ github.event_name != 'pull_request' && inputs.disable_slack_notifications == false }}
         shell: bash
         run: |
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is unstable (or canceled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
@@ -2502,7 +2507,7 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
 
       - name: Slack message
-        if: ${{ github.event_name != 'pull_request' }}
+        if: ${{ github.event_name != 'pull_request' && inputs.disable_slack_notifications == false }}
         uses: slackapi/slack-github-action@v3
         with:
           method: chat.update
