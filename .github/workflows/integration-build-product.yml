@@ -730,6 +730,7 @@ jobs:
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
           export ROBOTNAME="ci_${{ inputs.product_name }}"
+          export REGISTRY="${{ env.IP_MIRROR_REGISTRY }}"
           sudo rm -rf $USERSPACE_FOLDER_PATH || true
           sudo mkdir -p $USERSPACE_FOLDER_PATH
           sudo chmod 777 $USERSPACE_FOLDER_PATH
