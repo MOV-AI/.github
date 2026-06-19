@@ -171,10 +171,10 @@ jobs:
         run: |
           movai remove --all
 
-  Slack-Message-On-Failure:
+  Slack-Message-Result:
     runs-on: ubuntu-22.04
     needs:  [Validate-features, Install-Tests]
-    if: always()
+    if: ${{ always() && inputs.nightly }}
     steps:
       - name: Prepare slack variables
         id: pre_slack
@@ -186,7 +186,7 @@ jobs:
 
       - name: Slack message success
         if: ${{ inputs.nightly && ( needs.Validate-features.result == 'success' && needs.Install-Tests.result == 'success' ) }}
-        uses: slackapi/slack-github-action@v1.23.0
+        uses: slackapi/slack-github-action@v3
         with:
           channel-id: ${{ inputs.slack_channel_nightly_msg }}
           slack-message: ${{ steps.pre_slack.outputs.msg }}
