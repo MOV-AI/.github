@@ -1214,6 +1214,7 @@ jobs:
           sudo chmod 777 -R $USERSPACE_FOLDER_PATH
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
           export ROBOTNAME="ci_${{ inputs.product_name }}"
+          export REGISTRY="${{ env.IP_MIRROR_REGISTRY }}"
 
           . .ci-venv/bin/activate
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
