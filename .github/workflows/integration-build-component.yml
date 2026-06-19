@@ -323,7 +323,7 @@ jobs:
             export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
             export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
             export CI_TOOLS_EXEC_FOLDER="tests_workdir"
-              
+
             echo "Collecting tests artifacts"
             . .github/workflows/collect_tests_artifacts.bash
           fi
