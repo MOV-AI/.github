@@ -964,7 +964,7 @@ jobs:
           else
             echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
           fi
-          echo "image_name=${{ env.IP_MIRROR_REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
+          echo "image_name=${{ env.PUSH_REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
 
       - name: Lint docker image
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
