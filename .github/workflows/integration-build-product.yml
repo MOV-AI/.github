@@ -359,6 +359,46 @@ jobs:
           cp ci_artifacts/* ./simulator_artifacts
           fi
 
+      - name: Generate Multi-Workspace Artifacts
+        id: generate_meta
+        shell: bash
+        run: |
+          source ci_scripts/bin/activate
+
+          if [ -n '${{ inputs.product_distro_list }}' ]; then
+            WORKSPACES='${{ inputs.product_distro_list }}'
+          else
+            WORKSPACES=$(jq -c --arg product '${{ inputs.product_name }}' '[ .[] | { service: "spawner", distro: ., product_name: $product } ]' <<< '${{ inputs.ros_distro }}')
+          fi
+
+          echo "$WORKSPACES" | jq -e . >/dev/null
+          echo "Generating metadata for workspaces: $WORKSPACES"
+
+          rm -rf ci_artifacts
+
+          echo "$WORKSPACES" | jq -c '.[]' | while read -r workspace; do
+            service=$(echo "$workspace" | jq -r '.service')
+            distro=$(echo "$workspace" | jq -r '.distro')
+            product_name=$(echo "$workspace" | jq -r '.product_name // "${{ inputs.product_name }}"')
+
+            override_service=$(echo "$service" | tr '-' '_')
+            override_arg="--override_${override_service}"
+
+            echo "Generating artifacts for ${product_name}-${distro} with ${override_arg}"
+            integration-pipeline generate_meta_artifacts --update_simulator $override_arg ${product_name}-${distro} --manifest_platform_base_key "product_dependencies"
+          done
+
+          deactivate
+
+      - name: Stash All Robot Configs
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}all_robot_configs
+          path: |
+            *.json*
+            ci_artifacts/
+          retention-days: 5
+
       - name: Stash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
         uses: actions/upload-artifact@v5
@@ -468,17 +508,11 @@ jobs:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: platform_configs
 
-      - name: Generate product configs from manifest
-        shell: bash
-        run: |
-          cp ./platform_configs/product.version product.version
-          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
-          . .ci-venv/bin/activate
-          cat product-manifest.yaml
-          override_service=$(echo "${{ matrix.workspace['service'] }}" | tr '-' '_')
-          override_arg="--override_${override_service}"
-          integration-pipeline generate_meta_artifacts --update_simulator $override_arg ${{ inputs.product_name }}-${{ matrix.workspace['distro'] }} --manifest_platform_base_key "product_dependencies"
-          deactivate
+      - name: Unstash All Robot Configs
+        uses: actions/download-artifact@v5
+        with:
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}all_robot_configs
+          path: .
 
       - name: Update robot jsons to use ci project
         if: ${{ github.event_name == 'pull_request' }}
@@ -548,10 +582,17 @@ jobs:
         id: pre_build
         shell: bash
         run: |
+          cp ./platform_configs/product.version product.version
+          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
+          cat product-manifest.yaml
+
           service_name_file_pattern=$(echo ${{ matrix.workspace['service'] }} | sed 's/-/_/g')
+          product_name=${{ matrix.workspace['product_name'] || inputs.product_name }}
+
           echo "base_name=$(cat ci_artifacts/${service_name_file_pattern}_base_name_${{ matrix.workspace['distro'] }}.ci)" >> $GITHUB_OUTPUT
           echo "base_version=$(cat ci_artifacts/${service_name_file_pattern}_base_version_${{ matrix.workspace['distro'] }}.ci)" >> $GITHUB_OUTPUT
           echo "raised_version=$(cat product.version)" >> $GITHUB_OUTPUT
+          echo "target_tag=${product_name}-${{ matrix.workspace['distro'] }}" >> $GITHUB_OUTPUT
           # Check if propagated project is false
           if [ "${{ inputs.propagate_project }}" = "false" ];
           then
@@ -580,7 +621,7 @@ jobs:
             --build-arg CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }} \
             --file docker/${{ matrix.workspace['distro'] }}/Dockerfile \
             --platform linux/amd64 \
-            --tag ${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ steps.pre_build.outputs.raised_version }} \
+            --tag ${{ env.PUSH_REGISTRY }}/ci/${{ steps.pre_build.outputs.target_tag }}:${{ steps.pre_build.outputs.raised_version }} \
             --pull \
             --push .
 
@@ -959,10 +1000,17 @@ jobs:
         id: pre_simulator_build
         if: ${{ inputs.with_simulation == 'true' }}
         run: |
-          if [ ! -f "simulator_artifacts/version" ]; then
-            echo "skip_simulator_build=true" >> $GITHUB_OUTPUT
-          else
+          if [ ! -f "simulator_artifacts/simulator_base.ci" ] || [ ! -f "simulator_artifacts/version" ]; then
             echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
+          else
+            git config --global --add safe.directory $(pwd)
+            dockerfile_changed=$(git diff HEAD -- docker/${{ env.DISTRO }}/Dockerfile-simulator | wc -l)
+
+            if [ "$dockerfile_changed" -gt 0 ]; then
+              echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
+            else
+              echo "skip_simulator_build=true" >> $GITHUB_OUTPUT
+            fi
           fi
           echo "image_name=${{ env.PUSH_REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
 
