@@ -63,7 +63,7 @@ on:
       provision_tf_env_version:
         required: false
         type: string
-        default: "0.2.0-8"
+        default: "0.2.2-2"
       provision_infra_repo:
         required: false
         type: string
@@ -71,7 +71,7 @@ on:
       provision_infra_version:
         required: false
         type: string
-        default: "2.0.0-17"
+        default: "2.2.0-1"
 
     secrets:
       auto_commit_user:
@@ -125,7 +125,7 @@ on:
       fleet_password:
         required: true
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "4.0.2.3"
+  CI_INTEGRATION_SCRIPTS_VERSION: "4.1.0.3"
   MOBTEST_VERSION: "0.0.7.2"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.40"
   GITHUB_API_USR: "OttoMation-Movai"
@@ -142,10 +142,10 @@ env:
   XRAY_SECRET: ${{ secrets.xray_secret}}
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
-  PROVISIONING_ENV_VERSION: 0.2.0-8
+  PROVISIONING_ENV_VERSION: 0.2.2-2
   PROVISIONING_ENV_REPO: devops-tf-env-conf
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-17"
+  PROVISION_INFRA_VERSION: "2.2.0-1"
   ARTIFACTS_RETENTION_DAYS: 15
 jobs:
   Validate-bootstrap-configs:
@@ -273,7 +273,7 @@ jobs:
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
   Build-backend:
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    runs-on: integration-pipeline
     needs: [Validate-bootstrap-configs]
     outputs:
       slack_thread_id: ${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id }}
@@ -330,9 +330,11 @@ jobs:
       - name: Prepare docker build variables
         id: pre_build
         shell: bash
+        env:
+          DISTRO: noetic
         run: |
-          echo "base_name=$(cat backend_base_name.ci)" >> $GITHUB_OUTPUT
-          echo "base_version=$(cat backend_base_version.ci)" >> $GITHUB_OUTPUT
+          echo "base_name=$(cat backend_base_name_${DISTRO}.ci)" >> $GITHUB_OUTPUT
+          echo "base_version=$(cat backend_base_version_${DISTRO}.ci)" >> $GITHUB_OUTPUT
           echo "raised_version=$(cat product.version)" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
@@ -494,7 +496,7 @@ jobs:
 
   Build-Simulator:
     needs: [Validate-bootstrap-configs]
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    runs-on: integration-pipeline
     env:
       DISTRO: noetic
     outputs:
@@ -691,7 +693,7 @@ jobs:
 
   publish:
     needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
-    runs-on: integration-pipeline-${{ inputs.proxmox_cluster_name }}
+    runs-on: integration-pipeline
     outputs:
       slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
     steps:

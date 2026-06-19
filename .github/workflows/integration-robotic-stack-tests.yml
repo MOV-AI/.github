@@ -33,6 +33,11 @@ on:
         type: string
         default: ""
         description: Version of the simulator tests to run. If not provided, the version will be taken from the product manifest.
+      apt_region:
+        required: false
+        type: string
+        default: "fr"
+        description: Region for APT package manager.
 
     secrets:
       auto_commit_user:
@@ -89,12 +94,12 @@ env:
   SLACK_CHANNEL: ${{ inputs.slack_channel }}
   DEVOPS_SLACK_CHANNEL: "G0102LEV1CL"
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-17"
+  PROVISION_INFRA_VERSION: "2.2.0-1"
   PROVISION_INFRA_DIR: "provision_scripts"
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISIONING_ENV_CONF_VERSION: "0.2.0-8"
+  PROVISIONING_ENV_CONF_VERSION: "0.2.2-2"
   PROVISION_ENV_CONF_DIR: "infra_env_configs"
 
 jobs:
@@ -212,6 +217,7 @@ jobs:
           echo 'pool="IP-Temp-VMs"'>>input.tfvars
           echo 'proxmox_ve_username="${{ secrets.proxmox_ve_sim_username }}"'>>input.tfvars
           echo 'proxmox_ve_password="${{ secrets.proxmox_ve_sim_password }}"'>>input.tfvars
+          echo 'apt_region="${{ inputs.apt_region }}"'>>input.tfvars
           echo "\n">>input
 
           echo "File args: $var_file_arg"
@@ -615,8 +621,7 @@ jobs:
             cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.simulator_tests_setup.outputs.target_dir }}
             CONTAINERS=$(docker ps -a --format '{{.Names}}')
             for container in ${CONTAINERS}; do
-              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
-              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
+              docker logs "${container}" &> "${container}.log" || true
             done || true
 
             # movai-service

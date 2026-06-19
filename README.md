@@ -36,7 +36,7 @@ See [docs/workflows.md](docs/workflows.md) for detailed specifications, inputs, 
 | **Build Product** | Orchestrates complete product build pipeline including validation, workspace build, simulator setup, and testing |
 | **Build Product Composite** | Builds composite projects (multiple products/squads) |
 | **Generic Local Standalone Tests** | Runs QA tests on locally deployed platform instances (install tests, UI tests, etc.) |
-| **Generic Remote Fleet Tests** | Runs QA tests on provisioned remote fleet infrastructure with Terraform provisioning and Ansible deployment |
+| **Generic Remote Fleet Tests** | Runs QA tests on provisioned remote fleet infrastructure with Terraform provisioning and Ansible deployment, including infrastructure recreation with dedicated robotics-sim, redhat-oracle, and packer runner pools |
 | **Install Tests** | Runs QA install tests on platform deployments |
 | **Publish to Project Data Viewer** | Publishes data to the [project data viewer website](https://personal-7vf0v2cu.outsystemscloud.com/ProjectDataViewer5/) |
 | **Robotic Component Pipeline** | Builds and tests robotic stack components with remote provisioning and test execution |
