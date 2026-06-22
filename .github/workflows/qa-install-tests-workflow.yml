@@ -188,16 +188,22 @@ jobs:
         if: ${{ inputs.nightly && ( needs.Validate-features.result == 'success' && needs.Install-Tests.result == 'success' ) }}
         uses: slackapi/slack-github-action@v3
         with:
-          channel-id: ${{ inputs.slack_channel_nightly_msg }}
-          slack-message: ${{ steps.pre_slack.outputs.msg }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel_nightly_msg }}",
+              "text": "${{ steps.pre_slack.outputs.msg }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
       - name: Slack message failure
         if: ${{ inputs.nightly && ( needs.Validate-features.result == 'failure' || needs.Install-Tests.result == 'failure' ) }}
-        uses: slackapi/slack-github-action@v1.23.0
+        uses: slackapi/slack-github-action@v3
         with:
-          channel-id: ${{ inputs.slack_channel_nightly_msg }}
-          slack-message: ${{ steps.pre_slack.outputs.msg_error }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel_nightly_msg }}",
+              "text": "${{ steps.pre_slack.outputs.msg_error }}"
+            }
+          token: ${{ secrets.slack_token_id }}
