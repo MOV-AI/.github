@@ -364,6 +364,7 @@ jobs:
         shell: bash
         run: |
           source ci_scripts/bin/activate
+          rm -rf ci_artifacts
 
           if [ -n '${{ inputs.product_distro_list }}' ]; then
             WORKSPACES='${{ inputs.product_distro_list }}'
@@ -371,22 +372,16 @@ jobs:
             WORKSPACES=$(jq -c --arg product '${{ inputs.product_name }}' '[ .[] | { service: "spawner", distro: ., product_name: $product } ]' <<< '${{ inputs.ros_distro }}')
           fi
 
-          echo "$WORKSPACES" | jq -e . >/dev/null
-          echo "Generating metadata for workspaces: $WORKSPACES"
+          ROS1_NAME=$(jq -r '(.[] | select(.distro == "noetic") | .product_name + "-" + .distro) // "False"' <<< "$WORKSPACES" | head -n 1)
+          ROS2_NAME=$(jq -r '(.[] | select(.distro != "noetic") | .product_name + "-" + .distro) // "False"' <<< "$WORKSPACES" | head -n 1)
 
-          rm -rf ci_artifacts
+          echo "Generating artifacts with ROS1 Workspace: $ROS1_NAME and ROS2 Workspace: $ROS2_NAME"
 
-          echo "$WORKSPACES" | jq -c '.[]' | while read -r workspace; do
-            service=$(echo "$workspace" | jq -r '.service')
-            distro=$(echo "$workspace" | jq -r '.distro')
-            product_name=$(echo "$workspace" | jq -r '.product_name // "${{ inputs.product_name }}"')
-
-            override_service=$(echo "$service" | tr '-' '_')
-            override_arg="--override_${override_service}"
-
-            echo "Generating artifacts for ${product_name}-${distro} with ${override_arg}"
-            integration-pipeline generate_meta_artifacts --update_simulator $override_arg ${product_name}-${distro} --manifest_platform_base_key "product_dependencies"
-          done
+          integration-pipeline generate_meta_artifacts \
+            --update_simulator \
+            --override_ros1_workspace "$ROS1_NAME" \
+            --override_ros2_workspace "$ROS2_NAME" \
+            --manifest_platform_base_key "product_dependencies"
 
           deactivate
 
@@ -399,12 +394,11 @@ jobs:
             ci_artifacts/
           retention-days: 5
 
-      - name: Stash sim_configs
-        if: ${{ inputs.with_simulation == 'true' }}
+      - name: Stash ci_artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}sim_configs
-          path: simulator_artifacts/*
+          name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}ci_artifacts
+          path: ci_artifacts/
           retention-days: 5
 
       - name: raise
@@ -512,6 +506,12 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}all_robot_configs
+          path: .
+
+      - name: Unstash ci_artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}ci_artifacts
           path: .
 
       - name: Update robot jsons to use ci project
