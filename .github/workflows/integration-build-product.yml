@@ -359,6 +359,29 @@ jobs:
           cp ci_artifacts/* ./simulator_artifacts
           fi
 
+      - name: raise
+        id: raise
+        shell: bash
+        run: |
+          mkdir platform_configs
+          source ci_scripts/bin/activate
+          echo "init_version=$(cat product.version)" >> $GITHUB_OUTPUT
+          # Check if a PR triggered the workflow
+          if [ -n "${{ inputs.pr_id }}" ]; then
+            # raised version has sufix of PR number
+            sed -i ''1s/$/-pr${{ inputs.pr_id }}/'' product.version
+          elif [[ ",${{ inputs.pr_labels }}," == *"minor"* ]]; then
+            bump2version minor --no-tag --no-commit --allow-dirty
+          elif [[ ",${{ inputs.pr_labels }}," == *"patch"* ]]; then
+            bump2version patch --no-tag --no-commit --allow-dirty
+          else
+            bump2version build --no-tag --no-commit --allow-dirty
+          fi
+
+          cp product.version ./platform_configs/product.version
+          cp .bumpversion.cfg ./platform_configs/.bumpversion.cfg
+          cp product-manifest.yaml ./platform_configs/product-manifest.yaml
+
       - name: Generate Multi-Workspace Artifacts
         id: generate_meta
         shell: bash
@@ -408,30 +431,6 @@ jobs:
           name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts/*
           retention-days: 5
-
-      - name: raise
-        id: raise
-        shell: bash
-        run: |
-          rm -rf simulator_artifacts ci_artifacts
-          mkdir platform_configs
-          source ci_scripts/bin/activate
-          echo "init_version=$(cat product.version)" >> $GITHUB_OUTPUT
-          # Check if a PR triggered the workflow
-          if [ -n "${{ inputs.pr_id }}" ]; then
-            # raised version has sufix of PR number
-            sed -i ''1s/$/-pr${{ inputs.pr_id }}/'' product.version
-          elif [[ ",${{ inputs.pr_labels }}," == *"minor"* ]]; then
-            bump2version minor --no-tag --no-commit --allow-dirty
-          elif [[ ",${{ inputs.pr_labels }}," == *"patch"* ]]; then
-            bump2version patch --no-tag --no-commit --allow-dirty
-          else
-            bump2version build --no-tag --no-commit --allow-dirty
-          fi
-
-          cp product.version ./platform_configs/product.version
-          cp .bumpversion.cfg ./platform_configs/.bumpversion.cfg
-          cp product-manifest.yaml ./platform_configs/product-manifest.yaml
 
       - name: Prepare slack variables
         if: ${{ always() && github.event_name != 'pull_request' }}
@@ -1755,6 +1754,16 @@ jobs:
             set -e
             docker pull "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
             docker tag "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
+          '
+
+      - name: Remote - Docker load spawner image
+        if: ${{ inputs.with_simulation_tests }}
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            docker pull "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-humble:${{ needs.Build-Workspace.outputs.raised_version }}"
+            docker tag "${{ env.REGISTRY }}/ci/${{ inputs.product_name }}-humble:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.REGISTRY }}/qa/${{ inputs.product_name }}-humble:${{ needs.Build-Workspace.outputs.raised_version }}"
           '
 
       - name: Remote - Docker load simulator image
