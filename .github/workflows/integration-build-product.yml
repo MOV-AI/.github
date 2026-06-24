@@ -561,6 +561,7 @@ jobs:
           deactivate
 
       - name: Stash manifest
+        if: ${{ matrix.workspace['distro'] == 'noetic' }}
         uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
@@ -609,7 +610,7 @@ jobs:
           fi
 
       - name: Stash dependency_version
-        if: ${{ inputs.propagate_project == false }}
+        if: ${{ inputs.propagate_project == false && matrix.workspace['distro'] == 'noetic' }}
         uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}dependency_version
@@ -679,10 +680,11 @@ jobs:
               "thread_ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
             }
 
-      - name: Stash robot_jsons_${{ matrix.workspace['distro'] }}
+      - name: Stash robot_jsons_noetic
+        if: ${{ matrix.workspace['distro'] == 'noetic' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_${{ matrix.workspace['distro'] }}
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_noetic
           path: "*.json*"
           retention-days: 10
 
