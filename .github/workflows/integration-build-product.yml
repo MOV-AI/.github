@@ -401,6 +401,14 @@ jobs:
           path: ci_artifacts/
           retention-days: 5
 
+      - name: Stash sim_configs
+        if: ${{ inputs.with_simulation == 'true' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}sim_configs
+          path: simulator_artifacts/*
+          retention-days: 5
+
       - name: raise
         id: raise
         shell: bash
@@ -686,10 +694,7 @@ jobs:
           docker image prune --all -f
 
   Install-Robot:
-    needs: [Validate-boostrap-configs, Normalize-Distro-Input, Build-Workspace]
-    strategy:
-      matrix:
-        workspace: ${{ fromJSON(needs.Normalize-Distro-Input.outputs.product_distro_list) }}
+    needs: [Validate-boostrap-configs, Build-Workspace]
     runs-on: integration-pipeline
     steps:
       - uses: rtCamp/action-cleanup@master
@@ -721,10 +726,10 @@ jobs:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
 
-      - name: unstash robot_jsons_${{ matrix.workspace['distro'] }}
+      - name: unstash robot_jsons_noetic
         uses: actions/download-artifact@v5
         with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_${{ matrix.workspace['distro'] }}
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_noetic
           path: .
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
@@ -744,13 +749,13 @@ jobs:
       - name: Docker load spawner image
         shell: bash
         run: |
-          docker pull "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
-          docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.IP_MIRROR_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
-          docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker pull "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.IP_MIRROR_REGISTRY }}/qa/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
           # if event is pr create ci tags
           if [ "${{ github.event_name }}" = "pull_request" ];
           then
-            docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
+            docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
           fi
           docker images
 
@@ -834,9 +839,9 @@ jobs:
             touch proj_metadata/metadata.tar.gz
             touch metadata_artifact/metadata.tar.gz
 
-            CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}.json
+            CONFIG_FILE_NAME=${{ inputs.product_name }}-noetic.json
 
-            echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:$(cat product.version)">artifacts/product-${{ matrix.workspace['distro'] }}.image.artifact
+            echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-noetic:$(cat product.version)">artifacts/product-noetic.image.artifact
 
       - name: Un stash dependency_version
         if: ${{ inputs.propagate_project == false }}
@@ -862,10 +867,10 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          curl --location '${{ env.PROJECT_DATA_VIEWER_API}}?Name=${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}&Version=${{ steps.project_and_solution_version.outputs.PROJECT_VERSION }}&SolutionVersion=${{ steps.project_and_solution_version.outputs.MOVAI_SOLUTION_VERSION }}' \
+          curl --location '${{ env.PROJECT_DATA_VIEWER_API}}?Name=${{ inputs.product_name }}-noetic&Version=${{ steps.project_and_solution_version.outputs.PROJECT_VERSION }}&SolutionVersion=${{ steps.project_and_solution_version.outputs.MOVAI_SOLUTION_VERSION }}' \
           --header 'Content-Type: application/json' \
           --header 'Authorization: Basic ${{ secrets.pdv_auth_token }}' \
-          --data @artifacts/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}-apt_packages.json
+          --data @artifacts/${{ inputs.product_name }}-noetic-apt_packages.json
 
       - name: Get current job id
         if: always()
