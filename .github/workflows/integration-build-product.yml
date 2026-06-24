@@ -391,6 +391,7 @@ jobs:
           name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}all_robot_configs
           path: |
             *.json*
+            ci_artifacts/
           retention-days: 5
 
       - name: Stash ci_artifacts
