@@ -746,7 +746,7 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.IP_MIRROR_REGISTRY }}
 
-      - name: Docker load spawner image
+      - name: Docker load spawner noetic image
         shell: bash
         run: |
           docker pull "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
@@ -756,6 +756,19 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ];
           then
             docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
+          fi
+          docker images
+
+      - name: Docker load spawner humble image
+        shell: bash
+        run: |
+          docker pull "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-humble:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-humble:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.IP_MIRROR_REGISTRY }}/qa/${{ inputs.product_name }}-humble:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-humble:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-humble:${{ needs.Build-Workspace.outputs.raised_version }}"
+          # if event is pr create ci tags
+          if [ "${{ github.event_name }}" = "pull_request" ];
+          then
+            docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-humble:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-humble:${{ needs.Build-Workspace.outputs.raised_version }}"
           fi
           docker images
 
@@ -1143,10 +1156,7 @@ jobs:
           fi
 
   Install-Simulator-Robot:
-    needs: [Validate-boostrap-configs, Normalize-Distro-Input, Build-Workspace, Build-Simulator]
-    strategy:
-      matrix:
-        workspace: ${{ fromJSON(needs.Normalize-Distro-Input.outputs.product_distro_list) }}
+    needs: [Validate-boostrap-configs, Build-Workspace, Build-Simulator]
     runs-on: integration-pipeline
     outputs:
       slack_thread_id: ${{ needs.Build-Workspace.outputs.slack_thread_id }}
@@ -1196,11 +1206,11 @@ jobs:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
 
-      - name: unstash robot_jsons_${{ matrix.workspace['distro'] }}
+      - name: unstash robot_jsons_noetic
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         uses: actions/download-artifact@v5
         with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_${{ matrix.workspace['distro'] }}
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_noetic
           path: .
 
 
@@ -1219,19 +1229,32 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.IP_MIRROR_REGISTRY }}
 
-      - name: Docker load spawner image
+      - name: Docker load spawner noetic image
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         shell: bash
         run: |
-          docker pull "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
-          docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.IP_MIRROR_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
-          docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker pull "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.IP_MIRROR_REGISTRY }}/qa/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
           # if event is pr create ci tags
           if [ "${{ github.event_name }}" = "pull_request" ];
           then
-            docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}:${{ needs.Build-Workspace.outputs.raised_version }}"
+            docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-noetic:${{ needs.Build-Workspace.outputs.raised_version }}"
           fi
           # print out docker images for debug purposes
+          docker images
+
+      - name: Docker load spawner humble image
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        shell: bash
+        run: |
+          docker pull "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-humble:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-humble:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.IP_MIRROR_REGISTRY }}/qa/${{ inputs.product_name }}-humble:${{ needs.Build-Workspace.outputs.raised_version }}"
+          docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-humble:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-humble:${{ needs.Build-Workspace.outputs.raised_version }}"
+          if [ "${{ github.event_name }}" = "pull_request" ];
+          then
+            docker tag "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-humble:${{ needs.Build-Workspace.outputs.raised_version }}" "${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-humble:${{ needs.Build-Workspace.outputs.raised_version }}"
+          fi
           docker images
 
       - name: Docker load simulator image
@@ -1261,7 +1284,7 @@ jobs:
 
           mkdir -p artifacts
           cp *.json artifacts/
-          CONFIG_FILE_NAME="standalone-${{ inputs.product_name }}-simulator-${{ matrix.workspace['distro'] }}.json"
+          CONFIG_FILE_NAME="standalone-${{ inputs.product_name }}-simulator-noetic.json"
           sudo rm -rf $USERSPACE_FOLDER_PATH || true
           sudo mkdir -p $USERSPACE_FOLDER_PATH $USERSPACE_FOLDER_PATH/models_database $USERSPACE_FOLDER_PATH/tugbot_ignition
           sudo chmod 777 -R $USERSPACE_FOLDER_PATH
@@ -1313,7 +1336,7 @@ jobs:
             set -e
             export PATH="$HOME/.local/bin:$PATH"
             python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
-            mobtest proj /opt/ros/${{ matrix.workspace['distro'] }}/share/
+            mobtest proj /opt/ros/noetic/share/
           '
 
       - name: Output simulator image
