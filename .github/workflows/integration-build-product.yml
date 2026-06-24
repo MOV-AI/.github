@@ -982,11 +982,11 @@ jobs:
           python3 -m pip install --upgrade pyOpenSSL cryptography
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
-      - name: unstash ci_artifacts (sim configs)
+      - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
         uses: actions/download-artifact@v5
         with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}ci_artifacts
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts
 
       - name: unstash manifest
@@ -1320,6 +1320,39 @@ jobs:
           push_name=$(echo "$sim_img_name" | sed "s-${{ env.IP_MIRROR_REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
           echo "image_name=$push_name" >> $GITHUB_OUTPUT
 
+      - name: Collect Installed components
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        shell: bash
+        run: |
+          container_id=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace-.*)")
+          docker exec -t "$container_id" bash -c '
+            set -e
+            ls -la /tmp
+            {
+                echo 'Annotation:*'
+                echo 'Callback:*'
+                echo 'Configuration:*'
+                echo 'Flow:*'
+                echo 'GraphicScene:*'
+                echo 'Layout:*'
+                echo 'Node:*'
+                echo 'Package:*'
+            } >> /tmp/manifest.txt
+            mkdir /tmp/proj_metadata
+            python3 -m tools.backup -p /tmp/proj_metadata/ -m /tmp/manifest.txt -a export -i
+          ' || true
+            mkdir -p metadata_artifact tmp_meta
+            docker cp $container_id:/tmp/proj_metadata/ ./
+            tar cvzf ./metadata_artifact/sim_metadata.tar.gz ./proj_metadata
+
+      - name: stash Sim project metadata
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}project_sim_metadata
+          path: metadata_artifact/*
+          retention-days: 3
+
       - name: Get current job id
         if: always()
         shell: bash
@@ -1453,11 +1486,11 @@ jobs:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
 
-      - name: unstash ci_artifacts (sim configs)
+      - name: unstash sim_configs
         if: ${{ inputs.with_simulation_tests }}
         uses: actions/download-artifact@v5
         with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}ci_artifacts
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts
 
       - name: unstash robot_jsons_noetic
@@ -2195,11 +2228,11 @@ jobs:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
 
-      - name: unstash ci_artifacts (sim configs)
+      - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
         uses: actions/download-artifact@v5
         with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}ci_artifacts
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts
 
       - name: unstash project metadata
