@@ -762,7 +762,7 @@ jobs:
 
           mkdir -p artifacts
           cp *.json artifacts/
-          CONFIG_FILE_NAME=${{ inputs.product_name }}-${{ matrix.workspace['distro'] }}.json
+          CONFIG_FILE_NAME=${{ inputs.product_name }}-noetic.json
 
           python3 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
