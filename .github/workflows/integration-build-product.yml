@@ -357,6 +357,7 @@ jobs:
 
           mkdir simulator_artifacts
           cp ci_artifacts/* ./simulator_artifacts
+          [ -f simulator.state ] && cp simulator.state ./simulator_artifacts/
           fi
 
       - name: raise
@@ -559,14 +560,6 @@ jobs:
           done
           deactivate
 
-      - name: Stash manifest
-        if: ${{ matrix.workspace['distro'] == 'noetic' }}
-        uses: actions/upload-artifact@v5
-        with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
-          path: product-manifest.yaml
-          retention-days: 5
-
       - name: Lint docker image
         shell: bash
         run: |
@@ -719,12 +712,6 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
-          path: .
-
-      - name: unstash manifest
-        uses: actions/download-artifact@v5
-        with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
 
       - name: unstash robot_jsons_noetic
@@ -1008,13 +995,6 @@ jobs:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts
 
-      - name: unstash manifest
-        if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v5
-        with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
-          path: .
-
       - name: Prepare Skip variables
         id: pre_simulator_build
         if: ${{ inputs.with_simulation == 'true' }}
@@ -1198,13 +1178,6 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
-          path: .
-
-      - name: unstash manifest
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v5
-        with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
           path: .
 
       - name: unstash robot_jsons_noetic
@@ -1508,13 +1481,6 @@ jobs:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: .
 
-      - name: unstash manifest
-        if: ${{ inputs.with_simulation_tests }}
-        uses: actions/download-artifact@v5
-        with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
-          path: .
-
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation_tests }}
         uses: actions/download-artifact@v5
@@ -1528,6 +1494,12 @@ jobs:
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_noetic
           path: .
+
+      - name: Copy manifest from raised_meta
+        if: ${{ inputs.with_simulation_tests }}
+        shell: bash
+        run: |
+          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
 
       - name: Setup infra environment configs
         id: infra_env_configs_setup
@@ -2259,13 +2231,6 @@ jobs:
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}deploy_artifacts_noetic
           path: artifacts
-
-      - name: unstash manifest
-        if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v5
-        with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
-          path: .
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
