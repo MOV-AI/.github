@@ -417,13 +417,6 @@ jobs:
             ci_artifacts/
           retention-days: 5
 
-      - name: Stash ci_artifacts
-        uses: actions/upload-artifact@v5
-        with:
-          name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}ci_artifacts
-          path: ci_artifacts/
-          retention-days: 5
-
       - name: Stash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
         uses: actions/upload-artifact@v5
@@ -513,12 +506,6 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}all_robot_configs
-          path: .
-
-      - name: Unstash ci_artifacts
-        uses: actions/download-artifact@v5
-        with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}ci_artifacts
           path: .
 
       - name: Update robot jsons to use ci project
@@ -671,14 +658,6 @@ jobs:
               "thread_ts": "${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}"
             }
 
-      - name: Stash robot_jsons_noetic
-        if: ${{ matrix.workspace['distro'] == 'noetic' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_noetic
-          path: "*.json*"
-          retention-days: 10
-
       - name: Docker cleanups
         if: always()
         shell: bash
@@ -713,10 +692,10 @@ jobs:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: .
 
-      - name: unstash robot_jsons_noetic
+      - name: Unstash All Robot Configs
         uses: actions/download-artifact@v5
         with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_noetic
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}all_robot_configs
           path: .
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
@@ -1179,11 +1158,11 @@ jobs:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: .
 
-      - name: unstash robot_jsons_noetic
+      - name: Unstash All Robot Configs
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         uses: actions/download-artifact@v5
         with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_noetic
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}all_robot_configs
           path: .
 
 
@@ -1478,7 +1457,7 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
-          path: .
+          path: platform_configs
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation_tests }}
@@ -1487,11 +1466,11 @@ jobs:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts
 
-      - name: unstash robot_jsons_noetic
+      - name: Unstash All Robot Configs
         if: ${{ inputs.with_simulation_tests }}
         uses: actions/download-artifact@v5
         with:
-          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}robot_jsons_noetic
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}all_robot_configs
           path: .
 
       - name: Copy manifest from raised_meta
@@ -1767,7 +1746,7 @@ jobs:
         shell: bash
         run: scp -r -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no simulator_artifacts ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/simulator_artifacts
 
-      - name: Remote - unstash robot_jsons_noetic
+      - name: Remote - unstash all_robot_configs
         if: ${{ inputs.with_simulation_tests }}
         shell: bash
         run: scp -r -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no *.json* ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
