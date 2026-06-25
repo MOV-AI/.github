@@ -357,7 +357,6 @@ jobs:
 
           mkdir simulator_artifacts
           cp ci_artifacts/* ./simulator_artifacts
-          [ -f simulator.state ] && cp simulator.state ./simulator_artifacts/
           fi
 
       - name: raise
