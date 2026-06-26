@@ -47,7 +47,6 @@ env:
   AWS_DEFAULT_REGION: ${{ inputs.aws_region }}
 
 jobs:
-
   Deploy:
     runs-on: ubuntu-22.04
     container:
@@ -55,10 +54,14 @@ jobs:
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          apk add --no-cache bash curl jq openssl
 
       - name: Set eks context and get pods
         shell: bash
@@ -145,7 +148,6 @@ jobs:
           commit_hash=$(git log --format="%H" -n 1)
           echo "commit_id=${commit_hash}" >> $GITHUB_OUTPUT
 
-
       - name: Create Github Release
         if: ${{ inputs.promotion == false }}
         id: create_gh_release
@@ -158,7 +160,6 @@ jobs:
           token: ${{ secrets.gh_token }}
           prerelease: true
           generate_release_notes: true
-
 
       - name: Get current job id
         if: always()
