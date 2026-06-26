@@ -990,17 +990,10 @@ jobs:
         id: pre_simulator_build
         if: ${{ inputs.with_simulation == 'true' }}
         run: |
-          if [ ! -f "simulator_artifacts/simulator_base.ci" ] || [ ! -f "simulator_artifacts/version" ]; then
-            echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
+          if [ ! -f "simulator_artifacts/version" ]; then
+            echo "skip_simulator_build=true" >> $GITHUB_OUTPUT
           else
-            git config --global --add safe.directory $(pwd)
-            dockerfile_changed=$(git diff HEAD -- docker/${{ env.DISTRO }}/Dockerfile-simulator | wc -l)
-
-            if [ "$dockerfile_changed" -gt 0 ]; then
-              echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
-            else
-              echo "skip_simulator_build=true" >> $GITHUB_OUTPUT
-            fi
+            echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
           fi
           echo "image_name=${{ env.PUSH_REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
 
