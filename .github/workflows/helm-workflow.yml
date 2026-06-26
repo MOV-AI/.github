@@ -51,7 +51,7 @@ jobs:
   Deploy:
     runs-on: ubuntu-22.04
     container:
-      image: registry.cloud.mov.ai/qa/tf-buildserver:v1.0.7
+      image: registry.cloud.mov.ai/qa/tf-buildserver:v1.1.1
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
