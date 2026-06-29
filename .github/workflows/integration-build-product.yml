@@ -826,7 +826,7 @@ jobs:
             touch proj_metadata/metadata.tar.gz
             touch metadata_artifact/metadata.tar.gz
 
-            CONFIG_FILE_NAME=${{ inputs.product_name }}-noetic.json
+            CONFIG_FILE_NAME=spawner-solution-noetic.json
 
             echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-noetic:$(cat product.version)">artifacts/product-noetic.image.artifact
 
