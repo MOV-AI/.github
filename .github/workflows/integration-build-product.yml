@@ -813,20 +813,61 @@ jobs:
         if: always()
         shell: bash
         run: |
+          set -e
+          movai-cli apt_cache stop || true
+          movai-cli apt_cache disable || true
+
+          robots_str=$(movai-cli robots list)
+          readarray -t robots <<< "$robots_str"
+
+          if [ "${#robots[@]}" -gt 1 ]; then
+            echo "There is more than one robot. There was a bad cleanup somewhere."
+            exit 1
+          fi
+
+          movai-cli restart "${robots[0]}"
+          sleep 5
+
+          wget https://movai-scripts.s3.amazonaws.com/wait_robot_start.bash
+          chmod +x ./wait_robot_start.bash
+          ./wait_robot_start.bash
+          echo "image list:"
+          docker images
+          echo "container list:"
+          docker ps -a
+          container_id=$(docker ps -q -f "ancestor=$REGISTRY/qa/${{ inputs.product_name }}-noetic:$(cat product.version)")
+          docker exec -t "$container_id" bash -c '
             set -e
-            mkdir -p artifacts proj_metadata metadata_artifact
-            cp *.json artifacts/
+            sudo apt update
+            export PATH="$HOME/.local/bin:$PATH"
+            python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple movai-package-deployer==${{ env.PACKAGE_DEPLOYER_VERSION }} --ignore-installed
+            package-deployer scan
+            package-deployer scanAll
+            ls -la /tmp
 
-            touch artifacts/${{ inputs.product_name }}-noetic-deployable.dploy
-            touch artifacts/${{ inputs.product_name }}-noetic-3rdParty.dploy
-            touch artifacts/${{ inputs.product_name }}-noetic-apt_packages.json
-            echo '{"packages": []}' > artifacts/${{ inputs.product_name }}-noetic-apt_packages.json
-            echo '{"packages": []}' > artifacts/${{ inputs.product_name }}-noetic-deployable.dploy
-            echo '{"packages": []}' > artifacts/${{ inputs.product_name }}-noetic-3rdParty.dploy
-            touch proj_metadata/metadata.tar.gz
-            touch metadata_artifact/metadata.tar.gz
+            {
+                echo 'Annotation:*'
+                echo 'Callback:*'
+                echo 'Configuration:*'
+                echo 'Flow:*'
+                echo 'GraphicScene:*'
+                echo 'Layout:*'
+                echo 'Node:*'
+                echo 'Package:*'
+            } >> /tmp/manifest.txt
+            mkdir /tmp/proj_metadata
+            echo "Scans finished. Starting backup of metadata"
+            python3 -m tools.backup -p /tmp/proj_metadata/ -m /tmp/manifest.txt -a export -i
+            tar czf /tmp/proj_metadata.tar.gz -C /tmp proj_metadata
+            echo "backup of metadata finished"
+          ' || true
+            echo "export finished"
+            docker cp $container_id:/tmp/deployable.dploy artifacts/${{ inputs.product_name }}-noetic-deployable.dploy
+            docker cp $container_id:/tmp/undeployable.dploy artifacts/${{ inputs.product_name }}-noetic-3rdParty.dploy
+            docker cp $container_id:/tmp/apt_packages.json artifacts/${{ inputs.product_name }-noetic-apt_packages.json
 
-            CONFIG_FILE_NAME=spawner-solution-noetic.json
+            mkdir -p metadata_artifact tmp_meta
+            docker cp $container_id:/tmp/proj_metadata.tar.gz ./metadata_artifact/metadata.tar.gz
 
             echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-noetic:$(cat product.version)">artifacts/product-noetic.image.artifact
 
