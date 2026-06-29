@@ -864,7 +864,7 @@ jobs:
             echo "export finished"
             docker cp $container_id:/tmp/deployable.dploy artifacts/${{ inputs.product_name }}-noetic-deployable.dploy
             docker cp $container_id:/tmp/undeployable.dploy artifacts/${{ inputs.product_name }}-noetic-3rdParty.dploy
-            docker cp $container_id:/tmp/apt_packages.json artifacts/${{ inputs.product_name }-noetic-apt_packages.json
+            docker cp $container_id:/tmp/apt_packages.json artifacts/${{ inputs.product_name }}-noetic-apt_packages.json
 
             mkdir -p metadata_artifact tmp_meta
             docker cp $container_id:/tmp/proj_metadata.tar.gz ./metadata_artifact/metadata.tar.gz
