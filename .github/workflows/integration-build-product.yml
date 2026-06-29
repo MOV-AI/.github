@@ -755,7 +755,7 @@ jobs:
 
           mkdir -p artifacts
           cp *.json artifacts/
-          CONFIG_FILE_NAME=${{ inputs.product_name }}-noetic.json
+          CONFIG_FILE_NAME=spawner-solution-noetic.json
 
           python3 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
