@@ -817,12 +817,12 @@ jobs:
             mkdir -p artifacts proj_metadata metadata_artifact
             cp *.json artifacts/
 
-            touch artifacts/spawner-solution-noetic-deployable.dploy
-            touch artifacts/spawner-solution-noetic-3rdParty.dploy
-            touch artifacts/spawner-solution-noetic-apt_packages.json
-            echo '{"packages": []}' > artifacts/spawner-solution-noetic-apt_packages.json
-            echo '{"packages": []}' > artifacts/spawner-solution-noetic-deployable.dploy
-            echo '{"packages": []}' > artifacts/spawner-solution-noetic-3rdParty.dploy
+            touch artifacts/{{ inputs.product_name }}-noetic-deployable.dploy
+            touch artifacts/{{ inputs.product_name }}-noetic-3rdParty.dploy
+            touch artifacts/{{ inputs.product_name }}-noetic-apt_packages.json
+            echo '{"packages": []}' > artifacts/{{ inputs.product_name }}-noetic-apt_packages.json
+            echo '{"packages": []}' > artifacts/{{ inputs.product_name }}-noetic-deployable.dploy
+            echo '{"packages": []}' > artifacts/{{ inputs.product_name }}-noetic-3rdParty.dploy
             touch proj_metadata/metadata.tar.gz
             touch metadata_artifact/metadata.tar.gz
 
@@ -1244,7 +1244,7 @@ jobs:
 
           mkdir -p artifacts
           cp *.json artifacts/
-          CONFIG_FILE_NAME="standalone-${{ inputs.product_name }}-simulator-noetic.json"
+          CONFIG_FILE_NAME="standalone-spawner-solution-simulator-noetic.json"
           sudo rm -rf $USERSPACE_FOLDER_PATH || true
           sudo mkdir -p $USERSPACE_FOLDER_PATH $USERSPACE_FOLDER_PATH/models_database $USERSPACE_FOLDER_PATH/tugbot_ignition
           sudo chmod 777 -R $USERSPACE_FOLDER_PATH
@@ -1832,7 +1832,7 @@ jobs:
 
           mkdir -p artifacts
           cp *.json artifacts/
-          CONFIG_FILE_NAME="standalone-${{ inputs.product_name }}-simulator-noetic.json"
+          CONFIG_FILE_NAME="standalone-spawner-solution-simulator-noetic.json"
           export PATH="$HOME/.local/bin:$PATH"
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
           integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
