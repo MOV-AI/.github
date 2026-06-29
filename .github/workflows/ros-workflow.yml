@@ -104,7 +104,7 @@ jobs:
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.lis.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
+      image: registry.hel.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -284,7 +284,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 90
     container:
-      image: registry.lis.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
+      image: registry.hel.mov.ai/qa/ros-buildtools-${{ matrix.distro }}:${{ inputs.ROS_BUILDTOOLS_TAG }}
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -333,7 +333,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs:  [Package-Install-Test,Test]
     container:
-      image: registry.lis.mov.ai/qa/ros-buildtools-noetic:${{ inputs.ROS_BUILDTOOLS_TAG }}
+      image: registry.hel.mov.ai/qa/ros-buildtools-noetic:${{ inputs.ROS_BUILDTOOLS_TAG }}
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -468,7 +468,7 @@ jobs:
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.lis.mov.ai/qa/ros-buildtools-noetic:${{ inputs.ROS_BUILDTOOLS_TAG }}
+      image: registry.hel.mov.ai/qa/ros-buildtools-noetic:${{ inputs.ROS_BUILDTOOLS_TAG }}
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
