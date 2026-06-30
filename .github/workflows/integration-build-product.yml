@@ -674,7 +674,7 @@ jobs:
           docker image prune --all -f
 
   Install-Robot:
-    needs: [Validate-boostrap-configs, Build-Workspace]
+    needs: [Validate-boostrap-configs, Normalize-Distro-Input, Build-Workspace]
     runs-on: integration-pipeline
     steps:
       - uses: rtCamp/action-cleanup@master
@@ -1154,7 +1154,7 @@ jobs:
           fi
 
   Install-Simulator-Robot:
-    needs: [Validate-boostrap-configs, Build-Workspace, Build-Simulator]
+    needs: [Validate-boostrap-configs, Normalize-Distro-Input, Build-Workspace, Build-Simulator]
     runs-on: integration-pipeline
     outputs:
       slack_thread_id: ${{ needs.Build-Workspace.outputs.slack_thread_id }}
@@ -1440,7 +1440,7 @@ jobs:
           docker image prune --all -f
 
   Validation-Simulator-Tests:
-    needs: [Validate-boostrap-configs, Compute-timeout, Build-Workspace, Build-Simulator]
+    needs: [Validate-boostrap-configs, Compute-timeout, Normalize-Distro-Input, Build-Workspace, Build-Simulator]
     runs-on: ${{ needs.Build-Simulator.outputs.simulator_tests_agent_name }}
     if: ${{ github.event_name != 'pull_request'}}
     timeout-minutes: ${{ fromJSON(needs.Compute-timeout.outputs.jobtimeout) }}
