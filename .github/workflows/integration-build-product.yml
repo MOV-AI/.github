@@ -151,7 +151,7 @@ env:
   USERSPACE_FOLDER_PATH: /opt/movai/userspace
   REMOTE_WORKSPACE_PATH: workspace
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.2.0-1"
+  PROVISION_INFRA_VERSION: "2.2.0-2"
   DEVOPS_SLACK_CHANNEL: "G0102LEV1CL"
   # slack channel movai-projects
   SLACK_CHANNEL: ${{ inputs.overwrite_slack_channel }}
@@ -161,7 +161,7 @@ env:
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   TIMEOUT: 720
-  PROVISIONING_ENV_CONF: "0.2.2-4"
+  PROVISIONING_ENV_CONF: "0.2.2-5"
 
 jobs:
   Compute-timeout:
@@ -1469,11 +1469,12 @@ jobs:
       - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
-          python3 -m venv .ci-venv --clear
+          python3.9 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
-          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install --upgrade pyOpenSSL cryptography
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          [ -f ci-requirements.txt ] && python3.9 -m pip install -r ci-requirements.txt
+          python3.9 -m pip install --upgrade pyOpenSSL cryptography
+          extra_args="-i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple"
+          python3.9 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed $extra_args
 
       - name: Check AWS Cli
         shell: bash
