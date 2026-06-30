@@ -723,9 +723,7 @@ jobs:
       - name: Docker load workspaces images
         shell: bash
         run: |
-          echo "Raw product_distro_list: '${{ needs.Normalize-Distro-Input.outputs.product_distro_list }}'"
           DISTROS=$(echo '${{ needs.Normalize-Distro-Input.outputs.product_distro_list }}' | jq -r '.[] | .distro')
-          echo "Extracted DISTROS: $DISTROS"
 
           for distro in $DISTROS; do
             echo "Processing workspaces image for distro: ${distro}"
