@@ -835,7 +835,7 @@ jobs:
           docker images
           echo "container list:"
           docker ps -a
-          container_id=$(docker ps -q -f "ancestor=$REGISTRY/qa/${{ inputs.product_name }}-noetic:$(cat product.version)")
+          container_id=$(docker ps -q -f "ancestor=$PUSH_REGISTRY/qa/${{ inputs.product_name }}-noetic:$(cat product.version)")
           docker exec -t "$container_id" bash -c '
             set -e
             sudo apt update
