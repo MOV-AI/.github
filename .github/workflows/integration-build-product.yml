@@ -775,7 +775,7 @@ jobs:
           rm quickstart_version
 
       - name: Collect Install logs
-        if: ${{ always() }}
+        if: always()
         continue-on-error: true
         run: |
           # cleanup
@@ -785,7 +785,7 @@ jobs:
 
       - name: Stash Install logs artifacts
         continue-on-error: true
-        if: ${{ always() }}
+        if: always()
         uses: actions/upload-artifact@v5
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}install_logs
