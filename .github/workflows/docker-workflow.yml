@@ -354,6 +354,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build image and push to /ci/
+        id: build_ci_image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -370,11 +371,19 @@ jobs:
           pull: true
           build-args: ${{ steps.get_build_args.outputs.build_args_str_list }}
 
+      - name: Re-login to Private Registry before CI SBOM
+        if: ${{ inputs.generate_sbom }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ inputs.docker_registry }}
+
       - name: Generate and attach CycloneDX SBOM to /ci/ image
         if: ${{ inputs.generate_sbom }}
         uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@feat/docker_sbom_cycloneDX
         with:
-          image: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
+          image: ${{ format('{0}@{1}', steps.get_image_names.outputs.DOCKER_IMAGES, steps.build_ci_image.outputs.digest) }}
           sbom_file: sbom-ci-${{ matrix.name }}.cyclonedx.json
           artifact_name: sbom-ci-${{ matrix.name }}
   test:
@@ -490,7 +499,14 @@ jobs:
           echo "Pushing to official registry with version tag..."
           docker tag "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}" \
                      "${OFFICIAL_IMAGE}"
-          docker push "${OFFICIAL_IMAGE}"
+          OFFICIAL_PUSH_OUTPUT="$(docker push "${OFFICIAL_IMAGE}" 2>&1)"
+          echo "${OFFICIAL_PUSH_OUTPUT}"
+          OFFICIAL_DIGEST="$(printf '%s\n' "${OFFICIAL_PUSH_OUTPUT}" | awk '/digest: sha256:/ { print $2; exit }')"
+          if [ -z "${OFFICIAL_DIGEST}" ]; then
+            echo "Failed to capture digest for pushed image ${OFFICIAL_IMAGE}"
+            exit 1
+          fi
+          echo "digest=${OFFICIAL_DIGEST}" | tee -a "$GITHUB_OUTPUT"
           echo "✓ Successfully pushed version tag to official registry"
 
           # Handle latest tag
@@ -542,7 +558,7 @@ jobs:
         if: ${{ inputs.generate_sbom }}
         uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@feat/docker_sbom_cycloneDX
         with:
-          image: ${{ steps.push_images.outputs.image }}
+          image: ${{ format('{0}@{1}', steps.push_images.outputs.image, steps.push_images.outputs.digest) }}
           sbom_file: sbom-official-${{ matrix.name }}.cyclonedx.json
           artifact_name: sbom-official-${{ matrix.name }}
 

@@ -5,6 +5,10 @@ inputs:
   image:
     description: Fully qualified image reference with tag
     required: true
+  digest:
+    description: Image digest (sha256:...) for exact pushed reference; if omitted, digest is resolved from image
+    required: false
+    default: ""
   sbom_file:
     description: Output file for generated CycloneDX JSON
     required: false
@@ -21,10 +25,38 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Resolve image subject reference
+      id: resolve_subject
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        DIGEST_INPUT: ${{ inputs.digest }}
+      run: |
+        set -e -o pipefail
+
+        DIGEST="${DIGEST_INPUT}"
+        if [ -z "${DIGEST}" ] && [[ "${IMAGE}" == *@sha256:* ]]; then
+          DIGEST="${IMAGE##*@}"
+        fi
+        if [ -z "${DIGEST}" ]; then
+          DIGEST="$(docker buildx imagetools inspect "${IMAGE}" | awk '/Digest:/ { print $2; exit }')"
+        fi
+
+        if [ -z "${DIGEST}" ]; then
+          echo "Failed to resolve digest for ${IMAGE}"
+          exit 1
+        fi
+
+        SUBJECT_REF="${IMAGE%@*}@${DIGEST}"
+        echo "Using subject reference: ${SUBJECT_REF}"
+
+        echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+        echo "subject_ref=${SUBJECT_REF}" >> "$GITHUB_OUTPUT"
+
     - name: Generate CycloneDX SBOM
       uses: anchore/sbom-action@v0
       with:
-        image: ${{ inputs.image }}
+        image: ${{ steps.resolve_subject.outputs.subject_ref }}
         format: cyclonedx-json
         output-file: ${{ inputs.sbom_file }}
 
@@ -36,18 +68,11 @@ runs:
     - name: Attach CycloneDX SBOM as Harbor accessory
       shell: bash
       env:
-        IMAGE: ${{ inputs.image }}
+        SUBJECT_REF: ${{ steps.resolve_subject.outputs.subject_ref }}
         SBOM_FILE: ${{ inputs.sbom_file }}
       run: |
         set -e -o pipefail
 
-        DIGEST="$(docker buildx imagetools inspect "${IMAGE}" | awk '/Digest:/ { print $2; exit }')"
-        if [ -z "${DIGEST}" ]; then
-          echo "Failed to resolve digest for ${IMAGE}"
-          exit 1
-        fi
-
-        SUBJECT_REF="${IMAGE%@*}@${DIGEST}"
         echo "Attaching SBOM to subject: ${SUBJECT_REF}"
 
         oras attach \
