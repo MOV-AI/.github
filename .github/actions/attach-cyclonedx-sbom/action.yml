@@ -62,8 +62,6 @@ runs:
 
     - name: Set up ORAS
       uses: oras-project/setup-oras@v2
-      with:
-        version: 1.3.2
 
     - name: Attach CycloneDX SBOM as Harbor accessory
       shell: bash
