@@ -371,6 +371,13 @@ jobs:
           build-args: ${{ steps.get_build_args.outputs.build_args_str_list }}
           secrets: ${{ steps.get_secret_args.outputs.build_secrets_args_str_list }}
 
+      - name: Generate and attach CycloneDX SBOM to /ci/ image
+        if: ${{ inputs.generate_sbom }}
+        uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@feat/docker_sbom_cycloneDX
+        with:
+          image: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
+          artifact_name: sbom
+
   test:
     needs: [raise-version, build, parse-matrix]
     if: ${{ inputs.deploy && needs.build.result == 'success' }}
