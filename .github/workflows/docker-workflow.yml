@@ -177,7 +177,7 @@ jobs:
           fi
 
       - name: Upload release notes template
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-notes
           path: release_notes_template.md
@@ -369,7 +369,6 @@ jobs:
           target: ${{ matrix.target }}
           pull: true
           build-args: ${{ steps.get_build_args.outputs.build_args_str_list }}
-          secrets: ${{ steps.get_secret_args.outputs.build_secrets_args_str_list }}
 
       - name: Generate and attach CycloneDX SBOM to /ci/ image
         if: ${{ inputs.generate_sbom }}
@@ -546,6 +545,7 @@ jobs:
           image: ${{ steps.push_images.outputs.image }}
           sbom_file: sbom-official-${{ matrix.name }}.cyclonedx.json
           artifact_name: sbom-official-${{ matrix.name }}
+
       - name: Install bump-my-version for pushing version changes
         if: ${{ inputs.version == 'auto' && matrix.name == needs.parse-matrix.outputs.first_image }}
         run: python3 -m pip install bump-my-version
@@ -588,6 +588,7 @@ jobs:
         with:
           pattern: sbom-*
           merge-multiple: true
+
       - name: Replace version placeholder and append metadata
         env:
           VERSION: ${{ needs.raise-version.outputs.package_version }}
