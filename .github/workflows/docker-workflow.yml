@@ -92,6 +92,11 @@ on:
         type: boolean
         default: false
         description: boolean to create GitHub Release with build metadata and digests (requires commit_token secret)
+      generate_sbom:
+        required: false
+        type: boolean
+        default: true
+        description: boolean to generate CycloneDX SBOM and attach it as Harbor accessory
     secrets:
       registry_user:
         required: true
@@ -172,7 +177,7 @@ jobs:
           fi
 
       - name: Upload release notes template
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-notes
           path: release_notes_template.md
@@ -349,6 +354,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build image and push to /ci/
+        id: build_ci_image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -364,8 +370,22 @@ jobs:
           target: ${{ matrix.target }}
           pull: true
           build-args: ${{ steps.get_build_args.outputs.build_args_str_list }}
-          secrets: ${{ steps.get_secret_args.outputs.build_secrets_args_str_list }}
 
+      - name: Re-login to Private Registry before CI SBOM
+        if: ${{ inputs.generate_sbom }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ inputs.docker_registry }}
+
+      - name: Generate and attach CycloneDX SBOM to /ci/ image
+        if: ${{ inputs.generate_sbom }}
+        uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@v3
+        with:
+          image: ${{ format('{0}@{1}', steps.get_image_names.outputs.DOCKER_IMAGES, steps.build_ci_image.outputs.digest) }}
+          sbom_file: sbom-ci-${{ matrix.name }}.cyclonedx.json
+          artifact_name: sbom-ci-${{ matrix.name }}
   test:
     needs: [raise-version, build, parse-matrix]
     if: ${{ inputs.deploy && needs.build.result == 'success' }}
@@ -454,6 +474,7 @@ jobs:
           registry: ${{ inputs.github_registry }}
 
       - name: Distribute images to official and public registries
+        id: push_images
         env:
           VERSION: ${{ needs.raise-version.outputs.package_version }}
           LATEST: ${{ inputs.push_latest }}
@@ -466,6 +487,8 @@ jobs:
           # Extract image directory and name
           OFC_IMAGE_DIR="${DOCKER_IMAGE%%/*}"
           OFC_IMAGE_NAME="${DOCKER_IMAGE#*/}"
+          OFFICIAL_IMAGE="${DOCKER_REGISTRY}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:${VERSION}"
+          echo "image=${OFFICIAL_IMAGE}" | tee -a "$GITHUB_OUTPUT"
 
           # Pull from CI directory
           echo "Pulling image from CI registry..."
@@ -475,8 +498,15 @@ jobs:
           # Push to official directory with version tag
           echo "Pushing to official registry with version tag..."
           docker tag "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}" \
-                     "${DOCKER_REGISTRY}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:${VERSION}"
-          docker push "${DOCKER_REGISTRY}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:${VERSION}"
+                     "${OFFICIAL_IMAGE}"
+          OFFICIAL_PUSH_OUTPUT="$(docker push "${OFFICIAL_IMAGE}" 2>&1)"
+          echo "${OFFICIAL_PUSH_OUTPUT}"
+          OFFICIAL_DIGEST="$(printf '%s\n' "${OFFICIAL_PUSH_OUTPUT}" | awk '/digest: sha256:/ { print $2; exit }')"
+          if [ -z "${OFFICIAL_DIGEST}" ]; then
+            echo "Failed to capture digest for pushed image ${OFFICIAL_IMAGE}"
+            exit 1
+          fi
+          echo "digest=${OFFICIAL_DIGEST}" | tee -a "$GITHUB_OUTPUT"
           echo "✓ Successfully pushed version tag to official registry"
 
           # Handle latest tag
@@ -524,6 +554,14 @@ jobs:
 
           echo "✓ Image distribution completed successfully"
 
+      - name: Generate and attach CycloneDX SBOM
+        if: ${{ inputs.generate_sbom }}
+        uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@v3
+        with:
+          image: ${{ format('{0}@{1}', steps.push_images.outputs.image, steps.push_images.outputs.digest) }}
+          sbom_file: sbom-official-${{ matrix.name }}.cyclonedx.json
+          artifact_name: sbom-official-${{ matrix.name }}
+
       - name: Install bump-my-version for pushing version changes
         if: ${{ inputs.version == 'auto' && matrix.name == needs.parse-matrix.outputs.first_image }}
         run: python3 -m pip install bump-my-version
@@ -560,6 +598,13 @@ jobs:
         with:
           name: release-notes
 
+      - name: Download CycloneDX SBOM artifacts
+        if: ${{ inputs.generate_sbom }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sbom-*
+          merge-multiple: true
+
       - name: Replace version placeholder and append metadata
         env:
           VERSION: ${{ needs.raise-version.outputs.package_version }}
@@ -591,4 +636,12 @@ jobs:
           body_path: release_body.md
           draft: false
           prerelease: true
+          token: ${{ secrets.commit_token }}
+
+      - name: Upload CycloneDX SBOMs to GitHub Release
+        if: ${{ inputs.generate_sbom }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.raise-version.outputs.package_version }}
+          files: sbom-*.cyclonedx.json
           token: ${{ secrets.commit_token }}
