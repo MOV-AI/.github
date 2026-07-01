@@ -1,0 +1,64 @@
+name: Attach CycloneDX SBOM
+description: Generate CycloneDX SBOM for a pushed image and attach it as OCI accessory using ORAS
+
+inputs:
+  image:
+    description: Fully qualified image reference with tag
+    required: true
+  sbom_file:
+    description: Output file for generated CycloneDX JSON
+    required: false
+    default: sbom.cyclonedx.json
+  artifact_name:
+    description: GitHub artifact name used for the SBOM file
+    required: false
+    default: sbom
+  upload_artifact:
+    description: Upload SBOM as GitHub artifact
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Generate CycloneDX SBOM
+      uses: anchore/sbom-action@v0
+      with:
+        image: ${{ inputs.image }}
+        format: cyclonedx-json
+        output-file: ${{ inputs.sbom_file }}
+
+    - name: Set up ORAS
+      uses: oras-project/setup-oras@v2
+
+    - name: Attach CycloneDX SBOM as Harbor accessory
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        SBOM_FILE: ${{ inputs.sbom_file }}
+      run: |
+        set -e -o pipefail
+
+        DIGEST="$(docker buildx imagetools inspect "${IMAGE}" | awk '/Digest:/ { print $2; exit }')"
+        if [ -z "${DIGEST}" ]; then
+          echo "Failed to resolve digest for ${IMAGE}"
+          exit 1
+        fi
+
+        SUBJECT_REF="${IMAGE%@*}@${DIGEST}"
+        echo "Attaching SBOM to subject: ${SUBJECT_REF}"
+
+        oras attach \
+          --artifact-type "sbom/cyclonedx" \
+          --annotation "org.opencontainers.artifact.description=CycloneDX SBOM" \
+          "${SUBJECT_REF}" \
+          "${SBOM_FILE}:application/vnd.cyclonedx+json"
+
+        echo "CycloneDX SBOM attached as Harbor accessory"
+
+    - name: Upload CycloneDX SBOM as GitHub artifact
+      if: ${{ inputs.upload_artifact == 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact_name }}
+        path: ${{ inputs.sbom_file }}
