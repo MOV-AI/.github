@@ -56,11 +56,6 @@ on:
         type: boolean
         default: true
         description: Flag to enable/disable the Robotic Stack Integration tests
-      generate_sbom:
-        required: false
-        type: boolean
-        default: true
-        description: Generate CycloneDX SBOM and attach it as Harbor accessory for pushed images
       provision_tf_env_repo:
         required: false
         type: string
@@ -591,13 +586,6 @@ jobs:
             BASE_IMAGE=${{ steps.pre_build.outputs.base_name }}
             CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
 
-      - name: Generate and attach simulator CycloneDX SBOM
-        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.generate_sbom }}
-        uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@feat/docker_sbom_cycloneDX
-        with:
-          image: ${{ env.REGISTRY }}/qa/${{ steps.pre_build.outputs.image_name }}
-          artifact_name: sbom-simulator
-
       - name: Collect Installed components
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
         shell: bash
@@ -820,13 +808,6 @@ jobs:
           git commit -m "[skip actions] Automatic Raise"
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
-
-      - name: Generate and attach backend CycloneDX SBOM
-        if: ${{ inputs.generate_sbom }}
-        uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@feat/docker_sbom_cycloneDX
-        with:
-          image: ${{ env.PUSH_REGISTRY }}/qa/${{ needs.Validations-Finish.outputs.backend_image }}
-          artifact_name: sbom-backend
 
       - name: Prepare raise variables
         id: pre_raise
