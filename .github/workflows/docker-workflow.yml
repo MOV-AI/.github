@@ -376,8 +376,8 @@ jobs:
         uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@feat/docker_sbom_cycloneDX
         with:
           image: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
-          artifact_name: sbom
-
+          sbom_file: sbom-ci-${{ matrix.name }}.cyclonedx.json
+          artifact_name: sbom-ci-${{ matrix.name }}
   test:
     needs: [raise-version, build, parse-matrix]
     if: ${{ inputs.deploy && needs.build.result == 'success' }}
@@ -544,8 +544,8 @@ jobs:
         uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@feat/docker_sbom_cycloneDX
         with:
           image: ${{ steps.push_images.outputs.image }}
-          artifact_name: sbom
-
+          sbom_file: sbom-official-${{ matrix.name }}.cyclonedx.json
+          artifact_name: sbom-official-${{ matrix.name }}
       - name: Install bump-my-version for pushing version changes
         if: ${{ inputs.version == 'auto' && matrix.name == needs.parse-matrix.outputs.first_image }}
         run: python3 -m pip install bump-my-version
@@ -582,12 +582,12 @@ jobs:
         with:
           name: release-notes
 
-      - name: Download CycloneDX SBOM artifact
+      - name: Download CycloneDX SBOM artifacts
         if: ${{ inputs.generate_sbom }}
         uses: actions/download-artifact@v4
         with:
-          name: sbom
-
+          pattern: sbom-*
+          merge-multiple: true
       - name: Replace version placeholder and append metadata
         env:
           VERSION: ${{ needs.raise-version.outputs.package_version }}
@@ -621,10 +621,10 @@ jobs:
           prerelease: true
           token: ${{ secrets.commit_token }}
 
-      - name: Upload CycloneDX SBOM to GitHub Release
+      - name: Upload CycloneDX SBOMs to GitHub Release
         if: ${{ inputs.generate_sbom }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.raise-version.outputs.package_version }}
-          name: Release v${{ needs.raise-version.outputs.package_version }}
-          files: sbom.cyclonedx.json
+          files: sbom-*.cyclonedx.json
+          token: ${{ secrets.commit_token }}
