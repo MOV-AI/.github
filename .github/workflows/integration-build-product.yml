@@ -1466,6 +1466,11 @@ jobs:
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
+      - name: Setup python3.9
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.9'
+
       - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
