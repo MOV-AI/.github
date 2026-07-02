@@ -6,7 +6,7 @@ inputs:
     description: Fully qualified image reference with tag
     required: true
   digest:
-    description: Image digest (sha256:...) for exact pushed reference
+    description: Image digest in canonical format sha256:<64-hex>
     required: true
   sbom_file:
     description: Output file for generated CycloneDX JSON
@@ -33,11 +33,10 @@ runs:
       run: |
         set -e -o pipefail
 
-        DIGEST="${DIGEST_INPUT#digest:}"
-        DIGEST="${DIGEST#:}"
+        DIGEST="${DIGEST_INPUT}"
 
         if ! [[ "${DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
-          echo "Invalid digest provided: ${DIGEST_INPUT}"
+          echo "Invalid digest format (expected sha256:<64-hex>): ${DIGEST_INPUT}"
           exit 1
         fi
 

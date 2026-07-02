@@ -503,8 +503,6 @@ jobs:
           OFFICIAL_PUSH_OUTPUT="$(docker push "${OFFICIAL_IMAGE}" 2>&1)"
           echo "${OFFICIAL_PUSH_OUTPUT}"
           OFFICIAL_DIGEST="$(printf '%s\n' "${OFFICIAL_PUSH_OUTPUT}" | awk '/digest: sha256:/ { print $2; exit }')"
-          OFFICIAL_DIGEST="${OFFICIAL_DIGEST#digest:}"
-          OFFICIAL_DIGEST="${OFFICIAL_DIGEST#:}"
 
           if [ -z "${OFFICIAL_DIGEST}" ] || ! [[ "${OFFICIAL_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
             echo "Failed to capture digest for pushed image ${OFFICIAL_IMAGE}"
@@ -515,32 +513,6 @@ jobs:
 
           # Handle latest tag
           if [ "${LATEST}" = "true" ]; then
-
-      - name: Prepare official SBOM image ref
-        id: prepare_official_sbom_image
-        if: ${{ inputs.generate_sbom }}
-        shell: bash
-        env:
-          IMAGE_BASE: ${{ steps.push_images.outputs.image }}
-          DIGEST_INPUT: ${{ steps.push_images.outputs.digest }}
-        run: |
-          set -e -o pipefail
-
-          DIGEST="${DIGEST_INPUT#digest:}"
-          DIGEST="${DIGEST#:}"
-
-          if [ -n "${DIGEST}" ] && ! [[ "${DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
-            echo "Invalid official digest: ${DIGEST}"
-            exit 1
-          fi
-
-          if [ -n "${DIGEST}" ]; then
-            IMAGE_REF="${IMAGE_BASE}@${DIGEST}"
-          else
-            IMAGE_REF="${IMAGE_BASE}"
-          fi
-
-          echo "image=${IMAGE_REF}" | tee -a "$GITHUB_OUTPUT"
             echo "Pushing latest tag to official registry..."
             docker tag "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}" \
                        "${DOCKER_REGISTRY}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:latest"
@@ -588,7 +560,7 @@ jobs:
         if: ${{ inputs.generate_sbom }}
         uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@feat/docker_sbom_cycloneDX
         with:
-          image: ${{ steps.prepare_official_sbom_image.outputs.image }}
+          image: ${{ steps.push_images.outputs.image }}
           digest: ${{ steps.push_images.outputs.digest }}
           sbom_file: sbom-official-${{ matrix.name }}.cyclonedx.json
           artifact_name: sbom-official-${{ matrix.name }}
