@@ -579,8 +579,6 @@ jobs:
         shell: bash
         run: |
           cp ./platform_configs/product.version product.version
-          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
-          cat product-manifest.yaml
 
           service_name_file_pattern=$(echo "${{ matrix.workspace['service'] }}" | sed 's/-/_/g')
           product_name="${{ inputs.product_name }}"
@@ -1514,11 +1512,18 @@ jobs:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}all_robot_configs
           path: .
 
+      - name: unstash manifest
+        if: ${{ inputs.with_simulation_tests }}
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
+          path: .
+
       - name: Copy manifest from raised_meta
         if: ${{ inputs.with_simulation_tests }}
         shell: bash
         run: |
-          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
+          test -f product-manifest.yaml
 
       - name: Setup infra environment configs
         id: infra_env_configs_setup
@@ -2328,7 +2333,6 @@ jobs:
 
           cp ./platform_configs/product.version product.version
           cp ./platform_configs/.bumpversion.cfg .bumpversion.cfg
-          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
           mkdir -p deployment_artifacts
 
           . .ci-venv/bin/activate
@@ -2547,7 +2551,6 @@ jobs:
         shell: bash
         run: |
           cp ./platform_configs/product.version product.version
-          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
 
       - name: Prepare slack variables
         id: pre_slack
