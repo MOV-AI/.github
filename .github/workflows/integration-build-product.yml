@@ -454,6 +454,14 @@ jobs:
         env:
           SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
+      - name: Stash manifest
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}manifest
+          path: product-manifest.yaml
+          retention-days: 5
+          include-hidden-files: true
+
       - name: Stash raised_meta
         uses: actions/upload-artifact@v5
         with:
@@ -503,18 +511,6 @@ jobs:
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: platform_configs
-
-      - name: Generate product configs from manifest
-        shell: bash
-        run: |
-          cp ./platform_configs/product.version product.version
-          cp ./platform_configs/product-manifest.yaml product-manifest.yaml
-          . .ci-venv/bin/activate
-          cat product-manifest.yaml
-          override_service=$(echo "${{ matrix.workspace['service'] }}" | tr '-' '_')
-          override_arg="--override_${override_service}"
-          integration-pipeline generate_meta_artifacts --update_simulator $override_arg ${{ inputs.product_name }}-${{ matrix.workspace['distro'] }} --manifest_platform_base_key "product_dependencies"
-          deactivate
 
       - name: Unstash All Robot Configs
         uses: actions/download-artifact@v5
@@ -2241,6 +2237,13 @@ jobs:
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: platform_configs
+
+      - name: unstash manifest
+        if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
+        uses: actions/download-artifact@v5
+        with:
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
+          path: product-manifest.yaml
 
       - name: unstash deploy_artifacts_noetic
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
