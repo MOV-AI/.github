@@ -377,7 +377,6 @@ jobs:
 
           cp product.version ./platform_configs/product.version
           cp .bumpversion.cfg ./platform_configs/.bumpversion.cfg
-          cp product-manifest.yaml ./platform_configs/product-manifest.yaml
 
       - name: Generate Multi-Workspace Artifacts
         id: generate_meta
@@ -411,7 +410,7 @@ jobs:
           deactivate
 
       - name: Stash All Robot Configs
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}all_robot_configs
           path: |
@@ -421,7 +420,7 @@ jobs:
 
       - name: Stash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts/*
@@ -455,7 +454,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.slack_token_id }}
 
       - name: Stash manifest
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}manifest
           path: product-manifest.yaml
@@ -463,7 +462,7 @@ jobs:
           include-hidden-files: true
 
       - name: Stash raised_meta
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}raised_meta
           path: platform_configs/*
@@ -507,13 +506,13 @@ jobs:
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: platform_configs
 
       - name: Unstash All Robot Configs
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}all_robot_configs
           path: .
@@ -602,7 +601,7 @@ jobs:
 
       - name: Stash dependency_version
         if: ${{ inputs.propagate_project == false && matrix.workspace['distro'] == 'noetic' }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}dependency_version
           path: dependency_version
@@ -700,13 +699,13 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: .
 
       - name: Unstash All Robot Configs
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}all_robot_configs
           path: .
@@ -791,7 +790,7 @@ jobs:
       - name: Stash Install logs artifacts
         continue-on-error: true
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}install_logs
           path: install_logs/*
@@ -873,7 +872,7 @@ jobs:
 
       - name: Un stash dependency_version
         if: ${{ inputs.propagate_project == false }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}dependency_version
           path: dependency_version
@@ -948,14 +947,14 @@ jobs:
 
       - name: Stash project metadata
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}project_metadata
           path: metadata_artifact/*
           retention-days: 3
 
       - name: Stash deploy_artifacts_noetic
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}deploy_artifacts_noetic
           path: artifacts/*
@@ -1017,7 +1016,7 @@ jobs:
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts
@@ -1195,14 +1194,14 @@ jobs:
 
       - name: unstash raised_meta
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: .
 
       - name: Unstash All Robot Configs
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}all_robot_configs
           path: .
@@ -1309,7 +1308,7 @@ jobs:
       - name: Stash Install simulator logs artifacts
         continue-on-error: true
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}install_simulator_logs
           path: install_logs/*
@@ -1363,7 +1362,7 @@ jobs:
 
       - name: stash Sim project metadata
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}project_sim_metadata
           path: metadata_artifact/*
@@ -1423,7 +1422,7 @@ jobs:
 
       - name: Stash deploy_simulator_artifacts
         if: ${{ inputs.with_simulation == 'true' }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}deploy_simulator_artifacts
           path: simulator.image.artifact
@@ -1496,21 +1495,21 @@ jobs:
 
       - name: unstash raised_meta
         if: ${{ inputs.with_simulation_tests }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: platform_configs
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation_tests }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts
 
       - name: Unstash All Robot Configs
         if: ${{ inputs.with_simulation_tests }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}all_robot_configs
           path: .
@@ -1962,7 +1961,7 @@ jobs:
 
       - name: Stash simulation test outputs
         if: ${{ always() && inputs.with_simulation_tests && steps.simulation_tests.outputs.save_outputs == 'true' }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim-outputs
           path: test-output.json
@@ -2239,42 +2238,42 @@ jobs:
 
       - name: unstash raised_meta
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: platform_configs
 
       - name: unstash manifest
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}manifest
-          path: product-manifest.yaml
+          path: .
 
       - name: unstash deploy_artifacts_noetic
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}deploy_artifacts_noetic
           path: artifacts
 
       - name: unstash sim_configs
         if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts
 
       - name: unstash project metadata
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}project_metadata
           path: .
 
       - name: unstash deploy_simulator_artifacts
         if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}deploy_simulator_artifacts
           path: .
@@ -2539,7 +2538,7 @@ jobs:
     steps:
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
           path: platform_configs
