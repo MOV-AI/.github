@@ -60,8 +60,6 @@ product_name: "spawner-name"
 product_distro_list: '[{"service":"ros1-workspace","distro":"noetic"}]'
 ```
 
-The legacy ros_distro syntax is kept for backward compatibility with projects created before version 3.0.0, but new projects should adopt product_distro_list.
-
 ## - name: Install Tests
 This workflow run QA install tests for the MOV.AI platform.
 
