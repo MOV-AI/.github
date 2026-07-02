@@ -323,7 +323,7 @@ jobs:
             export MOVAI_USER="${{ steps.install.outputs.movai_user }}"
             export MOVAI_PWD="${{ steps.install.outputs.movai_pwd }}"
             export CI_TOOLS_EXEC_FOLDER="tests_workdir"
-
+              
             echo "Collecting tests artifacts"
             . .github/workflows/collect_tests_artifacts.bash
           fi
@@ -352,7 +352,7 @@ jobs:
           # for sanity
           docker ps -a
 
-          for container in backend spawner message-server monitoring redis-master redis-local influxdb haproxy; do
+          for container in backend spawner ros1-workspace ros2-workspace orchestrator message-server monitoring redis-master redis-local influxdb haproxy; do
              CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
              docker logs "${CONTAINER_ID}" &> "${container}.log" || true
           done || true
