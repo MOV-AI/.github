@@ -381,7 +381,7 @@ jobs:
 
       - name: Generate and attach CycloneDX SBOM to /ci/ image
         if: ${{ inputs.generate_sbom }}
-        uses: ./.github/actions/attach-cyclonedx-sbom
+        uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@feat/docker_sbom_cycloneDX
         with:
           image: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
           digest: ${{ steps.build_ci_image.outputs.digest }}
@@ -586,9 +586,10 @@ jobs:
 
       - name: Generate and attach CycloneDX SBOM
         if: ${{ inputs.generate_sbom }}
-        uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@v3
+        uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@feat/docker_sbom_cycloneDX
         with:
           image: ${{ steps.prepare_official_sbom_image.outputs.image }}
+          digest: ${{ steps.push_images.outputs.digest }}
           sbom_file: sbom-official-${{ matrix.name }}.cyclonedx.json
           artifact_name: sbom-official-${{ matrix.name }}
 
@@ -604,10 +605,9 @@ jobs:
 
       - name: Download CycloneDX SBOM artifacts
         if: ${{ inputs.generate_sbom }}
-        uses: ./.github/actions/attach-cyclonedx-sbom
+        uses: actions/download-artifact@v4
         with:
-          image: ${{ steps.push_images.outputs.image }}
-          digest: ${{ steps.push_images.outputs.digest }}
+          pattern: sbom-*
           merge-multiple: true
 
       - name: Replace version placeholder and append metadata
