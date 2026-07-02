@@ -389,39 +389,25 @@ jobs:
           if [ -n '${{ inputs.product_distro_list }}' ]; then
             WORKSPACES='${{ inputs.product_distro_list }}'
           else
-            WORKSPACES=$(jq -c --arg product '${{ inputs.product_name }}' \
-              '[ .[] | { service: "spawner", distro: ., product_name: $product } ]' \
-              <<< '${{ inputs.ros_distro }}')
+            WORKSPACES=$(jq -c --arg product '${{ inputs.product_name }}' '[ .[] | { service: "spawner", distro: ., product_name: $product } ]' <<< '${{ inputs.ros_distro }}')
           fi
 
-          ROS1_NAME=$(jq -r --arg prod "${{ inputs.product_name }}" \
-            '(.[] | select(.distro == "noetic") | $prod + "-" + .distro) // "False"' \
-            <<< "$WORKSPACES" | head -n 1)
+          ROS1_NAME=$(jq -r --arg prod "${{ inputs.product_name }}" '(.[] | select(.distro == "noetic") | $prod + "-" + .distro) // "False"' <<< "$WORKSPACES" | head -n 1)
+          ROS2_NAME=$(jq -r --arg prod "${{ inputs.product_name }}" '(.[] | select(.distro != "noetic") | $prod + "-" + .distro) // "False"' <<< "$WORKSPACES" | head -n 1)
 
-          ROS2_NAME=$(jq -r --arg prod "${{ inputs.product_name }}" \
-            '(.[] | select(.distro != "noetic") | $prod + "-" + .distro) // "False"' \
-            <<< "$WORKSPACES" | head -n 1)
+          echo "Generating artifacts with ROS1 Workspace: $ROS1_NAME and ROS2 Workspace: $ROS2_NAME"
 
-          echo "ROS1 Workspace: $ROS1_NAME"
-          echo "ROS2 Workspace: $ROS2_NAME"
+          args=(
+            --update_simulator
+            --override_ros1_workspace "$ROS1_NAME"
+            --manifest_platform_base_key "product_dependencies"
+          )
 
-          if [ "$ROS2_NAME" = "False" ]; then
-            echo "ROS2 workspace not found. Falling back to single-workspace override."
-
-            integration-pipeline generate_meta_artifacts \
-              --update_simulator \
-              --override_spawner "$ROS1_NAME" \
-              --manifest_platform_base_key "product_dependencies"
-          else
-            echo "Generating artifacts with ROS1 and ROS2 workspace overrides."
-
-            integration-pipeline generate_meta_artifacts \
-              --update_simulator \
-              --override_ros1_workspace "$ROS1_NAME" \
-              --override_ros2_workspace "$ROS2_NAME" \
-              --manifest_platform_base_key "product_dependencies"
+          if [ -n "$ROS2_NAME" ] && [ "$ROS2_NAME" != "False" ] && [ "$ROS2_NAME" != "false" ]; then
+            args+=(--override_ros2_workspace "$ROS2_NAME")
           fi
 
+          integration-pipeline generate_meta_artifacts "${args[@]}"
           deactivate
 
       - name: Stash All Robot Configs
