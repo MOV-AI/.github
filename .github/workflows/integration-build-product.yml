@@ -396,9 +396,11 @@ jobs:
 
           echo "Generating artifacts with ROS1 Workspace: $ROS1_NAME and ROS2 Workspace: $ROS2_NAME"
 
+          ROS1_OVERRIDE=$(jq -r 'first(.[] | select(.distro == "noetic") | "--override_" + .service) // ""' <<< "$WORKSPACES")
+
           args=(
             --update_simulator
-            --override_ros1_workspace "$ROS1_NAME"
+            "$ROS1_OVERRIDE" "$ROS1_NAME"
             --manifest_platform_base_key "product_dependencies"
           )
 
