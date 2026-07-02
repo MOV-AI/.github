@@ -1668,7 +1668,7 @@ jobs:
             }
 
       - name: Send Slack Message
-        if: ${{ always() && (! needs.Provision-IP-Runners.result == 'success' || ! needs.Provision-QA-Runners.result == 'success' || ! needs.Provision-Robotics-Sim-Runners.result == 'success' || ! needs.Provision-Redhat-Oracle-Runners.result == 'success' || ! needs.Provision-Packer-Runners.result == 'success') }}
+        if: ${{ always() && (needs.Provision-IP-Runners.result != 'success' || needs.Provision-QA-Runners.result != 'success' || needs.Provision-Robotics-Sim-Runners.result != 'success' || needs.Provision-Redhat-Oracle-Runners.result != 'success' || needs.Provision-Packer-Runners.result != 'success') }}
         uses: slackapi/slack-github-action@v2
         with:
           method: chat.update
