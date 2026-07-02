@@ -582,17 +582,21 @@ jobs:
           cp ./platform_configs/product-manifest.yaml product-manifest.yaml
           cat product-manifest.yaml
 
-          service_name_file_pattern=$(echo ${{ matrix.workspace['service'] }} | sed 's/-/_/g')
+          service_name_file_pattern=$(echo "${{ matrix.workspace['service'] }}" | sed 's/-/_/g')
           product_name="${{ inputs.product_name }}"
+          version=$(tr -d '[:space:]' < product.version)
 
-          echo "base_name=$(cat ci_artifacts/${service_name_file_pattern}_base_name.ci)" >> $GITHUB_OUTPUT
-          echo "base_version=$(cat ci_artifacts/${service_name_file_pattern}_base_version.ci)" >> $GITHUB_OUTPUT
-          echo "raised_version=$(cat product.version)" >> $GITHUB_OUTPUT
+          # If major < 3, append _distro (e.g., _ubuntu), otherwise leave empty
+          [[ ${version%%.*} -lt 3 ]] && ext="_${{ matrix.workspace['distro'] }}" || ext=""
+
+          echo "base_name=$(cat ci_artifacts/${service_name_file_pattern}_base_name${ext}.ci)" >> $GITHUB_OUTPUT
+          echo "base_version=$(cat ci_artifacts/${service_name_file_pattern}_base_version${ext}.ci)" >> $GITHUB_OUTPUT
+          echo "raised_version=${version}" >> $GITHUB_OUTPUT
           echo "target_tag=${product_name}-${{ matrix.workspace['distro'] }}" >> $GITHUB_OUTPUT
           # Check if propagated project is false
           if [ "${{ inputs.propagate_project }}" = "false" ]; then
             mkdir -p dependency_version
-            cp ci_artifacts/${service_name_file_pattern}_base_version.ci dependency_version/base_version
+            cp "ci_artifacts/${service_name_file_pattern}_base_version${ext}.ci" dependency_version/base_version
           fi
 
       - name: Stash dependency_version
