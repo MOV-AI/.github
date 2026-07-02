@@ -396,7 +396,7 @@ jobs:
 
           echo "Generating artifacts with ROS1 Workspace: $ROS1_NAME and ROS2 Workspace: $ROS2_NAME"
 
-          ROS1_OVERRIDE=$(jq -r 'first(.[] | select(.distro == "noetic") | "--override_" + .service) // ""' <<< "$WORKSPACES")
+          ROS1_OVERRIDE=$(jq -r 'first(.[] | select(.distro == "noetic") | "--override_" + (.service | gsub("-"; "_"))) // ""' <<< "$WORKSPACES")
 
           echo "ROS1_OVERRIDE: $ROS1_OVERRIDE"
 
