@@ -398,6 +398,8 @@ jobs:
 
           ROS1_OVERRIDE=$(jq -r 'first(.[] | select(.distro == "noetic") | "--override_" + .service) // ""' <<< "$WORKSPACES")
 
+          echo "ROS1_OVERRIDE: $ROS1_OVERRIDE"
+
           args=(
             --update_simulator
             "$ROS1_OVERRIDE" "$ROS1_NAME"
