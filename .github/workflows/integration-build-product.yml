@@ -802,7 +802,6 @@ jobs:
           retention-days: 5
 
       - name: Run mobtest
-        continue-on-error: true # TODO: remove continue-on-error when mobtest is stable
         if: ${{ inputs.deployment_project == false }}
         shell: bash
         run: |
@@ -1475,16 +1474,19 @@ jobs:
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
-      - name: Setup python3.10
-        uses: actions/setup-python@v6
+      - name: Install uv and setup .ci-venv
+        uses: astral-sh/setup-uv@v8.2.0
         with:
-          python-version: '3.10.20'
+          python-version: "3.10"
+          activate-environment: "true"
+          venv-path: ".ci-venv"
 
       - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
-          python3.10 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
+          python3 --version
+          uv pip install --python=3.10 pip
           [ -f ci-requirements.txt ] && python3 -m pip install -r ci-requirements.txt
           python3 -m pip install --upgrade pyOpenSSL cryptography
           extra_args="-i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple"
