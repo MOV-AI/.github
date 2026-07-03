@@ -60,6 +60,8 @@ product_name: "spawner-name"
 product_distro_list: '[{"service":"ros1-workspace","distro":"noetic"}]'
 ```
 
+For docker base artifact resolution in the Build Product workflow, the `_<distro>` suffix is now decided by service type, not product version: it is added only when the workspace service is `spawner`.
+
 ## - name: Install Tests
 This workflow run QA install tests for the MOV.AI platform.
 
