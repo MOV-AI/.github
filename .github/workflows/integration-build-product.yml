@@ -765,7 +765,6 @@ jobs:
           retention-days: 5
 
       - name: Run mobtest
-        continue-on-error: true # TODO: remove continue-on-error when mobtest is stable
         if: ${{ inputs.deployment_project == false }}
         shell: bash
         run: |
