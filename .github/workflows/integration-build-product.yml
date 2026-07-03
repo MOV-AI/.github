@@ -588,8 +588,11 @@ jobs:
           product_name="${{ inputs.product_name }}"
           version=$(tr -d '[:space:]' < product.version)
 
-          # If major < 3, append _distro (e.g., _ubuntu), otherwise leave empty
-          [[ ${version%%.*} -lt 3 ]] && ext="_${{ matrix.workspace['distro'] }}" || ext=""
+          if [[ "${{ matrix.workspace['service'] }}" == "spawner" ]]; then
+            ext="_${{ matrix.workspace['distro'] }}"
+          else
+            ext=""
+          fi
 
           echo "base_name=$(cat ci_artifacts/${service_name_file_pattern}_base_name${ext}.ci)" >> $GITHUB_OUTPUT
           echo "base_version=$(cat ci_artifacts/${service_name_file_pattern}_base_version${ext}.ci)" >> $GITHUB_OUTPUT
