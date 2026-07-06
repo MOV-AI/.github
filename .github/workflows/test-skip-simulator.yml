@@ -266,6 +266,16 @@ jobs:
           echo "base_name=$(cat simulator_artifacts/simulator_base.ci)" | tee  >> $GITHUB_OUTPUT
           echo "push_name=$push_name_tmp" | tee  >> $GITHUB_OUTPUT
 
+      - name: Patch Dockerfile to use experimental PyPI (For Testing)
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
+        shell: bash
+        run: |
+          echo "Patching Dockerfile-simulator to use pypi-experimental..."
+          find docker -name "Dockerfile*" -exec sed -i 's/pypi-integration/pypi-experimental/g' {} +
+
+          # Debug: Verify the line was changed
+          grep -rn "pypi-experimental" docker/ || true
+
       - name: Set up Docker Buildx
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
         uses: docker/setup-buildx-action@v4
