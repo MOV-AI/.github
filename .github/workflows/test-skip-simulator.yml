@@ -2,6 +2,7 @@ name: Test Simulator Studio & Build
 
 on:
   workflow_dispatch:
+  workflow_call:
     inputs:
       product_name:
         description: 'Product Name'
