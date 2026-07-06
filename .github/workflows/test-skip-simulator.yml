@@ -1,0 +1,250 @@
+name: Test Simulator Studio & Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      product_name:
+        description: 'Product Name'
+        required: true
+        default: 'tugbot'
+        type: string
+      branch_name:
+        description: 'Branch to test'
+        required: true
+        default: 'main'
+        type: string
+      with_simulation:
+        description: 'Run simulation build'
+        required: false
+        default: 'true'
+        type: string
+      pr_id:
+        description: 'PR ID (Optional)'
+        required: false
+        default: ''
+        type: string
+      is_external_project:
+        required: false
+        type: boolean
+        default: false
+
+env:
+  CI_INTEGRATION_SCRIPTS_VERSION: "4.2.0.6"
+  GITHUB_API_USR: "OttoMation-Movai"
+  PUSH_REGISTRY: registry.cloud.mov.ai
+  IP_MIRROR_REGISTRY: registry.hel.mov.ai
+  PYPI_EXPERIMENTAL_URL: "https://artifacts.cloud.mov.ai/repository/pypi-experimental/simple"
+
+jobs:
+  Validate-boostrap-configs:
+    runs-on: integration-pipeline
+    container:
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      credentials:
+        username: ${{ secrets.registry_user }}
+        password: ${{ secrets.registry_password }}
+    outputs:
+      commit_hash: ${{ steps.Checkout.outputs.commit_hash }}
+      pr_prefix: ${{ steps.artifacts_prefix.outputs.pr_prefix }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.branch_name }}
+
+      - name: Checkout commit hash
+        id: Checkout
+        run: |
+          git config --global --add safe.directory $(pwd)
+          git rev-parse HEAD > commit_hash
+          echo "commit_hash=$(cat commit_hash)" >> $GITHUB_OUTPUT
+
+      - name: Set PR prefix
+        id: artifacts_prefix
+        run: |
+          if [ -n "${{ inputs.pr_id }}" ]; then
+            echo "pr_prefix=pr${{ inputs.pr_id }}~" >> $GITHUB_OUTPUT
+          else
+            echo "pr_prefix=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install CI Scripts in container (Experimental PyPI)
+        shell: bash
+        run: |
+          python3 -m venv ci_scripts --clear
+          source ci_scripts/bin/activate
+          python3 -m pip install --upgrade pyOpenSSL cryptography
+          python3 -m pip install -i ${{ env.PYPI_EXPERIMENTAL_URL }} --extra-index-url https://pypi.org/simple integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          deactivate
+
+      - name: Bootstraping simulator metadata
+        shell: bash
+        run: |
+          BRANCH_NAME="${{ inputs.branch_name }}"
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+          git config --global --add safe.directory $(pwd)
+          git fetch
+          git checkout origin/$BRANCH_NAME -- product.version .bumpversion.cfg
+          cat product.version
+          rm -rf simulator_artifacts ci_artifacts
+
+          source ci_scripts/bin/activate
+
+          merge_manifest_args=" --dependency_name product-platform"
+          merge_manifest_args="$merge_manifest_args --gh_api_user $GITHUB_API_USR"
+          merge_manifest_args="$merge_manifest_args --gh_api_pwd ${{ secrets.auto_commit_pwd }}"
+          merge_manifest_args="$merge_manifest_args --auto_fetch"
+
+          if [ "${{ inputs.is_external_project }}" = "true" ]; then
+            merge_manifest_args="$merge_manifest_args --merge_sub_prod_dep_keys platform_config,platform_components,installion"
+          fi
+
+          if [ "${{ inputs.with_simulation }}" = "false" ]; then
+            merge_manifest_args="$merge_manifest_args --forward_sim"
+          fi
+
+          integration-pipeline merge_manifest_dependency $merge_manifest_args
+
+          if [ "${{ inputs.with_simulation }}" = "true" ]; then
+            if [ -n "${{ inputs.pr_id }}" ]; then
+              tag_arg="--tag pr${{ inputs.pr_id }}"
+            fi
+
+            # This is the target method under test
+            integration-pipeline generate_meta_simulator_artifacts \
+                --manifest_platform_base_key product_dependencies \
+                --product_name ${{ inputs.product_name }} \
+                --branch ${BRANCH_NAME} \
+                --update_simulator \
+                --docker_registry $PUSH_REGISTRY $tag_arg
+
+            mkdir simulator_artifacts
+            cp ci_artifacts/* ./simulator_artifacts
+          fi
+
+      - name: Stash sim_configs
+        if: ${{ inputs.with_simulation == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}sim_configs
+          path: simulator_artifacts/*
+          retention-days: 1
+
+      - name: Stash manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.artifacts_prefix.outputs.pr_prefix }}manifest
+          path: product-manifest.yaml
+          retention-days: 1
+          include-hidden-files: true
+
+  Build-Simulator:
+    needs: [Validate-boostrap-configs]
+    runs-on: integration-pipeline
+    env:
+      DISTRO: noetic
+    outputs:
+      image_name: "${{ steps.pre_build.outputs.push_name }}"
+      skip_simulator: "${{ steps.pre_simulator_build.outputs.skip_simulator_build }}"
+    steps:
+      - name: Pre clean ups
+        uses: rtCamp/action-cleanup@master
+        if: ${{ inputs.with_simulation == 'true' }}
+
+      - name: Checkout
+        if: ${{ inputs.with_simulation == 'true' }}
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.Validate-boostrap-configs.outputs.commit_hash }}
+
+      - name: Setup CI Scripts in .ci-venv (Experimental PyPI)
+        shell: bash
+        run: |
+          python3 -m venv .ci-venv --clear
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install --upgrade pyOpenSSL cryptography
+          python3 -m pip install -i ${{ env.PYPI_EXPERIMENTAL_URL }} --extra-index-url https://pypi.org/simple integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+
+      - name: unstash sim_configs
+        if: ${{ inputs.with_simulation == 'true' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim_configs
+          path: simulator_artifacts
+
+      - name: Prepare Skip variables
+        id: pre_simulator_build
+        if: ${{ inputs.with_simulation == 'true' }}
+        run: |
+          if [ ! -f "simulator_artifacts/version" ]; then
+            echo "skip_simulator_build=true" >> $GITHUB_OUTPUT
+            echo "SUCCESS: No package changes detected. Skipping Docker build."
+          else
+            echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
+            echo "NOTICE: Package changes detected. Proceeding to Docker build."
+          fi
+          echo "image_name=${{ env.PUSH_REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
+
+      - name: Fetch artifacts
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
+        shell: bash
+        run: |
+          . .ci-venv/bin/activate
+          integration-pipeline fetch_simulator_models \
+          --manifest_platform_base_key product_components \
+          --gh_api_user $GITHUB_API_USR \
+          --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
+          --target_dir "./models"
+          deactivate
+          if [ ! -d ./models ]; then mkdir -p ./models; fi
+
+      - name: Login to ${{ env.PUSH_REGISTRY }} Registry
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.PUSH_REGISTRY }}
+
+      - name: Login to ${{ env.IP_MIRROR_REGISTRY }} Registry
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.IP_MIRROR_REGISTRY }}
+
+      - name: Prepare docker build variables
+        if: ${{ inputs.with_simulation == 'true' }}
+        id: pre_build
+        run: |
+          push_name_tmp=$(echo "${{ steps.pre_simulator_build.outputs.image_name }}")
+          echo "base_name=$(cat simulator_artifacts/simulator_base.ci)" | tee  >> $GITHUB_OUTPUT
+          echo "push_name=$push_name_tmp" | tee  >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
+        uses: docker/setup-buildx-action@v4
+
+      - name: Docker build
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true'}}
+        shell: bash
+        run: |
+          docker build --add-host ${{ env.IP_MIRROR_REGISTRY }}:172.22.0.106 \
+            --build-arg BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} \
+            --build-arg CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }} \
+            --file docker/${{ env.DISTRO }}/Dockerfile-simulator \
+            --platform linux/amd64 \
+            --tag ${{ steps.pre_build.outputs.push_name }} \
+            --pull \
+            --push .
+
+      - name: Docker cleanups
+        if: always()
+        shell: bash
+        run: |
+          docker system prune -f
+          docker image prune --all -f
