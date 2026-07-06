@@ -73,6 +73,8 @@ env:
   PUSH_REGISTRY: registry.cloud.mov.ai
   IP_MIRROR_REGISTRY: registry.hel.mov.ai
   PYPI_EXPERIMENTAL_URL: "https://artifacts.cloud.mov.ai/repository/pypi-experimental/simple"
+  AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
 
 jobs:
   Validate-boostrap-configs:
