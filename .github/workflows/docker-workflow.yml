@@ -132,10 +132,10 @@ jobs:
       GITHUB_REGISTRY: ${{ inputs.github_registry }}
     steps:
       - name: Checkout calling repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Checkout workflow repository for scripts
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: MOV-AI/.github
           path: .github-workflows
@@ -172,7 +172,7 @@ jobs:
           fi
 
       - name: Upload release notes template
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-notes
           path: release_notes_template.md
@@ -185,7 +185,7 @@ jobs:
       matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Hadolint ${{ matrix.docker_file }}
         uses: hadolint/hadolint-action@v3.3.0
@@ -202,7 +202,7 @@ jobs:
       branch_name: ${{ steps.branch.outputs.name }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Use manual version
         if: ${{ inputs.version != 'auto' }}
@@ -269,7 +269,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Login to Private Registry
         uses: docker/login-action@v3
@@ -336,7 +336,7 @@ jobs:
 
       - name: Download packages to include in build
         if: ${{ matrix.download_artifact}}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.download_artifact_name }}
           path: ${{ matrix.download_artifact_path }}
@@ -377,7 +377,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Login to Private Registry
         uses: docker/login-action@v3
@@ -428,7 +428,7 @@ jobs:
       GITHUB_REGISTRY: ${{ inputs.github_registry }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Login to Private Registry (for push permission)
         uses: docker/login-action@v3
@@ -553,10 +553,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Download release notes
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-notes
 
