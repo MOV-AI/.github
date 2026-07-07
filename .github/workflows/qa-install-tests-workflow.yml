@@ -9,6 +9,14 @@ on:
         required: false
         type: boolean
         default: false
+      nightly:
+        required: false
+        type: boolean
+        default: false
+      slack_channel_nightly_msg:
+        required: false
+        type: string
+        default: 'C02PB9A9F45'
     secrets:
       jira_username:
         required: true
@@ -35,6 +43,8 @@ on:
       gh_token:
         required: true
       sonar_token:
+        required: true
+      slack_token_id:
         required: true
 
 jobs:
@@ -160,3 +170,40 @@ jobs:
         shell: bash
         run: |
           movai remove --all
+
+  Slack-Message-Result:
+    runs-on: ubuntu-22.04
+    needs:  [Validate-features, Install-Tests]
+    if: ${{ always() && inputs.nightly }}
+    steps:
+      - name: Prepare slack variables
+        id: pre_slack
+        run: |
+          MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), unstable :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
+          echo "msg_error=$MESSAGE_ERR" >> $GITHUB_OUTPUT
+
+      - name: Slack message success
+        if: ${{ inputs.nightly && ( needs.Validate-features.result == 'success' && needs.Install-Tests.result == 'success' ) }}
+        uses: slackapi/slack-github-action@v3
+        with:
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel_nightly_msg }}",
+              "text": "${{ steps.pre_slack.outputs.msg }}"
+            }
+          token: ${{ secrets.slack_token_id }}
+
+      - name: Slack message failure
+        if: ${{ inputs.nightly && ( needs.Validate-features.result == 'failure' || needs.Install-Tests.result == 'failure' ) }}
+        uses: slackapi/slack-github-action@v3
+        with:
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel_nightly_msg }}",
+              "text": "${{ steps.pre_slack.outputs.msg_error }}"
+            }
+          token: ${{ secrets.slack_token_id }}
