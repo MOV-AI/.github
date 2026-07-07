@@ -200,7 +200,6 @@ jobs:
     outputs:
       package_version: ${{ steps.get_version.outputs.version }}
       branch_name: ${{ steps.branch.outputs.name }}
-      use_manifest_version: ${{ steps.manifest_version.outputs.use_manifest_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -212,30 +211,12 @@ jobs:
           echo "version=${{ inputs.version }}" | tee -a "$GITHUB_OUTPUT"
           echo "Using manual version: ${{ inputs.version }}"
 
-      - name: Use version from manifest when available
-        if: ${{ inputs.version == 'auto' && inputs.manifest_file != '' }}
-        id: manifest_version
-        run: |
-          set -e
-          if [ ! -f "${{ inputs.manifest_file }}" ]; then
-            echo "Error: manifest file not found: ${{ inputs.manifest_file }}"
-            exit 1
-          fi
-          VERSION=$(grep "^version:" "${{ inputs.manifest_file }}" | head -1 | awk '{print $2}')
-          if [ -z "${VERSION}" ]; then
-            echo "Error: Could not extract version from ${{ inputs.manifest_file }}"
-            exit 1
-          fi
-          echo "version=${VERSION}" | tee -a "$GITHUB_OUTPUT"
-          echo "use_manifest_version=true" | tee -a "$GITHUB_OUTPUT"
-          echo "Using manifest version: ${VERSION}"
-
       - name: Install bump-my-version
-        if: ${{ inputs.version == 'auto' && steps.manifest_version.outputs.use_manifest_version != 'true' }}
+        if: ${{ inputs.version == 'auto' }}
         run: python3 -m pip install bump-my-version
 
       - name: Bump version (deploy only)
-        if: ${{ inputs.version == 'auto' && inputs.deploy && steps.manifest_version.outputs.use_manifest_version != 'true' }}
+        if: ${{ inputs.version == 'auto' && inputs.deploy }}
         run: |
           set -e
           git config --global --add safe.directory "$(pwd)"
@@ -256,7 +237,7 @@ jobs:
           fi
 
       - name: Get version from bump-my-version
-        if: ${{ inputs.version == 'auto' && steps.manifest_version.outputs.use_manifest_version != 'true' }}
+        if: ${{ inputs.version == 'auto' }}
         id: auto_version
         run: |
           VERSION=$(bump-my-version show current_version)
@@ -268,8 +249,6 @@ jobs:
         run: |
           if [ "${{ inputs.version }}" != 'auto' ]; then
             echo "version=${{ steps.manual_version.outputs.version }}" | tee -a "$GITHUB_OUTPUT"
-          elif [ "${{ steps.manifest_version.outputs.use_manifest_version }}" = 'true' ]; then
-            echo "version=${{ steps.manifest_version.outputs.version }}" | tee -a "$GITHUB_OUTPUT"
           else
             echo "version=${{ steps.auto_version.outputs.version }}" | tee -a "$GITHUB_OUTPUT"
           fi
@@ -546,11 +525,11 @@ jobs:
           echo "✓ Image distribution completed successfully"
 
       - name: Install bump-my-version for pushing version changes
-        if: ${{ inputs.version == 'auto' && needs.raise-version.outputs.use_manifest_version != 'true' && matrix.name == needs.parse-matrix.outputs.first_image }}
+        if: ${{ inputs.version == 'auto' && matrix.name == needs.parse-matrix.outputs.first_image }}
         run: python3 -m pip install bump-my-version
 
       - name: Raise version before git push
-        if: ${{ inputs.version == 'auto' && needs.raise-version.outputs.use_manifest_version != 'true' && matrix.name == needs.parse-matrix.outputs.first_image }}
+        if: ${{ inputs.version == 'auto' && matrix.name == needs.parse-matrix.outputs.first_image }}
         run: |
           set -e
           git config --global --add safe.directory "$(pwd)"
@@ -560,7 +539,7 @@ jobs:
 
       - name: Push version bump to protected branch
         uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
-        if: ${{ inputs.version == 'auto' && needs.raise-version.outputs.use_manifest_version != 'true' && matrix.name == needs.parse-matrix.outputs.first_image }}
+        if: ${{ inputs.version == 'auto' && matrix.name == needs.parse-matrix.outputs.first_image }}
         with:
           token: ${{ secrets.commit_token }}
           git_user_email: ${{ secrets.commit_mail }}
