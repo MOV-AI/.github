@@ -34,6 +34,10 @@ on:
         required: false
         type: string
         default: "integration-pipeline"
+      debug_keep_state:
+        required: false
+        type: boolean
+        default: false
 
     secrets:
       auto_commit_user:
@@ -386,12 +390,12 @@ jobs:
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Remove robots
-        if: always()
+        if: ${{ inputs.debug_keep_state == false && always() }}
         shell: bash
         run: |
           timeout 30 movai-cli remove --all || true
       - name: Docker cleanups
-        if: always()
+        if: ${{ inputs.debug_keep_state == false && always() }}
         shell: bash
         run: |
           docker system prune -f
