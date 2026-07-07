@@ -80,6 +80,17 @@ jobs:
   Run-tests:
     runs-on: qa-runner
     needs: [Validate]
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [standalone, fleet]
+        include:
+          - environment: standalone
+            pytest_flags: "--install-platform"
+            artifact_name: "qa_artifacts_ui_standalone"
+          - environment: fleet
+            pytest_flags: "--install-fleet -m 'fleet'"
+            artifact_name: "qa_artifacts_ui_fleet"
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
@@ -115,19 +126,19 @@ jobs:
           # install tests requirements in venv
           pip install -r requirements.txt
 
-      - name: UI tests
+      - name: UI tests (${{ matrix.environment }})
         id: ui
         shell: bash
         run: |
           export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
-          # activate venv
           . venv/bin/activate
-          # tests execution
+
+          # Execute pytest using the matrix flags
           pytest \
             --hub_url ${{ inputs.selenoid_server_url }} \
             --base_url https://${{ steps.agent_info.outputs.ip }}/ \
-            --install-platform \
-            | tee pytest-output.log
+            ${{ matrix.pytest_flags }} \
+            | tee pytest-output-${{ matrix.environment }}.log
 
       - name: Save docker container logs
         if: always()
@@ -173,7 +184,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qa_artifacts_ui_tests
+          name: ${{ matrix.artifact_name }}
           path: qa_artifacts/*
           retention-days: 3
 
