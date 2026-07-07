@@ -458,6 +458,11 @@ jobs:
             cp -r "./tests_artifacts" ./qa_artifacts
           else
             echo "ℹ tests_artifacts directory not found"
+            if [ -d "./results" ]; then
+              cp -r "./results" ./qa_artifacts
+            else
+              echo "ℹ results directory not found"
+            fi
           fi
           echo "::endgroup::"
 
