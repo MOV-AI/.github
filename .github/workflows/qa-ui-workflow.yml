@@ -296,7 +296,10 @@ jobs:
         id: infra_names
         shell: bash
         run: |
-          branch=$(echo ${GITHUB_REF#refs/heads/} | sed "s;\.;-;g" )
+          branch=${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}
+          branch=$(echo "$branch" | sed 's#[^[:alnum:]_-]#-#g; s#-\{2,\}#-#g; s#^-##; s#-$##')
+
+          echo "${branch}"
 
           local_manager_prefix="ip-$branch-manager"
           local_worker_prefix="ip-$branch-worker"
@@ -308,7 +311,6 @@ jobs:
           echo "manager_prefix=${local_manager_prefix}" >> $GITHUB_OUTPUT
           echo "worker_prefix=${local_worker_prefix}" >> $GITHUB_OUTPUT
           echo "total_resources=${total_resources}" >> $GITHUB_OUTPUT
-
 
       - name: Verify Required Secrets & Credentials
         shell: bash
