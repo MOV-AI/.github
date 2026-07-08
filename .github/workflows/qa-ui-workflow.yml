@@ -19,7 +19,7 @@ on:
       proxmox_cluster_name:
         required: false
         type: string
-        default: hel1
+        default: hel0
       fleet_ips:
         required: true
         type: string
