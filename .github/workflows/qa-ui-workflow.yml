@@ -21,9 +21,8 @@ on:
         type: string
         default: hel0
       fleet_ips:
-        required: false
+        required: true
         type: string
-        default: '["10.10.10.1", "10.10.10.2", "10.10.10.3"]'
       fleet_number_members:
         required: false
         type: number
