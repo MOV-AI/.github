@@ -137,10 +137,10 @@ jobs:
       GITHUB_REGISTRY: ${{ inputs.github_registry }}
     steps:
       - name: Checkout calling repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Checkout workflow repository for scripts
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: MOV-AI/.github
           path: .github-workflows
@@ -190,7 +190,7 @@ jobs:
       matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Hadolint ${{ matrix.docker_file }}
         uses: hadolint/hadolint-action@v3.3.0
@@ -207,7 +207,7 @@ jobs:
       branch_name: ${{ steps.branch.outputs.name }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Use manual version
         if: ${{ inputs.version != 'auto' }}
@@ -274,7 +274,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Login to Private Registry
         uses: docker/login-action@v3
@@ -341,7 +341,7 @@ jobs:
 
       - name: Download packages to include in build
         if: ${{ matrix.download_artifact}}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.download_artifact_name }}
           path: ${{ matrix.download_artifact_path }}
@@ -371,14 +371,6 @@ jobs:
           pull: true
           build-args: ${{ steps.get_build_args.outputs.build_args_str_list }}
 
-      - name: Re-login to Private Registry before CI SBOM
-        if: ${{ inputs.generate_sbom }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.registry_user }}
-          password: ${{ secrets.registry_password }}
-          registry: ${{ inputs.docker_registry }}
-
       - name: Generate and attach CycloneDX SBOM to /ci/ image
         if: ${{ inputs.generate_sbom }}
         uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@feat/docker_sbom_cycloneDX_reviewed
@@ -387,6 +379,7 @@ jobs:
           digest: ${{ steps.build_ci_image.outputs.digest }}
           sbom_file: sbom-ci-${{ matrix.name }}.cyclonedx.json
           artifact_name: sbom-ci-${{ matrix.name }}
+
   test:
     needs: [raise-version, build, parse-matrix]
     if: ${{ inputs.deploy && needs.build.result == 'success' }}
@@ -398,7 +391,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Login to Private Registry
         uses: docker/login-action@v3
@@ -449,7 +442,7 @@ jobs:
       GITHUB_REGISTRY: ${{ inputs.github_registry }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Login to Private Registry (for push permission)
         uses: docker/login-action@v3
@@ -573,10 +566,36 @@ jobs:
         run: |
           set -e
           git config --global --add safe.directory "$(pwd)"
+          git config --global user.name "${{ secrets.commit_user }}"
+          git config --global user.email "${{ secrets.commit_mail }}"
+          bump-my-version bump patch --commit --tag
+
+      - name: Push version bump to protected branch
+        uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
+        if: ${{ inputs.version == 'auto' && matrix.name == needs.parse-matrix.outputs.first_image }}
+        with:
+          token: ${{ secrets.commit_token }}
+          git_user_email: ${{ secrets.commit_mail }}
+          git_user_name: ${{ secrets.commit_user }}
+          branch: ${{ needs.raise-version.outputs.branch_name }}
+          repository: ${{ github.repository }}
+
+  create-release:
+    needs: [raise-version, publish]
+    if: ${{ inputs.create_release && inputs.deploy }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download release notes
+        uses: actions/download-artifact@v8
+        with:
+          name: release-notes
 
       - name: Download CycloneDX SBOM artifacts
         if: ${{ inputs.generate_sbom }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: sbom-*
           merge-multiple: true
@@ -589,7 +608,6 @@ jobs:
           RUN_ID: ${{ github.run_id }}
         run: |
           set -e
-
           # Replace version placeholder
           sed "s/{{VERSION}}/${VERSION}/g" release_notes_template.md > release_body.md
 
