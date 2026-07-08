@@ -872,7 +872,10 @@ jobs:
             mkdir -p metadata_artifact tmp_meta
             docker cp $container_id:/tmp/proj_metadata.tar.gz ./metadata_artifact/metadata.tar.gz
 
-            echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-noetic:$(cat product.version)">artifacts/product-noetic.image.artifact
+            DISTROS=$(echo '${{ needs.Normalize-Distro-Input.outputs.product_distro_list }}' | jq -r '.[] | .distro')
+            for distro in $DISTROS; do
+              echo "$PUSH_REGISTRY/qa/${{ inputs.product_name }}-${distro}:$(cat product.version)" >> artifacts/product-workspaces.image.artifact
+            done
 
       - name: Un stash dependency_version
         if: ${{ inputs.propagate_project == false }}
@@ -2361,9 +2364,9 @@ jobs:
           cp artifacts/*.json deployment_artifacts
           if [ "${{ inputs.with_simulation }}" = "true" ];
           then
-            echo -e "$(cat ./artifacts/product-noetic.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
+            cat ./artifacts/product-workspaces.image.artifact ./simulator.image.artifact > deployment_artifacts/product.image.artifact
           else
-            cp ./artifacts/product-noetic.image.artifact deployment_artifacts/product.image.artifact
+            cp ./artifacts/product-workspaces.image.artifact deployment_artifacts/product.image.artifact
           fi
 
           cp deployment_artifacts/product.image.artifact ./
