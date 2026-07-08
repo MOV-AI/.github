@@ -502,8 +502,7 @@ jobs:
                      "${OFFICIAL_IMAGE}"
           OFFICIAL_PUSH_OUTPUT="$(docker push "${OFFICIAL_IMAGE}" 2>&1)"
           echo "${OFFICIAL_PUSH_OUTPUT}"
-          OFFICIAL_DIGEST="$(printf '%s\n' "${OFFICIAL_PUSH_OUTPUT}" | awk '/digest: sha256:/ { print $2; exit }')"
-
+          OFFICIAL_DIGEST="$(printf '%s\n' "${OFFICIAL_PUSH_OUTPUT}" | grep -oP 'sha256:[a-f0-9]{64}' | head -1)"
           if [ -z "${OFFICIAL_DIGEST}" ] || ! [[ "${OFFICIAL_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
             echo "Failed to capture digest for pushed image ${OFFICIAL_IMAGE}"
             exit 1
