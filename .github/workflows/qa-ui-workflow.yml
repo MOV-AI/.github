@@ -15,6 +15,21 @@ on:
         type: string
         description: Selenoid server to use
         default: http://selenoid-ui.hel.mov.ai
+      with_fleet_tests:
+        required: false
+        type: boolean
+        default: true
+        description: Enable Fleet UI tests in this workflow
+      fleet_test_set:
+        required: false
+        type: string
+        default: fleet_ui_tests
+        description: Fleet UI test set to execute
+      fleet_pytest_filter:
+        required: false
+        type: string
+        default: -m "fleet"
+        description: Pytest selector for Fleet UI tests
     secrets:
       gh_token:
         required: true
@@ -57,6 +72,19 @@ jobs:
           xray download ${{ inputs.test_set }}
           xray compare ./tests/feature/
 
+      - name: Fleet feature file validation
+        if: ${{ inputs.with_fleet_tests }}
+        shell: bash
+        env:
+          XRAY_CLIENTID: ${{ secrets.xray_clientid }}
+          XRAY_SECRET: ${{ secrets.xray_secret }}
+          JIRA_USERNAME: ${{ secrets.jira_username }}
+          JIRA_PASSWORD: ${{ secrets.jira_password }}
+        run: |
+          . venv/bin/activate
+          xray download ${{ inputs.fleet_test_set }}
+          xray compare ./tests/feature/
+
   Validate:
     runs-on: ubuntu-latest
     steps:
@@ -79,18 +107,7 @@ jobs:
 
   Run-tests:
     runs-on: qa-runner
-    needs: [Validate]
-    strategy:
-      fail-fast: false
-      matrix:
-        environment: [standalone, fleet]
-        include:
-          - environment: standalone
-            pytest_flags: "--install-platform"
-            artifact_name: "qa_artifacts_ui_standalone"
-          - environment: fleet
-            pytest_flags: "--install-fleet -m 'fleet'"
-            artifact_name: "qa_artifacts_ui_fleet"
+    needs: [Validate, Validate-features]
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
@@ -126,19 +143,19 @@ jobs:
           # install tests requirements in venv
           pip install -r requirements.txt
 
-      - name: UI tests (${{ matrix.environment }})
+      - name: UI tests
         id: ui
         shell: bash
         run: |
           export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
+          # activate venv
           . venv/bin/activate
-
-          # Execute pytest using the matrix flags
+          # tests execution
           pytest \
             --hub_url ${{ inputs.selenoid_server_url }} \
             --base_url https://${{ steps.agent_info.outputs.ip }}/ \
-            ${{ matrix.pytest_flags }} \
-            | tee pytest-output-${{ matrix.environment }}.log
+            --install-platform \
+            | tee pytest-output.log
 
       - name: Save docker container logs
         if: always()
@@ -184,7 +201,125 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
+          name: qa_artifacts_ui_tests
+          path: qa_artifacts/*
+          retention-days: 3
+
+      - name: Remove robots
+        if: always()
+        shell: bash
+        run: |
+          timeout 30 movai-cli remove --all || true
+
+      - name: Docker cleanups
+        if: always()
+        shell: bash
+        run: |
+          if [ "$(docker ps -aq)" ]; then
+            docker rm -f $(docker ps -aq)
+          fi
+          docker system prune -f
+          docker image prune --all -f
+
+  Run-fleet-tests:
+    if: ${{ inputs.with_fleet_tests }}
+    runs-on: qa-runner
+    needs: [Validate, Validate-features]
+    steps:
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Agent info
+        id: agent_info
+        run: |
+          ip_tmp=$(hostname -I | awk '{print $1}')
+          echo "ip=$ip_tmp" | tee >> $GITHUB_OUTPUT
+
+      - name: Update/upgrade host packages
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
+          sudo apt-get update
+          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
+          sudo apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -y
+
+      - name: Setup environment
+        shell: bash
+        run: |
+          # install test dependencies on host
+          sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
+
+          # create virtual environment
+          rm -rf venv
+          python3 -m venv venv
+          . venv/bin/activate
+
+          # install tests requirements in venv
+          pip install -r requirements.txt
+
+      - name: Fleet UI tests
+        id: fleet_ui
+        shell: bash
+        run: |
+          export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
+          # activate venv
+          . venv/bin/activate
+          # tests execution
+          pytest \
+            --hub_url ${{ inputs.selenoid_server_url }} \
+            --base_url https://${{ steps.agent_info.outputs.ip }}/ \
+            --install-platform \
+            ${{ inputs.fleet_pytest_filter }} \
+            | tee pytest-fleet-output.log
+
+      - name: Save docker container logs
+        if: always()
+        shell: bash
+        run: |
+          # for sanity
+          docker ps -a
+
+          # save all container logs and inspect
+          CONTAINERS=$(docker ps -a --format '{{.Names}}')
+          for container in ${CONTAINERS}; do
+              docker logs "${container}" &> "${container}.log" || true
+              docker inspect "${container}" &> "${container}-inspect.log"
+          done || true
+
+          # movai-service
+          journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
+
+          # spawner (mobros firmware)
+          journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
+
+      - name: Stash Fleet QA artifacts
+        if: always()
+        shell: bash
+        run: |
+          # cleanup
+          rm -rf qa_artifacts
+
+          # tests artifacts
+          # *.log and *.zip might not exist if the test fails early
+          mkdir -p qa_artifacts
+          cp -r *.log ./qa_artifacts || true
+          cp -r *.tar ./qa_artifacts || true
+          cp -r *.json ./qa_artifacts || true
+          cp -r *.html ./qa_artifacts || true
+          cp -r tests_artifacts ./qa_artifacts || true
+
+          # install
+          mkdir -p qa_artifacts/install
+          cp -r ./installation ./qa_artifacts/ || true
+
+      - name: Upload Fleet artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa_artifacts_fleet_ui_tests
           path: qa_artifacts/*
           retention-days: 3
 
