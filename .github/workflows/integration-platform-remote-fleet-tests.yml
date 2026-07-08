@@ -60,6 +60,10 @@ on:
         required: false
         type: string
         default: 'C02PB9A9F45' # rnd-platform
+      simple_ui_tests:
+        required: false
+        type: boolean
+        default: false
 
     secrets:
       auto_commit_user:
@@ -170,6 +174,7 @@ jobs:
 
       - name: Download Robot Configs
         uses: actions/download-artifact@v5
+        if: ${{ inputs.simple_ui_tests }}
         with:
           name: robot_configs
           path: .
