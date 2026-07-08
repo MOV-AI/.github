@@ -59,7 +59,7 @@ on:
       slack_channel:
         required: false
         type: string
-        default: 'C02PB9A9F45' # rnd-platform
+        default: '' # rnd-platform
       simple_ui_tests:
         required: false
         type: boolean

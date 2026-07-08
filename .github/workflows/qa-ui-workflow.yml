@@ -321,7 +321,7 @@ jobs:
       slack_thread_id: ${{ needs.Resolve-fleet-context.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ inputs.backend_name }}
       test_timeout: 120
-      slack_channel: ${{ inputs.slack_channel }}
+      slack_channel: ''
       provision_tf_env_repo: ${{ needs.Resolve-fleet-context.outputs.PROVISIONING_ENV_REPO }}
       provision_tf_env_version: ${{ needs.Resolve-fleet-context.outputs.PROVISIONING_ENV_VERSION }}
       provision_infra_repo: ${{ needs.Resolve-fleet-context.outputs.PROVISION_INFRA_REPO }}
