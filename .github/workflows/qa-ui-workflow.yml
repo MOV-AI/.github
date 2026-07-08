@@ -15,7 +15,6 @@ on:
         type: string
         description: Selenoid server to use
         default: http://selenoid-ui.hel.mov.ai
-      # --- New Inputs for Fleet Validations ---
       proxmox_cluster_name:
         required: false
         type: string
@@ -69,8 +68,8 @@ env:
   AWS_DEFAULT_REGION: "us-east-1"
   REGISTRY: registry.cloud.mov.ai
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-17"
-  PROVISIONING_ENV_VERSION: "0.1.0-17"
+  PROVISION_INFRA_VERSION: "2.2.0-2"
+  PROVISIONING_ENV_VERSION: "0.2.2-5"
   PROVISIONING_ENV_REPO: devops-tf-env-conf
   ARTIFACTS_RETENTION_DAYS: 15
 
