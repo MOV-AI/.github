@@ -296,15 +296,19 @@ jobs:
         id: infra_names
         shell: bash
         run: |
-          branch=${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}
-          branch=$(echo "$branch" | sed 's#[^[:alnum:]_-]#-#g; s#-\{2,\}#-#g; s#^-##; s#-$##')
+          raw_ref="${GITHUB_HEAD_REF:-${GITHUB_REF:-${GITHUB_REF_NAME}}}"
+          clean_ref="${raw_ref#refs/heads/}"
+          clean_ref="${clean_ref#refs/pull/}"
 
-          echo "${branch}"
+          clean_branch=$(echo "$clean_ref" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-//;s/-$//' | cut -c1-30 | sed 's/-$//')
 
-          local_manager_prefix="ip-$branch-manager"
-          local_worker_prefix="ip-$branch-worker"
-          echo "$local_manager_prefix"
-          echo "$local_worker_prefix"
+          local_manager_prefix="ip-${clean_branch}-mgr"
+          local_worker_prefix="ip-${clean_branch}-wrk"
+
+          echo "Sanitized Branch: $clean_branch"
+          echo "Manager Name: $local_manager_prefix"
+          echo "Worker Prefix: $local_worker_prefix"
+
           total_resources=${{ inputs.fleet_number_members }}
           ((total_resources+=1))
 
