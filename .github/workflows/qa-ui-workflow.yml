@@ -35,6 +35,10 @@ on:
     secrets:
       gh_token:
         required: true
+      aws_key_id:
+        required: true
+      aws_secret_key_id:
+        required: true
       slack_token_id:
         required: true
       jira_username:
@@ -45,7 +49,6 @@ on:
         required: true
       xray_secret:
         required: true
-      # --- New Secrets for Fleet Validations ---
       proxmox_ve_username:
         required: true
       proxmox_ve_password:
@@ -62,6 +65,9 @@ on:
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.32"
   GITHUB_API_USR: "OttoMation-Movai"
+  AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
+  AWS_DEFAULT_REGION: "us-east-1"
   REGISTRY: registry.cloud.mov.ai
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.0.0-17"
@@ -291,7 +297,8 @@ jobs:
         id: infra_names
         shell: bash
         run: |
-          branch=$(echo ${GITHUB_REF#refs/heads/} | sed "s;\.;-;g" )
+          branch=${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}
+          branch=$(echo "$branch" | sed 's#[^[:alnum:]_-]#-#g; s#-\{2,\}#-#g; s#^-##; s#-$##')
 
           local_manager_prefix="ip-$branch-ui-manager"
           local_worker_prefix="ip-$branch-ui-worker"
@@ -313,15 +320,17 @@ jobs:
 
           var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.proxmox_cluster_name }}_fleet_test.tfvars'
 
-          echo "proxmox_host_list=[$node_list_str]">>input.tfvars
-          echo "fleet_peer_nr=${{ inputs.fleet_number_members }}">>input.tfvars
-          echo 'fleet_password="n/a"'>>input.tfvars
-          echo 'fleet_manager_name="${{ steps.infra_names.outputs.manager_prefix }}"'>>input.tfvars
-          echo 'fleet_peer_name_prefix="${{ steps.infra_names.outputs.worker_prefix }}"'>>input.tfvars
-          echo 'ip_list=${{ inputs.fleet_ips }}'>>input.tfvars
-          echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
-          echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
-          echo "\n">>input
+          {
+            echo "proxmox_host_list=[$node_list_str]"
+            echo "fleet_peer_nr=${{ inputs.fleet_number_members }}"
+            echo 'fleet_password="n/a"'
+            echo 'fleet_manager_name="${{ steps.infra_names.outputs.manager_prefix }}"'
+            echo 'fleet_peer_name_prefix="${{ steps.infra_names.outputs.worker_prefix }}"'
+            echo 'ip_list=${{ inputs.fleet_ips }}'
+            echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'
+            echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'
+            printf '\n'
+          } >> input.tfvars
 
           terraform init -backend-config="key=${{ inputs.proxmox_cluster_name }}-fleet-ui-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
           terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
