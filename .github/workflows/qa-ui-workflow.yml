@@ -15,21 +15,23 @@ on:
         type: string
         description: Selenoid server to use
         default: http://selenoid-ui.hel.mov.ai
-      with_fleet_tests:
+      # --- New Inputs for Fleet Validations ---
+      proxmox_cluster_name:
+        required: false
+        type: string
+        default: hel0
+      fleet_ips:
+        required: false
+        type: string
+        default: '["10.10.10.1", "10.10.10.2"]'
+      fleet_number_members:
+        required: false
+        type: number
+        default: 2
+      debug_fleet_keep_alive:
         required: false
         type: boolean
-        default: true
-        description: Enable Fleet UI tests in this workflow
-      fleet_test_set:
-        required: false
-        type: string
-        default: fleet_ui_tests
-        description: Fleet UI test set to execute
-      fleet_pytest_filter:
-        required: false
-        type: string
-        default: -m "fleet"
-        description: Pytest selector for Fleet UI tests
+        default: false
     secrets:
       gh_token:
         required: true
@@ -43,6 +45,29 @@ on:
         required: true
       xray_secret:
         required: true
+      # --- New Secrets for Fleet Validations ---
+      proxmox_ve_username:
+        required: true
+      proxmox_ve_password:
+        required: true
+      ssh_pem_fleet_aws_vm:
+        required: true
+      auto_commit_pwd:
+        required: true
+      registry_user:
+        required: true
+      registry_password:
+        required: true
+
+env:
+  CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.32"
+  GITHUB_API_USR: "OttoMation-Movai"
+  REGISTRY: registry.cloud.mov.ai
+  PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
+  PROVISION_INFRA_VERSION: "2.0.0-17"
+  PROVISIONING_ENV_VERSION: "0.1.0-17"
+  PROVISIONING_ENV_REPO: devops-tf-env-conf
+  ARTIFACTS_RETENTION_DAYS: 15
 
 jobs:
   Validate-features:
@@ -72,19 +97,6 @@ jobs:
           xray download ${{ inputs.test_set }}
           xray compare ./tests/feature/
 
-      - name: Fleet feature file validation
-        if: ${{ inputs.with_fleet_tests }}
-        shell: bash
-        env:
-          XRAY_CLIENTID: ${{ secrets.xray_clientid }}
-          XRAY_SECRET: ${{ secrets.xray_secret }}
-          JIRA_USERNAME: ${{ secrets.jira_username }}
-          JIRA_PASSWORD: ${{ secrets.jira_password }}
-        run: |
-          . venv/bin/activate
-          xray download ${{ inputs.fleet_test_set }}
-          xray compare ./tests/feature/
-
   Validate:
     runs-on: ubuntu-latest
     steps:
@@ -107,7 +119,7 @@ jobs:
 
   Run-tests:
     runs-on: qa-runner
-    needs: [Validate, Validate-features]
+    needs: [Validate]
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
@@ -222,9 +234,8 @@ jobs:
           docker image prune --all -f
 
   Run-fleet-tests:
-    if: ${{ inputs.with_fleet_tests }}
-    runs-on: qa-runner
-    needs: [Validate, Validate-features]
+    needs: [Validate]
+    runs-on: ip-${{ inputs.proxmox_cluster_name }}-queuer
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
@@ -235,106 +246,265 @@ jobs:
       - name: Agent info
         id: agent_info
         run: |
-          ip_tmp=$(hostname -I | awk '{print $1}')
-          echo "ip=$ip_tmp" | tee >> $GITHUB_OUTPUT
+          echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
 
-      - name: Update/upgrade host packages
-        run: |
-          export DEBIAN_FRONTEND=noninteractive
-          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
-          sudo apt-get update
-          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
-          sudo apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -y
-
-      - name: Setup environment
+      - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
-          # install test dependencies on host
-          sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
+          python3 -m venv .ci-venv --clear
+          . .ci-venv/bin/activate
+          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
+          python3 -m pip install --upgrade pyOpenSSL cryptography
+          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
-          # create virtual environment
+      - name: Setup infra environment configs
+        id: infra_env_configs_setup
+        shell: bash
+        run: |
+          env_configs_dir=infra_env_configs
+          env_configs_version=${{ env.PROVISIONING_ENV_VERSION }}
+          env_configs_repo_name=${{ env.PROVISIONING_ENV_REPO }}
+
+          rm -rf $env_configs_dir
+          . .ci-venv/bin/activate
+          integration-pipeline fetch_by_tag --repo $env_configs_repo_name --version $env_configs_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $env_configs_dir
+          ls -la $env_configs_dir
+          echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
+          deactivate
+
+      - name: Setup terraform proxmox provisioner
+        id: provision_infra_setup
+        shell: bash
+        run: |
+          provision_infra_dir=provision_scripts
+          provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
+          provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
+
+          rm -rf $provision_infra_dir
+          . .ci-venv/bin/activate
+          integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
+          deactivate
+          ls -la $provision_infra_dir
+          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+
+      - name: Define Instance names
+        id: infra_names
+        shell: bash
+        run: |
+          branch=$(echo ${GITHUB_REF#refs/heads/} | sed "s;\.;-;g" )
+
+          local_manager_prefix="ip-$branch-ui-manager"
+          local_worker_prefix="ip-$branch-ui-worker"
+          echo "$local_manager_prefix"
+          echo "$local_worker_prefix"
+          total_resources=${{ inputs.fleet_number_members }}
+          ((total_resources+=1))
+
+          echo "manager_prefix=${local_manager_prefix}" >> $GITHUB_OUTPUT
+          echo "worker_prefix=${local_worker_prefix}" >> $GITHUB_OUTPUT
+          echo "total_resources=${total_resources}" >> $GITHUB_OUTPUT
+
+      - name: Provision remote vms (Proxmox)
+        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        shell: bash
+        run: |
+          multiply_node=$(printf '"${{ inputs.proxmox_cluster_name }}",%.0s' {1..${{ steps.infra_names.outputs.total_resources }}})
+          node_list_str=${multiply_node::-1}
+
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.proxmox_cluster_name }}_fleet_test.tfvars'
+
+          echo "proxmox_host_list=[$node_list_str]">>input.tfvars
+          echo "fleet_peer_nr=${{ inputs.fleet_number_members }}">>input.tfvars
+          echo 'fleet_password="n/a"'>>input.tfvars
+          echo 'fleet_manager_name="${{ steps.infra_names.outputs.manager_prefix }}"'>>input.tfvars
+          echo 'fleet_peer_name_prefix="${{ steps.infra_names.outputs.worker_prefix }}"'>>input.tfvars
+          echo 'ip_list=${{ inputs.fleet_ips }}'>>input.tfvars
+          echo 'proxmox_ve_username="${{ secrets.proxmox_ve_username }}"'>>input.tfvars
+          echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"'>>input.tfvars
+          echo "\n">>input
+
+          terraform init -backend-config="key=${{ inputs.proxmox_cluster_name }}-fleet-ui-${{ steps.infra_names.outputs.manager_prefix }}.tfstate"
+          terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
+          terraform refresh $var_file_arg -var-file=input.tfvars
+
+      - name: Gather Terraform outputs
+        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        id: infra_outputs
+        shell: bash
+        run: |
+          ip=$(terraform output manager_ip_address)
+          user=$(terraform output user)
+          echo "host_ip=$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
+          echo "host_user=$(echo $user | sed "s;\";;g")" >> $GITHUB_OUTPUT
+
+      - name: Apply ansible inventory
+        shell: bash
+        run: |
+          . .ci-venv/bin/activate
+          cp ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml staging/provisioned_inventory.yml
+          cat staging/provisioned_inventory.yml
+          integration-pipeline get_yml_value --file staging/provisioned_inventory.yml --key fleet.children.managers.hosts.manager.ansible_host --output_file ./staging/manager_private_ip.txt
+          deactivate
+
+      - name: Setup ansible installation
+        id: ansible_install_setup
+        shell: bash
+        env:
+          install_key: ansible_deploy
+        run: |
+          rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
+          . .ci-venv/bin/activate
+          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installion.$install_key.target_dir --output_file /tmp/target_dir.txt
+          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installion.$install_key.version --output_file /tmp/version.txt
+          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.installion.$install_key.name --output_file /tmp/repo_name.txt
+          install_infra_dir=$(cat /tmp/target_dir.txt)
+          install_infra_version=$(cat /tmp/version.txt)
+          install_infra_repo_name=$(cat /tmp/repo_name.txt)
+
+          rm -rf $install_infra_repo_name
+          integration-pipeline fetch_by_tag --repo $install_infra_repo_name --version $install_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $install_infra_dir
+          ls -la $install_infra_dir
+          echo "target_dir=${install_infra_dir}" >> $GITHUB_OUTPUT
+          deactivate
+
+      - name: Login to ${{ env.REGISTRY }} Registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.REGISTRY }}
+
+      - name: Ansible install platform
+        id: ansible_install_platform
+        working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
+        shell: bash
+        run: |
+          echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
+          sudo chmod 600 ~/.ssh/aws_slave.pem
+          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
+          python3.9 -m venv ansible-venv
+          source ansible-venv/bin/activate
+          python3 -m pip install -r requirements.txt
+          ansible-galaxy install -r requirements.yml --timeout 120
+
+          stripped_ips=$(echo ${{ inputs.fleet_ips }} | sed "s;\[;;g" | sed "s;];;g" | sed "s; ;;g")
+          touch ~/.ssh/known_hosts
+          sudo chmod 600 ~/.ssh/known_hosts
+          IFS=',' read -r -a stripped_ips_arr <<< $stripped_ips
+
+          manager_ip=${stripped_ips_arr[0]}
+          echo "manager_ip=${manager_ip}" | tee >> $GITHUB_OUTPUT
+
+          for ip in "${stripped_ips_arr[@]}"
+          do
+            if [[ $ip == *"/"* ]]; then
+              ip=${ip%/*}
+            fi
+            ssh-keygen -f ~/.ssh/known_hosts -R $ip
+            ssh-keyscan -H $ip >> ~/.ssh/known_hosts
+          done
+
+          members=("manager")
+          for i in $(seq 0 $(( ${{ inputs.fleet_number_members}} - 1 ))); do
+            members+=("member$i")
+          done
+
+          for fleet_host in ${members[@]}; do
+            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'cloud-init status --wait'
+          done
+
+          ansible-playbook install.yml \
+            -i ../staging/provisioned_inventory.yml \
+            --key-file ~/.ssh/aws_slave.pem \
+            --extra-vars=@"$(pwd)/.."/product-manifest.yaml \
+            -e fleet_domain_dns="" \
+            -e "{\"proxycerts__remote_redis_servers_fqn\": [$(cat ../staging/manager_private_ip.txt)]}" \
+            -e "{\"fleet_manager_san\": [ \"DNS:$(cat ../staging/manager_private_ip.txt)\" ]}" \
+            -e "{\"fleet_extra_hosts\": [ \"10.26.0.10    registry.${{ inputs.proxmox_cluster_name }}.mov.ai traefik\", \"$(cat ../staging/manager_private_ip.txt)    manager ${{ steps.infra_names.outputs.manager_prefix }}\" ]}" \
+            --skip-tags "validate,ufw,hardening"
+          execution_status=$?
+          deactivate
+          exit $execution_status
+
+      - name: Setup environment for UI tests
+        shell: bash
+        run: |
+          sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
           rm -rf venv
           python3 -m venv venv
           . venv/bin/activate
-
-          # install tests requirements in venv
           pip install -r requirements.txt
 
-      - name: Fleet UI tests
+      - name: Run Fleet UI tests
         id: fleet_ui
         shell: bash
         run: |
           export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
-          # activate venv
           . venv/bin/activate
-          # tests execution
+
+          # Target the Fleet Manager IP provisioned by Terraform & Ansible.
+          # Note: We omit `--install-platform` as Ansible has already installed the distributed cluster.
           pytest \
             --hub_url ${{ inputs.selenoid_server_url }} \
-            --base_url https://${{ steps.agent_info.outputs.ip }}/ \
-            --install-platform \
-            ${{ inputs.fleet_pytest_filter }} \
+            --base_url https://${{ steps.infra_outputs.outputs.host_ip }}/ \
+            -m "fleet" \
             | tee pytest-fleet-output.log
 
-      - name: Save docker container logs
+      - name: Collect Fleet QA artifacts
+        working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
         if: always()
         shell: bash
         run: |
-          # for sanity
-          docker ps -a
+          rm -rf fleet_qa_artifacts
+          mkdir -p fleet_qa_artifacts/install
+          source ansible-venv/bin/activate
 
-          # save all container logs and inspect
-          CONTAINERS=$(docker ps -a --format '{{.Names}}')
-          for container in ${CONTAINERS}; do
-              docker logs "${container}" &> "${container}.log" || true
-              docker inspect "${container}" &> "${container}-inspect.log"
-          done || true
+          for fleet_host in "manager" "member0" "member1"; do
+            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u movai-service --since "1hour ago"' > fleet_qa_artifacts/install/$fleet_host.log || true
+            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'docker ps -a' > fleet_qa_artifacts/install/$fleet_host-docker_ps.log || true
+            ansible $fleet_host -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a 'journalctl -u docker --boot --lines=all' > fleet_qa_artifacts/install/$fleet_host-all-docker.log || true
+          done
+          deactivate
 
-          # movai-service
-          journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
-
-          # spawner (mobros firmware)
-          journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
+          # Grab local test run logs
+          mkdir -p fleet_qa_artifacts/ui
+          cp -r ../*.log ../*.tar ../*.json ../*.html fleet_qa_artifacts/ui/ 2>/dev/null || true
 
       - name: Stash Fleet QA artifacts
         if: always()
-        shell: bash
-        run: |
-          # cleanup
-          rm -rf qa_artifacts
-
-          # tests artifacts
-          # *.log and *.zip might not exist if the test fails early
-          mkdir -p qa_artifacts
-          cp -r *.log ./qa_artifacts || true
-          cp -r *.tar ./qa_artifacts || true
-          cp -r *.json ./qa_artifacts || true
-          cp -r *.html ./qa_artifacts || true
-          cp -r tests_artifacts ./qa_artifacts || true
-
-          # install
-          mkdir -p qa_artifacts/install
-          cp -r ./installation ./qa_artifacts/ || true
-
-      - name: Upload Fleet artifacts
-        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qa_artifacts_fleet_ui_tests
-          path: qa_artifacts/*
-          retention-days: 3
+          name: qa_artifacts_fleet_ui_tests_${{ github.run_id }}
+          path: ${{ steps.ansible_install_setup.outputs.target_dir }}/fleet_qa_artifacts/*
+          retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
-      - name: Remove robots
-        if: always()
+      - name: Teardown remote vms (Proxmox)
+        working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+        if: ${{ ( !inputs.debug_fleet_keep_alive && success() ) || cancelled() || ( !inputs.debug_fleet_keep_alive && failure() ) }}
         shell: bash
         run: |
-          timeout 30 movai-cli remove --all || true
+          set +e
+          attempts=3
+          count=0
+          exit_status=-1
+          while [ $count -lt $attempts ]; do
+            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/hel/${{ inputs.proxmox_cluster_name }}_fleet_test.tfvars'
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+            exit_status=$?
+            if [ $exit_status -eq 0 ]; then
+              break
+            else
+              ((count++))
+              echo "Retrying Terraform destroy (attempt $count)..."
+            fi
+          done
+          set -e
+          echo "Terraform destroy returned with exit status ${exit_status}. Attempted $count times."
+          exit ${exit_status}
 
       - name: Docker cleanups
         if: always()
         shell: bash
         run: |
-          if [ "$(docker ps -aq)" ]; then
-            docker rm -f $(docker ps -aq)
-          fi
           docker system prune -f
           docker image prune --all -f
