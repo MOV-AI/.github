@@ -32,9 +32,9 @@ runs:
         DIGEST_INPUT: ${{ inputs.digest }}
       run: |
         set -e -o pipefail
-
         DIGEST="${DIGEST_INPUT}"
-
+        DIGEST="${DIGEST//[[:space:]]/}"
+        DIGEST="${DIGEST,,}"
         if ! [[ "${DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
           echo "Invalid digest format (expected sha256:<64-hex>): ${DIGEST_INPUT}"
           exit 1
