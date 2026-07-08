@@ -373,7 +373,7 @@ jobs:
 
       - name: Generate and attach CycloneDX SBOM to /ci/ image
         if: ${{ inputs.generate_sbom }}
-        uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@feat/docker_sbom_cycloneDX_reviewed
+        uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@v3
         with:
           image: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
           digest: ${{ steps.build_ci_image.outputs.digest }}
@@ -550,7 +550,7 @@ jobs:
 
       - name: Generate and attach CycloneDX SBOM
         if: ${{ inputs.generate_sbom }}
-        uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@feat/docker_sbom_cycloneDX_reviewed
+        uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@v3
         with:
           image: ${{ steps.push_images.outputs.image }}
           digest: ${{ steps.push_images.outputs.digest }}
