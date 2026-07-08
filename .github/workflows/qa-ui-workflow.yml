@@ -139,9 +139,22 @@ jobs:
     outputs:
       fleet_tests_list: ${{ steps.extract_fleet_tests_list.outputs.fleet_tests_list }}
       slack_thread_id: ${{ steps.send-message.outputs.ts }}
+      PROVISIONING_ENV_REPO: ${{ steps.export_env.outputs.PROVISIONING_ENV_REPO }}
+      PROVISIONING_ENV_VERSION: ${{ steps.export_env.outputs.PROVISIONING_ENV_VERSION }}
+      PROVISION_INFRA_REPO: ${{ steps.export_env.outputs.PROVISION_INFRA_REPO }}
+      PROVISION_INFRA_VERSION: ${{ steps.export_env.outputs.PROVISION_INFRA_VERSION }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Export Env variables
+        id: export_env
+        shell: bash
+        run: |
+          echo "PROVISIONING_ENV_REPO=${PROVISIONING_ENV_REPO}" >> $GITHUB_OUTPUT
+          echo "PROVISIONING_ENV_VERSION=${PROVISIONING_ENV_VERSION}" >> $GITHUB_OUTPUT
+          echo "PROVISION_INFRA_REPO=${PROVISION_INFRA_REPO}" >> $GITHUB_OUTPUT
+          echo "PROVISION_INFRA_VERSION=${PROVISION_INFRA_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Extract fleet tests list
         id: extract_fleet_tests_list
@@ -309,10 +322,10 @@ jobs:
       backend_image_name_and_tag: ${{ inputs.backend_name }}
       test_timeout: 120
       slack_channel: ${{ inputs.slack_channel }}
-      provision_tf_env_repo: ${{ env.PROVISIONING_ENV_REPO }}
-      provision_tf_env_version: ${{ env.PROVISIONING_ENV_VERSION }}
-      provision_infra_repo: ${{ env.PROVISION_INFRA_REPO }}
-      provision_infra_version: ${{ env.PROVISION_INFRA_VERSION }}
+      provision_tf_env_repo: ${{ needs.Resolve-fleet-context.outputs.PROVISIONING_ENV_REPO }}
+      provision_tf_env_version: ${{ needs.Resolve-fleet-context.outputs.PROVISIONING_ENV_VERSION }}
+      provision_infra_repo: ${{ needs.Resolve-fleet-context.outputs.PROVISION_INFRA_REPO }}
+      provision_infra_version: ${{ needs.Resolve-fleet-context.outputs.PROVISION_INFRA_VERSION }}
       fleet_number_members: ${{ inputs.fleet_number_members }}
       fleet_ips: ${{ inputs.fleet_ips }}
       proxmox_cluster_name: ${{ inputs.proxmox_cluster_name }}
