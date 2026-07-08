@@ -255,11 +255,12 @@ jobs:
       - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
-          python3 -m venv .ci-venv --clear
+          python3.9 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
+          python -m pip install --upgrade pip
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install --upgrade pyOpenSSL cryptography
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python -m pip install --upgrade pyOpenSSL cryptography
+          python -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: Setup infra environment configs
         id: infra_env_configs_setup
