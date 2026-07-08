@@ -313,7 +313,7 @@ jobs:
 
   Fleet-Validations:
     needs: [Validate, Resolve-fleet-context]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@v3
+    uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@feat/DP-2081_fleet-ui-tests
     secrets: inherit
     with:
       collect_deployable_artifacts: true
