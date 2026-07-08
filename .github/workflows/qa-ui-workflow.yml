@@ -311,6 +311,14 @@ jobs:
           echo "worker_prefix=${local_worker_prefix}" >> $GITHUB_OUTPUT
           echo "total_resources=${total_resources}" >> $GITHUB_OUTPUT
 
+      - name: Verify Required Secrets & Credentials
+        shell: bash
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "::error::AWS credentials are empty! Ensure the calling workflow passes 'aws_key_id' and 'aws_secret_key_id' (or uses 'secrets: inherit')."
+            exit 1
+          fi
+
       - name: Provision remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
