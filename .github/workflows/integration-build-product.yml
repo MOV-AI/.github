@@ -86,6 +86,11 @@ on:
         required: false
         type: string
         default: "simulator_tests"
+      generate_sbom:
+        required: false
+        type: boolean
+        default: true
+        description: Generate CycloneDX SBOM and attach it as Harbor accessory for pushed images
 
     secrets:
       auto_commit_user:
@@ -2231,9 +2236,13 @@ jobs:
           fi
           echo -e "## ${{ github.job }} Summary\n${summary_message}" >> $GITHUB_STEP_SUMMARY
 
-  publish:
+  publish-prepare:
     needs: [Validate-boostrap-configs, Install-Robot, Install-Simulator-Robot, Validation-Simulator-Tests]
     runs-on: integration-pipeline
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      previous_version: ${{ steps.bump.outputs.previous_version }}
+      sbom_matrix: ${{ steps.bump.outputs.sbom_matrix }}
     container:
       image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
       credentials:
@@ -2333,7 +2342,7 @@ jobs:
                 --branch ${GITHUB_REF#refs/heads/}
           deactivate
 
-      - name: Publish and create release
+      - name: Push images and prepare release artifacts
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
         id: bump
         shell: bash
@@ -2343,6 +2352,7 @@ jobs:
           git config --global user.email '${{ secrets.auto_commit_mail }}'
           git config --global user.password ${{ secrets.auto_commit_pwd }}
 
+          previous_version=$(cat product.version)
           cp ./platform_configs/product.version product.version
           cp ./platform_configs/.bumpversion.cfg .bumpversion.cfg
           mkdir -p deployment_artifacts
@@ -2370,11 +2380,13 @@ jobs:
           fi
 
           cp deployment_artifacts/product.image.artifact ./
+          rm -f sbom_targets.tsv
 
           SAVEIFS=$IFS
           IFS=$'\n'
           images=($(cat product.image.artifact))
           IFS=$SAVEIFS   # Restore original IFS
+          index=0
 
           for image in "${images[@]}"
           do
@@ -2383,36 +2395,135 @@ jobs:
             docker pull $source
             echo "tagging $source as $target"
             docker tag $source $target
-            docker push $target
+            PUSH_OUTPUT="$(docker push $target 2>&1)"
+            echo "$PUSH_OUTPUT"
+            PUSH_DIGEST="$(printf '%s\n' "${PUSH_OUTPUT}" | grep -oP 'sha256:[a-f0-9]{64}' | head -1)"
+            if [ -z "${PUSH_DIGEST}" ] || ! [[ "${PUSH_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+              echo "Failed to capture digest for pushed image ${target}"
+              exit 1
+            fi
+
+            safe_target_name="${target#${{ env.PUSH_REGISTRY }}/qa/}"
+            safe_target_name="$(echo "$safe_target_name" | sed 's/[^a-zA-Z0-9_.-]/-/g')"
+
+            echo -e "${target}\t${PUSH_DIGEST}\t${safe_target_name}" >> sbom_targets.tsv
+            index=$((index + 1))
           done
+          if [ -f sbom_targets.tsv ] && [ -s sbom_targets.tsv ]; then
+            sbom_matrix=$(jq -R -s -c '
+              split("\n")
+              | map(select(length > 0) | split("\t"))
+              | map({image: .[0], digest: .[1], name: .[2]})
+            ' sbom_targets.tsv)
+          else
+            sbom_matrix='[]'
+          fi
+          echo "sbom_matrix=${sbom_matrix}" >> $GITHUB_OUTPUT
 
           cat product-manifest.yaml
           cp *.yaml deployment_artifacts
           cp metadata.tar.gz deployment_artifacts
+          cp product.version deployment_artifacts
 
           product_version=$(cat product.version)
           deactivate
 
-          # danger zone. Everything will be deleted.
-          git restore product.version
-          git restore product-manifest.yaml
-          git pull
-          # get previous version so we can generate the release report
-          echo "previous_version=$(cat product.version)" >> $GITHUB_OUTPUT
-          echo "$product_version" > product.version
-          git add product.version
-          git add .bumpversion.cfg
-          git commit -m "[skip actions] Automatic Raise"
-
+          # values needed by downstream matrix and release jobs
+          echo "previous_version=${previous_version}" >> $GITHUB_OUTPUT
           echo "version=${product_version}" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+      - name: Stash release deployment artifacts
+        if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}release_deployment_artifacts
+          path: deployment_artifacts/*
+          retention-days: 7
+
+  generate-sbom:
+    needs: [publish-prepare]
+    if: ${{ inputs.generate_sbom && inputs.is_nightly_run == false && github.event_name != 'pull_request' && needs.publish-prepare.outputs.sbom_matrix != '' && needs.publish-prepare.outputs.sbom_matrix != '[]' }}
+    runs-on: integration-pipeline
+    strategy:
+      fail-fast: false
+      matrix:
+        image_target: ${{ fromJSON(needs.publish-prepare.outputs.sbom_matrix) }}
+    steps:
+      - name: Login to ${{ env.PUSH_REGISTRY }} Registry
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.PUSH_REGISTRY }}
+
+      - name: Generate and attach CycloneDX SBOM
+        uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@v3
+        with:
+          image: ${{ matrix.image_target.image }}
+          digest: ${{ matrix.image_target.digest }}
+          sbom_file: sbom-${{ matrix.image_target.name }}.cyclonedx.json
+          artifact_name: sbom-${{ matrix.image_target.name }}
+
+  publish:
+    needs: [Validate-boostrap-configs, Install-Simulator-Robot, publish-prepare, generate-sbom]
+    if: ${{ always() }}
+    runs-on: integration-pipeline
+    outputs:
+      slack_thread_id: ${{ needs.Install-Simulator-Robot.outputs.slack_thread_id }}
+    container:
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
+      credentials:
+        username: ${{secrets.registry_user}}
+        password: ${{secrets.registry_password}}
+    steps:
+      - uses: rtCamp/action-cleanup@master
+        if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
+
+      - name: unstash raised_meta
+        if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}raised_meta
+          path: platform_configs
+
+      - name: unstash release deployment artifacts
+        if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}release_deployment_artifacts
+          path: deployment_artifacts
 
       - name: Prepare raise variables
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
         id: pre_raise
         run: |
           echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+
+      - name: Create raise commit
+        if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
+        shell: bash
+        run: |
+          git config --global --add safe.directory $(pwd)
+          git config --global user.name '${{ secrets.auto_commit_user }}'
+          git config --global user.email '${{ secrets.auto_commit_mail }}'
+          git config --global user.password ${{ secrets.auto_commit_pwd }}
+
+          cp ./platform_configs/.bumpversion.cfg .bumpversion.cfg
+          echo "${{ needs.publish-prepare.outputs.version }}" > product.version
+
+          git add product.version
+          git add .bumpversion.cfg
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "[skip actions] Automatic Raise"
+          fi
 
       - name: Raise App version
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
@@ -2424,20 +2535,29 @@ jobs:
           branch: ${{ steps.pre_raise.outputs.branch }}
           repository: ${{ github.repository }}
 
+      - name: Download CycloneDX SBOM artifacts
+        if: ${{ inputs.generate_sbom && inputs.is_nightly_run == false && github.event_name != 'pull_request' && needs.generate-sbom.result == 'success' }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: sbom-*
+          merge-multiple: true
+
       - name: Github Publish
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
         shell: bash
         run: |
           commit_hash=$(git log --format="%H" -n 1)
-          product_version=$(cat product.version)
+          product_version="${{ needs.publish-prepare.outputs.version }}"
           previous_version_option=""
-          if gh release view ${{ steps.bump.outputs.previous_version }}  &>/dev/null; then
-            previous_version_option="--notes-start-tag ${{ steps.bump.outputs.previous_version }}"
+          if gh release view ${{ needs.publish-prepare.outputs.previous_version }}  &>/dev/null; then
+            previous_version_option="--notes-start-tag ${{ needs.publish-prepare.outputs.previous_version }}"
           fi
           gh release create -p --generate-notes $previous_version_option --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
 
           # add all files in the deployment_artifacts folder
           find deployment_artifacts -type f -exec gh release upload $product_version {} \;
+          # add all CycloneDX SBOM files
+          find . -name "sbom-*.cyclonedx.json" -type f -exec gh release upload $product_version {} \;
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -2446,7 +2566,7 @@ jobs:
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
         run: |
           # release version
-          product_version=$(cat product.version)
+          product_version="${{ needs.publish-prepare.outputs.version }}"
 
           # get existent release body
           ORIGINAL_RN=$(gh release view "${product_version}" --json body | jq -r .body)
@@ -2517,7 +2637,7 @@ jobs:
           gh workflow run "Propagate base project dependency to projects - On Dispatch" \
             --repo MOV-AI/qa-automations \
             -f repo_name=${GITHUB_REPOSITORY#*/} \
-            -f repo_version=${{ steps.bump.outputs.version }}
+            -f repo_version=${{ needs.publish-prepare.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -2552,7 +2672,6 @@ jobs:
     needs: [publish, Validate-boostrap-configs]
     if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled' || needs.publish.result == 'skipped' ) }}
     steps:
-
       - name: unstash raised_meta
         uses: actions/download-artifact@v8
         with:
