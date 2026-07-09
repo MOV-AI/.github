@@ -1246,12 +1246,9 @@ jobs:
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         run: |
           DISTROS=$(echo '${{ needs.Normalize-Distro-Input.outputs.product_distro_list }}' | jq -r '.[] | .distro')
-
           for distro in $DISTROS; do
             echo "Processing workspaces image for distro: ${distro}"
-
             IMAGE_URI="${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${distro}:${{ needs.Build-Workspace.outputs.raised_version }}"
-
             docker pull "${IMAGE_URI}"
             docker tag "${IMAGE_URI}" "${{ env.IP_MIRROR_REGISTRY }}/qa/${{ inputs.product_name }}-${distro}:${{ needs.Build-Workspace.outputs.raised_version }}"
             docker tag "${IMAGE_URI}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${distro}:${{ needs.Build-Workspace.outputs.raised_version }}"
@@ -1268,12 +1265,8 @@ jobs:
         shell: bash
         run: |
           promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.PUSH_REGISTRY }}-${{ env.IP_MIRROR_REGISTRY }}-g")
-          docker manifest inspect "$promoted_name"
-          if [ $? -ne 0 ]; then
-            set -e
-            docker pull "${{ needs.Build-Simulator.outputs.image_name }}"
-            docker tag "${{ needs.Build-Simulator.outputs.image_name }}" $promoted_name
-          fi
+          docker pull "${{ needs.Build-Simulator.outputs.image_name }}"
+          docker tag "${{ needs.Build-Simulator.outputs.image_name }}" "${promoted_name}"
 
       - name: Installation
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
