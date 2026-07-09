@@ -353,7 +353,7 @@ jobs:
 
       - name: Slack message failure
         uses: slackapi/slack-github-action@v2
-        if: failure() && inputs.slack_channel != ''
+        if: failure() && inputs.slack_channel != '' && !inputs.simple_ui_tests
         with:
           method: chat.postMessage
           payload: |
@@ -743,7 +743,7 @@ jobs:
 
       - name: Slack message for execution
         uses: slackapi/slack-github-action@v2
-        if: always() && inputs.slack_channel != ''
+        if: always() && inputs.slack_channel != '' && !inputs.simple_ui_tests
         with:
           method: chat.postMessage
           payload: |
@@ -828,7 +828,7 @@ jobs:
 
       - name: Slack message for teardown
         uses: slackapi/slack-github-action@v2
-        if: always() && inputs.slack_channel != ''
+        if: always() && inputs.slack_channel != '' && !inputs.simple_ui_tests
         with:
           method: chat.postMessage
           payload: |
@@ -871,7 +871,7 @@ jobs:
 
       - name: Send Success Notification
         uses: slackapi/slack-github-action@v2
-        if: success() && inputs.slack_channel != ''
+        if: success() && inputs.slack_channel != '' && !inputs.simple_ui_tests
         with:
           method: chat.postMessage
           payload: |
@@ -884,7 +884,7 @@ jobs:
 
       - name: Send Failure Notification
         uses: slackapi/slack-github-action@v2
-        if: failure() && inputs.slack_channel != ''
+        if: failure() && inputs.slack_channel != '' && !inputs.simple_ui_tests
         with:
           method: chat.postMessage
           payload: |

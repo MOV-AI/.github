@@ -183,17 +183,17 @@ jobs:
           MESSAGE=":loading: QA UI Fleet validations started for ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}) - Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
 
-      - name: Send Slack Message
-        uses: slackapi/slack-github-action@v3
-        id: send-message
-        with:
-          method: chat.postMessage
-          payload: |
-            {
-              "channel": "${{ inputs.slack_channel }}",
-              "text": "${{ steps.pre_slack.outputs.msg }}"
-            }
-          token: ${{ secrets.slack_token_id }}
+      # - name: Send Slack Message
+      #   uses: slackapi/slack-github-action@v3
+      #   id: send-message
+      #   with:
+      #     method: chat.postMessage
+      #     payload: |
+      #       {
+      #         "channel": "${{ inputs.slack_channel }}",
+      #         "text": "${{ steps.pre_slack.outputs.msg }}"
+      #       }
+      #     token: ${{ secrets.slack_token_id }}
 
   # Run-tests:
   #   runs-on: qa-runner
