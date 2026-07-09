@@ -176,6 +176,13 @@ jobs:
           ")
           echo "fleet_tests_list=${FLEET_TESTS}" >> $GITHUB_OUTPUT
 
+      - name: Upload installation folder
+        if: ${{ inputs.with_fleet_tests }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: robot_configs
+          path: ./installation/
+
       - name: Prepare slack variables
         id: pre_slack
         shell: bash
