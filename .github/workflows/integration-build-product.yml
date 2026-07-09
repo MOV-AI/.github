@@ -812,6 +812,7 @@ jobs:
             python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==0.0.4.3 --ignore-installed
             mobtest proj /opt/ros/noetic/share/
           '
+
       - name: Collect Installed components
         if: always()
         shell: bash
@@ -1451,7 +1452,7 @@ jobs:
   Validation-Simulator-Tests:
     needs: [Validate-boostrap-configs, Compute-timeout, Normalize-Distro-Input, Build-Workspace, Build-Simulator]
     runs-on: ${{ needs.Build-Simulator.outputs.simulator_tests_agent_name }}
-    if: ${{ github.event_name != 'pull_request'}}
+    if: ${{ github.event_name != 'pull_request' || github.event.label.name == 'trigger_sanity' }}
     timeout-minutes: ${{ fromJSON(needs.Compute-timeout.outputs.jobtimeout) }}
     outputs:
       simulation_test_version: ${{ steps.simulator_tests_setup.outputs.version || 'not executed' }}
