@@ -130,7 +130,7 @@ on:
       fleet_password:
         required: true
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "4.1.0.3"
+  CI_INTEGRATION_SCRIPTS_VERSION: "4.3.0.1"
   MOBTEST_VERSION: "0.0.7.2"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.40"
   GITHUB_API_USR: "OttoMation-Movai"
@@ -152,6 +152,8 @@ env:
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.2.0-1"
   ARTIFACTS_RETENTION_DAYS: 15
+  DEPENDENCY_TRACK_URL: "https://sbom.es.mov.ai"
+  HARBOR_URL: "https://registry.cloud.mov.ai/"
 jobs:
   Validate-bootstrap-configs:
     runs-on: integration-pipeline
@@ -706,7 +708,7 @@ jobs:
       simulation_qa_key: ${{ inputs.simulation_qa_key }}
       simulation_qa_version: ${{ inputs.simulation_qa_version }}
 
-  publish:
+  Publish:
     needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
     runs-on: integration-pipeline
     outputs:
@@ -931,6 +933,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
+      - name: Publish SBOMs to Dependency Track
+        if: ${{ inputs.generate_sbom }}
+        run: |
+          . .ci-venv/bin/activate
+          rm -rf deployment_artifacts/publish-sbom/
+          mkdir  -p deployment_artifacts/publish-sbom/
+          chmod -R 777 deployment_artifacts/publish-sbom/
+          integration-pipeline publish_sbom_to_dependency_track $dry_run_flag $regenerate_bad_sboms_flag $tag_latest_flag \
+            --manifest_file deployment_artifacts/product-manifest.yaml \
+            --manifest_platform_base_key product_components \
+            --dependency_track_url ${{ env.DEPENDENCY_TRACK_URL }} \
+            --dependency_track_api_key ${{ secrets.DEPENDENCY_TRACK_API_KEY }} \
+            --harbor_url ${{ env.HARBOR_URL }} \
+            --harbor_user ${{ secrets.PORTUS_APP_USER }} \
+            --harbor_password ${{ secrets.PORTUS_APP_TOKEN }} \
+            --artifacts_output_dir deployment_artifacts/publish-sbom/ | tee deployment_artifacts/publish-sbom/publish-sbom.log
+          deactivate
+
       - name: Prepare slack variables
         if: always()
         id: pre_slack
@@ -952,8 +972,8 @@ jobs:
 
   Run-Status:
     runs-on: ubuntu-22.04
-    needs: [publish, Validate-bootstrap-configs]
-    if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled'  || needs.publish.result == 'skipped') }}
+    needs: [Publish, Validate-bootstrap-configs]
+    if: ${{ always() && ( needs.Publish.result == 'failure' || needs.Publish.result == 'cancelled'  || needs.Publish.result == 'skipped') }}
     steps:
       - name: unstash raised_meta
         uses: actions/download-artifact@v8
