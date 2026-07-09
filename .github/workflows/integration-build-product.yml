@@ -981,6 +981,18 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
+  # Validation-Sanity-Tests:
+  #   needs: [Validate-boostrap-configs, Normalize-Distro-Input, Build-Workspace]
+  #   if: ${{ github.event_name == 'pull_request' && github.event.label.name == 'trigger_sanity' }}
+  #   uses: MOV-AI/.github/.github/workflows/integration-local-standalone-tests.yml@feat/project_trigger_sanity_on_pr
+  #   secrets: inherit
+  #   with:
+  #     test_infra_key: "flow_tests"
+  #     slack_thread_id: "${{ needs.Build-Workspace.outputs.slack_thread_id }}"
+  #     test_timeout: 30
+  #     pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
+  #     slack_channel: "${{ inputs.overwrite_slack_channel }}"
+
   Build-Simulator:
     needs: [Validate-boostrap-configs, Build-Workspace]
     runs-on: integration-pipeline
@@ -1574,17 +1586,20 @@ jobs:
         id: infra_names
         shell: bash
         run: |
-          if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
-            BRANCH_NAME=${{inputs.nightly_run_branch}}
-          else
-            BRANCH_NAME=${GITHUB_REF#refs/heads/}
-          fi
-          branch=$(echo ${BRANCH_NAME} | sed "s;\.;-;g" )
-
           run_type="ci"
-          if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            raw_branch="pr-${{ github.event.pull_request.number }}"
+          elif [ "${{ inputs.is_nightly_run }}" = "true" ]; then
+            raw_branch="${{ inputs.nightly_run_branch }}"
             run_type="lr"
+          else
+            raw_branch="${GITHUB_REF_NAME}"
           fi
+          # Normalize to DNS-safe style
+          branch="$(echo "$raw_branch" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed -E 's#[^a-z0-9]+#-#g; s#(^-+|-+$)##g; s#-+#-#g' \
+            | cut -c1-64)"
 
           local_manager_prefix="ip-$run_type-${{ inputs.cluster }}-${{ inputs.product_name }}-$branch"
 
