@@ -304,13 +304,13 @@ jobs:
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: raised_meta
           path: platform_configs
 
       - name: unstash component_artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: component_artifacts
 
@@ -529,7 +529,7 @@ jobs:
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash sim_configs
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: sim_configs
           path: simulator_artifacts
@@ -724,25 +724,25 @@ jobs:
           echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
 
       - name: unstash robot_configs
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: robot_configs
           path: .
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: raised_meta
           path: platform_configs
 
       - name: unstash deploy_artifacts_noetic
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: deploy_artifacts_noetic
           path: artifacts
 
       - name: unstash deploy_simulator_artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: deploy_simulator_artifacts
           path: .
@@ -956,7 +956,7 @@ jobs:
     if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled'  || needs.publish.result == 'skipped') }}
     steps:
       - name: unstash raised_meta
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: raised_meta
           path: platform_configs
