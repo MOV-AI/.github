@@ -211,17 +211,25 @@ jobs:
 
 
           echo "::group::Merge QA overrides into EE manifest"
-          merge_keys_csv=$(python3 - << 'PY'
-          import yaml
+            merge_keys_csv=$(python3 - << 'PY'
+            import yaml
+            import sys
 
-          with open("qa-tests-manifest.yaml", "r", encoding="utf-8") as f:
-              qa_manifest = yaml.safe_load(f) or {}
+            try:
+                with open("qa-tests-manifest.yaml", "r", encoding="utf-8") as f:
+                    qa_manifest = yaml.safe_load(f) or {}
+            except FileNotFoundError:
+                print("ERROR: qa-tests-manifest.yaml was not found in the workspace root!", file=sys.stderr)
+                sys.exit(1)
+            except yaml.YAMLError as e:
+                print(f"ERROR: Failed to parse YAML: {e}", file=sys.stderr)
+                sys.exit(1)
 
-          product_dependencies = qa_manifest.get("product_dependencies", {})
-          merge_keys = [f"product_dependencies.{key}" for key in product_dependencies.keys()]
-          print(",".join(merge_keys))
-          PY
-          )
+            product_dependencies = qa_manifest.get("product_dependencies", {})
+            merge_keys = [f"product_dependencies.{key}" for key in product_dependencies.keys()]
+            print(",".join(merge_keys))
+            PY
+            )
 
           if [ -z "$merge_keys_csv" ]; then
             echo "No QA override keys found under product_dependencies"
