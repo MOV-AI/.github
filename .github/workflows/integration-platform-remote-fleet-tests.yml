@@ -12,7 +12,7 @@ on:
       ee_manifest_version:
         required: false
         type: string
-        default: '3.0.0-71'
+        default: '3.0.0-27'
         description: Release tag/version for MOV-AI/product-movai-studio.
       robot_config:
         required: false
@@ -131,7 +131,7 @@ env:
   PROVISIONING_ENV_REPO: ${{ inputs.provision_tf_env_repo }}
   PROVISION_INFRA_REPO: ${{ inputs.provision_infra_repo }}
   PROVISION_INFRA_VERSION: ${{ inputs.provision_infra_version }}
-  EE_MANIFEST_REPO: MOV-AI/product-movai-studio
+  EE_MANIFEST_REPO: product-movai-studio
 
 jobs:
   Fleet-Tests-Provisioning:
