@@ -68,7 +68,7 @@ on:
       provision_tf_env_version:
         required: false
         type: string
-        default: "0.2.2-2"
+        default: "0.2.2-5"
       provision_infra_repo:
         required: false
         type: string
@@ -76,7 +76,7 @@ on:
       provision_infra_version:
         required: false
         type: string
-        default: "2.2.0-1"
+        default: "2.2.0-3"
 
     secrets:
       auto_commit_user:
@@ -147,10 +147,10 @@ env:
   XRAY_SECRET: ${{ secrets.xray_secret}}
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
-  PROVISIONING_ENV_VERSION: 0.2.2-2
+  PROVISIONING_ENV_VERSION: 0.2.2-5
   PROVISIONING_ENV_REPO: devops-tf-env-conf
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.2.0-1"
+  PROVISION_INFRA_VERSION: "2.2.0-3"
   ARTIFACTS_RETENTION_DAYS: 15
   DEPENDENCY_TRACK_URL: "https://sbom.es.mov.ai"
   HARBOR_URL: "https://registry.cloud.mov.ai/"
