@@ -210,40 +210,23 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::Merge QA overrides into EE manifest"
-            merge_keys_csv=$(python3 - << 'PY'
-            import yaml
-            import sys
 
-            try:
-                with open("qa-tests-manifest.yaml", "r", encoding="utf-8") as f:
-                    qa_manifest = yaml.safe_load(f) or {}
-            except FileNotFoundError:
-                print("ERROR: qa-tests-manifest.yaml was not found in the workspace root!", file=sys.stderr)
-                sys.exit(1)
-            except yaml.YAMLError as e:
-                print(f"ERROR: Failed to parse YAML: {e}", file=sys.stderr)
-                sys.exit(1)
+          merge_keys_csv=$(yq e '.product_dependencies | keys | join(",")' qa-tests-manifest.yaml)
 
-            product_dependencies = qa_manifest.get("product_dependencies", {})
-            merge_keys = [f"product_dependencies.{key}" for key in product_dependencies.keys()]
-            print(",".join(merge_keys))
-            PY
-            )
-
-          echo "merging documents"
-
-          if [ -z "$merge_keys_csv" ]; then
+          if [ -z "$merge_keys_csv" ] || [ "$merge_keys_csv" == "null" ]; then
             echo "No QA override keys found under product_dependencies"
           else
             echo "Merging keys: $merge_keys_csv"
-            IFS=',' read -r -a merge_keys <<< "$merge_keys_csv"
-            for merge_key in "${merge_keys[@]}"; do
-              [ -z "$merge_key" ] && continue
+
+            IFS=',' read -r -a keys <<< "$merge_keys_csv"
+            for key in "${keys[@]}"; do
+              echo "Merging: product_dependencies.$key"
               integration-pipeline merge_manifest_section \
                 --sub_manifest "qa-tests-manifest.yaml" \
-                --merge_src_prod_dep_keys "$merge_key"
+                --merge_src_prod_dep_keys "product_dependencies.$key"
             done
           fi
+
           echo "✓ Final product manifest prepared"
           echo "::endgroup::"
 
