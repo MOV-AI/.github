@@ -164,10 +164,10 @@ jobs:
           import json
           import yaml
 
-          with open('product-manifest.yaml') as f:
+          with open('qa-tests-manifest.yaml') as f:
               data = yaml.safe_load(f)
 
-          qa_config = data['product_components']['qa']
+          qa_config = data['product_dependencies']['qa']
           fleet_test_names = [
               test_name for test_name, test_config in qa_config.items()
               if isinstance(test_config, dict) and 'fleet' in test_config
