@@ -199,6 +199,8 @@ jobs:
           fi
 
           echo "::group::Fetch EE product manifest"
+          . .ci-venv/bin/activate
+
           integration-pipeline fetch_github_release_asset \
             --repo "$EE_MANIFEST_REPO" \
             --version "$ee_manifest_version" \
@@ -211,7 +213,16 @@ jobs:
 
           echo "::group::Merge QA overrides into EE manifest"
 
-          merge_keys_csv=$(yq e '.product_dependencies | keys | join(",")' qa-tests-manifest.yaml)
+          merge_keys_csv=$(python3 - <<'PY'
+          import yaml
+
+          with open("qa-tests-manifest.yaml", encoding="utf-8") as manifest_file:
+              data = yaml.safe_load(manifest_file) or {}
+
+          product_dependencies = data.get("product_dependencies") or {}
+          print(",".join(product_dependencies.keys()))
+          PY
+          )
 
           if [ -z "$merge_keys_csv" ] || [ "$merge_keys_csv" == "null" ]; then
             echo "No QA override keys found under product_dependencies"
