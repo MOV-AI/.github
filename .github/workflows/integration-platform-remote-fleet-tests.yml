@@ -209,7 +209,6 @@ jobs:
           echo "✓ EE product manifest fetched"
           echo "::endgroup::"
 
-
           echo "::group::Merge QA overrides into EE manifest"
             merge_keys_csv=$(python3 - << 'PY'
             import yaml
@@ -230,6 +229,8 @@ jobs:
             print(",".join(merge_keys))
             PY
             )
+
+          echo "merging documents"
 
           if [ -z "$merge_keys_csv" ]; then
             echo "No QA override keys found under product_dependencies"
