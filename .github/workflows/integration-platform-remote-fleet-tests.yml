@@ -12,7 +12,7 @@ on:
       ee_manifest_version:
         required: false
         type: string
-        default: '3.0.0'
+        default: '3.0.0-71'
         description: Release tag/version for MOV-AI/product-movai-studio.
       robot_config:
         required: false
@@ -201,6 +201,7 @@ jobs:
           echo "::group::Fetch EE product manifest"
           integration-pipeline fetch_github_release_asset \
             --repo "$EE_MANIFEST_REPO" \
+            --version "$ee_manifest_version" \
             --gh_api_user "$GITHUB_API_USR" \
             --gh_api_pwd "${{ secrets.auto_commit_pwd }}" \
             --asset_name product-manifest.yaml \
