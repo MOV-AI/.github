@@ -131,7 +131,7 @@ env:
   PROVISIONING_ENV_REPO: ${{ inputs.provision_tf_env_repo }}
   PROVISION_INFRA_REPO: ${{ inputs.provision_infra_repo }}
   PROVISION_INFRA_VERSION: ${{ inputs.provision_infra_version }}
-  EE_MANIFEST_REPO: product-movai-studio
+  EE_MANIFEST_REPO: project-movai-studio
 
 jobs:
   Fleet-Tests-Provisioning:
