@@ -20,6 +20,10 @@ on:
         required: false
         type: string
         default: ''
+      simulator_image_name_and_tag:
+        required: false
+        type: string
+        default: ''
       test_timeout:
         required: false
         type: number
@@ -257,6 +261,19 @@ jobs:
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.REGISTRY }}/qa/$backend_image"
           docker tag "${{ env.REGISTRY }}/ci/$backend_image" "${{ env.MID_REGISTRY }}/qa/$backend_image"
           echo "✓ Images pulled and tagged"
+          echo "::endgroup::"
+
+          echo "::group::Pull and tag simulator image"
+          simulator_image=${{ inputs.simulator_image_name_and_tag }}
+          if [ -n "$simulator_image" ]; then
+            docker rmi "${{ env.REGISTRY }}/ci/$simulator_image" -f || true
+            docker pull "${{ env.REGISTRY }}/ci/$simulator_image"
+            docker tag "${{ env.REGISTRY }}/ci/$simulator_image" "${{ env.REGISTRY }}/qa/$simulator_image"
+            docker tag "${{ env.REGISTRY }}/ci/$simulator_image" "${{ env.MID_REGISTRY }}/qa/$simulator_image"
+            echo "✓ Simulator image pulled and tagged"
+          else
+            echo "No simulator image specified"
+          fi
           echo "::endgroup::"
 
       - name: Prepare System for Tests

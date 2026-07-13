@@ -422,7 +422,7 @@ jobs:
 
   Validation-UI-Tests:
     needs: [Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
     secrets: inherit
     with:
       collect_deployable_artifacts: true
@@ -436,7 +436,7 @@ jobs:
 
   Validation-Install-Tests:
     needs: [Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
     secrets: inherit
     with:
       test_infra_key: "install_tests"
@@ -448,7 +448,7 @@ jobs:
 
   Validation-API-Tests:
     needs: [Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
     secrets: inherit
     with:
       test_infra_key: "api_tests"
@@ -460,7 +460,7 @@ jobs:
 
   Validation-Flow-Tests:
     needs: [Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
     secrets: inherit
     with:
       test_infra_key: "flow_tests"
@@ -482,7 +482,7 @@ jobs:
 
   Fleet-Validations:
     needs: [Validate-bootstrap-configs, Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@v3
+    uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@feat/publsih_sbom_to_dtrack
     secrets: inherit
     with:
       collect_deployable_artifacts: true
@@ -508,6 +508,7 @@ jobs:
       DISTRO: noetic
     outputs:
       slack_thread_id: ${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id }}
+      simulator_image: ${{ steps.pre_build.outputs.image_name }}
 
     steps:
       - name: Cleanup Workspace
@@ -682,12 +683,13 @@ jobs:
 
   Simulator-Validations:
     needs: [Build-Simulator, Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
     secrets: inherit
     with:
       test_infra_key: "simul_flow_tests"
       slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+      simulator_image_name_and_tag: ${{ needs.Build-Simulator.outputs.simulator_image }}
       test_timeout: 30
       pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
       slack_channel: ${{ inputs.slack_channel }}
@@ -696,7 +698,7 @@ jobs:
   Robotic-Stack-Integration:
     if: ${{ inputs.with_robotic_stack_tests }}
     needs: [Simulator-Validations, Build-backend, Build-Simulator]
-    uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@v3
+    uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@feat/publsih_sbom_to_dtrack
     secrets: inherit
     with:
       product_name: ${{ inputs.product_name }}
