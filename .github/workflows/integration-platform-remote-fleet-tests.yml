@@ -178,11 +178,11 @@ jobs:
           echo "✓ Python environment ready"
           echo "::endgroup::"
 
-      - name: Download Robot Configs
-        uses: actions/download-artifact@v5
-        with:
-          name: robot_configs
-          path: .
+      # - name: Download Robot Configs
+      #   uses: actions/download-artifact@v5
+      #   with:
+      #     name: robot_configs
+      #     path: .
 
       - name: Setup Python 3.10
         uses: actions/setup-python@v6
@@ -201,7 +201,6 @@ jobs:
           echo "::group::Fetch EE product manifest"
           integration-pipeline fetch_github_release_asset \
             --repo "$EE_MANIFEST_REPO" \
-            --version "$ee_manifest_version" \
             --gh_api_user "$GITHUB_API_USR" \
             --gh_api_pwd "${{ secrets.auto_commit_pwd }}" \
             --asset_name product-manifest.yaml \
