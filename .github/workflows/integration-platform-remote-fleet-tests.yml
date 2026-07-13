@@ -12,7 +12,7 @@ on:
       ee_manifest_version:
         required: false
         type: string
-        default: ''
+        default: '3.0.0'
         description: Release tag/version for MOV-AI/product-movai-studio.
       robot_config:
         required: false
