@@ -741,11 +741,11 @@ jobs:
           name: raised_meta
           path: platform_configs
 
-      - name: unstash deploy_artifacts_noetic
-        uses: actions/download-artifact@v8
-        with:
-          name: deploy_artifacts_noetic
-          path: artifacts
+      # - name: unstash deploy_artifacts_noetic
+      #   uses: actions/download-artifact@v8
+      #   with:
+      #     name: deploy_artifacts_noetic
+      #     path: artifacts
 
       - name: unstash deploy_simulator_artifacts
         uses: actions/download-artifact@v8
@@ -802,9 +802,12 @@ jobs:
           package-deployer join --dploy_workspace "$(pwd)/artifacts"
           integration-pipeline get_image_list_from_manifest --manifest_platform_base_key product_components --docker_registry $REGISTRY
           cp ./*.json deployment_artifacts
-          cp artifacts/merged.dploy deployment_artifacts/deployable.dploy
-          echo -e "$(cat ./artifacts/product.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
-          echo "${{env.REGISTRY}}/qa/${{ needs.Validations-Finish.outputs.backend_image }}" >> deployment_artifacts/product.image.artifact
+
+          if [ -d ./artifacts/ ]; then
+            cp artifacts/merged.dploy deployment_artifacts/deployable.dploy
+            echo -e "$(cat ./artifacts/product.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
+            echo "${{env.REGISTRY}}/qa/${{ needs.Validations-Finish.outputs.backend_image }}" >> deployment_artifacts/product.image.artifact
+          fi
           deactivate
 
           source="${{env.REGISTRY}}/ci/${{ needs.Validations-Finish.outputs.backend_image }}"
@@ -946,11 +949,12 @@ jobs:
       - name: Publish SBOMs to Dependency Track
         if: ${{ inputs.generate_sbom }}
         run: |
+          set -o pipefail
           . .ci-venv/bin/activate
           rm -rf deployment_artifacts/publish-sbom/
           mkdir  -p deployment_artifacts/publish-sbom/
-          chmod -R 777 deployment_artifacts/publish-sbom/
-          integration-pipeline publish_sbom_to_dependency_track $dry_run_flag $regenerate_bad_sboms_flag $tag_latest_flag \
+          chmod -R 755 deployment_artifacts/publish-sbom/
+          integration-pipeline publish_sbom_to_dependency_track \
             --manifest_file deployment_artifacts/product-manifest.yaml \
             --manifest_platform_base_key product_components \
             --dependency_track_url ${{ env.DEPENDENCY_TRACK_URL }} \
@@ -958,6 +962,8 @@ jobs:
             --harbor_url ${{ env.HARBOR_URL }} \
             --harbor_user ${{ secrets.PORTUS_APP_USER }} \
             --harbor_password ${{ secrets.PORTUS_APP_TOKEN }} \
+            --is_latest \
+            --regenerate_bad_sboms \
             --artifacts_output_dir deployment_artifacts/publish-sbom/ | tee deployment_artifacts/publish-sbom/publish-sbom.log
           deactivate
 
