@@ -224,18 +224,14 @@ jobs:
           PY
           )
 
-          if [ -z "$merge_keys_csv" ] || [ "$merge_keys_csv" == "null" ]; then
+          if [ -z "$merge_keys_csv" ]; then
             echo "No QA override keys found under product_dependencies"
           else
             echo "Merging keys: $merge_keys_csv"
 
-            IFS=',' read -r -a keys <<< "$merge_keys_csv"
-            for key in "${keys[@]}"; do
-              echo "Merging: product_dependencies.$key"
-              integration-pipeline merge_manifest_section \
-                --sub_manifest "qa-tests-manifest.yaml" \
-                --merge_src_prod_dep_keys "product_dependencies.$key"
-            done
+            integration-pipeline merge_manifest_section \
+              --sub_manifest "qa-tests-manifest.yaml" \
+              --merge_src_prod_dep_keys "$merge_keys_csv"
           fi
 
           echo "✓ Final product manifest prepared"
