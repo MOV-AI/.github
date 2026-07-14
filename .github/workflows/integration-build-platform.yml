@@ -130,6 +130,7 @@ on:
       fleet_password:
         required: true
 env:
+  PY39_CI_INTEGRATION_SCRIPTS_VERSION: "4.2.0.6"
   CI_INTEGRATION_SCRIPTS_VERSION: "4.3.0.4"
   MOBTEST_VERSION: "0.0.7.2"
   PACKAGE_DEPLOYER_VERSION: "2.0.0.2"
@@ -353,7 +354,7 @@ jobs:
             --build-arg DOCKER_REGISTRY=${{ env.REGISTRY }} \
             --build-arg BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} \
             --build-arg TAG=${{ steps.pre_build.outputs.base_version }} \
-            --build-arg CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }} \
+            --build-arg CI_SCRIPT_VERSION=${{ env.PY39_CI_INTEGRATION_SCRIPTS_VERSION }} \
             --file docker/backend/Dockerfile \
             --platform linux/amd64 \
             --tag ${{ env.REGISTRY }}/ci/${{ inputs.backend_name }}:${{ steps.pre_build.outputs.raised_version }} \
@@ -591,7 +592,7 @@ jobs:
           pull: true
           build-args: |
             BASE_IMAGE=${{ steps.pre_build.outputs.base_name }}
-            CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
+            CI_SCRIPT_VERSION=${{ env.PY39_CI_INTEGRATION_SCRIPTS_VERSION }}
 
       - name: Generate and attach simulator CycloneDX SBOM
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.generate_sbom }}
