@@ -420,58 +420,58 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
-  # Validation-UI-Tests:
-  #   needs: [Build-backend]
-  #   uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
-  #   secrets: inherit
-  #   with:
-  #     collect_deployable_artifacts: true
-  #     test_infra_key: "ui_tests"
-  #     slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-  #     backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-  #     test_timeout: 120
-  #     pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json'
-  #     xray_label: "UI_Automation"
-  #     slack_channel: ${{ inputs.slack_channel }}
+  Validation-UI-Tests:
+    needs: [Build-backend]
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
+    secrets: inherit
+    with:
+      collect_deployable_artifacts: true
+      test_infra_key: "ui_tests"
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+      test_timeout: 120
+      pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json'
+      xray_label: "UI_Automation"
+      slack_channel: ${{ inputs.slack_channel }}
 
-  # Validation-Install-Tests:
-  #   needs: [Build-backend]
-  #   uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
-  #   secrets: inherit
-  #   with:
-  #     test_infra_key: "install_tests"
-  #     slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-  #     backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-  #     test_timeout: 30
-  #     pytest_args: '-k "$test_set" --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --jira_report'
-  #     slack_channel: ${{ inputs.slack_channel }}
+  Validation-Install-Tests:
+    needs: [Build-backend]
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
+    secrets: inherit
+    with:
+      test_infra_key: "install_tests"
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+      test_timeout: 30
+      pytest_args: '-k "$test_set" --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --jira_report'
+      slack_channel: ${{ inputs.slack_channel }}
 
-  # Validation-API-Tests:
-  #   needs: [Build-backend]
-  #   uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
-  #   secrets: inherit
-  #   with:
-  #     test_infra_key: "api_tests"
-  #     slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-  #     backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-  #     test_timeout: 30
-  #     pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
-  #     slack_channel: ${{ inputs.slack_channel }}
+  Validation-API-Tests:
+    needs: [Build-backend]
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
+    secrets: inherit
+    with:
+      test_infra_key: "api_tests"
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+      test_timeout: 30
+      pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
+      slack_channel: ${{ inputs.slack_channel }}
 
-  # Validation-Flow-Tests:
-  #   needs: [Build-backend]
-  #   uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
-  #   secrets: inherit
-  #   with:
-  #     test_infra_key: "flow_tests"
-  #     slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-  #     backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-  #     test_timeout: 30
-  #     pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
-  #     slack_channel: ${{ inputs.slack_channel }}
+  Validation-Flow-Tests:
+    needs: [Build-backend]
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
+    secrets: inherit
+    with:
+      test_infra_key: "flow_tests"
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+      test_timeout: 30
+      pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
+      slack_channel: ${{ inputs.slack_channel }}
 
   Validations-Finish:
-    needs: [Build-backend]
+    needs: [Build-backend, Validation-UI-Tests, Validation-Install-Tests, Validation-API-Tests, Validation-Flow-Tests]
     runs-on: ubuntu-22.04
     outputs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
@@ -480,26 +480,26 @@ jobs:
       - name: Pass through
         run: echo "Pass"
 
-  # Fleet-Validations:
-  #   needs: [Validate-bootstrap-configs, Build-backend]
-  #   uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@feat/publsih_sbom_to_dtrack
-  #   secrets: inherit
-  #   with:
-  #     collect_deployable_artifacts: true
-  #     fleet_test_infra_list: ${{ needs.Validate-bootstrap-configs.outputs.fleet_tests_list }}
-  #     slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-  #     backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-  #     test_timeout: 120
-  #     slack_channel: ${{ inputs.slack_channel }}
-  #     provision_tf_env_repo: ${{ inputs.provision_tf_env_repo }}
-  #     provision_tf_env_version: ${{ inputs.provision_tf_env_version }}
-  #     provision_infra_repo: ${{ inputs.provision_infra_repo }}
-  #     provision_infra_version: ${{ inputs.provision_infra_version }}
-  #     fleet_number_members: ${{ inputs.fleet_number_members }}
-  #     debug_fleet_keep_alive: ${{ inputs.debug_fleet_keep_alive }}
-  #     fleet_ips: ${{ inputs.fleet_ips }}
-  #     proxmox_cluster_name: ${{ inputs.proxmox_cluster_name }}
-  #     with_fleet_tests: ${{ inputs.with_fleet_tests }}
+  Fleet-Validations:
+    needs: [Validate-bootstrap-configs, Build-backend]
+    uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@feat/publsih_sbom_to_dtrack
+    secrets: inherit
+    with:
+      collect_deployable_artifacts: true
+      fleet_test_infra_list: ${{ needs.Validate-bootstrap-configs.outputs.fleet_tests_list }}
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+      test_timeout: 120
+      slack_channel: ${{ inputs.slack_channel }}
+      provision_tf_env_repo: ${{ inputs.provision_tf_env_repo }}
+      provision_tf_env_version: ${{ inputs.provision_tf_env_version }}
+      provision_infra_repo: ${{ inputs.provision_infra_repo }}
+      provision_infra_version: ${{ inputs.provision_infra_version }}
+      fleet_number_members: ${{ inputs.fleet_number_members }}
+      debug_fleet_keep_alive: ${{ inputs.debug_fleet_keep_alive }}
+      fleet_ips: ${{ inputs.fleet_ips }}
+      proxmox_cluster_name: ${{ inputs.proxmox_cluster_name }}
+      with_fleet_tests: ${{ inputs.with_fleet_tests }}
 
   Build-Simulator:
     needs: [Validate-bootstrap-configs]
@@ -680,37 +680,37 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
-  # Simulator-Validations:
-  #   needs: [Build-Simulator, Build-backend]
-  #   uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
-  #   secrets: inherit
-  #   with:
-  #     test_infra_key: "simul_flow_tests"
-  #     slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
-  #     backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-  #     simulator_image_name_and_tag: ${{ needs.Build-Simulator.outputs.simulator_image }}
-  #     test_timeout: 30
-  #     pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
-  #     slack_channel: ${{ inputs.slack_channel }}
-  #     robot_config: 'basic-standalone-ignition-noetic.json'
+  Simulator-Validations:
+    needs: [Build-Simulator, Build-backend]
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
+    secrets: inherit
+    with:
+      test_infra_key: "simul_flow_tests"
+      slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+      simulator_image_name_and_tag: ${{ needs.Build-Simulator.outputs.simulator_image }}
+      test_timeout: 30
+      pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
+      slack_channel: ${{ inputs.slack_channel }}
+      robot_config: 'basic-standalone-ignition-noetic.json'
 
-  # Robotic-Stack-Integration:
-  #   if: ${{ inputs.with_robotic_stack_tests }}
-  #   needs: [Simulator-Validations, Build-backend, Build-Simulator]
-  #   uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@feat/publsih_sbom_to_dtrack
-  #   secrets: inherit
-  #   with:
-  #     product_name: ${{ inputs.product_name }}
-  #     slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
-  #     slack_channel: ${{ inputs.slack_channel }}
-  #     cluster: ${{ inputs.cluster }}
-  #     debug_simulation_tests_keep_alive: ${{ inputs.debug_simulation_tests_keep_alive }}
-  #     backend_name: ${{ needs.Build-backend.outputs.backend_image }}
-  #     simulation_qa_key: ${{ inputs.simulation_qa_key }}
-  #     simulation_qa_version: ${{ inputs.simulation_qa_version }}
+  Robotic-Stack-Integration:
+    if: ${{ inputs.with_robotic_stack_tests }}
+    needs: [Simulator-Validations, Build-backend, Build-Simulator]
+    uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@feat/publsih_sbom_to_dtrack
+    secrets: inherit
+    with:
+      product_name: ${{ inputs.product_name }}
+      slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
+      slack_channel: ${{ inputs.slack_channel }}
+      cluster: ${{ inputs.cluster }}
+      debug_simulation_tests_keep_alive: ${{ inputs.debug_simulation_tests_keep_alive }}
+      backend_name: ${{ needs.Build-backend.outputs.backend_image }}
+      simulation_qa_key: ${{ inputs.simulation_qa_key }}
+      simulation_qa_version: ${{ inputs.simulation_qa_version }}
 
   Publish:
-    needs: [Validations-Finish]
+    needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
     runs-on: integration-pipeline
     outputs:
       slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
@@ -738,11 +738,11 @@ jobs:
           name: raised_meta
           path: platform_configs
 
-      # - name: unstash deploy_artifacts_noetic
-      #   uses: actions/download-artifact@v8
-      #   with:
-      #     name: deploy_artifacts_noetic
-      #     path: artifacts
+      - name: unstash deploy_artifacts_noetic
+        uses: actions/download-artifact@v8
+        with:
+          name: deploy_artifacts_noetic
+          path: artifacts
 
       - name: unstash deploy_simulator_artifacts
         uses: actions/download-artifact@v8
