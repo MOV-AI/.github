@@ -358,6 +358,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Compute SBOM filename
+        id: get_sbom_filename
+        shell: bash
+        run: |
+          SBOM_FILENAME="$(printf '%s' '${{ matrix.name }}' | sed 's/[^A-Za-z0-9._-]/-/g')"
+          echo "value=${SBOM_FILENAME}" >> "$GITHUB_OUTPUT"
+
       - name: Build image and push to /ci/
         id: build_ci_image
         uses: docker/build-push-action@v6
@@ -382,13 +389,13 @@ jobs:
           {
             echo "image=${{ steps.get_image_names.outputs.DOCKER_IMAGES }}"
             echo "digest=${{ steps.build_ci_image.outputs.digest }}"
-          } > sbom-ci-${{ matrix.name }}.env
+          } > sbom-ci-${{ steps.get_sbom_filename.outputs.value }}.env
 
       - name: Upload /ci/ SBOM metadata
         uses: actions/upload-artifact@v7
         with:
-          name: sbom-ci-metadata-${{ matrix.name }}
-          path: sbom-ci-${{ matrix.name }}.env
+          name: sbom-ci-metadata-${{ steps.get_sbom_filename.outputs.value }}
+          path: sbom-ci-${{ steps.get_sbom_filename.outputs.value }}.env
 
   attach-ci-sbom:
     needs: [build, parse-matrix]
@@ -406,6 +413,13 @@ jobs:
           remove-docker-images: 'true'
           remove-large-packages: 'true'
 
+      - name: Compute SBOM filename
+        id: get_sbom_filename
+        shell: bash
+        run: |
+          SBOM_FILENAME="$(printf '%s' '${{ matrix.name }}' | sed 's/[^A-Za-z0-9._-]/-/g')"
+          echo "value=${SBOM_FILENAME}" >> "$GITHUB_OUTPUT"
+
       - name: Login to Private Registry
         if: ${{ inputs.generate_sbom }}
         uses: docker/login-action@v3
@@ -418,7 +432,7 @@ jobs:
         if: ${{ inputs.generate_sbom }}
         uses: actions/download-artifact@v8
         with:
-          name: sbom-ci-metadata-${{ matrix.name }}
+          name: sbom-ci-metadata-${{ steps.get_sbom_filename.outputs.value }}
           path: .sbom-ci-metadata
 
       - name: Resolve /ci/ SBOM metadata
@@ -427,7 +441,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          source .sbom-ci-metadata/sbom-ci-${{ matrix.name }}.env
+          source .sbom-ci-metadata/sbom-ci-${{ steps.get_sbom_filename.outputs.value }}.env
           echo "image=${image}" >> "$GITHUB_OUTPUT"
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
 
@@ -437,8 +451,8 @@ jobs:
         with:
           image: ${{ steps.resolve_ci_sbom_metadata.outputs.image }}
           digest: ${{ steps.resolve_ci_sbom_metadata.outputs.digest }}
-          sbom_file: sbom-ci-${{ matrix.name }}.cyclonedx.json
-          artifact_name: sbom-ci-${{ matrix.name }}
+          sbom_file: sbom-ci-${{ steps.get_sbom_filename.outputs.value }}.cyclonedx.json
+          artifact_name: sbom-ci-${{ steps.get_sbom_filename.outputs.value }}
 
   test:
     needs: [raise-version, build, parse-matrix]
@@ -527,6 +541,13 @@ jobs:
           password: ${{ secrets.github_registry_password }}
           registry: ${{ inputs.github_registry }}
 
+      - name: Compute SBOM filename
+        id: get_sbom_filename
+        shell: bash
+        run: |
+          SBOM_FILENAME="$(printf '%s' '${{ matrix.name }}' | sed 's/[^A-Za-z0-9._-]/-/g')"
+          echo "value=${SBOM_FILENAME}" >> "$GITHUB_OUTPUT"
+
       - name: Distribute images to official and public registries
         id: push_images
         env:
@@ -614,8 +635,8 @@ jobs:
         with:
           image: ${{ steps.push_images.outputs.image }}
           digest: ${{ steps.push_images.outputs.digest }}
-          sbom_file: sbom-official-${{ matrix.name }}.cyclonedx.json
-          artifact_name: sbom-official-${{ matrix.name }}
+          sbom_file: sbom-official-${{ steps.get_sbom_filename.outputs.value }}.cyclonedx.json
+          artifact_name: sbom-official-${{ steps.get_sbom_filename.outputs.value }}
 
       - name: Install bump-my-version for pushing version changes
         if: ${{ inputs.version == 'auto' && matrix.name == needs.parse-matrix.outputs.first_image }}
