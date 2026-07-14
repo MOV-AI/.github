@@ -130,7 +130,6 @@ on:
       fleet_password:
         required: true
 env:
-  PY39_CI_INTEGRATION_SCRIPTS_VERSION: "4.2.0.6"
   CI_INTEGRATION_SCRIPTS_VERSION: "4.3.0.4"
   MOBTEST_VERSION: "0.0.7.2"
   PACKAGE_DEPLOYER_VERSION: "2.0.0.2"
@@ -334,6 +333,21 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.REGISTRY }}
 
+      - name: Resolve frontend apt packages
+        id: resolve_backend_apt_packages
+        shell: bash
+        run: |
+          set -e
+          . .ci-venv/bin/activate
+          integration-pipeline get_yml_value \
+            --file product-manifest.yaml \
+            --key product_components.platform_config.frontend.apps \
+            --output_file frontend.packages.apt
+          FRONTEND_APT_PACKAGES="$(tr '\n' ' ' < frontend.packages.apt | xargs)"
+          echo "frontend_apt_packages=${FRONTEND_APT_PACKAGES}" >> $GITHUB_OUTPUT
+          echo "Resolved frontend apt packages count: $(wc -w <<< "${FRONTEND_APT_PACKAGES}")"
+          deactivate
+
       - name: Prepare docker build variables
         id: pre_build
         shell: bash
@@ -354,7 +368,7 @@ jobs:
             --build-arg DOCKER_REGISTRY=${{ env.REGISTRY }} \
             --build-arg BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} \
             --build-arg TAG=${{ steps.pre_build.outputs.base_version }} \
-            --build-arg CI_SCRIPT_VERSION=${{ env.PY39_CI_INTEGRATION_SCRIPTS_VERSION }} \
+            --build-arg FRONTEND_APT_PACKAGES="${{ steps.resolve_backend_apt_packages.outputs.frontend_apt_packages }}" \
             --file docker/backend/Dockerfile \
             --platform linux/amd64 \
             --tag ${{ env.REGISTRY }}/ci/${{ inputs.backend_name }}:${{ steps.pre_build.outputs.raised_version }} \
@@ -572,6 +586,20 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.REGISTRY }}
 
+      - name: Resolve simulator apt packages
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+        id: resolve_simulator_apt_packages
+        shell: bash
+        run: |
+          set -e
+          . .ci-venv/bin/activate
+          integration-pipeline get_install_list \
+            --manifest_platform_base_key product_components.simulator_components.plugins
+          SIMULATOR_APT_PACKAGES="$(tr '\n' ' ' < packages.apt | xargs)"
+          echo "simulator_apt_packages=${SIMULATOR_APT_PACKAGES}" >> $GITHUB_OUTPUT
+          echo "Resolved simulator apt packages count: $(wc -w <<< "${SIMULATOR_APT_PACKAGES}")"
+          deactivate
+
       - name: Prepare docker build variables
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
         id: pre_build
@@ -592,7 +620,7 @@ jobs:
           pull: true
           build-args: |
             BASE_IMAGE=${{ steps.pre_build.outputs.base_name }}
-            CI_SCRIPT_VERSION=${{ env.PY39_CI_INTEGRATION_SCRIPTS_VERSION }}
+            SIMULATOR_APT_PACKAGES=${{ steps.resolve_simulator_apt_packages.outputs.simulator_apt_packages }}
 
       - name: Generate and attach simulator CycloneDX SBOM
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.generate_sbom }}
