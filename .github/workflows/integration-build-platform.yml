@@ -130,9 +130,9 @@ on:
       fleet_password:
         required: true
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "4.2.0.6"
+  CI_INTEGRATION_SCRIPTS_VERSION: "4.3.0.2"
   MOBTEST_VERSION: "0.0.7.2"
-  PACKAGE_DEPLOYER_VERSION: "1.0.0.40"
+  PACKAGE_DEPLOYER_VERSION: "2.0.0.2"
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
@@ -158,7 +158,7 @@ jobs:
   Validate-bootstrap-configs:
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -177,7 +177,7 @@ jobs:
       - name: Install CI Scripts in container
         shell: bash
         run: |
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install -q integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: raise version
         run: |
@@ -301,9 +301,8 @@ jobs:
         run: |
           python3 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
-          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install --upgrade pyOpenSSL cryptography
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          [ -f ci-requirements.txt ] && pip install -q -r ci-requirements.txt
+          python3 -m pip install -q integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash raised_meta
         uses: actions/download-artifact@v8
@@ -527,9 +526,8 @@ jobs:
         run: |
           python3 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
-          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install --upgrade pyOpenSSL cryptography
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          [ -f ci-requirements.txt ] && pip install -q -r ci-requirements.txt
+          python3 -m pip install -q integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash sim_configs
         uses: actions/download-artifact@v8
@@ -715,8 +713,6 @@ jobs:
     runs-on: integration-pipeline
     outputs:
       slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
-    env:
-      CI_INTEGRATION_SCRIPTS_VERSION: "4.3.0.1"
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
@@ -767,21 +763,14 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.PUSH_REGISTRY }}
 
-      - name: Setup Python 3.12
-        uses: actions/setup-python@v6
-        id: setup_python_3_12
-        with:
-          python-version: '3.12'
-
       - name: Setup CI Scripts in .ci-venv
         shell: bash
         run: |
           python3 -m venv .ci-venv --clear --system-site-packages
           . .ci-venv/bin/activate
-          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install --upgrade pyOpenSSL cryptography
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-          python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
+          [ -f ci-requirements.txt ] && pip install -q -r ci-requirements.txt
+          python3 -m pip install -q integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install -q movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: Publish and create release
         id: prepare_publish
