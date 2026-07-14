@@ -553,8 +553,8 @@ jobs:
             ${{ steps.infra_provision.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/product-manifest.yaml
           echo "✓ Product manifest transferred"
 
-          scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ./*.json* \
-            "${{ steps.infra_provision.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/"
+          scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ./*.json ./installation/*.json \
+            "${{ steps.infra_provision.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/" || true
           echo "✓ Robot JSON configs transferred"
           echo "::endgroup::"
 
