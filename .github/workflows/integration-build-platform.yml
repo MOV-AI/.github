@@ -158,7 +158,7 @@ jobs:
   Validate-bootstrap-configs:
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:4.0.1
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -226,21 +226,21 @@ jobs:
 
 
       - name: Stash component_artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: component_artifacts
           path: component_artifacts/*
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Stash robot_configs
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: robot_configs
           path: "*.json*"
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Stash sim_configs
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: sim_configs
           path: simulator_artifacts/*
@@ -273,7 +273,7 @@ jobs:
           token: ${{ secrets.slack_token_id }}
 
       - name: Stash raised_meta
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: raised_meta
           path: platform_configs/*
@@ -666,7 +666,7 @@ jobs:
           echo "$REGISTRY/qa/$(cat simulator_artifacts/simulator_name.ci)" > simulator.image.artifact
 
       - name: Stash deploy_simulator_artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: deploy_simulator_artifacts
           path: simulator.image.artifact
