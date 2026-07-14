@@ -9,11 +9,6 @@ on:
       fleet_test_infra_list:
         required: true
         type: string
-      ee_manifest_version:
-        required: false
-        type: string
-        default: '3.0.0-27'
-        description: Release tag/version for MOV-AI/product-movai-studio.
       robot_config:
         required: false
         type: string
@@ -131,7 +126,6 @@ env:
   PROVISIONING_ENV_REPO: ${{ inputs.provision_tf_env_repo }}
   PROVISION_INFRA_REPO: ${{ inputs.provision_infra_repo }}
   PROVISION_INFRA_VERSION: ${{ inputs.provision_infra_version }}
-  EE_MANIFEST_REPO: project-movai-studio
 
 jobs:
   Fleet-Tests-Provisioning:
@@ -190,790 +184,728 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Fetch and merge manifests
+      - name: Setup Infrastructure Configuration
+        id: infra_setup
         shell: bash
         run: |
-          ee_manifest_version="${{ inputs.ee_manifest_version }}"
-          if [ -z "$ee_manifest_version" ]; then
-            ee_manifest_version="$(cat product.version)"
-          fi
-
-          echo "::group::Fetch EE product manifest"
+          # shellcheck disable=SC2129
+          set -eo pipefail
+          echo "::group::Download environment configs"
           . .ci-venv/bin/activate
+          env_configs_dir=infra_env_configs
+          env_configs_version=${{ env.PROVISIONING_ENV_VERSION }}
+          env_configs_repo_name=${{ env.PROVISIONING_ENV_REPO }}
 
-          integration-pipeline fetch_github_release_asset \
-            --repo "$EE_MANIFEST_REPO" \
-            --version "$ee_manifest_version" \
-            --gh_api_user "$GITHUB_API_USR" \
-            --gh_api_pwd "${{ secrets.auto_commit_pwd }}" \
-            --asset_name product-manifest.yaml \
-            --target_dir ./
-          echo "✓ EE product manifest fetched"
+          rm -rf "$env_configs_dir"
+          # shellcheck disable=SC2086
+          integration-pipeline fetch_by_tag --repo "$env_configs_repo_name" --version "$env_configs_version" --gh_api_user "$GITHUB_API_USR" --gh_api_pwd "${{ secrets.auto_commit_pwd }}" --target_dir "$env_configs_dir"
+          ls -la "$env_configs_dir"
+          echo "✓ Environment configs downloaded"
           echo "::endgroup::"
 
-          echo "::group::Merge QA overrides into EE manifest"
+          echo "::group::Download terraform provisioner"
+          provision_infra_dir=provision_scripts
+          provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
+          provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
 
-          merge_keys_csv=$(python3 - <<'PY'
-          import yaml
+          rm -rf "$provision_infra_dir"
+          # shellcheck disable=SC2086
+          integration-pipeline fetch_by_tag --repo "$provision_infra_repo_name" --version "$provision_infra_version" --gh_api_user "$GITHUB_API_USR" --gh_api_pwd "${{ secrets.auto_commit_pwd }}" --target_dir "$provision_infra_dir"
+          ls -la "$provision_infra_dir"
+          deactivate
+          echo "✓ Terraform provisioner downloaded"
+          echo "::endgroup::"
 
-          with open("qa-tests-manifest.yaml", encoding="utf-8") as manifest_file:
-              data = yaml.safe_load(manifest_file) or {}
+          echo "::group::Define instance names"
+          branch="${GITHUB_REF#refs/heads/}"
+          branch="${branch//./-}"
 
-          product_dependencies = data.get("product_dependencies") or {}
-            if isinstance(product_dependencies, dict):
-              keys = [f"product_dependencies.{key}" for key in product_dependencies.keys() if key]
-              print(",".join(keys))
-            else:
-              print("")
-          PY
-          )
-
-          if [ -z "$merge_keys_csv" ]; then
-            echo "No QA override keys found under product_dependencies"
-          else
-            echo "Merging keys: $merge_keys_csv"
-
-            integration-pipeline merge_manifest_section \
-              --sub_manifest "qa-tests-manifest.yaml" \
-              --merge_src_prod_dep_keys "$merge_keys_csv"
+          if [ "${{ inputs.simple_ui_tests }}" = "true" ]; then
+            branch="${clean_ref#refs/pull/}"
+            branch=$(echo "$clean_ref" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-//;s/-$//' | cut -c1-30 | sed 's/-$//')
           fi
 
-          echo "✓ Final product manifest prepared"
+          local_manager_prefix="ip-${branch}-manager"
+          local_worker_prefix="ip-${branch}-worker"
+          total_resources=${{ inputs.fleet_number_members }}
+          ((total_resources+=1))
+
+          echo "Manager: $local_manager_prefix"
+          echo "Worker: $local_worker_prefix"
+          echo "Total resources: $total_resources"
+          echo "✓ Instance names defined"
           echo "::endgroup::"
 
+          # Output variables
+          # shellcheck disable=SC2129
+          echo "env_configs_dir=${env_configs_dir}" >> "$GITHUB_OUTPUT"
+          echo "provision_infra_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
+          echo "manager_prefix=${local_manager_prefix}" >> "$GITHUB_OUTPUT"
+          echo "worker_prefix=${local_worker_prefix}" >> "$GITHUB_OUTPUT"
+          echo "total_resources=${total_resources}" >> "$GITHUB_OUTPUT"
+
+      - name: Provision & Gather Infrastructure
+        id: infra_provision
+        working-directory: ${{ steps.infra_setup.outputs.provision_infra_dir }}
+        shell: bash
+        run: |
+          set -eo pipefail
+          # shellcheck disable=SC2129
+          echo "::group::Configure SSH"
+          echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
+          sudo chmod 600 ~/.ssh/aws_slave.pem
+          echo "✓ SSH key configured"
+          echo "::endgroup::"
+
+          echo "::group::Generate terraform variables"
+          multiply_node=$(printf '"${{ inputs.proxmox_cluster_name }}",%.0s' {1..${{ steps.infra_setup.outputs.total_resources }}})
+          node_list_str=${multiply_node::-1}
+          var_file_arg='-var-file=../${{ steps.infra_setup.outputs.env_configs_dir }}/hel/${{ inputs.proxmox_cluster_name }}_fleet_test.tfvars'
+
+          # Grouped redirect for terraform input file (not GITHUB_OUTPUT)
+          # shellcheck disable=SC2129
+          {
+            echo "proxmox_host_list=[${node_list_str}]"
+            echo "fleet_peer_nr=${{ inputs.fleet_number_members }}"
+            echo 'fleet_password="n/a"'
+            echo "fleet_manager_name=\"${{ steps.infra_setup.outputs.manager_prefix }}\""
+            echo "fleet_peer_name_prefix=\"${{ steps.infra_setup.outputs.worker_prefix }}\""
+            echo 'ip_list=${{ inputs.fleet_ips }}'
+            echo "proxmox_ve_username=\"${{ secrets.proxmox_ve_username }}\""
+            echo "proxmox_ve_password=\"${{ secrets.proxmox_ve_password }}\""
+            printf '\n'
+          } >> input.tfvars
+          echo "✓ Terraform variables configured"
+          echo "::endgroup::"
+
+          echo "::group::Terraform initialization & provisioning"
+          echo "File args: $var_file_arg"
+          echo "Input vars: $(cat input.tfvars)"
+          terraform init -backend-config="key=${{ inputs.proxmox_cluster_name }}-fleet-${{ steps.infra_setup.outputs.manager_prefix }}.tfstate"
+          # shellcheck disable=SC2086
+          terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
+          # shellcheck disable=SC2086
+          terraform refresh $var_file_arg -var-file=input.tfvars
+          echo "✓ Infrastructure provisioned"
+          echo "::endgroup::"
+
+          echo "::group::Gather terraform outputs"
+          ip=$(terraform output manager_ip_address)
+          user=$(terraform output user)
+          members=$(terraform output peers_ip_addresses | xargs | sed 's/,$//')
+          echo "Manager IP: ${ip//\"/}"
+          echo "User: ${user//\"/}"
+          echo "Members: ${members//\"/}"
+          echo "✓ Terraform outputs gathered"
+
+          if [ -f /tmp/terraform-external-debug.log ]; then
+            cat /tmp/terraform-external-debug.log || true
+          fi
+          echo "::endgroup::"
+
+          # Output terraform values
+          echo "host_ip=${ip//\"/}" >> "$GITHUB_OUTPUT"
+          echo "host_user=${user//\"/}" >> "$GITHUB_OUTPUT"
+          echo "ssh_connect_string=${user//\"/}@${ip//\"/}" >> "$GITHUB_OUTPUT"
+          echo "fleet_ips=${members//\"/}" >> "$GITHUB_OUTPUT"
+
+      - name: Stash provision_infra_dir
+        uses: actions/upload-artifact@v5
+        if: always()
+        continue-on-error: true
+        with:
+          name: provision_infra_dir
+          path: ${{ steps.infra_setup.outputs.provision_infra_dir }}
+
+      - name: Stash infra_env_configs
+        uses: actions/upload-artifact@v5
+        if: always()
+        continue-on-error: true
+        with:
+          name: infra_env_configs
+          path: ${{ steps.infra_setup.outputs.env_configs_dir }}
+
+      - name: Stash provisioned_inventory
+        uses: actions/upload-artifact@v5
+        if: always()
+        continue-on-error: true
+        with:
+          name: provisioned_inventory
+          path: ${{ steps.infra_setup.outputs.provision_infra_dir }}/provisioned_inventory.yml
+
+      - name: Prepare Devops provisioning slack message
+        if: always()
+        id: pre_slack_infra
+        shell: bash
+        run: |
+          if [ -f "product.version" ]; then
+            BUILD_INFO="build: $(cat product.version)"
+          else
+            BUILD_INFO=""
+          fi
+
+          MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), $BUILD_INFO is being impacted by an infrastructural issue. Provisioning of fleet infrastructure failed. Please take a look! Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          # Use a heredoc or printf if the message contains special characters,
+          # but for GitHub Outputs, escaping the newlines is important:
+          echo "msg_error=${MESSAGE_ERR}" >> "$GITHUB_OUTPUT"
+
+      - name: Slack message failure
+        uses: slackapi/slack-github-action@v2
+        if: failure() && inputs.slack_channel != '' && !inputs.simple_ui_tests
+        with:
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ env.DEVOPS_SLACK_CHANNEL }}",
+              "text": "${{ steps.pre_slack_infra.outputs.msg_error }}"
+            }
+          token: ${{ secrets.slack_token_id }}
+
+      - name: Setup Ansible Environment
+        id: ansible_install_setup
+        shell: bash
+        run: |
+          # shellcheck disable=SC2086
+          set -eo pipefail
+          echo "::group::Prepare ansible inventory"
+          . .ci-venv/bin/activate
+          cp "${{ steps.infra_setup.outputs.provision_infra_dir }}/provisioned_inventory.yml" staging/provisioned_inventory.yml
+
+          # Add localhost configuration for delegated tasks
+          cat >> staging/provisioned_inventory.yml << 'EOF'
+          all:
+            hosts:
+              localhost:
+                ansible_connection: local
+          EOF
+
+          cat staging/provisioned_inventory.yml
+          # shellcheck disable=SC2086
+          integration-pipeline get_yml_value --file staging/provisioned_inventory.yml --key fleet.children.managers.hosts.manager.ansible_host --output_file ./staging/manager_private_ip.txt
+          echo "✓ Ansible inventory prepared"
+          echo "::endgroup::"
+
+          echo "::group::Download ansible playbooks"
+          install_key=ansible_deploy
+          rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
+
+          # shellcheck disable=SC2086
+          integration-pipeline get_yml_value --file product-manifest.yaml --key "product_components.installion.${install_key}.target_dir" --output_file /tmp/target_dir.txt
+          integration-pipeline get_yml_value --file product-manifest.yaml --key "product_components.installion.${install_key}.version" --output_file /tmp/version.txt
+          integration-pipeline get_yml_value --file product-manifest.yaml --key "product_components.installion.${install_key}.name" --output_file /tmp/repo_name.txt
+
+          install_infra_dir=$(cat /tmp/target_dir.txt)
+          install_infra_version=$(cat /tmp/version.txt)
+          install_infra_repo_name=$(cat /tmp/repo_name.txt)
+
+          rm -rf "$install_infra_repo_name"
+          # shellcheck disable=SC2086
+          integration-pipeline fetch_by_tag --repo "$install_infra_repo_name" --version "$install_infra_version" --gh_api_user "$GITHUB_API_USR" --gh_api_pwd "${{ secrets.auto_commit_pwd }}" --target_dir "$install_infra_dir"
+          ls -la "$install_infra_dir"
+          deactivate
+          echo "✓ Ansible playbooks downloaded"
+          echo "::endgroup::"
+
+          # Output target directory
+          echo "target_dir=${install_infra_dir}" >> "$GITHUB_OUTPUT"
+
+      - name: Ansible install platform
+        id: ansible_install_platform
+        working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
+        shell: bash
+        run: |
+          set -eo pipefail
+          echo "::group::Configure SSH"
+          echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
+          sudo chmod 600 ~/.ssh/aws_slave.pem
+          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
+          echo "✓ SSH configured"
+          echo "::endgroup::"
+
+          echo "::group::Setup Python & Ansible"
+          python3.10 -m venv ansible-venv
+          source ansible-venv/bin/activate
+          if [ -f requirements.txt ]; then
+            python3.10 -m pip install -qq -r requirements.txt
+          fi
+          if [ -f requirements.yml ]; then
+            ansible-galaxy install -r requirements.yml --timeout 120
+          fi
+          echo "✓ Python venv and Ansible ready"
+          echo "::endgroup::"
+
+          echo "::group::Configure known hosts"
+          touch ~/.ssh/known_hosts
+          sudo chmod 600 ~/.ssh/known_hosts
+          echo "✓ Known hosts configured"
+          echo "::endgroup::"
+
+          echo "::group::Retag Docker images on fleet hosts"
+          echo "Peer ips: ${{ steps.infra_provision.outputs.fleet_ips }}"
+          members=("manager")
+          for i in $(seq 0 $(( ${{ inputs.fleet_number_members}} - 1 ))); do
+            members+=("member$i")
+          done
+
+          REGISTRY="${{ env.REGISTRY }}"
+          BACKEND_IMAGE="${{ inputs.backend_image_name_and_tag }}"
+          MID_REGISTRY="${{ env.MID_REGISTRY }}"
+          REGISTRY_USER="${{ secrets.registry_user }}"
+          REGISTRY_PASS="${{ secrets.registry_password }}"
+
+          SOURCE_TAG="${REGISTRY}/ci/${BACKEND_IMAGE}"
+          TARGET_TAG_REGISTRY="${REGISTRY}/qa/${BACKEND_IMAGE}"
+          TARGET_TAG_MID_REGISTRY="${MID_REGISTRY}/qa/${BACKEND_IMAGE}"
+
+          for fleet_host in "${members[@]}"; do
+            ansible "$fleet_host" -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker login \"$REGISTRY\" -u \"$REGISTRY_USER\" -p \"$REGISTRY_PASS\""
+            ansible "$fleet_host" -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker pull -q \"$SOURCE_TAG\""
+            ansible "$fleet_host" -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker tag \"$SOURCE_TAG\" \"$TARGET_TAG_REGISTRY\""
+            ansible "$fleet_host" -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker tag \"$SOURCE_TAG\" \"$TARGET_TAG_MID_REGISTRY\""
+          done
+          echo "✓ Docker images retagged"
+          echo "::endgroup::"
+
+          echo "::group::Setup Ansible vault"
+          VAULT_DIR="$(pwd)/.vault"
+          VAULT_PASSWORD_FILE="$VAULT_DIR/.vault-password-file"
+          VAULT_FILE="$VAULT_DIR/fleet.yml"
+          mkdir -p "$VAULT_DIR"
+          echo "${{ secrets.fleet_password}}" > "$VAULT_PASSWORD_FILE"
+          cat > "$VAULT_FILE" << 'EOF'
+          ---
+          vault_proxycerts_supervisor_password: "${{ secrets.fleet_password}}"
+          vault_proxycerts_ca_passphrase: "${{ secrets.fleet_password}}"
+          vault_movai_fleet_docker_password: "${{ secrets.registry_password }}"
+          vault_movai_fleet_admin_password: "${{ secrets.fleet_password}}"
+          EOF
+          ansible-vault encrypt "$VAULT_FILE" --vault-password-file "$VAULT_PASSWORD_FILE"
+          echo "✓ Vault configured"
+          echo "::endgroup::"
+
+          echo "::group::Execute Ansible playbook"
+          STAGING_PATH="$(pwd)/.staging"
+          FLEET_NAME="eefleet"
+          FLEET_ORGANIZATION="${{ inputs.proxmox_cluster_name }}.lab"
+
+          mkdir -p "$STAGING_PATH"
+          ansible-playbook install.yml \
+            -i ../staging/provisioned_inventory.yml \
+            --key-file ~/.ssh/aws_slave.pem \
+            --extra-vars=@"$(pwd)/.."/product-manifest.yaml \
+            --extra-vars=@"$VAULT_FILE" \
+            -e "movai_fleet_name=$FLEET_NAME" \
+            -e "movai_fleet_staging_path=$STAGING_PATH" \
+            -e "movai_fleet_docker_registry=$MID_REGISTRY" \
+            -e "movai_fleet_manager_enable_docker_proxy=false" \
+            -e "fleet__orga=$FLEET_ORGANIZATION" \
+            -e "{\"fleet__redis_masters_fqdn\": [$(cat ../staging/manager_private_ip.txt)]}" \
+            -e "{\"fleet_manager_san\": [ \"DNS:$(cat ../staging/manager_private_ip.txt)\", \"DNS:registry.manager\", \"DNS:manager.$FLEET_ORGANIZATION\" ]}" \
+            -e "{\"fleet_domain_dns\": [ \"10.26.0.3\", \"10.26.1.3\", \"1.1.1.1\" ]}" \
+            -e "{\"movai_fleet_extra_hosts\": [ \"10.26.0.2    registry.hel.mov.ai traefik\", \"$(cat ../staging/manager_private_ip.txt)   manager registry.manager manager.$FLEET_ORGANIZATION registry.manager.$FLEET_ORGANIZATION ${{ steps.infra_setup.outputs.manager_prefix }}\" ]}" \
+            --limit 'fleet' \
+            --vault-password-file "$VAULT_PASSWORD_FILE" \
+            --skip-tags "validate,ufw,hardening"
+          execution_status=$?
           deactivate
 
-      - name: Upload Manifest Artifacts
-        uses: actions/upload-artifact@v4
+          if [ $execution_status -eq 0 ]; then
+            echo "✓ Ansible install platform completed successfully"
+          else
+            echo "✗ Ansible install platform failed with status $execution_status"
+          fi
+          echo "::endgroup::"
+
+          exit $execution_status
+
+      - name: Configure Remote Environment
+        if: ${{ inputs.with_fleet_tests }}
+        shell: bash
+        run: |
+          set -eo pipefail
+          echo "::group::Setup SSH connection"
+          ssh-keygen -f ~/.ssh/known_hosts -R ${{ steps.infra_provision.outputs.host_ip }} || true
+          ssh-keyscan -H ${{ steps.infra_provision.outputs.host_ip }} >> ~/.ssh/known_hosts || true
+          echo "✓ SSH connection configured"
+          echo "::endgroup::"
+
+          echo "::group::Initialize remote workspace"
+          ssh ${{ steps.infra_provision.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
+            set -e
+            echo "Waiting for cloud-init..."
+            cloud-init status --wait
+            echo "Preparing workspace..."
+            rm -rf ./${{ env.REMOTE_WORKSPACE_PATH }}
+            mkdir -p ./${{ env.REMOTE_WORKSPACE_PATH }}
+            echo "✓ Workspace initialized"
+          '
+          echo "::endgroup::"
+
+          echo "::group::Install CI Scripts on remote"
+          ssh ${{ steps.infra_provision.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no \
+            "set -e ; python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION"
+          echo "✓ CI Scripts installed"
+          echo "::endgroup::"
+
+          echo "::group::Transfer configuration files"
+          scp -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no product-manifest.yaml \
+            ${{ steps.infra_provision.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/product-manifest.yaml
+          echo "✓ Product manifest transferred"
+
+          scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ./*.json* \
+            "${{ steps.infra_provision.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/"
+          echo "✓ Robot JSON configs transferred"
+          echo "::endgroup::"
+
+  Fleet-Tests-Execution:
+    runs-on: ip-${{ inputs.proxmox_cluster_name }}-queuer
+    needs: [Fleet-Tests-Provisioning]
+    if: ${{ inputs.with_fleet_tests }}
+    strategy:
+      fail-fast: false
+      matrix:
+        fleet_test_name: ${{ fromJSON( inputs.fleet_test_infra_list ) }}
+      max-parallel: 1
+    env:
+      QA_ARTIFACTS_PATH: ${{ matrix.fleet_test_name }}_qa_artifacts
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Remote - Setup QA ${{ matrix.fleet_test_name }} tests
+        if: ${{ inputs.with_fleet_tests }}
+        shell: bash
+        id: tests_setup
+        run: |
+          # shellcheck disable=SC2129
+          ssh ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
+            set -e
+
+            tests_dir="fleet_${{ matrix.fleet_test_name }}"
+            qa_key=${{ matrix.fleet_test_name }}
+
+            mkdir -p ${{ env.REMOTE_WORKSPACE_PATH }}
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
+            echo "::group::Extract test metadata"
+            rm -f /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt
+            export PATH="$HOME/.local/bin:$PATH"
+
+            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
+            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
+            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.fleet.test_set --output_file /tmp/test_set.txt
+            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.fleet.test_args --output_file /tmp/test_args.txt
+
+            tests_version=$(cat /tmp/version.txt)
+            tests_repo_name=$(cat /tmp/repo_name.txt)
+            test_set=$(cat /tmp/test_set.txt)
+            test_args=$(cat /tmp/test_args.txt || echo "")
+
+            echo "Test version: $tests_version"
+            echo "Test repo: $tests_repo_name"
+            echo "✓ Test metadata extracted"
+            echo "::endgroup::"
+
+            echo "::group::Download test repository"
+            rm -rf $tests_repo_name
+            integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user ${{ env.GITHUB_API_USR }} --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
+            ls -la $tests_dir
+            echo "✓ Test repository downloaded"
+            echo "::endgroup::"
+
+            echo "::group::Setup test environment"
+            pushd "${tests_dir}"
+            python3 -m venv test-venv --clear
+            . test-venv/bin/activate
+            if  [ -f test-requirements.txt ]; then
+              echo "Installing test requirements from test-requirements.txt"
+              pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r test-requirements.txt
+            else
+              echo "No test-requirements.txt file found!"
+              exit 1
+            fi
+            deactivate
+            popd
+            echo "✓ Test environment prepared"
+            echo "::endgroup::"
+          '
+          rm -f /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt /tmp/test_args.txt /tmp/test_exec_dir.txt
+          # shellcheck disable=SC2086,SC2129
+          scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no "${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:/tmp/*.txt" /tmp/
+
+          echo "tests_dir=fleet_${{ matrix.fleet_test_name }}" >> "$GITHUB_OUTPUT"
+          echo "version=$(cat /tmp/version.txt)" >> "$GITHUB_OUTPUT"
+          echo "test_set=$(cat /tmp/test_set.txt)" >> "$GITHUB_OUTPUT"
+          echo "test_exec_dir=$(cat /tmp/test_exec_dir.txt)" >> "$GITHUB_OUTPUT"
+          echo "test_args=$(cat /tmp/test_args.txt || echo \"\")" >> "$GITHUB_OUTPUT"
+
+      - name: Remote - Run Fleet test [${{ matrix.fleet_test_name }}]
+        if: ${{ inputs.with_fleet_tests }}
+        id: run_tests
+        shell: bash
+        run: |
+          ssh ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.tests_dir }}
+            export host_ip=${{ needs.Fleet-Tests-Provisioning.outputs.host_ip }}
+            export movai_user=movai
+            export movai_pwd=movai123
+            export test_set=${{ steps.tests_setup.outputs.test_set }}
+            movai-cli user manager $movai_user $movai_pwd || true
+            . test-venv/bin/activate
+            python3 -m pytest ${{ steps.tests_setup.outputs.test_args }} -m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd
+            deactivate
+          '
+
+      - name: Download Provisioned Inventory
+        if: always()
+        uses: actions/download-artifact@v5
         with:
-          name: merged-manifests
-          path: |
-            product-manifest.yaml
-            qa-tests-manifest.yaml
+          name: provisioned_inventory
+          path: ./
+
+      - name: Setup Python 3.10
+        if: always()
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+
+      - name: Checkout shared workflow scripts
+        if: always()
+        uses: actions/checkout@v6
+        with:
+          repository: MOV-AI/.github
+          ref: v3
+          path: .shared-github
+
+      - name: Collect QA Artifacts
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          echo "::group::Download provisioned inventory"
+          python3.10 --version || python3 --version
+          echo "✓ Python environment ready"
+
+          if [ ! -f ./provisioned_inventory.yml ]; then
+            echo "ERROR: provisioned_inventory.yml not found - cannot collect host logs"
+            exit 1
+          fi
+          echo "✓ Inventory prepared"
+          echo "::endgroup::"
+
+          echo "::group::Setup Ansible environment"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
+          chmod 600 ~/.ssh/aws_slave.pem
+          python3.10 -m venv ansible-venv
+          source ansible-venv/bin/activate
+          python3.10 -m pip install -qq ansible==9.13.0
+          echo "✓ Ansible environment ready"
+          echo "::endgroup::"
+
+          echo "::group::Collect fleet host logs"
+          rm -rf "$QA_ARTIFACTS_PATH"
+          mkdir -p "$QA_ARTIFACTS_PATH"
+
+          chmod +x ./.shared-github/.github/scripts/scp_collect_logs.bash
+          ./.shared-github/.github/scripts/scp_collect_logs.bash ./provisioned_inventory.yml "$QA_ARTIFACTS_PATH"
+          echo "::endgroup::"
+
+          echo "::group::Collect test artifacts"
+          # shellcheck disable=SC2086
+          scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no \
+            "${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.tests_dir }}/tests_artifacts" \
+            "$QA_ARTIFACTS_PATH/" || echo "WARN: Failed to collect test artifacts"
+          echo "✓ Test artifacts collection completed"
+          echo "::endgroup::"
+          deactivate
+
+      - name: Stash Fleet QA artifacts
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ github.run_number }}_${{ github.run_attempt }}_fleet_${{ matrix.fleet_test_name }}_qa_artifacts_${{ github.run_id }}
+          path: ${{ env.QA_ARTIFACTS_PATH }}/*
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
-      # - name: Setup Infrastructure Configuration
-      #   id: infra_setup
-      #   shell: bash
-      #   run: |
-      #     # shellcheck disable=SC2129
-      #     set -eo pipefail
-      #     echo "::group::Download environment configs"
-      #     . .ci-venv/bin/activate
-      #     env_configs_dir=infra_env_configs
-      #     env_configs_version=${{ env.PROVISIONING_ENV_VERSION }}
-      #     env_configs_repo_name=${{ env.PROVISIONING_ENV_REPO }}
-
-      #     rm -rf "$env_configs_dir"
-      #     # shellcheck disable=SC2086
-      #     integration-pipeline fetch_by_tag --repo "$env_configs_repo_name" --version "$env_configs_version" --gh_api_user "$GITHUB_API_USR" --gh_api_pwd "${{ secrets.auto_commit_pwd }}" --target_dir "$env_configs_dir"
-      #     ls -la "$env_configs_dir"
-      #     echo "✓ Environment configs downloaded"
-      #     echo "::endgroup::"
-
-      #     echo "::group::Download terraform provisioner"
-      #     provision_infra_dir=provision_scripts
-      #     provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
-      #     provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
-
-      #     rm -rf "$provision_infra_dir"
-      #     # shellcheck disable=SC2086
-      #     integration-pipeline fetch_by_tag --repo "$provision_infra_repo_name" --version "$provision_infra_version" --gh_api_user "$GITHUB_API_USR" --gh_api_pwd "${{ secrets.auto_commit_pwd }}" --target_dir "$provision_infra_dir"
-      #     ls -la "$provision_infra_dir"
-      #     deactivate
-      #     echo "✓ Terraform provisioner downloaded"
-      #     echo "::endgroup::"
-
-      #     echo "::group::Define instance names"
-      #     branch="${GITHUB_REF#refs/heads/}"
-      #     branch="${branch//./-}"
-
-      #     if [ "${{ inputs.simple_ui_tests }}" = "true" ]; then
-      #       branch="${clean_ref#refs/pull/}"
-      #       branch=$(echo "$clean_ref" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-//;s/-$//' | cut -c1-30 | sed 's/-$//')
-      #     fi
-
-      #     local_manager_prefix="ip-${branch}-manager"
-      #     local_worker_prefix="ip-${branch}-worker"
-      #     total_resources=${{ inputs.fleet_number_members }}
-      #     ((total_resources+=1))
-
-      #     echo "Manager: $local_manager_prefix"
-      #     echo "Worker: $local_worker_prefix"
-      #     echo "Total resources: $total_resources"
-      #     echo "✓ Instance names defined"
-      #     echo "::endgroup::"
-
-      #     # Output variables
-      #     # shellcheck disable=SC2129
-      #     echo "env_configs_dir=${env_configs_dir}" >> "$GITHUB_OUTPUT"
-      #     echo "provision_infra_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
-      #     echo "manager_prefix=${local_manager_prefix}" >> "$GITHUB_OUTPUT"
-      #     echo "worker_prefix=${local_worker_prefix}" >> "$GITHUB_OUTPUT"
-      #     echo "total_resources=${total_resources}" >> "$GITHUB_OUTPUT"
-
-      # - name: Provision & Gather Infrastructure
-      #   id: infra_provision
-      #   working-directory: ${{ steps.infra_setup.outputs.provision_infra_dir }}
-      #   shell: bash
-      #   run: |
-      #     set -eo pipefail
-      #     # shellcheck disable=SC2129
-      #     echo "::group::Configure SSH"
-      #     echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
-      #     sudo chmod 600 ~/.ssh/aws_slave.pem
-      #     echo "✓ SSH key configured"
-      #     echo "::endgroup::"
-
-      #     echo "::group::Generate terraform variables"
-      #     multiply_node=$(printf '"${{ inputs.proxmox_cluster_name }}",%.0s' {1..${{ steps.infra_setup.outputs.total_resources }}})
-      #     node_list_str=${multiply_node::-1}
-      #     var_file_arg='-var-file=../${{ steps.infra_setup.outputs.env_configs_dir }}/hel/${{ inputs.proxmox_cluster_name }}_fleet_test.tfvars'
-
-      #     # Grouped redirect for terraform input file (not GITHUB_OUTPUT)
-      #     # shellcheck disable=SC2129
-      #     {
-      #       echo "proxmox_host_list=[${node_list_str}]"
-      #       echo "fleet_peer_nr=${{ inputs.fleet_number_members }}"
-      #       echo 'fleet_password="n/a"'
-      #       echo "fleet_manager_name=\"${{ steps.infra_setup.outputs.manager_prefix }}\""
-      #       echo "fleet_peer_name_prefix=\"${{ steps.infra_setup.outputs.worker_prefix }}\""
-      #       echo 'ip_list=${{ inputs.fleet_ips }}'
-      #       echo "proxmox_ve_username=\"${{ secrets.proxmox_ve_username }}\""
-      #       echo "proxmox_ve_password=\"${{ secrets.proxmox_ve_password }}\""
-      #       printf '\n'
-      #     } >> input.tfvars
-      #     echo "✓ Terraform variables configured"
-      #     echo "::endgroup::"
-
-      #     echo "::group::Terraform initialization & provisioning"
-      #     echo "File args: $var_file_arg"
-      #     echo "Input vars: $(cat input.tfvars)"
-      #     terraform init -backend-config="key=${{ inputs.proxmox_cluster_name }}-fleet-${{ steps.infra_setup.outputs.manager_prefix }}.tfstate"
-      #     # shellcheck disable=SC2086
-      #     terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
-      #     # shellcheck disable=SC2086
-      #     terraform refresh $var_file_arg -var-file=input.tfvars
-      #     echo "✓ Infrastructure provisioned"
-      #     echo "::endgroup::"
-
-      #     echo "::group::Gather terraform outputs"
-      #     ip=$(terraform output manager_ip_address)
-      #     user=$(terraform output user)
-      #     members=$(terraform output peers_ip_addresses | xargs | sed 's/,$//')
-      #     echo "Manager IP: ${ip//\"/}"
-      #     echo "User: ${user//\"/}"
-      #     echo "Members: ${members//\"/}"
-      #     echo "✓ Terraform outputs gathered"
-
-      #     if [ -f /tmp/terraform-external-debug.log ]; then
-      #       cat /tmp/terraform-external-debug.log || true
-      #     fi
-      #     echo "::endgroup::"
-
-      #     # Output terraform values
-      #     echo "host_ip=${ip//\"/}" >> "$GITHUB_OUTPUT"
-      #     echo "host_user=${user//\"/}" >> "$GITHUB_OUTPUT"
-      #     echo "ssh_connect_string=${user//\"/}@${ip//\"/}" >> "$GITHUB_OUTPUT"
-      #     echo "fleet_ips=${members//\"/}" >> "$GITHUB_OUTPUT"
-
-      # - name: Stash provision_infra_dir
-      #   uses: actions/upload-artifact@v5
-      #   if: always()
-      #   continue-on-error: true
-      #   with:
-      #     name: provision_infra_dir
-      #     path: ${{ steps.infra_setup.outputs.provision_infra_dir }}
-
-      # - name: Stash infra_env_configs
-      #   uses: actions/upload-artifact@v5
-      #   if: always()
-      #   continue-on-error: true
-      #   with:
-      #     name: infra_env_configs
-      #     path: ${{ steps.infra_setup.outputs.env_configs_dir }}
-
-      # - name: Stash provisioned_inventory
-      #   uses: actions/upload-artifact@v5
-      #   if: always()
-      #   continue-on-error: true
-      #   with:
-      #     name: provisioned_inventory
-      #     path: ${{ steps.infra_setup.outputs.provision_infra_dir }}/provisioned_inventory.yml
-
-      # - name: Prepare Devops provisioning slack message
-      #   if: always()
-      #   id: pre_slack_infra
-      #   shell: bash
-      #   run: |
-      #     if [ -f "product.version" ]; then
-      #       BUILD_INFO="build: $(cat product.version)"
-      #     else
-      #       BUILD_INFO=""
-      #     fi
-
-      #     MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), $BUILD_INFO is being impacted by an infrastructural issue. Provisioning of fleet infrastructure failed. Please take a look! Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-
-      #     # Use a heredoc or printf if the message contains special characters,
-      #     # but for GitHub Outputs, escaping the newlines is important:
-      #     echo "msg_error=${MESSAGE_ERR}" >> "$GITHUB_OUTPUT"
-
-      # - name: Slack message failure
-      #   uses: slackapi/slack-github-action@v2
-      #   if: failure() && inputs.slack_channel != '' && !inputs.simple_ui_tests
-      #   with:
-      #     method: chat.postMessage
-      #     payload: |
-      #       {
-      #         "channel": "${{ env.DEVOPS_SLACK_CHANNEL }}",
-      #         "text": "${{ steps.pre_slack_infra.outputs.msg_error }}"
-      #       }
-      #     token: ${{ secrets.slack_token_id }}
-
-      # - name: Setup Ansible Environment
-      #   id: ansible_install_setup
-      #   shell: bash
-      #   run: |
-      #     # shellcheck disable=SC2086
-      #     set -eo pipefail
-      #     echo "::group::Prepare ansible inventory"
-      #     . .ci-venv/bin/activate
-      #     cp "${{ steps.infra_setup.outputs.provision_infra_dir }}/provisioned_inventory.yml" staging/provisioned_inventory.yml
-
-      #     # Add localhost configuration for delegated tasks
-      #     cat >> staging/provisioned_inventory.yml << 'EOF'
-      #     all:
-      #       hosts:
-      #         localhost:
-      #           ansible_connection: local
-      #     EOF
-
-      #     cat staging/provisioned_inventory.yml
-      #     # shellcheck disable=SC2086
-      #     integration-pipeline get_yml_value --file staging/provisioned_inventory.yml --key fleet.children.managers.hosts.manager.ansible_host --output_file ./staging/manager_private_ip.txt
-      #     echo "✓ Ansible inventory prepared"
-      #     echo "::endgroup::"
-
-      #     echo "::group::Download ansible playbooks"
-      #     install_key=ansible_deploy
-      #     rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
-
-      #     # shellcheck disable=SC2086
-      #     integration-pipeline get_yml_value --file product-manifest.yaml --key "product_components.installion.${install_key}.target_dir" --output_file /tmp/target_dir.txt
-      #     integration-pipeline get_yml_value --file product-manifest.yaml --key "product_components.installion.${install_key}.version" --output_file /tmp/version.txt
-      #     integration-pipeline get_yml_value --file product-manifest.yaml --key "product_components.installion.${install_key}.name" --output_file /tmp/repo_name.txt
-
-      #     install_infra_dir=$(cat /tmp/target_dir.txt)
-      #     install_infra_version=$(cat /tmp/version.txt)
-      #     install_infra_repo_name=$(cat /tmp/repo_name.txt)
-
-      #     rm -rf "$install_infra_repo_name"
-      #     # shellcheck disable=SC2086
-      #     integration-pipeline fetch_by_tag --repo "$install_infra_repo_name" --version "$install_infra_version" --gh_api_user "$GITHUB_API_USR" --gh_api_pwd "${{ secrets.auto_commit_pwd }}" --target_dir "$install_infra_dir"
-      #     ls -la "$install_infra_dir"
-      #     deactivate
-      #     echo "✓ Ansible playbooks downloaded"
-      #     echo "::endgroup::"
-
-      #     # Output target directory
-      #     echo "target_dir=${install_infra_dir}" >> "$GITHUB_OUTPUT"
-
-      # - name: Ansible install platform
-      #   id: ansible_install_platform
-      #   working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
-      #   shell: bash
-      #   run: |
-      #     set -eo pipefail
-      #     echo "::group::Configure SSH"
-      #     echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
-      #     sudo chmod 600 ~/.ssh/aws_slave.pem
-      #     while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
-      #     echo "✓ SSH configured"
-      #     echo "::endgroup::"
-
-      #     echo "::group::Setup Python & Ansible"
-      #     python3.10 -m venv ansible-venv
-      #     source ansible-venv/bin/activate
-      #     if [ -f requirements.txt ]; then
-      #       python3.10 -m pip install -qq -r requirements.txt
-      #     fi
-      #     if [ -f requirements.yml ]; then
-      #       ansible-galaxy install -r requirements.yml --timeout 120
-      #     fi
-      #     echo "✓ Python venv and Ansible ready"
-      #     echo "::endgroup::"
-
-      #     echo "::group::Configure known hosts"
-      #     touch ~/.ssh/known_hosts
-      #     sudo chmod 600 ~/.ssh/known_hosts
-      #     echo "✓ Known hosts configured"
-      #     echo "::endgroup::"
-
-      #     echo "::group::Retag Docker images on fleet hosts"
-      #     echo "Peer ips: ${{ steps.infra_provision.outputs.fleet_ips }}"
-      #     members=("manager")
-      #     for i in $(seq 0 $(( ${{ inputs.fleet_number_members}} - 1 ))); do
-      #       members+=("member$i")
-      #     done
-
-      #     REGISTRY="${{ env.REGISTRY }}"
-      #     BACKEND_IMAGE="${{ inputs.backend_image_name_and_tag }}"
-      #     MID_REGISTRY="${{ env.MID_REGISTRY }}"
-      #     REGISTRY_USER="${{ secrets.registry_user }}"
-      #     REGISTRY_PASS="${{ secrets.registry_password }}"
-
-      #     SOURCE_TAG="${REGISTRY}/ci/${BACKEND_IMAGE}"
-      #     TARGET_TAG_REGISTRY="${REGISTRY}/qa/${BACKEND_IMAGE}"
-      #     TARGET_TAG_MID_REGISTRY="${MID_REGISTRY}/qa/${BACKEND_IMAGE}"
-
-      #     for fleet_host in "${members[@]}"; do
-      #       ansible "$fleet_host" -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker login \"$REGISTRY\" -u \"$REGISTRY_USER\" -p \"$REGISTRY_PASS\""
-      #       ansible "$fleet_host" -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker pull -q \"$SOURCE_TAG\""
-      #       ansible "$fleet_host" -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker tag \"$SOURCE_TAG\" \"$TARGET_TAG_REGISTRY\""
-      #       ansible "$fleet_host" -i ../staging/provisioned_inventory.yml --key-file ~/.ssh/aws_slave.pem -m shell -a "set -e; docker tag \"$SOURCE_TAG\" \"$TARGET_TAG_MID_REGISTRY\""
-      #     done
-      #     echo "✓ Docker images retagged"
-      #     echo "::endgroup::"
-
-      #     echo "::group::Setup Ansible vault"
-      #     VAULT_DIR="$(pwd)/.vault"
-      #     VAULT_PASSWORD_FILE="$VAULT_DIR/.vault-password-file"
-      #     VAULT_FILE="$VAULT_DIR/fleet.yml"
-      #     mkdir -p "$VAULT_DIR"
-      #     echo "${{ secrets.fleet_password}}" > "$VAULT_PASSWORD_FILE"
-      #     cat > "$VAULT_FILE" << 'EOF'
-      #     ---
-      #     vault_proxycerts_supervisor_password: "${{ secrets.fleet_password}}"
-      #     vault_proxycerts_ca_passphrase: "${{ secrets.fleet_password}}"
-      #     vault_movai_fleet_docker_password: "${{ secrets.registry_password }}"
-      #     vault_movai_fleet_admin_password: "${{ secrets.fleet_password}}"
-      #     EOF
-      #     ansible-vault encrypt "$VAULT_FILE" --vault-password-file "$VAULT_PASSWORD_FILE"
-      #     echo "✓ Vault configured"
-      #     echo "::endgroup::"
-
-      #     echo "::group::Execute Ansible playbook"
-      #     STAGING_PATH="$(pwd)/.staging"
-      #     FLEET_NAME="eefleet"
-      #     FLEET_ORGANIZATION="${{ inputs.proxmox_cluster_name }}.lab"
-
-      #     mkdir -p "$STAGING_PATH"
-      #     ansible-playbook install.yml \
-      #       -i ../staging/provisioned_inventory.yml \
-      #       --key-file ~/.ssh/aws_slave.pem \
-      #       --extra-vars=@"$(pwd)/.."/product-manifest.yaml \
-      #       --extra-vars=@"$VAULT_FILE" \
-      #       -e "movai_fleet_name=$FLEET_NAME" \
-      #       -e "movai_fleet_staging_path=$STAGING_PATH" \
-      #       -e "movai_fleet_docker_registry=$MID_REGISTRY" \
-      #       -e "movai_fleet_manager_enable_docker_proxy=false" \
-      #       -e "fleet__orga=$FLEET_ORGANIZATION" \
-      #       -e "{\"fleet__redis_masters_fqdn\": [$(cat ../staging/manager_private_ip.txt)]}" \
-      #       -e "{\"fleet_manager_san\": [ \"DNS:$(cat ../staging/manager_private_ip.txt)\", \"DNS:registry.manager\", \"DNS:manager.$FLEET_ORGANIZATION\" ]}" \
-      #       -e "{\"fleet_domain_dns\": [ \"10.26.0.3\", \"10.26.1.3\", \"1.1.1.1\" ]}" \
-      #       -e "{\"movai_fleet_extra_hosts\": [ \"10.26.0.2    registry.hel.mov.ai traefik\", \"$(cat ../staging/manager_private_ip.txt)   manager registry.manager manager.$FLEET_ORGANIZATION registry.manager.$FLEET_ORGANIZATION ${{ steps.infra_setup.outputs.manager_prefix }}\" ]}" \
-      #       --limit 'fleet' \
-      #       --vault-password-file "$VAULT_PASSWORD_FILE" \
-      #       --skip-tags "validate,ufw,hardening"
-      #     execution_status=$?
-      #     deactivate
-
-      #     if [ $execution_status -eq 0 ]; then
-      #       echo "✓ Ansible install platform completed successfully"
-      #     else
-      #       echo "✗ Ansible install platform failed with status $execution_status"
-      #     fi
-      #     echo "::endgroup::"
-
-      #     exit $execution_status
-
-      # - name: Configure Remote Environment
-      #   if: ${{ inputs.with_fleet_tests }}
-      #   shell: bash
-      #   run: |
-      #     set -eo pipefail
-      #     echo "::group::Setup SSH connection"
-      #     ssh-keygen -f ~/.ssh/known_hosts -R ${{ steps.infra_provision.outputs.host_ip }} || true
-      #     ssh-keyscan -H ${{ steps.infra_provision.outputs.host_ip }} >> ~/.ssh/known_hosts || true
-      #     echo "✓ SSH connection configured"
-      #     echo "::endgroup::"
-
-      #     echo "::group::Initialize remote workspace"
-      #     ssh ${{ steps.infra_provision.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
-      #       set -e
-      #       echo "Waiting for cloud-init..."
-      #       cloud-init status --wait
-      #       echo "Preparing workspace..."
-      #       rm -rf ./${{ env.REMOTE_WORKSPACE_PATH }}
-      #       mkdir -p ./${{ env.REMOTE_WORKSPACE_PATH }}
-      #       echo "✓ Workspace initialized"
-      #     '
-      #     echo "::endgroup::"
-
-      #     echo "::group::Install CI Scripts on remote"
-      #     ssh ${{ steps.infra_provision.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no \
-      #       "set -e ; python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION"
-      #     echo "✓ CI Scripts installed"
-      #     echo "::endgroup::"
-
-      #     echo "::group::Transfer configuration files"
-      #     scp -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no product-manifest.yaml \
-      #       ${{ steps.infra_provision.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/product-manifest.yaml
-      #     echo "✓ Product manifest transferred"
-
-      #     scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no ./*.json* \
-      #       "${{ steps.infra_provision.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/"
-      #     echo "✓ Robot JSON configs transferred"
-      #     echo "::endgroup::"
-
-  # Fleet-Tests-Execution:
-  #   runs-on: ip-${{ inputs.proxmox_cluster_name }}-queuer
-  #   needs: [Fleet-Tests-Provisioning]
-  #   if: ${{ inputs.with_fleet_tests }}
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       fleet_test_name: ${{ fromJSON( inputs.fleet_test_infra_list ) }}
-  #     max-parallel: 1
-  #   env:
-  #     QA_ARTIFACTS_PATH: ${{ matrix.fleet_test_name }}_qa_artifacts
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v6
-
-  #     - name: Remote - Setup QA ${{ matrix.fleet_test_name }} tests
-  #       if: ${{ inputs.with_fleet_tests }}
-  #       shell: bash
-  #       id: tests_setup
-  #       run: |
-  #         # shellcheck disable=SC2129
-  #         ssh ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
-  #           set -e
-
-  #           tests_dir="fleet_${{ matrix.fleet_test_name }}"
-  #           qa_key=${{ matrix.fleet_test_name }}
-
-  #           mkdir -p ${{ env.REMOTE_WORKSPACE_PATH }}
-  #           cd ${{ env.REMOTE_WORKSPACE_PATH }}
-
-  #           echo "::group::Extract test metadata"
-  #           rm -f /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt
-  #           export PATH="$HOME/.local/bin:$PATH"
-
-  #           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
-  #           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
-  #           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.fleet.test_set --output_file /tmp/test_set.txt
-  #           integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.fleet.test_args --output_file /tmp/test_args.txt
-
-  #           tests_version=$(cat /tmp/version.txt)
-  #           tests_repo_name=$(cat /tmp/repo_name.txt)
-  #           test_set=$(cat /tmp/test_set.txt)
-  #           test_args=$(cat /tmp/test_args.txt || echo "")
-
-  #           echo "Test version: $tests_version"
-  #           echo "Test repo: $tests_repo_name"
-  #           echo "✓ Test metadata extracted"
-  #           echo "::endgroup::"
-
-  #           echo "::group::Download test repository"
-  #           rm -rf $tests_repo_name
-  #           integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user ${{ env.GITHUB_API_USR }} --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
-  #           ls -la $tests_dir
-  #           echo "✓ Test repository downloaded"
-  #           echo "::endgroup::"
-
-  #           echo "::group::Setup test environment"
-  #           pushd "${tests_dir}"
-  #           python3 -m venv test-venv --clear
-  #           . test-venv/bin/activate
-  #           if  [ -f test-requirements.txt ]; then
-  #             echo "Installing test requirements from test-requirements.txt"
-  #             pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r test-requirements.txt
-  #           else
-  #             echo "No test-requirements.txt file found!"
-  #             exit 1
-  #           fi
-  #           deactivate
-  #           popd
-  #           echo "✓ Test environment prepared"
-  #           echo "::endgroup::"
-  #         '
-  #         rm -f /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt /tmp/test_args.txt /tmp/test_exec_dir.txt
-  #         # shellcheck disable=SC2086,SC2129
-  #         scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no "${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:/tmp/*.txt" /tmp/
-
-  #         echo "tests_dir=fleet_${{ matrix.fleet_test_name }}" >> "$GITHUB_OUTPUT"
-  #         echo "version=$(cat /tmp/version.txt)" >> "$GITHUB_OUTPUT"
-  #         echo "test_set=$(cat /tmp/test_set.txt)" >> "$GITHUB_OUTPUT"
-  #         echo "test_exec_dir=$(cat /tmp/test_exec_dir.txt)" >> "$GITHUB_OUTPUT"
-  #         echo "test_args=$(cat /tmp/test_args.txt || echo \"\")" >> "$GITHUB_OUTPUT"
-
-  #     - name: Remote - Run Fleet test [${{ matrix.fleet_test_name }}]
-  #       if: ${{ inputs.with_fleet_tests }}
-  #       id: run_tests
-  #       shell: bash
-  #       run: |
-  #         ssh ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
-  #           set -e
-  #           cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.tests_dir }}
-  #           export host_ip=${{ needs.Fleet-Tests-Provisioning.outputs.host_ip }}
-  #           export movai_user=movai
-  #           export movai_pwd=movai123
-  #           export test_set=${{ steps.tests_setup.outputs.test_set }}
-  #           movai-cli user manager $movai_user $movai_pwd || true
-  #           . test-venv/bin/activate
-  #           python3 -m pytest ${{ steps.tests_setup.outputs.test_args }} -m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd
-  #           deactivate
-  #         '
-
-  #     - name: Download Provisioned Inventory
-  #       if: always()
-  #       uses: actions/download-artifact@v5
-  #       with:
-  #         name: provisioned_inventory
-  #         path: ./
-
-  #     - name: Setup Python 3.10
-  #       if: always()
-  #       uses: actions/setup-python@v6
-  #       with:
-  #         python-version: '3.10'
-
-  #     - name: Checkout shared workflow scripts
-  #       if: always()
-  #       uses: actions/checkout@v6
-  #       with:
-  #         repository: MOV-AI/.github
-  #         ref: v3
-  #         path: .shared-github
-
-  #     - name: Collect QA Artifacts
-  #       if: always()
-  #       shell: bash
-  #       run: |
-  #         set +e
-  #         echo "::group::Download provisioned inventory"
-  #         python3.10 --version || python3 --version
-  #         echo "✓ Python environment ready"
-
-  #         if [ ! -f ./provisioned_inventory.yml ]; then
-  #           echo "ERROR: provisioned_inventory.yml not found - cannot collect host logs"
-  #           exit 1
-  #         fi
-  #         echo "✓ Inventory prepared"
-  #         echo "::endgroup::"
-
-  #         echo "::group::Setup Ansible environment"
-  #         mkdir -p ~/.ssh
-  #         echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
-  #         chmod 600 ~/.ssh/aws_slave.pem
-  #         python3.10 -m venv ansible-venv
-  #         source ansible-venv/bin/activate
-  #         python3.10 -m pip install -qq ansible==9.13.0
-  #         echo "✓ Ansible environment ready"
-  #         echo "::endgroup::"
-
-  #         echo "::group::Collect fleet host logs"
-  #         rm -rf "$QA_ARTIFACTS_PATH"
-  #         mkdir -p "$QA_ARTIFACTS_PATH"
-
-  #         chmod +x ./.shared-github/.github/scripts/scp_collect_logs.bash
-  #         ./.shared-github/.github/scripts/scp_collect_logs.bash ./provisioned_inventory.yml "$QA_ARTIFACTS_PATH"
-  #         echo "::endgroup::"
-
-  #         echo "::group::Collect test artifacts"
-  #         # shellcheck disable=SC2086
-  #         scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no \
-  #           "${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.tests_dir }}/tests_artifacts" \
-  #           "$QA_ARTIFACTS_PATH/" || echo "WARN: Failed to collect test artifacts"
-  #         echo "✓ Test artifacts collection completed"
-  #         echo "::endgroup::"
-  #         deactivate
-
-  #     - name: Stash Fleet QA artifacts
-  #       if: always()
-  #       uses: actions/upload-artifact@v5
-  #       with:
-  #         name: ${{ github.run_number }}_${{ github.run_attempt }}_fleet_${{ matrix.fleet_test_name }}_qa_artifacts_${{ github.run_id }}
-  #         path: ${{ env.QA_ARTIFACTS_PATH }}/*
-  #         retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
-
-  #     - name: Prepare slack variables for execution
-  #       if: always()
-  #       id: pre_slack_execution
-  #       run: |
-  #         MESSAGE=":white_check_mark: Fleet-Tests-Execution [${{ matrix.fleet_test_name }}] passed"
-  #         if [ "${{ job.status }}" != "success" ]; then
-  #           MESSAGE=":x: Fleet-Tests-Execution [${{ matrix.fleet_test_name }}] failed"
-  #         fi
-  #         echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
-
-  #     - name: Slack message for execution
-  #       uses: slackapi/slack-github-action@v2
-  #       if: always() && inputs.slack_channel != '' && !inputs.simple_ui_tests
-  #       with:
-  #         method: chat.postMessage
-  #         payload: |
-  #           {
-  #             "channel": "${{ inputs.slack_channel }}",
-  #             "text": "${{ steps.pre_slack_execution.outputs.msg }}",
-  #             "thread_ts": "${{ inputs.slack_thread_id }}"
-  #           }
-  #         token: ${{ secrets.slack_token_id }}
-
-  # Fleet-Tests-Teardown:
-  #   runs-on: ip-${{ inputs.proxmox_cluster_name }}-queuer
-  #   needs: [Fleet-Tests-Provisioning, Fleet-Tests-Execution]
-  #   if: always()
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v6
-
-  #     - name: Setup Teardown Environment
-  #       shell: bash
-  #       run: |
-  #         set -eo pipefail
-  #         echo "::group::Download provisioning artifacts"
-  #         mkdir -p ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
-  #         mkdir -p ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_infra_env_configs }}
-
-  #         # Artifacts should be available from provisioning job
-  #         # In workflow execution, they're typically downloaded via artifact actions
-  #         echo "Preparing: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}"
-  #         echo "Preparing: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_infra_env_configs }}"
-  #         echo "✓ Teardown environment ready"
-  #         echo "::endgroup::"
-
-  #     - name: Download Provision Infra Dir
-  #       uses: actions/download-artifact@v5
-  #       continue-on-error: true
-  #       with:
-  #         name: provision_infra_dir
-  #         path: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
-
-  #     - name: Download Infra Env Configs
-  #       uses: actions/download-artifact@v5
-  #       continue-on-error: true
-  #       with:
-  #         name: infra_env_configs
-  #         path: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_infra_env_configs }}
-
-  #     - name: Teardown remote vms (Proxmox)
-  #       working-directory: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
-  #       if: ${{ needs.Fleet-Tests-Provisioning.result != 'skipped' && ( ( !inputs.debug_fleet_keep_alive && success() ) || cancelled() || ( !inputs.debug_fleet_keep_alive && failure() ) ) }}
-  #       shell: bash
-  #       run: |
-  #         set +e
-  #         attempts=3
-  #         count=0
-  #         exit_status=-1
-  #         while [ $count -lt $attempts ]; do
-  #           var_file_arg='-var-file=../${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_infra_env_configs }}/hel/${{ inputs.proxmox_cluster_name }}_fleet_test.tfvars'
-  #           terraform init -backend-config="key=${{ inputs.proxmox_cluster_name }}-fleet-${{ needs.Fleet-Tests-Provisioning.outputs.manager_vm_name }}.tfstate"
-  #           terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars -var "fleet_peer_nr=0" -var "manager_ip_lookup=false"
-  #           exit_status=$?
-  #           if [ $exit_status -eq 0 ]; then
-  #             break
-  #           else
-  #             ((count++))
-  #             echo "Retrying Terraform destroy (attempt $count)..."
-  #           fi
-  #         done
-  #         set -e
-  #         echo "Terraform destroy returned with exit status ${exit_status}. Attempted $count times."
-  #         exit ${exit_status}
-
-  #     - name: Prepare slack variables for teardown
-  #       if: always()
-  #       id: pre_slack_teardown
-  #       run: |
-  #         MESSAGE=":white_check_mark: Fleet-Tests-Teardown passed"
-  #         if [ "${{ job.status }}" != "success" ]; then
-  #           MESSAGE=":x: Fleet-Tests-Teardown failed"
-  #         fi
-  #         echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
-
-  #     - name: Slack message for teardown
-  #       uses: slackapi/slack-github-action@v2
-  #       if: always() && inputs.slack_channel != '' && !inputs.simple_ui_tests
-  #       with:
-  #         method: chat.postMessage
-  #         payload: |
-  #           {
-  #             "channel": "${{ inputs.slack_channel }}",
-  #             "text": "${{ steps.pre_slack_teardown.outputs.msg }}",
-  #             "thread_ts": "${{ inputs.slack_thread_id }}"
-  #           }
-  #         token: ${{ secrets.slack_token_id }}
-
-  # Fleet-Tests-Post-Operation:
-  #   runs-on: ubuntu-latest
-  #   needs: [Fleet-Tests-Provisioning, Fleet-Tests-Execution, Fleet-Tests-Teardown]
-  #   if: always()
-  #   steps:
-  #     - name: Report Job Status
-  #       if: always()
-  #       id: pre_slack_result
-  #       shell: bash
-  #       run: |
-  #         set -eo pipefail
-  #         echo "::group::Get job information"
-  #         # shellcheck disable=SC2086
-  #         job_html_url=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs" | jq -r '.jobs | map(select(.name | contains("Fleet-Tests-Teardown"))) | .[0].html_url')
-  #         echo "Job URL: $job_html_url"
-  #         echo "job_url=$job_html_url" >> "$GITHUB_OUTPUT"
-  #         echo "✓ Job information retrieved"
-  #         echo "::endgroup::"
-
-  #         echo "::group::Prepare status messages"
-  #         MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
-  #         MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed - Details: $job_html_url"
-  #         echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
-  #         echo "msg_error=${MESSAGE_ERR}" >> "$GITHUB_OUTPUT"
-  #         echo "✓ Status messages prepared"
-  #         echo "::endgroup::"
-
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.gh_token }}
-
-  #     - name: Send Success Notification
-  #       uses: slackapi/slack-github-action@v2
-  #       if: success() && inputs.slack_channel != '' && !inputs.simple_ui_tests
-  #       with:
-  #         method: chat.postMessage
-  #         payload: |
-  #           {
-  #             "channel": "${{ inputs.slack_channel }}",
-  #             "text": "${{ steps.pre_slack_result.outputs.msg }}",
-  #             "thread_ts": "${{ inputs.slack_thread_id }}"
-  #           }
-  #         token: ${{ secrets.slack_token_id }}
-
-  #     - name: Send Failure Notification
-  #       uses: slackapi/slack-github-action@v2
-  #       if: failure() && inputs.slack_channel != '' && !inputs.simple_ui_tests
-  #       with:
-  #         method: chat.postMessage
-  #         payload: |
-  #           {
-  #             "channel": "${{ inputs.slack_channel }}",
-  #             "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
-  #             "thread_ts": "${{ inputs.slack_thread_id }}"
-  #           }
-  #         token: ${{ secrets.slack_token_id }}
-
-  #     - name: Check if upstream jobs failed
-  #       shell: bash
-  #       run: |
-  #         if [[ "${{ needs.Fleet-Tests-Provisioning.result }}" != "success" ]]; then
-  #           echo "Fleet-Tests-Provisioning failed"
-  #           exit 1
-  #         fi
-  #         if [[ "${{ needs.Fleet-Tests-Execution.result }}" != "success" && "${{ needs.Fleet-Tests-Execution.result }}" != "skipped" ]]; then
-  #           echo "Fleet-Tests-Execution failed"
-  #           exit 1
-  #         fi
-  #         if [[ "${{ needs.Fleet-Tests-Teardown.result }}" != "success" ]]; then
-  #           echo "Fleet-Tests-Teardown failed"
-  #           exit 1
-  #         fi
+      - name: Prepare slack variables for execution
+        if: always()
+        id: pre_slack_execution
+        run: |
+          MESSAGE=":white_check_mark: Fleet-Tests-Execution [${{ matrix.fleet_test_name }}] passed"
+          if [ "${{ job.status }}" != "success" ]; then
+            MESSAGE=":x: Fleet-Tests-Execution [${{ matrix.fleet_test_name }}] failed"
+          fi
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+
+      - name: Slack message for execution
+        uses: slackapi/slack-github-action@v2
+        if: always() && inputs.slack_channel != '' && !inputs.simple_ui_tests
+        with:
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_execution.outputs.msg }}",
+              "thread_ts": "${{ inputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
+
+  Fleet-Tests-Teardown:
+    runs-on: ip-${{ inputs.proxmox_cluster_name }}-queuer
+    needs: [Fleet-Tests-Provisioning, Fleet-Tests-Execution]
+    if: always()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Teardown Environment
+        shell: bash
+        run: |
+          set -eo pipefail
+          echo "::group::Download provisioning artifacts"
+          mkdir -p ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
+          mkdir -p ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_infra_env_configs }}
+
+          # Artifacts should be available from provisioning job
+          # In workflow execution, they're typically downloaded via artifact actions
+          echo "Preparing: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}"
+          echo "Preparing: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_infra_env_configs }}"
+          echo "✓ Teardown environment ready"
+          echo "::endgroup::"
+
+      - name: Download Provision Infra Dir
+        uses: actions/download-artifact@v5
+        continue-on-error: true
+        with:
+          name: provision_infra_dir
+          path: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
+
+      - name: Download Infra Env Configs
+        uses: actions/download-artifact@v5
+        continue-on-error: true
+        with:
+          name: infra_env_configs
+          path: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_infra_env_configs }}
+
+      - name: Teardown remote vms (Proxmox)
+        working-directory: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
+        if: ${{ needs.Fleet-Tests-Provisioning.result != 'skipped' && ( ( !inputs.debug_fleet_keep_alive && success() ) || cancelled() || ( !inputs.debug_fleet_keep_alive && failure() ) ) }}
+        shell: bash
+        run: |
+          set +e
+          attempts=3
+          count=0
+          exit_status=-1
+          while [ $count -lt $attempts ]; do
+            var_file_arg='-var-file=../${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_infra_env_configs }}/hel/${{ inputs.proxmox_cluster_name }}_fleet_test.tfvars'
+            terraform init -backend-config="key=${{ inputs.proxmox_cluster_name }}-fleet-${{ needs.Fleet-Tests-Provisioning.outputs.manager_vm_name }}.tfstate"
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars -var "fleet_peer_nr=0" -var "manager_ip_lookup=false"
+            exit_status=$?
+            if [ $exit_status -eq 0 ]; then
+              break
+            else
+              ((count++))
+              echo "Retrying Terraform destroy (attempt $count)..."
+            fi
+          done
+          set -e
+          echo "Terraform destroy returned with exit status ${exit_status}. Attempted $count times."
+          exit ${exit_status}
+
+      - name: Prepare slack variables for teardown
+        if: always()
+        id: pre_slack_teardown
+        run: |
+          MESSAGE=":white_check_mark: Fleet-Tests-Teardown passed"
+          if [ "${{ job.status }}" != "success" ]; then
+            MESSAGE=":x: Fleet-Tests-Teardown failed"
+          fi
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+
+      - name: Slack message for teardown
+        uses: slackapi/slack-github-action@v2
+        if: always() && inputs.slack_channel != '' && !inputs.simple_ui_tests
+        with:
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_teardown.outputs.msg }}",
+              "thread_ts": "${{ inputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
+
+  Fleet-Tests-Post-Operation:
+    runs-on: ubuntu-latest
+    needs: [Fleet-Tests-Provisioning, Fleet-Tests-Execution, Fleet-Tests-Teardown]
+    if: always()
+    steps:
+      - name: Report Job Status
+        if: always()
+        id: pre_slack_result
+        shell: bash
+        run: |
+          set -eo pipefail
+          echo "::group::Get job information"
+          # shellcheck disable=SC2086
+          job_html_url=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs" | jq -r '.jobs | map(select(.name | contains("Fleet-Tests-Teardown"))) | .[0].html_url')
+          echo "Job URL: $job_html_url"
+          echo "job_url=$job_html_url" >> "$GITHUB_OUTPUT"
+          echo "✓ Job information retrieved"
+          echo "::endgroup::"
+
+          echo "::group::Prepare status messages"
+          MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
+          MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed - Details: $job_html_url"
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+          echo "msg_error=${MESSAGE_ERR}" >> "$GITHUB_OUTPUT"
+          echo "✓ Status messages prepared"
+          echo "::endgroup::"
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.gh_token }}
+
+      - name: Send Success Notification
+        uses: slackapi/slack-github-action@v2
+        if: success() && inputs.slack_channel != '' && !inputs.simple_ui_tests
+        with:
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg }}",
+              "thread_ts": "${{ inputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
+
+      - name: Send Failure Notification
+        uses: slackapi/slack-github-action@v2
+        if: failure() && inputs.slack_channel != '' && !inputs.simple_ui_tests
+        with:
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack_result.outputs.msg_error }}",
+              "thread_ts": "${{ inputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
+
+      - name: Check if upstream jobs failed
+        shell: bash
+        run: |
+          if [[ "${{ needs.Fleet-Tests-Provisioning.result }}" != "success" ]]; then
+            echo "Fleet-Tests-Provisioning failed"
+            exit 1
+          fi
+          if [[ "${{ needs.Fleet-Tests-Execution.result }}" != "success" && "${{ needs.Fleet-Tests-Execution.result }}" != "skipped" ]]; then
+            echo "Fleet-Tests-Execution failed"
+            exit 1
+          fi
+          if [[ "${{ needs.Fleet-Tests-Teardown.result }}" != "success" ]]; then
+            echo "Fleet-Tests-Teardown failed"
+            exit 1
+          fi
