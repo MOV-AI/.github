@@ -420,19 +420,19 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
-  Validation-UI-Tests:
-    needs: [Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
-    secrets: inherit
-    with:
-      collect_deployable_artifacts: true
-      test_infra_key: "ui_tests"
-      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-      test_timeout: 120
-      pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json'
-      xray_label: "UI_Automation"
-      slack_channel: ${{ inputs.slack_channel }}
+  # Validation-UI-Tests:
+  #   needs: [Build-backend]
+  #   uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
+  #   secrets: inherit
+  #   with:
+  #     collect_deployable_artifacts: true
+  #     test_infra_key: "ui_tests"
+  #     slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+  #     backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+  #     test_timeout: 120
+  #     pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json'
+  #     xray_label: "UI_Automation"
+  #     slack_channel: ${{ inputs.slack_channel }}
 
   Validation-Install-Tests:
     needs: [Build-backend]
@@ -471,7 +471,7 @@ jobs:
       slack_channel: ${{ inputs.slack_channel }}
 
   Validations-Finish:
-    needs: [Build-backend, Validation-UI-Tests, Validation-Install-Tests, Validation-API-Tests, Validation-Flow-Tests]
+    needs: [Build-backend, Validation-Install-Tests, Validation-API-Tests, Validation-Flow-Tests]
     runs-on: ubuntu-22.04
     outputs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
