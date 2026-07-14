@@ -220,14 +220,13 @@ jobs:
               data = yaml.safe_load(manifest_file) or {}
 
           product_dependencies = data.get("product_dependencies") or {}
-          print(",".join(product_dependencies.keys()))
+            if isinstance(product_dependencies, dict):
+              keys = [f"product_dependencies.{key}" for key in product_dependencies.keys() if key]
+              print(",".join(keys))
+            else:
+              print("")
           PY
           )
-
-          merge_keys_csv=$(sed -n '/product_dependencies:/,/^[^ ]/p' qa-tests-manifest.yaml | \
-                grep -E '^[[:space:]]+[a-zA-Z0-9_-]+:' | \
-                sed 's/:.*//; s/^[[:space:]]*//; s/^/product_dependencies./' | \
-                paste -sd "," -)
 
           if [ -z "$merge_keys_csv" ]; then
             echo "No QA override keys found under product_dependencies"
