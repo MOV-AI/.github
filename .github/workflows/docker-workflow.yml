@@ -97,6 +97,11 @@ on:
         type: boolean
         default: true
         description: boolean to generate CycloneDX SBOM and attach it as Harbor accessory
+      runner_label:
+        required: false
+        type: string
+        default: ubuntu-22.04
+        description: label of the runner to use for the workflow
     secrets:
       registry_user:
         required: true
@@ -125,7 +130,7 @@ on:
 
 jobs:
   parse-matrix:
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     outputs:
       matrix: ${{ steps.parse.outputs.matrix }}
       is_matrix: ${{ steps.parse.outputs.is_matrix }}
@@ -185,7 +190,7 @@ jobs:
 
   static-analyze:
     needs: parse-matrix
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     strategy:
       matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     steps:
@@ -201,7 +206,7 @@ jobs:
 
   raise-version:
     needs: parse-matrix
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     outputs:
       package_version: ${{ steps.get_version.outputs.version }}
       branch_name: ${{ steps.branch.outputs.name }}
@@ -260,7 +265,7 @@ jobs:
 
   build:
     needs: [static-analyze, parse-matrix, raise-version]
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     strategy:
       matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     outputs:
@@ -388,10 +393,19 @@ jobs:
   attach-ci-sbom:
     needs: [build, parse-matrix]
     if: ${{ needs.build.result == 'success' }}
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     strategy:
       matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     steps:
+      - name: Maximize build space
+        uses: AdityaGarg8/remove-unwanted-software@v5
+        with:
+          remove-android: 'true'
+          remove-dotnet: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
+          remove-large-packages: 'true'
+
       - name: Login to Private Registry
         if: ${{ inputs.generate_sbom }}
         uses: docker/login-action@v3
@@ -429,7 +443,7 @@ jobs:
   test:
     needs: [raise-version, build, parse-matrix]
     if: ${{ inputs.deploy && needs.build.result == 'success' }}
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     strategy:
       matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     permissions:
@@ -479,7 +493,7 @@ jobs:
   publish:
     needs: [raise-version, build, test, parse-matrix]
     if: ${{ inputs.deploy && needs.build.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     strategy:
       matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     env:
@@ -629,7 +643,7 @@ jobs:
   create-release:
     needs: [raise-version, publish, attach-ci-sbom]
     if: ${{ inputs.create_release && inputs.deploy }}
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
