@@ -2643,6 +2643,8 @@ jobs:
 
       - name: Publish SBOMs to Dependency Track
         if: ${{ inputs.generate_sbom }}
+        continue-on-error: true
+        shell: bash
         run: |
           set -o pipefail
           rm -rf deployment_artifacts/publish-sbom/
