@@ -2478,7 +2478,7 @@ jobs:
     outputs:
       slack_thread_id: ${{ needs.Install-Simulator-Robot.outputs.slack_thread_id }}
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v4.0.1
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:4.0.1
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
