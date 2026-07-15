@@ -56,6 +56,11 @@ on:
         type: boolean
         default: true
         description: Flag to enable/disable the Robotic Stack Integration tests
+      generate_sbom:
+        required: false
+        type: boolean
+        default: true
+        description: Generate CycloneDX SBOM and attach it as Harbor accessory for pushed images
       provision_tf_env_repo:
         required: false
         type: string
@@ -63,7 +68,7 @@ on:
       provision_tf_env_version:
         required: false
         type: string
-        default: "0.2.2-2"
+        default: "0.2.2-5"
       provision_infra_repo:
         required: false
         type: string
@@ -71,7 +76,7 @@ on:
       provision_infra_version:
         required: false
         type: string
-        default: "2.2.0-1"
+        default: "2.2.0-3"
 
     secrets:
       auto_commit_user:
@@ -124,10 +129,12 @@ on:
         required: false
       fleet_password:
         required: true
+      dependency_track_api_key:
+        required: false
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "4.1.0.3"
+  CI_INTEGRATION_SCRIPTS_VERSION: "4.3.0.4"
   MOBTEST_VERSION: "0.0.7.2"
-  PACKAGE_DEPLOYER_VERSION: "1.0.0.40"
+  PACKAGE_DEPLOYER_VERSION: "2.0.0.2"
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
@@ -142,16 +149,18 @@ env:
   XRAY_SECRET: ${{ secrets.xray_secret}}
   JIRA_USERNAME: ${{ secrets.jira_username}}
   JIRA_PASSWORD: ${{ secrets.jira_password}}
-  PROVISIONING_ENV_VERSION: 0.2.2-2
+  PROVISIONING_ENV_VERSION: 0.2.2-5
   PROVISIONING_ENV_REPO: devops-tf-env-conf
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.2.0-1"
+  PROVISION_INFRA_VERSION: "2.2.0-3"
   ARTIFACTS_RETENTION_DAYS: 15
+  DEPENDENCY_TRACK_URL: "https://sbom.es.mov.ai"
+  HARBOR_URL: "https://registry.cloud.mov.ai/"
 jobs:
   Validate-bootstrap-configs:
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:4.0.1
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -170,7 +179,7 @@ jobs:
       - name: Install CI Scripts in container
         shell: bash
         run: |
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install -q integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: raise version
         run: |
@@ -219,21 +228,21 @@ jobs:
 
 
       - name: Stash component_artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: component_artifacts
           path: component_artifacts/*
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Stash robot_configs
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: robot_configs
           path: "*.json*"
           retention-days: ${{ env.ARTIFACTS_RETENTION_DAYS }}
 
       - name: Stash sim_configs
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: sim_configs
           path: simulator_artifacts/*
@@ -266,7 +275,7 @@ jobs:
           token: ${{ secrets.slack_token_id }}
 
       - name: Stash raised_meta
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: raised_meta
           path: platform_configs/*
@@ -294,18 +303,17 @@ jobs:
         run: |
           python3 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
-          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install --upgrade pyOpenSSL cryptography
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          [ -f ci-requirements.txt ] && pip install -q -r ci-requirements.txt
+          python3 -m pip install -q integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: raised_meta
           path: platform_configs
 
       - name: unstash component_artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: component_artifacts
 
@@ -327,14 +335,27 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.REGISTRY }}
 
+      - name: Resolve frontend apt packages
+        id: resolve_frontend_apt_packages
+        shell: bash
+        run: |
+          set -e
+          . .ci-venv/bin/activate
+          integration-pipeline get_yml_value \
+            --file product-manifest.yaml \
+            --key product_components.platform_config.frontend.apps \
+            --output_file frontend.packages.apt
+          FRONTEND_APT_PACKAGES="$(tr '\n' ' ' < frontend.packages.apt | xargs)"
+          echo "frontend_apt_packages=${FRONTEND_APT_PACKAGES}" >> $GITHUB_OUTPUT
+          echo "Resolved frontend apt packages count: $(wc -w <<< "${FRONTEND_APT_PACKAGES}")"
+          deactivate
+
       - name: Prepare docker build variables
         id: pre_build
         shell: bash
-        env:
-          DISTRO: noetic
         run: |
-          echo "base_name=$(cat backend_base_name_${DISTRO}.ci)" >> $GITHUB_OUTPUT
-          echo "base_version=$(cat backend_base_version_${DISTRO}.ci)" >> $GITHUB_OUTPUT
+          echo "base_name=$(cat backend_base_name.ci)" >> $GITHUB_OUTPUT
+          echo "base_version=$(cat backend_base_version.ci)" >> $GITHUB_OUTPUT
           echo "raised_version=$(cat product.version)" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
@@ -347,7 +368,7 @@ jobs:
             --build-arg DOCKER_REGISTRY=${{ env.REGISTRY }} \
             --build-arg BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} \
             --build-arg TAG=${{ steps.pre_build.outputs.base_version }} \
-            --build-arg CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }} \
+            --build-arg FRONTEND_APT_PACKAGES="${{ steps.resolve_frontend_apt_packages.outputs.frontend_apt_packages }}" \
             --file docker/backend/Dockerfile \
             --platform linux/amd64 \
             --tag ${{ env.REGISTRY }}/ci/${{ inputs.backend_name }}:${{ steps.pre_build.outputs.raised_version }} \
@@ -432,6 +453,7 @@ jobs:
     uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
     secrets: inherit
     with:
+      collect_deployable_artifacts: true
       test_infra_key: "install_tests"
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
@@ -478,7 +500,6 @@ jobs:
     uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@v3
     secrets: inherit
     with:
-      collect_deployable_artifacts: true
       fleet_test_infra_list: ${{ needs.Validate-bootstrap-configs.outputs.fleet_tests_list }}
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
@@ -501,6 +522,7 @@ jobs:
       DISTRO: noetic
     outputs:
       slack_thread_id: ${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id }}
+      simulator_image: ${{ steps.pre_build.outputs.image_name }}
 
     steps:
       - name: Cleanup Workspace
@@ -519,12 +541,11 @@ jobs:
         run: |
           python3 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
-          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install --upgrade pyOpenSSL cryptography
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          [ -f ci-requirements.txt ] && pip install -q -r ci-requirements.txt
+          python3 -m pip install -q integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash sim_configs
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: sim_configs
           path: simulator_artifacts
@@ -565,6 +586,20 @@ jobs:
           password: ${{ secrets.registry_password }}
           registry: ${{ env.REGISTRY }}
 
+      - name: Resolve simulator apt packages
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
+        id: resolve_simulator_apt_packages
+        shell: bash
+        run: |
+          set -e
+          . .ci-venv/bin/activate
+          integration-pipeline get_install_list \
+            --manifest_platform_base_key product_components.simulator_components.plugins
+          SIMULATOR_APT_PACKAGES="$(tr '\n' ' ' < packages.apt | xargs)"
+          echo "simulator_apt_packages=${SIMULATOR_APT_PACKAGES}" >> $GITHUB_OUTPUT
+          echo "Resolved simulator apt packages count: $(wc -w <<< "${SIMULATOR_APT_PACKAGES}")"
+          deactivate
+
       - name: Prepare docker build variables
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
         id: pre_build
@@ -574,7 +609,8 @@ jobs:
 
       - name: Build with args and push
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
+        id: build_simulator
         with:
           context: .
           platforms: linux/amd64
@@ -584,7 +620,16 @@ jobs:
           pull: true
           build-args: |
             BASE_IMAGE=${{ steps.pre_build.outputs.base_name }}
-            CI_SCRIPT_VERSION=${{ env.CI_INTEGRATION_SCRIPTS_VERSION }}
+            SIMULATOR_APT_PACKAGES=${{ steps.resolve_simulator_apt_packages.outputs.simulator_apt_packages }}
+
+      - name: Generate and attach simulator CycloneDX SBOM
+        if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.generate_sbom }}
+        uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@v3
+        with:
+          image: ${{ env.REGISTRY }}/qa/${{ steps.pre_build.outputs.image_name }}
+          digest: ${{ steps.build_simulator.outputs.digest }}
+          sbom_file: sbom-simulator.cyclonedx.json
+          artifact_name: sbom-simulator
 
       - name: Collect Installed components
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
@@ -650,7 +695,7 @@ jobs:
           echo "$REGISTRY/qa/$(cat simulator_artifacts/simulator_name.ci)" > simulator.image.artifact
 
       - name: Stash deploy_simulator_artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: deploy_simulator_artifacts
           path: simulator.image.artifact
@@ -671,6 +716,7 @@ jobs:
       test_infra_key: "simul_flow_tests"
       slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+      simulator_image_name_and_tag: ${{ needs.Build-Simulator.outputs.simulator_image }}
       test_timeout: 30
       pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
       slack_channel: ${{ inputs.slack_channel }}
@@ -691,7 +737,7 @@ jobs:
       simulation_qa_key: ${{ inputs.simulation_qa_key }}
       simulation_qa_version: ${{ inputs.simulation_qa_version }}
 
-  publish:
+  Publish:
     needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
     runs-on: integration-pipeline
     outputs:
@@ -709,25 +755,25 @@ jobs:
           echo "ip=$(hostname -I | awk '{print $1}')" | tee $GITHUB_OUTPUT
 
       - name: unstash robot_configs
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: robot_configs
           path: .
 
       - name: unstash raised_meta
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: raised_meta
           path: platform_configs
 
       - name: unstash deploy_artifacts_noetic
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: deploy_artifacts_noetic
           path: artifacts
 
       - name: unstash deploy_simulator_artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: deploy_simulator_artifacts
           path: .
@@ -751,10 +797,9 @@ jobs:
         run: |
           python3 -m venv .ci-venv --clear --system-site-packages
           . .ci-venv/bin/activate
-          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install --upgrade pyOpenSSL cryptography
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-          python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
+          [ -f ci-requirements.txt ] && pip install -q -r ci-requirements.txt
+          python3 -m pip install -q integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install -q movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: Publish and create release
         id: prepare_publish
@@ -775,9 +820,12 @@ jobs:
           package-deployer join --dploy_workspace "$(pwd)/artifacts"
           integration-pipeline get_image_list_from_manifest --manifest_platform_base_key product_components --docker_registry $REGISTRY
           cp ./*.json deployment_artifacts
-          cp artifacts/merged.dploy deployment_artifacts/deployable.dploy
-          echo -e "$(cat ./artifacts/product.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
-          echo "${{env.REGISTRY}}/qa/${{ needs.Validations-Finish.outputs.backend_image }}" >> deployment_artifacts/product.image.artifact
+
+          if [ -d ./artifacts/ ]; then
+            cp artifacts/merged.dploy deployment_artifacts/deployable.dploy
+            echo -e "$(cat ./artifacts/product.image.artifact)\n$(cat ./simulator.image.artifact)" > deployment_artifacts/product.image.artifact
+            echo "${{env.REGISTRY}}/qa/${{ needs.Validations-Finish.outputs.backend_image }}" >> deployment_artifacts/product.image.artifact
+          fi
           deactivate
 
           source="${{env.REGISTRY}}/ci/${{ needs.Validations-Finish.outputs.backend_image }}"
@@ -785,7 +833,14 @@ jobs:
           docker pull $source
           echo "tagging $source as $target"
           docker tag $source $target
-          docker push $target
+          PUSH_OUTPUT="$(docker push $target 2>&1)"
+          echo "$PUSH_OUTPUT"
+          PUSH_DIGEST="$(printf '%s\n' "${PUSH_OUTPUT}" | grep -oP 'sha256:[a-f0-9]{64}' | head -1)"
+          if [ -z "${PUSH_DIGEST}" ] || ! [[ "${PUSH_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "Failed to capture digest for pushed image ${target}"
+            exit 1
+          fi
+          echo "digest=${PUSH_DIGEST}" | tee -a "$GITHUB_OUTPUT"
 
           cp product.version deployment_artifacts
           cp product-manifest.yaml deployment_artifacts
@@ -809,6 +864,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
+      - name: Generate and attach backend CycloneDX SBOM
+        if: ${{ inputs.generate_sbom }}
+        uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@v3
+        with:
+          image: "${{env.PUSH_REGISTRY}}/qa/${{ needs.Validations-Finish.outputs.backend_image }}"
+          digest: ${{ steps.prepare_publish.outputs.digest }}
+          sbom_file: sbom-backend.cyclonedx.json
+          artifact_name: sbom-backend
+
       - name: Prepare raise variables
         id: pre_raise
         run: |
@@ -823,6 +887,13 @@ jobs:
           branch: ${{ steps.pre_raise.outputs.branch }}
           repository: ${{ github.repository }}
 
+      - name: Download CycloneDX SBOM artifacts
+        if: ${{ inputs.generate_sbom }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: sbom-*
+          merge-multiple: true
+
       - name: Github Publish
         shell: bash
         run: |
@@ -835,6 +906,8 @@ jobs:
           gh release create -p --generate-notes $previous_version_option --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
           # add all files in the deployment_artifacts folder
           find deployment_artifacts -type f -exec gh release upload $product_version {} \;
+          # add all CycloneDX SBOM files
+          find . -name "sbom-*.cyclonedx.json" -type f -exec gh release upload $product_version {} \;
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -891,6 +964,28 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
+      - name: Publish SBOMs to Dependency Track
+        if: ${{ inputs.generate_sbom }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          . .ci-venv/bin/activate
+          rm -rf deployment_artifacts/publish-sbom/
+          mkdir  -p deployment_artifacts/publish-sbom/
+          chmod -R 755 deployment_artifacts/publish-sbom/
+          integration-pipeline publish_sbom_to_dependency_track \
+            --manifest_file deployment_artifacts/product-manifest.yaml \
+            --manifest_platform_base_key product_components \
+            --dependency_track_url ${{ env.DEPENDENCY_TRACK_URL }} \
+            --dependency_track_api_key ${{ secrets.dependency_track_api_key }} \
+            --harbor_url ${{ env.HARBOR_URL }} \
+            --harbor_user ${{ secrets.registry_user }} \
+            --harbor_password ${{ secrets.registry_password }} \
+            --is_latest \
+            --regenerate_bad_sboms \
+            --artifacts_output_dir deployment_artifacts/publish-sbom/ | tee deployment_artifacts/publish-sbom/publish-sbom.log
+
       - name: Prepare slack variables
         if: always()
         id: pre_slack
@@ -912,11 +1007,11 @@ jobs:
 
   Run-Status:
     runs-on: ubuntu-22.04
-    needs: [publish, Validate-bootstrap-configs]
-    if: ${{ always() && ( needs.publish.result == 'failure' || needs.publish.result == 'cancelled'  || needs.publish.result == 'skipped') }}
+    needs: [Publish, Validate-bootstrap-configs]
+    if: ${{ always() && ( needs.Publish.result == 'failure' || needs.Publish.result == 'cancelled'  || needs.Publish.result == 'skipped') }}
     steps:
       - name: unstash raised_meta
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: raised_meta
           path: platform_configs

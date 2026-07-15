@@ -92,6 +92,16 @@ on:
         type: boolean
         default: false
         description: boolean to create GitHub Release with build metadata and digests (requires commit_token secret)
+      generate_sbom:
+        required: false
+        type: boolean
+        default: true
+        description: boolean to generate CycloneDX SBOM and attach it as Harbor accessory
+      runner_label:
+        required: false
+        type: string
+        default: ubuntu-22.04
+        description: label of the runner to use for the workflow
     secrets:
       registry_user:
         required: true
@@ -120,7 +130,7 @@ on:
 
 jobs:
   parse-matrix:
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     outputs:
       matrix: ${{ steps.parse.outputs.matrix }}
       is_matrix: ${{ steps.parse.outputs.is_matrix }}
@@ -180,7 +190,7 @@ jobs:
 
   static-analyze:
     needs: parse-matrix
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     strategy:
       matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     steps:
@@ -196,7 +206,7 @@ jobs:
 
   raise-version:
     needs: parse-matrix
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     outputs:
       package_version: ${{ steps.get_version.outputs.version }}
       branch_name: ${{ steps.branch.outputs.name }}
@@ -255,7 +265,7 @@ jobs:
 
   build:
     needs: [static-analyze, parse-matrix, raise-version]
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     strategy:
       matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     outputs:
@@ -348,7 +358,15 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Compute SBOM filename
+        id: get_sbom_filename
+        shell: bash
+        run: |
+          SBOM_FILENAME="$(printf '%s' '${{ matrix.name }}' | sed 's/[^A-Za-z0-9._-]/-/g')"
+          echo "value=${SBOM_FILENAME}" >> "$GITHUB_OUTPUT"
+
       - name: Build image and push to /ci/
+        id: build_ci_image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -364,12 +382,82 @@ jobs:
           target: ${{ matrix.target }}
           pull: true
           build-args: ${{ steps.get_build_args.outputs.build_args_str_list }}
-          secrets: ${{ steps.get_secret_args.outputs.build_secrets_args_str_list }}
+
+      - name: Prepare /ci/ SBOM metadata
+        id: prepare_ci_sbom_metadata
+        run: |
+          {
+            echo "image=${{ steps.get_image_names.outputs.DOCKER_IMAGES }}"
+            echo "digest=${{ steps.build_ci_image.outputs.digest }}"
+          } > sbom-ci-${{ steps.get_sbom_filename.outputs.value }}.env
+
+      - name: Upload /ci/ SBOM metadata
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-ci-metadata-${{ steps.get_sbom_filename.outputs.value }}
+          path: sbom-ci-${{ steps.get_sbom_filename.outputs.value }}.env
+
+  attach-ci-sbom:
+    needs: [build, parse-matrix]
+    if: ${{ needs.build.result == 'success' }}
+    runs-on: ${{ inputs.runner_label }}
+    strategy:
+      matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
+    steps:
+      - name: Maximize build space
+        uses: AdityaGarg8/remove-unwanted-software@v5
+        with:
+          remove-android: 'true'
+          remove-dotnet: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
+          remove-large-packages: 'true'
+
+      - name: Compute SBOM filename
+        id: get_sbom_filename
+        shell: bash
+        run: |
+          SBOM_FILENAME="$(printf '%s' '${{ matrix.name }}' | sed 's/[^A-Za-z0-9._-]/-/g')"
+          echo "value=${SBOM_FILENAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to Private Registry
+        if: ${{ inputs.generate_sbom }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ inputs.docker_registry }}
+
+      - name: Download /ci/ SBOM metadata
+        if: ${{ inputs.generate_sbom }}
+        uses: actions/download-artifact@v8
+        with:
+          name: sbom-ci-metadata-${{ steps.get_sbom_filename.outputs.value }}
+          path: .sbom-ci-metadata
+
+      - name: Resolve /ci/ SBOM metadata
+        if: ${{ inputs.generate_sbom }}
+        id: resolve_ci_sbom_metadata
+        shell: bash
+        run: |
+          set -e
+          source .sbom-ci-metadata/sbom-ci-${{ steps.get_sbom_filename.outputs.value }}.env
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate and attach CycloneDX SBOM to /ci/ image
+        if: ${{ inputs.generate_sbom }}
+        uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@v3
+        with:
+          image: ${{ steps.resolve_ci_sbom_metadata.outputs.image }}
+          digest: ${{ steps.resolve_ci_sbom_metadata.outputs.digest }}
+          sbom_file: sbom-ci-${{ steps.get_sbom_filename.outputs.value }}.cyclonedx.json
+          artifact_name: sbom-ci-${{ steps.get_sbom_filename.outputs.value }}
 
   test:
     needs: [raise-version, build, parse-matrix]
     if: ${{ inputs.deploy && needs.build.result == 'success' }}
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     strategy:
       matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     permissions:
@@ -419,7 +507,7 @@ jobs:
   publish:
     needs: [raise-version, build, test, parse-matrix]
     if: ${{ inputs.deploy && needs.build.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     strategy:
       matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     env:
@@ -453,7 +541,15 @@ jobs:
           password: ${{ secrets.github_registry_password }}
           registry: ${{ inputs.github_registry }}
 
+      - name: Compute SBOM filename
+        id: get_sbom_filename
+        shell: bash
+        run: |
+          SBOM_FILENAME="$(printf '%s' '${{ matrix.name }}' | sed 's/[^A-Za-z0-9._-]/-/g')"
+          echo "value=${SBOM_FILENAME}" >> "$GITHUB_OUTPUT"
+
       - name: Distribute images to official and public registries
+        id: push_images
         env:
           VERSION: ${{ needs.raise-version.outputs.package_version }}
           LATEST: ${{ inputs.push_latest }}
@@ -466,6 +562,8 @@ jobs:
           # Extract image directory and name
           OFC_IMAGE_DIR="${DOCKER_IMAGE%%/*}"
           OFC_IMAGE_NAME="${DOCKER_IMAGE#*/}"
+          OFFICIAL_IMAGE="${DOCKER_REGISTRY}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:${VERSION}"
+          echo "image=${OFFICIAL_IMAGE}" | tee -a "$GITHUB_OUTPUT"
 
           # Pull from CI directory
           echo "Pulling image from CI registry..."
@@ -475,8 +573,15 @@ jobs:
           # Push to official directory with version tag
           echo "Pushing to official registry with version tag..."
           docker tag "${DOCKER_REGISTRY}/ci/${OFC_IMAGE_NAME}:${VERSION}" \
-                     "${DOCKER_REGISTRY}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:${VERSION}"
-          docker push "${DOCKER_REGISTRY}/${OFC_IMAGE_DIR}/${OFC_IMAGE_NAME}:${VERSION}"
+                     "${OFFICIAL_IMAGE}"
+          OFFICIAL_PUSH_OUTPUT="$(docker push "${OFFICIAL_IMAGE}" 2>&1)"
+          echo "${OFFICIAL_PUSH_OUTPUT}"
+          OFFICIAL_DIGEST="$(printf '%s\n' "${OFFICIAL_PUSH_OUTPUT}" | grep -oP 'sha256:[a-f0-9]{64}' | head -1)"
+          if [ -z "${OFFICIAL_DIGEST}" ] || ! [[ "${OFFICIAL_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "Failed to capture digest for pushed image ${OFFICIAL_IMAGE}"
+            exit 1
+          fi
+          echo "digest=${OFFICIAL_DIGEST}" | tee -a "$GITHUB_OUTPUT"
           echo "✓ Successfully pushed version tag to official registry"
 
           # Handle latest tag
@@ -524,6 +629,15 @@ jobs:
 
           echo "✓ Image distribution completed successfully"
 
+      - name: Generate and attach CycloneDX SBOM
+        if: ${{ inputs.generate_sbom }}
+        uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@v3
+        with:
+          image: ${{ steps.push_images.outputs.image }}
+          digest: ${{ steps.push_images.outputs.digest }}
+          sbom_file: sbom-official-${{ steps.get_sbom_filename.outputs.value }}.cyclonedx.json
+          artifact_name: sbom-official-${{ steps.get_sbom_filename.outputs.value }}
+
       - name: Install bump-my-version for pushing version changes
         if: ${{ inputs.version == 'auto' && matrix.name == needs.parse-matrix.outputs.first_image }}
         run: python3 -m pip install bump-my-version
@@ -548,9 +662,9 @@ jobs:
           repository: ${{ github.repository }}
 
   create-release:
-    needs: [raise-version, publish]
+    needs: [raise-version, publish, attach-ci-sbom]
     if: ${{ inputs.create_release && inputs.deploy }}
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -560,6 +674,13 @@ jobs:
         with:
           name: release-notes
 
+      - name: Download CycloneDX SBOM artifacts
+        if: ${{ inputs.generate_sbom }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: sbom-*
+          merge-multiple: true
+
       - name: Replace version placeholder and append metadata
         env:
           VERSION: ${{ needs.raise-version.outputs.package_version }}
@@ -568,7 +689,6 @@ jobs:
           RUN_ID: ${{ github.run_id }}
         run: |
           set -e
-
           # Replace version placeholder
           sed "s/{{VERSION}}/${VERSION}/g" release_notes_template.md > release_body.md
 
@@ -591,4 +711,12 @@ jobs:
           body_path: release_body.md
           draft: false
           prerelease: true
+          token: ${{ secrets.commit_token }}
+
+      - name: Upload CycloneDX SBOMs to GitHub Release
+        if: ${{ inputs.generate_sbom }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.raise-version.outputs.package_version }}
+          files: sbom-*.cyclonedx.json
           token: ${{ secrets.commit_token }}
