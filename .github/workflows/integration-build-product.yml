@@ -2641,6 +2641,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
+      - name: Login to ${{ env.PUSH_REGISTRY }} Registry
+        if: ${{ inputs.generate_sbom && inputs.is_nightly_run == false && github.event_name != 'pull_request' && needs.Generate-SBOM.result == 'success' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ env.PUSH_REGISTRY }}
+
       - name: Publish SBOMs to Dependency Track
         if: ${{ inputs.generate_sbom && inputs.is_nightly_run == false && github.event_name != 'pull_request' && needs.Generate-SBOM.result == 'success' }}
         continue-on-error: true
