@@ -59,8 +59,8 @@ on:
       slack_channel:
         required: false
         type: string
-        default: '' # rnd-platform
-      simple_ui_tests:
+        default: 'C02PB9A9F45' # rnd-platform
+      qa_ui_tests:
         required: false
         type: boolean
         default: false
@@ -172,11 +172,12 @@ jobs:
           echo "✓ Python environment ready"
           echo "::endgroup::"
 
-      # - name: Download Robot Configs
-      #   uses: actions/download-artifact@v5
-      #   with:
-      #     name: robot_configs
-      #     path: .
+      - name: Download Robot Configs
+        uses: actions/download-artifact@v5
+        if: ${{ !inputs.qa_ui_tests }}
+        with:
+          name: robot_configs
+          path: .
 
       - name: Setup Python 3.10
         uses: actions/setup-python@v6
@@ -219,11 +220,6 @@ jobs:
           echo "::group::Define instance names"
           branch="${GITHUB_REF#refs/heads/}"
           branch="${branch//./-}"
-
-          if [ "${{ inputs.simple_ui_tests }}" = "true" ]; then
-            branch="${clean_ref#refs/pull/}"
-            branch=$(echo "$clean_ref" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-//;s/-$//' | cut -c1-30 | sed 's/-$//')
-          fi
 
           local_manager_prefix="ip-${branch}-manager"
           local_worker_prefix="ip-${branch}-worker"
@@ -352,7 +348,7 @@ jobs:
 
       - name: Slack message failure
         uses: slackapi/slack-github-action@v2
-        if: failure() && inputs.slack_channel != '' && !inputs.simple_ui_tests
+        if: failure() && inputs.slack_channel != ''
         with:
           method: chat.postMessage
           payload: |
@@ -742,7 +738,7 @@ jobs:
 
       - name: Slack message for execution
         uses: slackapi/slack-github-action@v2
-        if: always() && inputs.slack_channel != '' && !inputs.simple_ui_tests
+        if: always() && inputs.slack_channel != ''
         with:
           method: chat.postMessage
           payload: |
@@ -827,7 +823,7 @@ jobs:
 
       - name: Slack message for teardown
         uses: slackapi/slack-github-action@v2
-        if: always() && inputs.slack_channel != '' && !inputs.simple_ui_tests
+        if: always() && inputs.slack_channel != ''
         with:
           method: chat.postMessage
           payload: |
@@ -870,7 +866,7 @@ jobs:
 
       - name: Send Success Notification
         uses: slackapi/slack-github-action@v2
-        if: success() && inputs.slack_channel != '' && !inputs.simple_ui_tests
+        if: success() && inputs.slack_channel != ''
         with:
           method: chat.postMessage
           payload: |
@@ -883,7 +879,7 @@ jobs:
 
       - name: Send Failure Notification
         uses: slackapi/slack-github-action@v2
-        if: failure() && inputs.slack_channel != '' && !inputs.simple_ui_tests
+        if: failure() && inputs.slack_channel != ''
         with:
           method: chat.postMessage
           payload: |
