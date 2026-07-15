@@ -195,123 +195,123 @@ jobs:
       #       }
       #     token: ${{ secrets.slack_token_id }}
 
-  # Run-tests:
-  #   runs-on: qa-runner
-  #   needs: [Validate]
-  #   steps:
-  #     - name: Cleanup Workspace
-  #       uses: rtCamp/action-cleanup@master
+  Run-Standalone-tests:
+    runs-on: qa-runner
+    needs: [Validate]
+    steps:
+      - name: Cleanup Workspace
+        uses: rtCamp/action-cleanup@master
 
-  #     - name: Checkout
-  #       uses: actions/checkout@v7
+      - name: Checkout
+        uses: actions/checkout@v7
 
-  #     - name: Agent info
-  #       id: agent_info
-  #       run: |
-  #         ip_tmp=$(hostname -I | awk '{print $1}')
-  #         echo "ip=$ip_tmp" | tee >> $GITHUB_OUTPUT
+      - name: Agent info
+        id: agent_info
+        run: |
+          ip_tmp=$(hostname -I | awk '{print $1}')
+          echo "ip=$ip_tmp" | tee >> $GITHUB_OUTPUT
 
-  #     - name: Update/upgrade host packages
-  #       run: |
-  #         export DEBIAN_FRONTEND=noninteractive
-  #         while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
-  #         sudo apt-get update
-  #         while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
-  #         sudo apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -y
+      - name: Update/upgrade host packages
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
+          sudo apt-get update
+          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
+          sudo apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -y
 
-  #     - name: Setup environment
-  #       shell: bash
-  #       run: |
-  #         # install test dependencies on host
-  #         sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
+      - name: Setup environment
+        shell: bash
+        run: |
+          # install test dependencies on host
+          sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
 
-  #         # create virtual environment
-  #         rm -rf venv
-  #         python3 -m venv venv
-  #         . venv/bin/activate
+          # create virtual environment
+          rm -rf venv
+          python3 -m venv venv
+          . venv/bin/activate
 
-  #         # install tests requirements in venv
-  #         pip install -r requirements.txt
+          # install tests requirements in venv
+          pip install -r requirements.txt
 
-  #     - name: UI tests
-  #       id: ui
-  #       shell: bash
-  #       run: |
-  #         export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
-  #         # activate venv
-  #         . venv/bin/activate
-  #         # tests execution
-  #         pytest \
-  #           --hub_url ${{ inputs.selenoid_server_url }} \
-  #           --base_url https://${{ steps.agent_info.outputs.ip }}/ \
-  #           --install-platform \
-  #           | tee pytest-output.log
+      - name: UI tests
+        id: ui
+        shell: bash
+        run: |
+          export PYTHONPATH="${PYTHONPATH}:/usr/lib/python3/dist-packages"
+          # activate venv
+          . venv/bin/activate
+          # tests execution
+          pytest \
+            --hub_url ${{ inputs.selenoid_server_url }} \
+            --base_url https://${{ steps.agent_info.outputs.ip }}/ \
+            --install-platform \
+            | tee pytest-output.log
 
-  #     - name: Save docker container logs
-  #       if: always()
-  #       shell: bash
-  #       run: |
-  #         # for sanity
-  #         docker ps -a
+      - name: Save docker container logs
+        if: always()
+        shell: bash
+        run: |
+          # for sanity
+          docker ps -a
 
-  #         # save all container logs and inspect
-  #         CONTAINERS=$(docker ps -a --format '{{.Names}}')
-  #         for container in ${CONTAINERS}; do
-  #             docker logs "${container}" &> "${container}.log" || true
-  #             docker inspect "${container}" &> "${container}-inspect.log"
-  #         done || true
+          # save all container logs and inspect
+          CONTAINERS=$(docker ps -a --format '{{.Names}}')
+          for container in ${CONTAINERS}; do
+              docker logs "${container}" &> "${container}.log" || true
+              docker inspect "${container}" &> "${container}-inspect.log"
+          done || true
 
-  #         # movai-service
-  #         journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
+          # movai-service
+          journalctl -u movai-service --since '1hour ago' &> "movai-service.log"
 
-  #         # spawner (mobros firmware)
-  #         journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
+          # spawner (mobros firmware)
+          journalctl -u movai-service -t mobros --since '1hour ago' &> spawner-firmware.log || true
 
-  #     - name: Stash QA artifacts
-  #       if: always()
-  #       shell: bash
-  #       run: |
-  #         # cleanup
-  #         rm -rf qa_artifacts
+      - name: Stash QA artifacts
+        if: always()
+        shell: bash
+        run: |
+          # cleanup
+          rm -rf qa_artifacts
 
-  #         # tests artifacts
-  #         # *.log and *.zip might not exist if the test fails early
-  #         mkdir -p qa_artifacts
-  #         cp -r *.log ./qa_artifacts || true
-  #         cp -r *.tar ./qa_artifacts || true
-  #         cp -r *.json ./qa_artifacts || true
-  #         cp -r *.html ./qa_artifacts || true
-  #         cp -r tests_artifacts ./qa_artifacts || true
+          # tests artifacts
+          # *.log and *.zip might not exist if the test fails early
+          mkdir -p qa_artifacts
+          cp -r *.log ./qa_artifacts || true
+          cp -r *.tar ./qa_artifacts || true
+          cp -r *.json ./qa_artifacts || true
+          cp -r *.html ./qa_artifacts || true
+          cp -r tests_artifacts ./qa_artifacts || true
 
-  #         # install
-  #         mkdir -p qa_artifacts/install
-  #         cp -r ./installation ./qa_artifacts/ || true
+          # install
+          mkdir -p qa_artifacts/install
+          cp -r ./installation ./qa_artifacts/ || true
 
-  #     - name: Upload artifacts
-  #       if: always()
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: qa_artifacts_ui_tests
-  #         path: qa_artifacts/*
-  #         retention-days: 3
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa_artifacts_ui_tests
+          path: qa_artifacts/*
+          retention-days: 3
 
-  #     - name: Remove robots
-  #       if: always()
-  #       shell: bash
-  #       run: |
-  #         timeout 30 movai-cli remove --all || true
+      - name: Remove robots
+        if: always()
+        shell: bash
+        run: |
+          timeout 30 movai-cli remove --all || true
 
-  #     - name: Docker cleanups
-  #       if: always()
-  #       shell: bash
-  #       run: |
-  #         if [ "$(docker ps -aq)" ]; then
-  #           docker rm -f $(docker ps -aq)
-  #         fi
-  #         docker system prune -f
-  #         docker image prune --all -f
+      - name: Docker cleanups
+        if: always()
+        shell: bash
+        run: |
+          if [ "$(docker ps -aq)" ]; then
+            docker rm -f $(docker ps -aq)
+          fi
+          docker system prune -f
+          docker image prune --all -f
 
-  Fleet-Validations:
+  Run-Fleet-Tests:
     needs: [Validate, Resolve-fleet-context]
     uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@feat/DP-2081_fleet-ui-tests
     secrets: inherit
