@@ -2,10 +2,6 @@ name: Generic Remote Fleet Tests
 on:
   workflow_call:
     inputs:
-      collect_deployable_artifacts:
-        required: false
-        type: boolean
-        default: false
       fleet_test_infra_list:
         required: true
         type: string
