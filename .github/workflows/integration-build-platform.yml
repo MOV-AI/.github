@@ -129,6 +129,8 @@ on:
         required: false
       fleet_password:
         required: true
+      dependency_track_api_key:
+        required: false
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "4.3.0.4"
   MOBTEST_VERSION: "0.0.7.2"
@@ -976,10 +978,10 @@ jobs:
             --manifest_file deployment_artifacts/product-manifest.yaml \
             --manifest_platform_base_key product_components \
             --dependency_track_url ${{ env.DEPENDENCY_TRACK_URL }} \
-            --dependency_track_api_key ${{ secrets.DEPENDENCY_TRACK_API_KEY }} \
+            --dependency_track_api_key ${{ secrets.dependency_track_api_key }} \
             --harbor_url ${{ env.HARBOR_URL }} \
-            --harbor_user ${{ secrets.PORTUS_APP_USER }} \
-            --harbor_password ${{ secrets.PORTUS_APP_TOKEN }} \
+            --harbor_user ${{ secrets.registry_user }} \
+            --harbor_password ${{ secrets.registry_password }} \
             --is_latest \
             --regenerate_bad_sboms \
             --artifacts_output_dir deployment_artifacts/publish-sbom/ | tee deployment_artifacts/publish-sbom/publish-sbom.log
