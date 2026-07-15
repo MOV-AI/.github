@@ -488,7 +488,7 @@ jobs:
       slack_channel: ${{ inputs.slack_channel }}
 
   Validations-Finish:
-    needs: [Build-backend, Validation-Install-Tests, Validation-API-Tests, Validation-Flow-Tests]
+    needs: [Build-backend, Validation-UI-Tests, Validation-Install-Tests, Validation-API-Tests, Validation-Flow-Tests]
     runs-on: ubuntu-22.04
     outputs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
@@ -726,7 +726,7 @@ jobs:
 
   Robotic-Stack-Integration:
     if: ${{ inputs.with_robotic_stack_tests }}
-    needs: [Build-backend, Build-Simulator]
+    needs: [Simulator-Validations, Build-backend, Build-Simulator]
     uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@v3
     secrets: inherit
     with:
@@ -740,7 +740,7 @@ jobs:
       simulation_qa_version: ${{ inputs.simulation_qa_version }}
 
   Publish:
-    needs: [Validations-Finish, Fleet-Validations, Robotic-Stack-Integration]
+    needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
     runs-on: integration-pipeline
     outputs:
       slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
