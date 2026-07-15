@@ -336,7 +336,7 @@ jobs:
           registry: ${{ env.REGISTRY }}
 
       - name: Resolve frontend apt packages
-        id: resolve_backend_apt_packages
+        id: resolve_frontend_apt_packages
         shell: bash
         run: |
           set -e
@@ -370,7 +370,7 @@ jobs:
             --build-arg DOCKER_REGISTRY=${{ env.REGISTRY }} \
             --build-arg BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} \
             --build-arg TAG=${{ steps.pre_build.outputs.base_version }} \
-            --build-arg FRONTEND_APT_PACKAGES="${{ steps.resolve_backend_apt_packages.outputs.frontend_apt_packages }}" \
+            --build-arg FRONTEND_APT_PACKAGES="${{ steps.resolve_frontend_apt_packages.outputs.frontend_apt_packages }}" \
             --file docker/backend/Dockerfile \
             --platform linux/amd64 \
             --tag ${{ env.REGISTRY }}/ci/${{ inputs.backend_name }}:${{ steps.pre_build.outputs.raised_version }} \
@@ -436,23 +436,23 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
-  # Validation-UI-Tests:
-  #   needs: [Build-backend]
-  #   uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
-  #   secrets: inherit
-  #   with:
-  #     collect_deployable_artifacts: true
-  #     test_infra_key: "ui_tests"
-  #     slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-  #     backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-  #     test_timeout: 120
-  #     pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json'
-  #     xray_label: "UI_Automation"
-  #     slack_channel: ${{ inputs.slack_channel }}
+  Validation-UI-Tests:
+    needs: [Build-backend]
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
+    secrets: inherit
+    with:
+      collect_deployable_artifacts: true
+      test_infra_key: "ui_tests"
+      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+      test_timeout: 120
+      pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json'
+      xray_label: "UI_Automation"
+      slack_channel: ${{ inputs.slack_channel }}
 
   Validation-Install-Tests:
     needs: [Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
     secrets: inherit
     with:
       collect_deployable_artifacts: true
@@ -465,7 +465,7 @@ jobs:
 
   Validation-API-Tests:
     needs: [Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
     secrets: inherit
     with:
       test_infra_key: "api_tests"
@@ -477,7 +477,7 @@ jobs:
 
   Validation-Flow-Tests:
     needs: [Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
     secrets: inherit
     with:
       test_infra_key: "flow_tests"
@@ -499,7 +499,7 @@ jobs:
 
   Fleet-Validations:
     needs: [Validate-bootstrap-configs, Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@feat/publsih_sbom_to_dtrack
+    uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@v3
     secrets: inherit
     with:
       fleet_test_infra_list: ${{ needs.Validate-bootstrap-configs.outputs.fleet_tests_list }}
@@ -710,24 +710,24 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
-  # Simulator-Validations:
-  #   needs: [Build-Simulator, Build-backend]
-  #   uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
-  #   secrets: inherit
-  #   with:
-  #     test_infra_key: "simul_flow_tests"
-  #     slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
-  #     backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-  #     simulator_image_name_and_tag: ${{ needs.Build-Simulator.outputs.simulator_image }}
-  #     test_timeout: 30
-  #     pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
-  #     slack_channel: ${{ inputs.slack_channel }}
-  #     robot_config: 'basic-standalone-ignition-noetic.json'
+  Simulator-Validations:
+    needs: [Build-Simulator, Build-backend]
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
+    secrets: inherit
+    with:
+      test_infra_key: "simul_flow_tests"
+      slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
+      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+      simulator_image_name_and_tag: ${{ needs.Build-Simulator.outputs.simulator_image }}
+      test_timeout: 30
+      pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
+      slack_channel: ${{ inputs.slack_channel }}
+      robot_config: 'basic-standalone-ignition-noetic.json'
 
   Robotic-Stack-Integration:
     if: ${{ inputs.with_robotic_stack_tests }}
     needs: [Build-backend, Build-Simulator]
-    uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@feat/publsih_sbom_to_dtrack
+    uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@v3
     secrets: inherit
     with:
       product_name: ${{ inputs.product_name }}
@@ -968,6 +968,8 @@ jobs:
 
       - name: Publish SBOMs to Dependency Track
         if: ${{ inputs.generate_sbom }}
+        continue-on-error: true
+        shell: bash
         run: |
           set -o pipefail
           . .ci-venv/bin/activate
@@ -985,7 +987,6 @@ jobs:
             --is_latest \
             --regenerate_bad_sboms \
             --artifacts_output_dir deployment_artifacts/publish-sbom/ | tee deployment_artifacts/publish-sbom/publish-sbom.log
-          deactivate
 
       - name: Prepare slack variables
         if: always()

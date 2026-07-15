@@ -264,7 +264,7 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::Pull and tag simulator image"
-          simulator_image=${{ inputs.simulator_image_name_and_tag }}
+          simulator_image="${{ inputs.simulator_image_name_and_tag }}"
           if [ -n "$simulator_image" ]; then
             docker rmi "${{ env.REGISTRY }}/ci/$simulator_image" -f || true
             docker pull "${{ env.REGISTRY }}/ci/$simulator_image"
