@@ -97,6 +97,11 @@ on:
         type: boolean
         default: true
         description: boolean to generate CycloneDX SBOM and attach it as Harbor accessory
+      runner_label:
+        required: false
+        type: string
+        default: ubuntu-22.04
+        description: label of the runner to use for the workflow
     secrets:
       registry_user:
         required: true
@@ -125,7 +130,7 @@ on:
 
 jobs:
   parse-matrix:
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     outputs:
       matrix: ${{ steps.parse.outputs.matrix }}
       is_matrix: ${{ steps.parse.outputs.is_matrix }}
@@ -185,7 +190,7 @@ jobs:
 
   static-analyze:
     needs: parse-matrix
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     strategy:
       matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     steps:
@@ -201,7 +206,7 @@ jobs:
 
   raise-version:
     needs: parse-matrix
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     outputs:
       package_version: ${{ steps.get_version.outputs.version }}
       branch_name: ${{ steps.branch.outputs.name }}
@@ -260,7 +265,7 @@ jobs:
 
   build:
     needs: [static-analyze, parse-matrix, raise-version]
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     strategy:
       matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     outputs:
@@ -353,6 +358,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Compute SBOM filename
+        id: get_sbom_filename
+        shell: bash
+        run: |
+          SBOM_FILENAME="$(printf '%s' '${{ matrix.name }}' | sed 's/[^A-Za-z0-9._-]/-/g')"
+          echo "value=${SBOM_FILENAME}" >> "$GITHUB_OUTPUT"
+
       - name: Build image and push to /ci/
         id: build_ci_image
         uses: docker/build-push-action@v6
@@ -371,19 +383,81 @@ jobs:
           pull: true
           build-args: ${{ steps.get_build_args.outputs.build_args_str_list }}
 
+      - name: Prepare /ci/ SBOM metadata
+        id: prepare_ci_sbom_metadata
+        run: |
+          {
+            echo "image=${{ steps.get_image_names.outputs.DOCKER_IMAGES }}"
+            echo "digest=${{ steps.build_ci_image.outputs.digest }}"
+          } > sbom-ci-${{ steps.get_sbom_filename.outputs.value }}.env
+
+      - name: Upload /ci/ SBOM metadata
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-ci-metadata-${{ steps.get_sbom_filename.outputs.value }}
+          path: sbom-ci-${{ steps.get_sbom_filename.outputs.value }}.env
+
+  attach-ci-sbom:
+    needs: [build, parse-matrix]
+    if: ${{ needs.build.result == 'success' }}
+    runs-on: ${{ inputs.runner_label }}
+    strategy:
+      matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
+    steps:
+      - name: Maximize build space
+        uses: AdityaGarg8/remove-unwanted-software@v5
+        with:
+          remove-android: 'true'
+          remove-dotnet: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
+          remove-large-packages: 'true'
+
+      - name: Compute SBOM filename
+        id: get_sbom_filename
+        shell: bash
+        run: |
+          SBOM_FILENAME="$(printf '%s' '${{ matrix.name }}' | sed 's/[^A-Za-z0-9._-]/-/g')"
+          echo "value=${SBOM_FILENAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to Private Registry
+        if: ${{ inputs.generate_sbom }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.registry_user }}
+          password: ${{ secrets.registry_password }}
+          registry: ${{ inputs.docker_registry }}
+
+      - name: Download /ci/ SBOM metadata
+        if: ${{ inputs.generate_sbom }}
+        uses: actions/download-artifact@v8
+        with:
+          name: sbom-ci-metadata-${{ steps.get_sbom_filename.outputs.value }}
+          path: .sbom-ci-metadata
+
+      - name: Resolve /ci/ SBOM metadata
+        if: ${{ inputs.generate_sbom }}
+        id: resolve_ci_sbom_metadata
+        shell: bash
+        run: |
+          set -e
+          source .sbom-ci-metadata/sbom-ci-${{ steps.get_sbom_filename.outputs.value }}.env
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
       - name: Generate and attach CycloneDX SBOM to /ci/ image
         if: ${{ inputs.generate_sbom }}
         uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@v3
         with:
-          image: ${{ steps.get_image_names.outputs.DOCKER_IMAGES }}
-          digest: ${{ steps.build_ci_image.outputs.digest }}
-          sbom_file: sbom-ci-${{ matrix.name }}.cyclonedx.json
-          artifact_name: sbom-ci-${{ matrix.name }}
+          image: ${{ steps.resolve_ci_sbom_metadata.outputs.image }}
+          digest: ${{ steps.resolve_ci_sbom_metadata.outputs.digest }}
+          sbom_file: sbom-ci-${{ steps.get_sbom_filename.outputs.value }}.cyclonedx.json
+          artifact_name: sbom-ci-${{ steps.get_sbom_filename.outputs.value }}
 
   test:
     needs: [raise-version, build, parse-matrix]
     if: ${{ inputs.deploy && needs.build.result == 'success' }}
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     strategy:
       matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     permissions:
@@ -433,7 +507,7 @@ jobs:
   publish:
     needs: [raise-version, build, test, parse-matrix]
     if: ${{ inputs.deploy && needs.build.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     strategy:
       matrix: ${{ fromJSON(needs.parse-matrix.outputs.matrix) }}
     env:
@@ -466,6 +540,13 @@ jobs:
           username: ${{ secrets.github_registry_user }}
           password: ${{ secrets.github_registry_password }}
           registry: ${{ inputs.github_registry }}
+
+      - name: Compute SBOM filename
+        id: get_sbom_filename
+        shell: bash
+        run: |
+          SBOM_FILENAME="$(printf '%s' '${{ matrix.name }}' | sed 's/[^A-Za-z0-9._-]/-/g')"
+          echo "value=${SBOM_FILENAME}" >> "$GITHUB_OUTPUT"
 
       - name: Distribute images to official and public registries
         id: push_images
@@ -554,8 +635,8 @@ jobs:
         with:
           image: ${{ steps.push_images.outputs.image }}
           digest: ${{ steps.push_images.outputs.digest }}
-          sbom_file: sbom-official-${{ matrix.name }}.cyclonedx.json
-          artifact_name: sbom-official-${{ matrix.name }}
+          sbom_file: sbom-official-${{ steps.get_sbom_filename.outputs.value }}.cyclonedx.json
+          artifact_name: sbom-official-${{ steps.get_sbom_filename.outputs.value }}
 
       - name: Install bump-my-version for pushing version changes
         if: ${{ inputs.version == 'auto' && matrix.name == needs.parse-matrix.outputs.first_image }}
@@ -581,9 +662,9 @@ jobs:
           repository: ${{ github.repository }}
 
   create-release:
-    needs: [raise-version, publish]
+    needs: [raise-version, publish, attach-ci-sbom]
     if: ${{ inputs.create_release && inputs.deploy }}
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_label }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
