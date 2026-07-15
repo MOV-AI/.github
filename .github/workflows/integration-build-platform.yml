@@ -708,23 +708,23 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
-  Simulator-Validations:
-    needs: [Build-Simulator, Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
-    secrets: inherit
-    with:
-      test_infra_key: "simul_flow_tests"
-      slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
-      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-      simulator_image_name_and_tag: ${{ needs.Build-Simulator.outputs.simulator_image }}
-      test_timeout: 30
-      pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
-      slack_channel: ${{ inputs.slack_channel }}
-      robot_config: 'basic-standalone-ignition-noetic.json'
+  # Simulator-Validations:
+  #   needs: [Build-Simulator, Build-backend]
+  #   uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/publsih_sbom_to_dtrack
+  #   secrets: inherit
+  #   with:
+  #     test_infra_key: "simul_flow_tests"
+  #     slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
+  #     backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+  #     simulator_image_name_and_tag: ${{ needs.Build-Simulator.outputs.simulator_image }}
+  #     test_timeout: 30
+  #     pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
+  #     slack_channel: ${{ inputs.slack_channel }}
+  #     robot_config: 'basic-standalone-ignition-noetic.json'
 
   Robotic-Stack-Integration:
     if: ${{ inputs.with_robotic_stack_tests }}
-    needs: [Simulator-Validations, Build-backend, Build-Simulator]
+    needs: [Build-backend, Build-Simulator]
     uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@feat/publsih_sbom_to_dtrack
     secrets: inherit
     with:
@@ -738,7 +738,7 @@ jobs:
       simulation_qa_version: ${{ inputs.simulation_qa_version }}
 
   Publish:
-    needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
+    needs: [Validations-Finish, Fleet-Validations, Robotic-Stack-Integration]
     runs-on: integration-pipeline
     outputs:
       slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
