@@ -89,7 +89,7 @@ on:
       generate_sbom:
         required: false
         type: boolean
-        default: true
+        default: false
         description: Generate CycloneDX SBOM and attach it as Harbor accessory for pushed images
 
     secrets:
