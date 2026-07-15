@@ -338,8 +338,6 @@ jobs:
 
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), $BUILD_INFO is being impacted by an infrastructural issue. Provisioning of fleet infrastructure failed. Please take a look! Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
-          # Use a heredoc or printf if the message contains special characters,
-          # but for GitHub Outputs, escaping the newlines is important:
           echo "msg_error=${MESSAGE_ERR}" >> "$GITHUB_OUTPUT"
 
       - name: Slack message failure
