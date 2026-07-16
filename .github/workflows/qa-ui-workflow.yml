@@ -316,7 +316,6 @@ jobs:
     uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@feat/DP-2081_fleet-ui-tests
     secrets: inherit
     with:
-      collect_deployable_artifacts: true
       fleet_test_infra_list: ${{ needs.Resolve-fleet-context.outputs.fleet_tests_list }}
       slack_thread_id: ${{ needs.Resolve-fleet-context.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ inputs.backend_name }}
