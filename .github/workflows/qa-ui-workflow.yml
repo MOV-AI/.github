@@ -10,11 +10,6 @@ on:
         required: true
         type: string
         description: Test set to execute
-      selenoid_server_url:
-        required: false
-        type: string
-        description: Selenoid server to use
-        default: http://selenoid-ui.hel.mov.ai
       proxmox_cluster_name:
         required: false
         type: string
@@ -249,9 +244,6 @@ jobs:
       - name: Setup environment
         shell: bash
         run: |
-          # install test dependencies on host
-          sudo apt install -y --allow-downgrades python3-rosnode python3-rosparam python3-rostopic
-
           # create virtual environment
           rm -rf venv
           python3 -m venv venv
@@ -269,7 +261,6 @@ jobs:
           . venv/bin/activate
           # tests execution
           pytest \
-            --hub_url ${{ inputs.selenoid_server_url }} \
             --base_url https://${{ steps.agent_info.outputs.ip }}/ \
             --install-platform \
             | tee pytest-output.log
