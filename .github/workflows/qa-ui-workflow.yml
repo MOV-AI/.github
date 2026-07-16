@@ -30,7 +30,7 @@ on:
       slack_channel:
         required: false
         type: string
-        default: C05K2KF1UP8 #C02PB9A9F45
+        default: 'G0102LEV1CL' #funky-devops
       with_fleet_tests:
         required: false
         type: boolean
@@ -210,17 +210,17 @@ jobs:
           MESSAGE=":loading: QA UI Fleet validations started for ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}) - Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
 
-      # - name: Send Slack Message
-      #   uses: slackapi/slack-github-action@v3
-      #   id: send-message
-      #   with:
-      #     method: chat.postMessage
-      #     payload: |
-      #       {
-      #         "channel": "${{ inputs.slack_channel }}",
-      #         "text": "${{ steps.pre_slack.outputs.msg }}"
-      #       }
-      #     token: ${{ secrets.slack_token_id }}
+      - name: Send Slack Message
+        uses: slackapi/slack-github-action@v3
+        id: send-message
+        with:
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack.outputs.msg }}"
+            }
+          token: ${{ secrets.slack_token_id }}
 
   Run-Standalone-tests:
     runs-on: qa-runner
@@ -347,7 +347,7 @@ jobs:
       slack_thread_id: ${{ needs.Resolve-fleet-context.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Resolve-fleet-context.outputs.backend_name }}:${{ needs.Resolve-fleet-context.outputs.backend_version }}
       test_timeout: 120
-      slack_channel: 'G0102LEV1CL' #funky-devops
+      slack_channel: ${{ inputs.slack_channel }}
       provision_tf_env_repo: ${{ needs.Resolve-fleet-context.outputs.PROVISIONING_ENV_REPO }}
       provision_tf_env_version: ${{ needs.Resolve-fleet-context.outputs.PROVISIONING_ENV_VERSION }}
       provision_infra_repo: ${{ needs.Resolve-fleet-context.outputs.PROVISION_INFRA_REPO }}
