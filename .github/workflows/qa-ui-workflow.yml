@@ -20,16 +20,13 @@ on:
         type: string
         default: hel0
       fleet_ips:
-        required: true
+        required: false
         type: string
+        default: '["dhcp","dhcp","dhcp"]'
       fleet_number_members:
         required: false
         type: number
         default: 2
-      backend_name:
-        required: false
-        type: string
-        default: ''
       slack_channel:
         required: false
         type: string
@@ -143,6 +140,8 @@ jobs:
       PROVISIONING_ENV_VERSION: ${{ steps.export_env.outputs.PROVISIONING_ENV_VERSION }}
       PROVISION_INFRA_REPO: ${{ steps.export_env.outputs.PROVISION_INFRA_REPO }}
       PROVISION_INFRA_VERSION: ${{ steps.export_env.outputs.PROVISION_INFRA_VERSION }}
+      backend_name: ${{ steps.extract_backend_info.outputs.backend_name }}
+      backend_version: ${{ steps.extract_backend_info.outputs.backend_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -175,6 +174,34 @@ jobs:
           print(json.dumps(fleet_test_names))
           ")
           echo "fleet_tests_list=${FLEET_TESTS}" >> $GITHUB_OUTPUT
+
+      - name: Extract backend info
+        id: extract_backend_info
+        shell: bash
+        run: |
+          BACKEND_INFO=$(python3 -c "
+          import json
+          import yaml
+
+          with open('product-manifest.yaml') as f:
+              data = yaml.safe_load(f)
+
+          backend_config = data['product_components']['platform_config']['backend']
+          backend_name = backend_config.get('name', '')
+          backend_version = backend_config.get('version', '')
+
+          result = {
+              'name': backend_name,
+              'version': backend_version
+          }
+          print(json.dumps(result))
+          ")
+
+          BACKEND_NAME=$(echo "$BACKEND_INFO" | python3 -c "import sys, json; print(json.load(sys.stdin)['name'])")
+          BACKEND_VERSION=$(echo "$BACKEND_INFO" | python3 -c "import sys, json; print(json.load(sys.stdin)['version'])")
+
+          echo "backend_name=${BACKEND_NAME}" >> $GITHUB_OUTPUT
+          echo "backend_version=${BACKEND_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Prepare slack variables
         id: pre_slack
@@ -318,9 +345,9 @@ jobs:
     with:
       fleet_test_infra_list: ${{ needs.Resolve-fleet-context.outputs.fleet_tests_list }}
       slack_thread_id: ${{ needs.Resolve-fleet-context.outputs.slack_thread_id }}
-      backend_image_name_and_tag: ${{ inputs.backend_name }}
+      backend_image_name_and_tag: ${{ needs.Resolve-fleet-context.outputs.backend_name }}:${{ needs.Resolve-fleet-context.outputs.backend_version }}
       test_timeout: 120
-      slack_channel: ''
+      slack_channel: 'G0102LEV1CL' #funky-devops
       provision_tf_env_repo: ${{ needs.Resolve-fleet-context.outputs.PROVISIONING_ENV_REPO }}
       provision_tf_env_version: ${{ needs.Resolve-fleet-context.outputs.PROVISIONING_ENV_VERSION }}
       provision_infra_repo: ${{ needs.Resolve-fleet-context.outputs.PROVISION_INFRA_REPO }}
