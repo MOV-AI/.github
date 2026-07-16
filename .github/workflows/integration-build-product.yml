@@ -2660,7 +2660,7 @@ jobs:
           chmod -R 755 deployment_artifacts/publish-sbom/
           integration-pipeline publish_sbom_to_dependency_track \
             --manifest_file deployment_artifacts/product-manifest.yaml \
-            --manifest_platform_base_key product_components \
+            --manifest_platform_base_key product_components,product_dependencies \
             --dependency_track_url ${{ env.DEPENDENCY_TRACK_URL }} \
             --dependency_track_api_key ${{ secrets.dependency_track_api_key }} \
             --harbor_url ${{ env.HARBOR_URL }} \
