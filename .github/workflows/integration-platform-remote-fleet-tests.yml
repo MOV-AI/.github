@@ -143,7 +143,7 @@ jobs:
         uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Resolve product manifest path
         id: resolve_product_manifest
@@ -167,7 +167,7 @@ jobs:
           echo "ref=${WORKFLOW_REF##*@}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout shared workflow repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: ${{ steps.shared_workflow_ref.outputs.repo }}
           ref: ${{ steps.shared_workflow_ref.outputs.ref }}
@@ -199,7 +199,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Download Robot Configs
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         if: ${{ !inputs.qa_ui_tests }}
         with:
           name: robot_configs
@@ -337,7 +337,7 @@ jobs:
           echo "fleet_ips=${members//\"/}" >> "$GITHUB_OUTPUT"
 
       - name: Stash provision_infra_dir
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         if: always()
         continue-on-error: true
         with:
@@ -345,7 +345,7 @@ jobs:
           path: ${{ steps.infra_setup.outputs.provision_infra_dir }}
 
       - name: Stash infra_env_configs
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         if: always()
         continue-on-error: true
         with:
@@ -353,7 +353,7 @@ jobs:
           path: ${{ steps.infra_setup.outputs.env_configs_dir }}
 
       - name: Stash provisioned_inventory
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         if: always()
         continue-on-error: true
         with:
@@ -376,7 +376,7 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}" >> "$GITHUB_OUTPUT"
 
       - name: Slack message failure
-        uses: slackapi/slack-github-action@v2
+        uses: slackapi/slack-github-action@v4
         if: failure() && inputs.slack_channel != ''
         with:
           method: chat.postMessage
@@ -598,7 +598,7 @@ jobs:
       QA_ARTIFACTS_PATH: ${{ matrix.fleet_test_name }}_qa_artifacts
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Remote - Setup QA ${{ matrix.fleet_test_name }} tests
         if: ${{ inputs.with_fleet_tests }}
@@ -687,7 +687,7 @@ jobs:
 
       - name: Download Provisioned Inventory
         if: always()
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: provisioned_inventory
           path: ./
@@ -709,7 +709,7 @@ jobs:
 
       - name: Checkout shared workflow scripts
         if: always()
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: ${{ steps.shared_workflow_ref_collect.outputs.repo }}
           ref: ${{ steps.shared_workflow_ref_collect.outputs.ref }}
@@ -761,7 +761,7 @@ jobs:
 
       - name: Stash Fleet QA artifacts
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ github.run_number }}_${{ github.run_attempt }}_fleet_${{ matrix.fleet_test_name }}_qa_artifacts_${{ github.run_id }}
           path: ${{ env.QA_ARTIFACTS_PATH }}/*
@@ -796,7 +796,7 @@ jobs:
     if: always()
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Teardown Environment
         shell: bash
@@ -814,14 +814,14 @@ jobs:
           echo "::endgroup::"
 
       - name: Download Provision Infra Dir
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: provision_infra_dir
           path: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
 
       - name: Download Infra Env Configs
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: infra_env_configs

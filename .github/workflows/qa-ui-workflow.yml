@@ -207,7 +207,7 @@ jobs:
           echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
 
       - name: Send Slack Message
-        uses: slackapi/slack-github-action@v3
+        uses: slackapi/slack-github-action@v4
         id: send-message
         with:
           method: chat.postMessage
@@ -308,7 +308,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: qa_artifacts_ui_tests
           path: qa_artifacts/*
