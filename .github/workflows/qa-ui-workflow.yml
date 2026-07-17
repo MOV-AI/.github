@@ -350,3 +350,38 @@ jobs:
       with_fleet_tests: ${{ inputs.with_fleet_tests }}
       debug_fleet_keep_alive: ${{ inputs.keep_fleet_alive }}
       qa_ui_tests: true
+
+  Run-Status:
+    runs-on: ubuntu-22.04
+    needs: [Validate-features, Validate, Resolve-fleet-context, Run-Standalone-tests, Run-Fleet-Tests]
+    if: ${{ always() }}
+    steps:
+      - name: Prepare slack variables
+        id: pre_slack
+        shell: bash
+        run: |
+          STATUS_VALIDATE_FEATURES="${{ needs.Validate-features.result }}"
+          STATUS_VALIDATE="${{ needs.Validate.result }}"
+          STATUS_STANDALONE="${{ needs.Run-Standalone-tests.result }}"
+          STATUS_FLEET="${{ needs.Run-Fleet-Tests.result }}"
+
+          if [[ "$STATUS_VALIDATE_FEATURES" == "success" && "$STATUS_VALIDATE" == "success" && "$STATUS_STANDALONE" == "success" && ( "$STATUS_FLEET" == "success" || "$STATUS_FLEET" == "skipped" ) ]]; then
+            MESSAGE=":white_check_mark: QA UI validations succeeded for ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}) - Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          else
+            MESSAGE=":x: QA UI validations failed (or cancelled) for ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}) - Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          fi
+
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+
+      - name: Update Slack Message
+        if: ${{ always() && inputs.slack_channel != '' && needs.Resolve-fleet-context.result == 'success' && needs.Resolve-fleet-context.outputs.slack_thread_id != '' }}
+        uses: slackapi/slack-github-action@v4
+        with:
+          method: chat.update
+          payload: |
+            {
+              "channel": "${{ inputs.slack_channel }}",
+              "text": "${{ steps.pre_slack.outputs.msg }}",
+              "ts": "${{ needs.Resolve-fleet-context.outputs.slack_thread_id }}"
+            }
+          token: ${{ secrets.slack_token_id }}
