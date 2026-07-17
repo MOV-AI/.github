@@ -287,6 +287,8 @@ jobs:
     outputs:
       slack_thread_id: ${{ needs.Validate-bootstrap-configs.outputs.slack_thread_id }}
       backend_image: ${{ steps.store_image_name.outputs.backend_image }}
+    env:
+      DISTRO: noetic
     steps:
       - uses: rtCamp/action-cleanup@master
 
@@ -356,9 +358,8 @@ jobs:
         run: |
           version=$(cat product.version)
           major=${version%%.*}
-
           if (( major < 3 )); then
-            ext="_${{ matrix.workspace['distro'] }}"
+            ext="_${{ env.DISTRO }}"
           else
             ext=""
           fi
