@@ -126,6 +126,8 @@ env:
 jobs:
   Fleet-Tests-Provisioning:
     runs-on: ip-${{ inputs.proxmox_cluster_name }}-queuer
+    env:
+      SHARED_ANSIBLE_ASSETS_DIR: ${{ github.workspace }}/.shared-github/.github/resources/ansible
     outputs:
       host_ip: ${{ steps.infra_provision.outputs.host_ip }}
       host_user: ${{ steps.infra_provision.outputs.host_user }}
@@ -142,6 +144,34 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Resolve product manifest path
+        id: resolve_product_manifest
+        shell: bash
+        run: |
+          if [ -f product-manifest.yaml ]; then
+            echo "manifest_path=product-manifest.yaml" >> "$GITHUB_OUTPUT"
+          elif [ -f installation/product-manifest.yaml ]; then
+            echo "manifest_path=installation/product-manifest.yaml" >> "$GITHUB_OUTPUT"
+          else
+            echo "product-manifest.yaml not found in repo root or installation/" >&2
+            exit 1
+          fi
+
+      - name: Resolve shared workflow repository ref
+        id: shared_workflow_ref
+        shell: bash
+        run: |
+          WORKFLOW_REF='${{ github.workflow_ref }}'
+          echo "repo=${WORKFLOW_REF%%/.github/workflows/*}" >> "$GITHUB_OUTPUT"
+          echo "ref=${WORKFLOW_REF##*@}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout shared workflow repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ steps.shared_workflow_ref.outputs.repo }}
+          ref: ${{ steps.shared_workflow_ref.outputs.ref }}
+          path: .shared-github
 
       - name: Agent info
         run: |
@@ -365,6 +395,7 @@ jobs:
           set -eo pipefail
           echo "::group::Prepare ansible inventory"
           . .ci-venv/bin/activate
+          mkdir -p staging
           cp "${{ steps.infra_setup.outputs.provision_infra_dir }}/provisioned_inventory.yml" staging/provisioned_inventory.yml
 
           # Add localhost configuration for delegated tasks
@@ -386,9 +417,9 @@ jobs:
           rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt
 
           # shellcheck disable=SC2086
-          integration-pipeline get_yml_value --file product-manifest.yaml --key "product_components.installion.${install_key}.target_dir" --output_file /tmp/target_dir.txt
-          integration-pipeline get_yml_value --file product-manifest.yaml --key "product_components.installion.${install_key}.version" --output_file /tmp/version.txt
-          integration-pipeline get_yml_value --file product-manifest.yaml --key "product_components.installion.${install_key}.name" --output_file /tmp/repo_name.txt
+          integration-pipeline get_yml_value --file "${{ steps.resolve_product_manifest.outputs.manifest_path }}" --key "product_components.installion.${install_key}.target_dir" --output_file /tmp/target_dir.txt
+          integration-pipeline get_yml_value --file "${{ steps.resolve_product_manifest.outputs.manifest_path }}" --key "product_components.installion.${install_key}.version" --output_file /tmp/version.txt
+          integration-pipeline get_yml_value --file "${{ steps.resolve_product_manifest.outputs.manifest_path }}" --key "product_components.installion.${install_key}.name" --output_file /tmp/repo_name.txt
 
           install_infra_dir=$(cat /tmp/target_dir.txt)
           install_infra_version=$(cat /tmp/version.txt)
@@ -411,6 +442,7 @@ jobs:
         shell: bash
         run: |
           set -eo pipefail
+          export ANSIBLE_CONFIG="$SHARED_ANSIBLE_ASSETS_DIR/ansible.cfg"
           echo "::group::Configure SSH"
           echo "${{ secrets.ssh_pem_fleet_aws_vm }}" > ~/.ssh/aws_slave.pem
           sudo chmod 600 ~/.ssh/aws_slave.pem
@@ -488,7 +520,7 @@ jobs:
           ansible-playbook install.yml \
             -i ../staging/provisioned_inventory.yml \
             --key-file ~/.ssh/aws_slave.pem \
-            --extra-vars=@"$(pwd)/.."/product-manifest.yaml \
+            --extra-vars=@"${{ github.workspace }}/${{ steps.resolve_product_manifest.outputs.manifest_path }}" \
             --extra-vars=@"$VAULT_FILE" \
             -e "movai_fleet_name=$FLEET_NAME" \
             -e "movai_fleet_staging_path=$STAGING_PATH" \
@@ -544,7 +576,7 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::Transfer configuration files"
-          scp -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no product-manifest.yaml \
+          scp -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no "${{ steps.resolve_product_manifest.outputs.manifest_path }}" \
             ${{ steps.infra_provision.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/product-manifest.yaml
           echo "✓ Product manifest transferred"
 
@@ -666,12 +698,21 @@ jobs:
         with:
           python-version: '3.10'
 
+      - name: Resolve shared workflow repository ref for artifact collection
+        if: always()
+        id: shared_workflow_ref_collect
+        shell: bash
+        run: |
+          WORKFLOW_REF='${{ github.workflow_ref }}'
+          echo "repo=${WORKFLOW_REF%%/.github/workflows/*}" >> "$GITHUB_OUTPUT"
+          echo "ref=${WORKFLOW_REF##*@}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout shared workflow scripts
         if: always()
         uses: actions/checkout@v6
         with:
-          repository: MOV-AI/.github
-          ref: v3
+          repository: ${{ steps.shared_workflow_ref_collect.outputs.repo }}
+          ref: ${{ steps.shared_workflow_ref_collect.outputs.ref }}
           path: .shared-github
 
       - name: Collect QA Artifacts
@@ -679,6 +720,7 @@ jobs:
         shell: bash
         run: |
           set +e
+          export ANSIBLE_CONFIG="$(pwd)/.shared-github/.github/resources/ansible/ansible.cfg"
           echo "::group::Download provisioned inventory"
           python3.10 --version || python3 --version
           echo "✓ Python environment ready"

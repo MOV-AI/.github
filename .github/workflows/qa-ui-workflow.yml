@@ -30,6 +30,10 @@ on:
         required: false
         type: boolean
         default: true
+      keep_fleet_alive:
+        required: false
+        type: boolean
+        default: false
     secrets:
       gh_token:
         required: true
@@ -161,11 +165,8 @@ jobs:
           with open('product-manifest.yaml') as f:
               data = yaml.safe_load(f)
 
-          qa_config = data['product_components']['qa']
-          fleet_test_names = [
-              test_name for test_name, test_config in qa_config.items()
-              if isinstance(test_config, dict) and 'fleet' in test_config
-          ]
+          ui_tests_config = data['product_components']['qa'].get('ui_tests', {})
+          fleet_test_names = ['ui_tests'] if isinstance(ui_tests_config, dict) and 'fleet' in ui_tests_config else []
           print(json.dumps(fleet_test_names))
           ")
           echo "fleet_tests_list=${FLEET_TESTS}" >> $GITHUB_OUTPUT
@@ -347,4 +348,5 @@ jobs:
       fleet_ips: ${{ inputs.fleet_ips }}
       proxmox_cluster_name: ${{ inputs.proxmox_cluster_name }}
       with_fleet_tests: ${{ inputs.with_fleet_tests }}
+      debug_fleet_keep_alive: ${{ inputs.keep_fleet_alive }}
       qa_ui_tests: true
