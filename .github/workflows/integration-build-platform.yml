@@ -354,9 +354,18 @@ jobs:
         id: pre_build
         shell: bash
         run: |
-          echo "base_name=$(cat backend_base_name.ci)" >> $GITHUB_OUTPUT
-          echo "base_version=$(cat backend_base_version.ci)" >> $GITHUB_OUTPUT
-          echo "raised_version=$(cat product.version)" >> $GITHUB_OUTPUT
+          version=$(cat product.version)
+          major=${version%%.*}
+
+          if (( major < 3 )); then
+            ext="_${{ matrix.workspace['distro'] }}"
+          else
+            ext=""
+          fi
+
+          echo "base_name=$(cat backend_base_name${ext}.ci)" >> "$GITHUB_OUTPUT"
+          echo "base_version=$(cat backend_base_version${ext}.ci)" >> "$GITHUB_OUTPUT"
+          echo "raised_version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
