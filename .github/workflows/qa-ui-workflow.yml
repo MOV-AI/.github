@@ -162,7 +162,7 @@ jobs:
           import json
           import yaml
 
-          with open('product-manifest.yaml') as f:
+          with open('installation/product-manifest.yaml') as f:
               data = yaml.safe_load(f)
 
           ui_tests_config = data['product_components']['qa'].get('ui_tests', {})
@@ -179,7 +179,7 @@ jobs:
           import json
           import yaml
 
-          with open('product-manifest.yaml') as f:
+          with open('installation/product-manifest.yaml') as f:
               data = yaml.safe_load(f)
 
           backend_config = data['product_components']['platform_config']['backend']
