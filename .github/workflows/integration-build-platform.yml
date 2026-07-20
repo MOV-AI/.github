@@ -18,9 +18,9 @@ on:
       fleet_number_members:
         required: true
         type: number
-      cluster:
+      sim_cluster:
         required: false
-        default: "mary"
+        default: "any"
         type: string
       debug_simulation_tests_keep_alive:
         required: false
@@ -29,7 +29,7 @@ on:
       proxmox_cluster_name:
         required: false
         type: string
-        default: hel0
+        default: "hel0"
       slack_channel:
         required: false
         type: string
@@ -732,16 +732,47 @@ jobs:
       slack_channel: ${{ inputs.slack_channel }}
       robot_config: 'basic-standalone-ignition-noetic.json'
 
+  Select-Simtest-Node:
+    if: ${{ inputs.with_robotic_stack_tests }}
+    runs-on: infra-runner
+    outputs:
+      free_node: ${{ steps.select_simtest_node.outputs.free_node }}
+    steps:
+      - name: Checkout workflow repository for scripts
+        uses: actions/checkout@v7
+        with:
+          repository: MOV-AI/.github
+          path: .github-workflows
+          ref: feat/select_sim_cluster
+
+      - name: Select node for robotic stack tests
+        id: select_simtest_node
+        run: |
+          set -e -o pipefail
+          if [ "${{ inputs.sim_cluster }}" == "any" ]; then
+            echo "Selecting a free node from the cluster ${{ inputs.sim_cluster }} for robotic stack tests"
+            free_node=$(.github-workflows/.github/scripts/select_gpu_free_node.sh \
+            --proxmox_url "https://${{ inputs.sim_cluster }}.mov.ai:8006/" \
+            --proxmox_user "${{ secrets.proxmox_ve_sim_username }}" \
+            --proxmox_password "${{ secrets.proxmox_ve_sim_password }}")
+          echo "Free node: $free_node"
+          echo "free_node=$free_node" >> "$GITHUB_OUTPUT"
+          else
+            echo "Using the specified cluster node ${{ inputs.sim_cluster }} for robotic stack tests"
+            cluster_name="${{ inputs.sim_cluster }}"
+          fi
+
+
   Robotic-Stack-Integration:
     if: ${{ inputs.with_robotic_stack_tests }}
-    needs: [Simulator-Validations, Build-backend, Build-Simulator]
-    uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@v3
+    needs: [Select-Simtest-Node, Simulator-Validations, Build-backend, Build-Simulator]
+    uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@feat/select_sim_cluster
     secrets: inherit
     with:
       product_name: ${{ inputs.product_name }}
       slack_thread_id: ${{ needs.Build-Simulator.outputs.slack_thread_id }}
       slack_channel: ${{ inputs.slack_channel }}
-      cluster: ${{ inputs.cluster }}
+      sim_cluster: ${{ needs.Select-Simtest-Node.outputs.free_node }}
       debug_simulation_tests_keep_alive: ${{ inputs.debug_simulation_tests_keep_alive }}
       backend_name: ${{ needs.Build-backend.outputs.backend_image }}
       simulation_qa_key: ${{ inputs.simulation_qa_key }}
