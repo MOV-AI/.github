@@ -744,7 +744,7 @@ jobs:
         with:
           repository: MOV-AI/.github
           path: .github-workflows
-          ref: feat/select_sim_cluster
+          ref: v3
 
       - name: Select node for robotic stack tests
         id: select_simtest_node
