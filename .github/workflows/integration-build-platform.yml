@@ -734,7 +734,7 @@ jobs:
 
   Select-Simtest-Node:
     if: ${{ inputs.with_robotic_stack_tests }}
-    runs-on: infra-runner
+    runs-on: pt-agent
     outputs:
       free_node: ${{ steps.select_simtest_node.outputs.free_node }}
     steps:
