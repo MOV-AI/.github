@@ -752,9 +752,9 @@ jobs:
           if [ "${{ inputs.sim_cluster }}" == "any" ]; then
             echo "Selecting a free node from the cluster ${{ inputs.sim_cluster }} for robotic stack tests"
             free_node=$(.github-workflows/.github/scripts/select_gpu_free_node.sh \
-            --proxmox_url "https://${{ inputs.sim_cluster }}.mov.ai:8006/" \
-            --proxmox_user "${{ secrets.proxmox_ve_sim_username }}" \
-            --proxmox_password "${{ secrets.proxmox_ve_sim_password }}")
+            --host "https://${{ inputs.sim_cluster }}.mov.ai:8006/" \
+            --token-id "${{ secrets.proxmox_ve_sim_username }}" \
+            --token-secret "${{ secrets.proxmox_ve_sim_password }}")
           echo "Free node: $free_node"
           echo "free_node=$free_node" >> "$GITHUB_OUTPUT"
           else
