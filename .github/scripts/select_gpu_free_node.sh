@@ -6,8 +6,8 @@ PRIORITY_NODES=("mary" "kx-01" "kx-02" "bb-8" "bb-9" "marvin")
 
 # Default values
 PVE_HOST="${PVE_HOST:-https://127.0.0.1:8006}"
-PVE_TOKEN_ID="${PVE_TOKEN_ID:-root@pam!mytoken}"
-PVE_TOKEN_SECRET="${PVE_TOKEN_SECRET:-00000000-0000-0000-0000-000000000000}"
+PVE_USER="${PVE_USER:-}"
+PVE_PASSWORD="${PVE_PASSWORD:-}"
 INSECURE_SSL="${INSECURE_SSL:-true}"
 VERBOSE="${VERBOSE:-false}"
 
@@ -17,8 +17,8 @@ Usage: $(basename "$0") [OPTIONS]
 
 Options:
   -H, --host URL          Proxmox API endpoint (default: https://127.0.0.1:8006)
-  -i, --token-id ID       PVE Token ID (default: root@pam!mytoken)
-  -s, --token-secret SEC  PVE Token Secret
+  -u, --user USER         PVE Username (e.g. root@pam) OR Token ID (e.g. root@pam!mytoken)
+  -p, --password PASS     PVE Password OR Token Secret (UUID)
   -v, --verbose, --debug  Enable debug logging output to stderr
   -k, --insecure          Disable SSL certificate verification (default: true)
   --secure                Enable SSL certificate verification
@@ -30,8 +30,8 @@ EOF
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -H|--host)          PVE_HOST="$2"; shift 2 ;;
-    -i|--token-id)      PVE_TOKEN_ID="$2"; shift 2 ;;
-    -s|--token-secret)  PVE_TOKEN_SECRET="$2"; shift 2 ;;
+    -u|--user)          PVE_USER="$2"; shift 2 ;;
+    -p|--password)      PVE_PASSWORD="$2"; shift 2 ;;
     -v|--verbose|-d|--debug) VERBOSE="true"; shift ;;
     -k|--insecure)      INSECURE_SSL="true"; shift ;;
     --secure)           INSECURE_SSL="false"; shift ;;
@@ -54,12 +54,48 @@ for cmd in curl jq grep; do
   fi
 done
 
+if [[ -z "${PVE_USER}" || -z "${PVE_PASSWORD}" ]]; then
+  echo "Error: Missing credentials. Both -u/--user and -p/--password are required." >&2
+  exit 1
+fi
+
 CURL_ARGS=(-s -S)
 if [[ "${INSECURE_SSL}" == "true" ]]; then
   CURL_ARGS+=(-k)
 fi
 
-AUTH_HEADER="Authorization: PVEAPIToken=${PVE_TOKEN_ID}=${PVE_TOKEN_SECRET}"
+# ==============================================================================
+# AUTODETECT AUTHENTICATION TYPE
+# ==============================================================================
+AUTH_HEADER=""
+
+# Detect Proxmox API Token ID format (e.g. user@realm!tokenname)
+if [[ "${PVE_USER}" =~ ^[^@]+@[^!]+!.+$ ]]; then
+  log_debug "Detected Token ID format ('!'). Using API Token authentication..."
+  AUTH_HEADER="Authorization: PVEAPIToken=${PVE_USER}=${PVE_PASSWORD}"
+
+else
+  log_debug "Detected standard Username. Authenticating via ticket for '${PVE_USER}'..."
+
+  TICKET_RESPONSE=$(curl "${CURL_ARGS[@]}" \
+    --data-urlencode "username=${PVE_USER}" \
+    --data-urlencode "password=${PVE_PASSWORD}" \
+    "${PVE_HOST}/api2/json/access/ticket" 2>/dev/null) || {
+      echo "Error: Network failure connecting to Proxmox API at ${PVE_HOST}" >&2
+      exit 1
+  }
+
+  PVE_TICKET=$(echo "$TICKET_RESPONSE" | jq -r '.data.ticket // empty')
+
+  if [[ -z "$PVE_TICKET" ]]; then
+    echo "Error: Authentication failed for user '${PVE_USER}'." >&2
+    echo "Proxmox API response: ${TICKET_RESPONSE}" >&2
+    exit 1
+  fi
+
+  log_debug "Authentication successful. Ticket acquired."
+  AUTH_HEADER="Cookie: PVEAuthCookie=${PVE_TICKET}"
+fi
 
 api_get() {
   local path="$1"
@@ -68,8 +104,12 @@ api_get() {
     "${PVE_HOST}/api2/json${path}"
 }
 
+# ==============================================================================
+# MAIN LOGIC
+# ==============================================================================
+
 # 1. Query Proxmox Cluster Resources
-log_debug "Connecting to Proxmox API at ${PVE_HOST} as ${PVE_TOKEN_ID}..."
+log_debug "Connecting to Proxmox API at ${PVE_HOST}..."
 RESOURCES_JSON=$(api_get "/cluster/resources" 2>/dev/null) || {
   echo "Error: Failed to connect to Proxmox API at ${PVE_HOST}" >&2
   exit 1
@@ -77,6 +117,7 @@ RESOURCES_JSON=$(api_get "/cluster/resources" 2>/dev/null) || {
 
 if ! echo "$RESOURCES_JSON" | jq -e '.data' >/dev/null 2>&1; then
   echo "Error: Invalid response from Proxmox API. Verify credentials and permissions." >&2
+  echo "API Response: ${RESOURCES_JSON}" >&2
   exit 1
 fi
 
@@ -106,7 +147,6 @@ if [[ -n "$RUNNING_VMS" ]]; then
   done <<< "$RUNNING_VMS"
 fi
 
-# Deduplicate busy nodes list for log clarity
 BUSY_GPU_NODES=($(printf "%s\n" "${BUSY_GPU_NODES[@]}" 2>/dev/null | sort -u))
 log_debug "Nodes currently running GPU passthrough VMs: [${BUSY_GPU_NODES[*]:-none}]"
 
