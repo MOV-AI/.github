@@ -47,7 +47,7 @@ log_debug() {
 }
 
 # Pre-flight binary checks
-for cmd in curl jq grep; do
+for cmd in curl jq grep sort head xargs; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "Error: Required binary '$cmd' is not installed." >&2
     exit 1
