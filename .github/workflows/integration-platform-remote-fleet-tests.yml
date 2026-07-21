@@ -56,10 +56,10 @@ on:
         required: false
         type: string
         default: 'C02PB9A9F45' # rnd-platform
-      qa_ui_tests:
+      robot_config_download:
         required: false
         type: boolean
-        default: false
+        default: true
 
     secrets:
       auto_commit_user:
@@ -200,7 +200,7 @@ jobs:
 
       - name: Download Robot Configs
         uses: actions/download-artifact@v8
-        if: ${{ !inputs.qa_ui_tests }}
+        if: ${{ inputs.robot_config_download }}
         with:
           name: robot_configs
           path: .

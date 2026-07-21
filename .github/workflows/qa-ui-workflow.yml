@@ -332,7 +332,7 @@ jobs:
 
   Run-Fleet-Tests:
     needs: [Validate, Resolve-fleet-context]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@feat/DP-2081_fleet-ui-tests
+    uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@v3
     secrets: inherit
     with:
       fleet_test_infra_list: ${{ needs.Resolve-fleet-context.outputs.fleet_tests_list }}
@@ -349,7 +349,7 @@ jobs:
       proxmox_cluster_name: ${{ inputs.proxmox_cluster_name }}
       with_fleet_tests: ${{ inputs.with_fleet_tests }}
       debug_fleet_keep_alive: ${{ inputs.keep_fleet_alive }}
-      qa_ui_tests: true
+      robot_config_download: false
 
   Run-Status:
     runs-on: ubuntu-22.04
