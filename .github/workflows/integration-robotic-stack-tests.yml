@@ -5,7 +5,7 @@ on:
       product_name:
         required: true
         type: string
-      cluster:
+      sim_cluster:
         required: false
         default: "mary"
         type: string
@@ -104,7 +104,7 @@ env:
 
 jobs:
   Robotic-Stack-Integration:
-    runs-on: simul-${{ inputs.cluster }}-queuer
+    runs-on: simul-${{ inputs.sim_cluster }}-queuer
     steps:
       - name: Cleanup Workspace
         uses: rtCamp/action-cleanup@master
@@ -192,9 +192,9 @@ jobs:
 
           run_type="ci"
 
-          local_manager_prefix="ip-$run_type-${{ inputs.cluster }}-${{ inputs.product_name }}-$branch"
+          local_manager_prefix="ip-$run_type-${{ inputs.sim_cluster }}-${{ inputs.product_name }}-$branch"
 
-          tf_state="${{ inputs.cluster }}-sim-$local_manager_prefix"
+          tf_state="${{ inputs.sim_cluster }}-sim-$local_manager_prefix"
           echo "simul_prefix=${local_manager_prefix}" | tee >> $GITHUB_OUTPUT
           echo "tfstate_name=${tf_state}" | tee >> $GITHUB_OUTPUT
 
@@ -203,10 +203,10 @@ jobs:
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
         run: |
-          multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..1})
+          multiply_node=$(printf '"${{ inputs.sim_cluster }}",%.0s' {1..1})
           node_list_str=${multiply_node::-1}
 
-          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.sim_cluster }}_simul_bpg.tfvars'
 
           echo "proxmox_host_list=[$node_list_str]">>input.tfvars
           echo "fleet_peer_nr=0">>input.tfvars
@@ -222,7 +222,7 @@ jobs:
 
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
-          terraform init -backend-config="key=${{ inputs.cluster }}-ci-simul-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
+          terraform init -backend-config="key=${{ inputs.sim_cluster }}-ci-simul-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
           terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
           terraform refresh $var_file_arg -var-file=input.tfvars
 
@@ -759,7 +759,7 @@ jobs:
           attempts=3
           count=0
           while [ $count -lt $attempts ]; do
-            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
+            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.sim_cluster }}_simul_bpg.tfvars'
             terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars -var "fleet_peer_nr=0"
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
