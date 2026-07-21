@@ -8,7 +8,7 @@ PRIORITY_NODES=("mary" "kx-01" "kx-02" "bb-8" "bb-9" "marvin")
 PVE_HOST="${PVE_HOST:-https://127.0.0.1:8006}"
 PVE_USER="${PVE_USER:-}"
 PVE_PASSWORD="${PVE_PASSWORD:-}"
-INSECURE_SSL="${INSECURE_SSL:-true}"
+INSECURE_SSL="${INSECURE_SSL:-false}"
 VERBOSE="${VERBOSE:-false}"
 
 usage() {
@@ -20,7 +20,7 @@ Options:
   -u, --user USER         PVE Username (e.g. root@pam) OR Token ID (e.g. root@pam!mytoken)
   -p, --password PASS     PVE Password OR Token Secret (UUID)
   -v, --verbose, --debug  Enable debug logging output to stderr
-  -k, --insecure          Disable SSL certificate verification (default: true)
+  -k, --insecure          Disable SSL certificate verification (default: false)
   --secure                Enable SSL certificate verification
   -h, --help              Show this help message
 EOF
