@@ -633,7 +633,6 @@ jobs:
           done
 
     - name: Publish wheels to PyPI Experimental
-      if: ${{ secrets.nexus_publisher_user != '' }}
       shell: bash
       run: |
           WHEEL_COUNT=$(find artifacts -name "*.whl" | wc -l)
@@ -784,7 +783,6 @@ jobs:
             done
 
     - name: Publish wheels to PyPI Integration
-      if: ${{ secrets.nexus_publisher_user != '' }}
       shell: bash
       run: |
           WHEEL_COUNT=$(find artifacts -name "*.whl" | wc -l)
