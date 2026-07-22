@@ -351,8 +351,8 @@ jobs:
             if [ ${PIPESTATUS[0]} -eq 0 ]; then
               # Copy wheels to artifacts directory
               if [ -d "dist" ]; then
-                mkdir -p "$(pwd)/../../artifacts"
-                cp dist/*.whl "$(pwd)/../../artifacts/" || echo "No wheels found in dist directory"
+                mkdir -p "../artifacts"
+                cp dist/*.whl "../artifacts/" || echo "No wheels found in dist directory"
                 echo "✓ Successfully built wheels for $pkg_dir"
               fi
             else
