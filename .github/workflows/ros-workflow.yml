@@ -280,11 +280,11 @@ jobs:
             exit 1
         fi
 
-    - name: Install Mobros
+    - name: Install Mobros and build tools
       run: |
         python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-edge/simple --extra-index-url https://pypi.org/simple mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
         # pin setuptools version after mobros install to preserve ROS2/colcon compatibility
-        python3 -m pip install --upgrade 'setuptools>=70.0,<80' jaraco-functools wheel
+        python3 -m pip install --upgrade 'setuptools>=70.0,<80' jaraco-functools wheel build
 
     - name: Setup link to Ros userspace
       run: |
@@ -313,6 +313,53 @@ jobs:
         export MOVAI_OUTPUT_DIR="$(pwd)/artifacts"
         mobros pack --workspace="$(pwd)" --mode ${{ matrix.build_mode }}
 
+    - name: Check for Python packages
+      id: check_setup
+      shell: bash
+      run: |
+        echo "Searching for Python packages with setup.py..."
+        # Find all directories with setup.py files (excluding .git and .github directories)
+        if find . -type f -name "setup.py" ! -path '*/.git/*' ! -path '*/.github/*' | grep -q .; then
+          echo "setup_found=true" >> $GITHUB_OUTPUT
+          echo "✓ Found setup.py file(s), will proceed with wheel building"
+        else
+          echo "setup_found=false" >> $GITHUB_OUTPUT
+          echo "No setup.py files found, skipping wheel building"
+        fi
+
+    - name: Build Python wheels
+      if: steps.check_setup.outputs.setup_found == 'true'
+      shell: bash
+      run: |
+        # Find all directories with setup.py files (excluding .git and .github directories)
+        find . -type f -name "setup.py" ! -path '*/.git/*' ! -path '*/.github/*' | while read -r setup_file; do
+          pkg_dir=$(dirname "$setup_file")
+          echo "Building wheel for: $pkg_dir"
+
+          # Check if this is a ROS package (has package.xml)
+          if [ -f "$pkg_dir/package.xml" ]; then
+            echo "Building wheel for ROS package at: $pkg_dir"
+            cd "$pkg_dir"
+
+            # Build the wheel
+            python3 -m build --wheel --no-isolation 2>&1 | tee build.log
+
+            # Check if build was successful
+            if [ ${PIPESTATUS[0]} -eq 0 ]; then
+              # Copy wheels to artifacts directory
+              if [ -d "dist" ]; then
+                mkdir -p "$(pwd)/../../artifacts"
+                cp dist/*.whl "$(pwd)/../../artifacts/" || echo "No wheels found in dist directory"
+                echo "✓ Successfully built wheels for $pkg_dir"
+              fi
+            else
+              echo "⚠ Warning: Failed to build wheel for $pkg_dir"
+            fi
+
+            cd - > /dev/null
+          fi
+        done
+
     - name: Run Catkin tests
       if: ${{ inputs.run_catkin_tests && matrix.distro == 'noetic' }}
       shell: bash
@@ -329,7 +376,8 @@ jobs:
 
     - name: Print generated packages
       run: |
-        ls -la artifacts
+        echo "=== Debian packages ===" && ls -la artifacts/*.deb 2>/dev/null || echo "No .deb files"
+        echo "=== Python wheels ===" && ls -la artifacts/*.whl 2>/dev/null || echo "No .whl files"
 
     - name: Print generated rosdep
       run: |
@@ -584,6 +632,25 @@ jobs:
             fi
           done
 
+    - name: Publish wheels to PyPI Experimental
+      if: ${{ secrets.nexus_publisher_user != '' }}
+      shell: bash
+      run: |
+          WHEEL_COUNT=$(find artifacts -name "*.whl" | wc -l)
+          if [ "$WHEEL_COUNT" -gt 0 ]; then
+            echo "Found $WHEEL_COUNT wheel(s) to publish to PyPI Experimental"
+            python3 -m pip install twine --quiet
+
+            twine upload artifacts/*.whl \
+              --repository-url "https://artifacts.cloud.mov.ai/repository/pypi-experimental" \
+              --username ${{ secrets.nexus_publisher_user }} \
+              --password ${{ secrets.nexus_publisher_password }} \
+              --non-interactive \
+              --skip-existing
+          else
+            echo "No wheels found, skipping PyPI publish"
+          fi
+
     - name: Commit raise version
       id: raise
       shell: bash
@@ -677,7 +744,7 @@ jobs:
         git config --global --add safe.directory "$(pwd)"
         mkdir artifacts
         cd artifacts
-        gh release download "${{ steps.vars.outputs.tag}}" -p "*.deb"
+        gh release download "${{ steps.vars.outputs.tag}}" -p "*.deb" -p "*.whl"
       env:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -715,3 +782,22 @@ jobs:
                 exit 1
               fi
             done
+
+    - name: Publish wheels to PyPI Integration
+      if: ${{ secrets.nexus_publisher_user != '' }}
+      shell: bash
+      run: |
+          WHEEL_COUNT=$(find artifacts -name "*.whl" | wc -l)
+          if [ "$WHEEL_COUNT" -gt 0 ]; then
+            echo "Found $WHEEL_COUNT wheel(s) to publish to PyPI Integration"
+            python3 -m pip install twine --quiet
+
+            twine upload artifacts/*.whl \
+              --repository-url "https://artifacts.cloud.mov.ai/repository/pypi-integration" \
+              --username ${{ secrets.nexus_publisher_user }} \
+              --password ${{ secrets.nexus_publisher_password }} \
+              --non-interactive \
+              --skip-existing
+          else
+            echo "No wheels found, skipping PyPI publish"
+          fi
