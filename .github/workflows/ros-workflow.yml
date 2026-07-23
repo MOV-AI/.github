@@ -334,7 +334,12 @@ jobs:
       if: steps.check_setup.outputs.setup_found == 'true'
       shell: bash
       run: |
-        # Find all directories with setup.py files (excluding .git and .github directories)
+        buildid=$(grep build_version "$(cat /tmp/main-package.mobrosinfo)" | sed 's/ //g; s/<\w*>//g; s/<\/\w*>//g')
+
+        if [ -n "$buildid" ]; then
+          find . -name "package.xml" ! -path '*/.git/*' ! -path '*/.github/*' -exec sed -i "s/<\/version>/-${buildid}<\/version>/g" {} +
+        fi
+
         find . -type f -name "setup.py" ! -path '*/.git/*' ! -path '*/.github/*' | while read -r setup_file; do
           pkg_dir=$(dirname "$setup_file")
           echo "Building wheel for: $pkg_dir"
@@ -362,6 +367,10 @@ jobs:
             cd - > /dev/null
           fi
         done
+
+        if [ -n "$buildid" ]; then
+          find . -name "package.xml" ! -path '*/.git/*' ! -path '*/.github/*' -exec sed -i "s/-${buildid}<\/version>/<\/version>/g" {} +
+        fi
 
     - name: Run Catkin tests
       if: ${{ inputs.run_catkin_tests && matrix.distro == 'noetic' }}
