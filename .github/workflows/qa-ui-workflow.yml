@@ -25,7 +25,7 @@ on:
       slack_channel:
         required: false
         type: string
-        default: 'G0102LEV1CL' #funky-devops
+        default: ''
       with_fleet_tests:
         required: false
         type: boolean
