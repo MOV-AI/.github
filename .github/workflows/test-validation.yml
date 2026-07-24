@@ -1465,7 +1465,7 @@ jobs:
   Validation-Simulator-Tests:
     needs: [Validate-boostrap-configs, Compute-timeout, Normalize-Distro-Input, Build-Workspace, Build-Simulator]
     runs-on: ${{ needs.Build-Simulator.outputs.simulator_tests_agent_name }}
-    if: ${{ always() && github.event_name != 'pull_request'}}
+    if: ${{ github.event_name != 'pull_request'}}
     timeout-minutes: ${{ fromJSON(needs.Compute-timeout.outputs.jobtimeout) }}
     outputs:
       simulation_test_version: ${{ steps.simulator_tests_setup.outputs.version || 'not executed' }}
@@ -1530,24 +1530,6 @@ jobs:
         with:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}sim_configs
           path: simulator_artifacts
-
-      - name: Resolve simulator image name
-        if: ${{ inputs.with_simulation_tests }}
-        id: simulator_image
-        shell: bash
-        run: |
-          image_name="${{ needs.Build-Simulator.outputs.image_name }}"
-
-          if [ -z "$image_name" ] && [ -f simulator_artifacts/simulator_name.ci ]; then
-            image_name="${{ env.PUSH_REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)"
-          fi
-
-          if [ -z "$image_name" ]; then
-            echo "Unable to resolve simulator image name"
-            exit 1
-          fi
-
-          echo "image_name=$image_name" >> $GITHUB_OUTPUT
 
       - name: Unstash All Robot Configs
         if: ${{ inputs.with_simulation_tests }}
@@ -1811,12 +1793,12 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
 
-            promoted_name=$(echo "${{ steps.simulator_image.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.PUSH_REGISTRY }}-${{ env.REGISTRY }}-g")
+            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.PUSH_REGISTRY }}-${{ env.REGISTRY }}-g")
             docker manifest inspect "$promoted_name"
             if [ $? -ne 0 ]; then
               set -e
-              docker pull "${{ steps.simulator_image.outputs.image_name }}"
-              docker tag "${{ steps.simulator_image.outputs.image_name }}" $promoted_name
+              docker pull "${{ needs.Build-Simulator.outputs.image_name }}"
+              docker tag "${{ needs.Build-Simulator.outputs.image_name }}" $promoted_name
             fi
           '
 
