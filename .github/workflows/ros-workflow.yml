@@ -334,7 +334,20 @@ jobs:
       if: steps.check_setup.outputs.setup_found == 'true'
       shell: bash
       run: |
-        buildid=$(grep build_version "$(cat /tmp/main-package.mobrosinfo)" | sed 's/ //g; s/<\w*>//g; s/<\/\w*>//g')
+        export BUILD_ID=$(grep build_version "$(cat /tmp/main-package.mobrosinfo)" | sed 's/ //g; s/<\w*>//g; s/<\/\w*>//g')
+
+        # create a memory hook so setuptools adds .post<buildid>
+        mkdir -p /tmp/wheel_hook
+        cat << 'EOF' > /tmp/wheel_hook/sitecustomize.py
+        import os, setuptools
+        _old_setup = setuptools.setup
+        def _hook(**kw):
+            if "version" in kw and os.environ.get("BUILD_ID"):
+                kw["version"] += f".post{os.environ['BUILD_ID']}"
+            return _old_setup(**kw)
+        setuptools.setup = _hook
+        EOF
+        export PYTHONPATH="/tmp/wheel_hook:$PYTHONPATH"
 
         find . -type f -name "setup.py" ! -path '*/.git/*' ! -path '*/.github/*' | while read -r setup_file; do
           pkg_dir=$(dirname "$setup_file")
@@ -352,22 +365,11 @@ jobs:
             if [ ${PIPESTATUS[0]} -eq 0 ]; then
               if [ -d "dist" ]; then
                 mkdir -p "../artifacts"
-
-                for wheel in dist/*.whl; do
-                  [ -e "$wheel" ] || continue
-
-                  wheel_name=$(basename "$wheel")
-                  renamed_wheel=$(echo "$wheel_name" | \
-                    sed -E "s/^(.+)-([0-9]+\.[0-9]+\.[0-9]+)-(.*)\.whl$/\1-\2-${buildid}-\3.whl/")
-
-                  cp "$wheel" "../artifacts/$renamed_wheel"
-                  echo "Copied as: $renamed_wheel"
-                done
-
-                echo "✓ Successfully built wheels for $pkg_dir"
+                cp dist/*.whl "../artifacts/" || echo "No wheels found in dist directory"
+                echo "Successfully built wheels for $pkg_dir"
               fi
             else
-              echo "⚠ Warning: Failed to build wheel for $pkg_dir"
+              echo "Failed to build wheel for $pkg_dir"
             fi
 
             cd - > /dev/null
@@ -405,6 +407,24 @@ jobs:
         export AWS_SECRET_ACCESS_KEY='${{ secrets.aws_sqs_rosdep_secret_access_key }}'
         mobros publish
         cat /usr/local/rosdep/ros-pkgs.yaml
+
+    - name: Publish wheels to PyPI Experimental
+      shell: bash
+      run: |
+          WHEEL_COUNT=$(find artifacts -name "*.whl" | wc -l)
+          if [ "$WHEEL_COUNT" -gt 0 ]; then
+            echo "Found $WHEEL_COUNT wheel(s) to publish to PyPI Experimental"
+            python3 -m pip install twine --quiet
+
+            twine upload artifacts/*.whl \
+              --repository-url "https://artifacts.cloud.mov.ai/repository/pypi-experimental" \
+              --username ${{ secrets.nexus_publisher_user }} \
+              --password ${{ secrets.nexus_publisher_password }} \
+              --non-interactive \
+              --skip-existing
+          else
+            echo "No wheels found, skipping PyPI publish"
+          fi
 
   Post-build-static-analysis:
     if: ${{ inputs.release == 'false' && needs.Check-static-analysis-config.outputs.pre_commit_exists == 'true' }}
@@ -645,24 +665,6 @@ jobs:
               exit 1
             fi
           done
-
-    - name: Publish wheels to PyPI Experimental
-      shell: bash
-      run: |
-          WHEEL_COUNT=$(find artifacts -name "*.whl" | wc -l)
-          if [ "$WHEEL_COUNT" -gt 0 ]; then
-            echo "Found $WHEEL_COUNT wheel(s) to publish to PyPI Experimental"
-            python3 -m pip install twine --quiet
-
-            twine upload artifacts/*.whl \
-              --repository-url "https://artifacts.cloud.mov.ai/repository/pypi-experimental" \
-              --username ${{ secrets.nexus_publisher_user }} \
-              --password ${{ secrets.nexus_publisher_password }} \
-              --non-interactive \
-              --skip-existing
-          else
-            echo "No wheels found, skipping PyPI publish"
-          fi
 
     - name: Commit raise version
       id: raise
