@@ -334,6 +334,7 @@ jobs:
       if: steps.check_setup.outputs.setup_found == 'true'
       shell: bash
       run: |
+        export _PYTHON_BUILD_WHEEL_PKG=1
         find . -type f -name "setup.py" ! -path '*/.git/*' ! -path '*/.github/*' | while read -r setup_file; do
           pkg_dir=$(dirname "$setup_file")
           echo "Building wheel for: $pkg_dir"
