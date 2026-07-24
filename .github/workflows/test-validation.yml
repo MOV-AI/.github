@@ -50,9 +50,9 @@ on:
       overwrite_slack_channel:
         required: false
         type: string
-        default: "C050L85R6VC"
+        default: "C05K2KF1UP8"
       # development slack channel
-      #default: "C05K2KF1UP8"
+      # default: "C05K2KF1UP8"
       docker_registry:
         required: false
         type: string
