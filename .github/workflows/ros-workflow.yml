@@ -400,7 +400,7 @@ jobs:
           WHEEL_COUNT=$(find artifacts -name "*.whl" | wc -l)
           if [ "$WHEEL_COUNT" -gt 0 ]; then
             echo "Found $WHEEL_COUNT wheel(s) to publish to PyPI Experimental"
-
+            python3 -m pip install twine
             python3 -m twine upload --repository-url https://artifacts.aws.cloud.mov.ai/repository/pypi-experimental/ \
             --username "${{ secrets.nexus_publisher_user }}" \
             --password "${{ secrets.nexus_publisher_password }}" \
