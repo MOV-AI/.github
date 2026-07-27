@@ -29,7 +29,7 @@ See [docs/workflows.md](docs/workflows.md) for detailed specifications, inputs, 
 |----------|---------|
 | **Build and Pack FE Packages** | Builds and packages frontend packages for the MOV.AI platform |
 | **Build and Pack Npm Components** | Builds and packages npm components for the MOV.AI platform |
-| **Build and Pack ROS Packages** | Builds and publishes ROS packages (Debian) for ROS 1 (Noetic) and ROS 2 (Humble) |
+| **Build and Pack ROS Packages** | Builds and publishes ROS packages (Debian) for ROS 1 (Noetic) and ROS 2 (Humble). Automatically builds and publishes Python wheel packages for ROS packages containing a setup.py file. |
 | **Build and Validate Platform** | Builds and validates the MOV.AI platform |
 | **Build Docker Images** | Builds and publishes Docker images with static analysis, Snyk scanning, and optional multi-platform support |
 | **Build Packer Images** | Builds ISO images for CICD using Packer, QEMU/KVM/Libvirt, and cloud-init |
