@@ -481,7 +481,12 @@ jobs:
           REGISTRY_USER="${{ secrets.registry_user }}"
           REGISTRY_PASS="${{ secrets.registry_password }}"
 
-          SOURCE_TAG="${REGISTRY}/ci/${BACKEND_IMAGE}"
+          SOURCE_IMAGE="qa"
+          if [[ "${{ inputs.robot_config_download }}" == "true"]]; then
+            SOURCE_IMAGE="ci"
+          fi
+
+          SOURCE_TAG="${REGISTRY}/${SOURCE_IMAGE}/${BACKEND_IMAGE}"
           TARGET_TAG_REGISTRY="${REGISTRY}/qa/${BACKEND_IMAGE}"
           TARGET_TAG_MID_REGISTRY="${MID_REGISTRY}/qa/${BACKEND_IMAGE}"
 
