@@ -482,7 +482,7 @@ jobs:
           REGISTRY_PASS="${{ secrets.registry_password }}"
 
           SOURCE_IMAGE="qa"
-          if [[ "${{ inputs.robot_config_download }}" == "true"]]; then
+          if [[ "${{ inputs.robot_config_download }}" == "true" ]]; then
             SOURCE_IMAGE="ci"
           fi
 
