@@ -1597,7 +1597,7 @@ jobs:
             run_type="lr"
           fi
 
-          local_manager_prefix="ip-$run_type-${{ inputs.cluster }}-${{ inputs.product_name }}-$branch-r${{ GITHUB_RUN_ID }}"
+          local_manager_prefix="ip-$run_type-${{ inputs.cluster }}-${{ inputs.product_name }}-$branch-r${{ github.run_id }}"
 
           tf_state="${{ inputs.cluster }}-sim-$local_manager_prefix"
           echo "simul_prefix=${local_manager_prefix}" | tee >> $GITHUB_OUTPUT
