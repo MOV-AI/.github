@@ -2481,7 +2481,7 @@ jobs:
           artifact_name: sbom-${{ matrix.image_target.name }}
 
   Publish:
-    needs: [Validate-boostrap-configs, Install-Simulator-Robot, Publish-Prepare, Generate-SBOM]
+    needs: [Validate-boostrap-configs, Install-Simulator-Robot, Validation-Simulator-Tests, Publish-Prepare, Generate-SBOM]
     if: ${{ always() }}
     runs-on: integration-pipeline
     outputs:
