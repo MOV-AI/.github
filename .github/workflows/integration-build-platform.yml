@@ -443,7 +443,7 @@ jobs:
       slack_channel: ${{ inputs.slack_channel }}
 
   Validations-Finish:
-    needs: [Build-backend, Validation-UI-Tests, Validation-Install-Tests, Validation-API-Tests, Validation-Flow-Tests]
+    needs: [Build-backend, Validation-Standalone-Tests]
     runs-on: ubuntu-22.04
     outputs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
