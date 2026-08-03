@@ -167,7 +167,7 @@ jobs:
         password: ${{secrets.registry_password}}
     outputs:
       slack_thread_id: ${{ steps.send-message.outputs.ts }}
-      fleet_tests_list: ${{ steps.extract_fleet_tests_list.outputs.fleet_tests_list }}
+      fleet_tests_list: ${{ steps.extract_test_lists.outputs.fleet_tests_list }}
       standalone_tests_list: ${{ steps.extract_test_lists.outputs.standalone_tests_list }}
       default_pytest_args: ${{ steps.default_pytest_args.outputs.args }}
     steps:
