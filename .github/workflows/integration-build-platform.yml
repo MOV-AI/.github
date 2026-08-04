@@ -584,6 +584,8 @@ jobs:
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
         id: resolve_simulator_apt_packages
         shell: bash
+        env:
+          ROS_DISTRO: ${{ env.DISTRO }}
         run: |
           set -e
           . .ci-venv/bin/activate
