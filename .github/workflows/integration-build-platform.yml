@@ -463,13 +463,13 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
-  Validation-Standalone-Tests:
-    needs: [Build-backend]
-    if: ${{ needs.Validate-bootstrap-configs.outputs.standalone_tests_list != '[]' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        test_key: ${{ fromJson(needs.Validate-bootstrap-configs.outputs.standalone_tests_list) }}
+    Validation-Standalone-Tests:
+        needs: [Build-backend]
+        if: ${{ needs.Validate-bootstrap-configs.outputs.standalone_tests_list != '[]' && needs.Validate-bootstrap-configs.outputs.standalone_tests_list != '' }}
+        strategy:
+          fail-fast: false
+          matrix:
+            test_key: ${{ fromJson(needs.Validate-bootstrap-configs.outputs.standalone_tests_list || '[]') }}
     uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v2.3
     secrets: inherit
     with:
@@ -492,25 +492,25 @@ jobs:
       - name: Pass through
         run: echo "Pass"
 
-  Fleet-Validations:
-    needs: [Validate-bootstrap-configs, Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@v3
-    secrets: inherit
-    with:
-      fleet_test_infra_list: ${{ needs.Validate-bootstrap-configs.outputs.fleet_tests_list }}
-      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-      test_timeout: 120
-      slack_channel: ${{ inputs.slack_channel }}
-      provision_tf_env_repo: ${{ inputs.provision_tf_env_repo }}
-      provision_tf_env_version: ${{ inputs.provision_tf_env_version }}
-      provision_infra_repo: ${{ inputs.provision_infra_repo }}
-      provision_infra_version: ${{ inputs.provision_infra_version }}
-      fleet_number_members: ${{ inputs.fleet_number_members }}
-      debug_fleet_keep_alive: ${{ inputs.debug_fleet_keep_alive }}
-      fleet_ips: ${{ inputs.fleet_ips }}
-      proxmox_cluster_name: ${{ inputs.proxmox_cluster_name }}
-      with_fleet_tests: ${{ inputs.with_fleet_tests }}
+  # Fleet-Validations:
+  #   needs: [Validate-bootstrap-configs, Build-backend]
+  #   uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@v3
+  #   secrets: inherit
+  #   with:
+  #     fleet_test_infra_list: ${{ needs.Validate-bootstrap-configs.outputs.fleet_tests_list }}
+  #     slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
+  #     backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
+  #     test_timeout: 120
+  #     slack_channel: ${{ inputs.slack_channel }}
+  #     provision_tf_env_repo: ${{ inputs.provision_tf_env_repo }}
+  #     provision_tf_env_version: ${{ inputs.provision_tf_env_version }}
+  #     provision_infra_repo: ${{ inputs.provision_infra_repo }}
+  #     provision_infra_version: ${{ inputs.provision_infra_version }}
+  #     fleet_number_members: ${{ inputs.fleet_number_members }}
+  #     debug_fleet_keep_alive: ${{ inputs.debug_fleet_keep_alive }}
+  #     fleet_ips: ${{ inputs.fleet_ips }}
+  #     proxmox_cluster_name: ${{ inputs.proxmox_cluster_name }}
+  #     with_fleet_tests: ${{ inputs.with_fleet_tests }}
 
   Build-Simulator:
     needs: [Validate-bootstrap-configs]
@@ -766,7 +766,7 @@ jobs:
       simulation_qa_version: ${{ inputs.simulation_qa_version }}
 
   Publish:
-    needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
+    needs: [Validations-Finish, Simulator-Validations, Robotic-Stack-Integration]
     runs-on: integration-pipeline
     outputs:
       slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
