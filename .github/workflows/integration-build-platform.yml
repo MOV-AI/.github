@@ -234,6 +234,9 @@ jobs:
               if isinstance(test_config, dict) and 'standalone' in test_config and test_name != 'simul_flow_tests'
           ]
 
+          print(f'Fleet tests: {json.dumps(fleet_tests)}')
+          print(f'Standalone tests: {json.dumps(standalone_tests)}')
+
           with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
               fh.write(f'fleet_tests_list={json.dumps(fleet_tests)}\n')
               fh.write(f'standalone_tests_list={json.dumps(standalone_tests)}\n')
