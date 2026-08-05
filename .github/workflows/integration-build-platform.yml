@@ -464,7 +464,7 @@ jobs:
           docker image prune --all -f
 
   Validation-Standalone-Tests:
-    needs: [Build-backend]
+    needs: [Build-backend, Validation-Standalone-Tests]
     if: ${{ needs.Validate-bootstrap-configs.outputs.standalone_tests_list != '[]' && needs.Validate-bootstrap-configs.outputs.standalone_tests_list != '' }}
     strategy:
       fail-fast: false
