@@ -324,7 +324,15 @@ jobs:
           . test-venv/bin/activate
           pip install buildkite-test-collector
           echo "python3 -m pytest ${{ inputs.pytest_args}}"
-          python3 -m pytest ${{ inputs.pytest_args}} --junit-xml=junit.xml | tee pytest-output.log
+
+          if [[ -z "$test_set" || "$test_set" == "None" ]]; then
+            PYTEST_ARGS=$(echo "$PYTEST_ARGS" | sed 's/-m "\$test_set"[[:space:]]*//')
+          fi
+
+          echo "python3 -m pytest $PYTEST_ARGS --junit-xml=junit.xml"
+
+          python3 -m pytest $PYTEST_ARGS --junit-xml=junit.xml | tee pytest-output.log
+
           deactivate
 
       - name: Publish test results trunk
