@@ -709,7 +709,7 @@ jobs:
 
   Simulator-Validations:
     needs: [Build-Simulator, Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/DP-2014_standalone-tests
     secrets: inherit
     with:
       test_infra_key: "simul_flow_tests"
