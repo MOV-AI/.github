@@ -470,7 +470,7 @@ jobs:
       fail-fast: false
       matrix:
         test_key: ${{ fromJson(needs.Validate-bootstrap-configs.outputs.standalone_tests_list || '[]') }}
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v2.3
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/DP-2014_standalone-tests
     secrets: inherit
     with:
       collect_deployable_artifacts: ${{ matrix.test_key == 'ui_tests' || matrix.test_key == 'install_tests' }}
@@ -709,7 +709,7 @@ jobs:
 
   Simulator-Validations:
     needs: [Build-Simulator, Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/DP-2014_standalone-tests
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
     secrets: inherit
     with:
       test_infra_key: "simul_flow_tests"
