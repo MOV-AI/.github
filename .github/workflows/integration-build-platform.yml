@@ -463,13 +463,13 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
-    Validation-Standalone-Tests:
-        needs: [Build-backend]
-        if: ${{ needs.Validate-bootstrap-configs.outputs.standalone_tests_list != '[]' && needs.Validate-bootstrap-configs.outputs.standalone_tests_list != '' }}
-        strategy:
-          fail-fast: false
-          matrix:
-            test_key: ${{ fromJson(needs.Validate-bootstrap-configs.outputs.standalone_tests_list || '[]') }}
+  Validation-Standalone-Tests:
+    needs: [Build-backend]
+    if: ${{ needs.Validate-bootstrap-configs.outputs.standalone_tests_list != '[]' && needs.Validate-bootstrap-configs.outputs.standalone_tests_list != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        test_key: ${{ fromJson(needs.Validate-bootstrap-configs.outputs.standalone_tests_list || '[]') }}
     uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v2.3
     secrets: inherit
     with:
