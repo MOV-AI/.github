@@ -324,7 +324,6 @@ jobs:
           . test-venv/bin/activate
           pip install buildkite-test-collector
           echo "python3 -m pytest ${{ inputs.pytest_args}}"
-          echo "test_set: $test_set"
 
           PYTEST_ARGS="${{ inputs.pytest_args }}"
 
