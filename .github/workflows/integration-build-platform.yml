@@ -477,7 +477,7 @@ jobs:
       test_infra_key: ${{ matrix.test_key }}
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-      test_timeout: ${{ matrix.test_key == 'ui_tests' && 120 || 30 }}
+      test_timeout: ${{ (matrix.test_key == 'ui_tests' || matrix.test_key == 'flow_initiator') && 120 || 30 }}
       pytest_args: ${{ matrix.test_key == 'install_tests' && '-k "$test_set" --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --jira_report' || needs.Validate-bootstrap-configs.outputs.default_pytest_args }}
       xray_label: ${{ matrix.test_key == 'ui_tests' && 'UI_Automation' || '' }}
       slack_channel: ${{ inputs.slack_channel }}
