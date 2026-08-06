@@ -320,6 +320,7 @@ jobs:
           movai_user: ${{ steps.install.outputs.movai_user }}
           movai_pwd: ${{ steps.install.outputs.movai_pwd }}
           test_set: ${{ steps.infra_tests_setup.outputs.test_set }}
+          test_args: ${{ steps.infra_tests_setup.outputs.test_args }}
         run: |
           . test-venv/bin/activate
           pip install buildkite-test-collector
