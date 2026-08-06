@@ -331,6 +331,10 @@ jobs:
             PYTEST_ARGS=$(echo "$PYTEST_ARGS" | sed -E 's/[[:space:]]*-m[[:space:]]+[^[:space:]]+//')
           fi
 
+          if [[ -n "${test_args:-}" ]]; then
+            PYTEST_ARGS="$test_args $PYTEST_ARGS"
+          fi
+
           echo "python3 -m pytest $PYTEST_ARGS --junit-xml=junit.xml"
           python3 -m pytest $PYTEST_ARGS --junit-xml=junit.xml
           deactivate
