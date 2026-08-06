@@ -244,17 +244,7 @@ jobs:
 
       - name: Pass through default pytest args
         id: default_pytest_args
-        shell: bash
-        run: |
-          echo "test_args='${test_args}'"
-          args="${DEFAULT_PYTEST_ARGS}"
-
-          if [[ -n "${test_args:-}" ]]; then
-            args="${test_args} ${DEFAULT_PYTEST_ARGS}"
-            echo "args=${args}"
-          fi
-
-          echo "args=${args}" >> "$GITHUB_OUTPUT"
+        run: echo "args=${DEFAULT_PYTEST_ARGS}" >> $GITHUB_OUTPUT
 
       - name: Stash component_artifacts
         uses: actions/upload-artifact@v7
