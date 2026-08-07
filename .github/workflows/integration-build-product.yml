@@ -1597,7 +1597,7 @@ jobs:
             run_type="lr"
           fi
 
-          local_manager_prefix="ip-$run_type-${{ inputs.cluster }}-${{ inputs.product_name }}-$branch"
+          local_manager_prefix="ip-$run_type-${{ inputs.cluster }}-${{ inputs.product_name }}-$branch-r${{ github.run_id }}"
 
           tf_state="${{ inputs.cluster }}-sim-$local_manager_prefix"
           echo "simul_prefix=${local_manager_prefix}" | tee >> $GITHUB_OUTPUT
@@ -1608,6 +1608,7 @@ jobs:
         if: ${{ inputs.with_simulation_tests }}
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
+        id: provision_vms
         run: |
           multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..1})
           node_list_str=${multiply_node::-1}
@@ -1633,6 +1634,7 @@ jobs:
 
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
           sudo chmod 600 ~/.ssh/ci_priv_key.pem
+          echo "provision_status=success" >> $GITHUB_OUTPUT
 
       - name: Gather Terraform outputs
         if: ${{ inputs.with_simulation_tests }}
@@ -1640,7 +1642,12 @@ jobs:
         id: infra_outputs
         shell: bash
         run: |
-          ip=$(terraform output manager_ip_address)
+          set -e
+          if ! ip=$(terraform output manager_ip_address 2>&1); then
+            echo "ERROR: Failed to get terraform output - manager_ip_address. Terraform state may be corrupted."
+            echo "IP retrieval failed" >&2
+            exit 1
+          fi
           user=$(terraform output user)
           echo "host_ip=$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
           echo "host_user=$(echo $user | sed "s;\";;g")" >> $GITHUB_OUTPUT
@@ -1660,7 +1667,7 @@ jobs:
           '
 
       - name: Prepare Devops provisioning slack message
-        if: ${{ inputs.with_simulation_tests && failure() && github.event_name != 'pull_request' }}
+        if: ${{ inputs.with_simulation_tests && (failure() || steps.provision_vms.outcome == 'failure' || steps.infra_outputs.outcome == 'failure') && github.event_name != 'pull_request' }}
         id: pre_slack_infra
         run: |
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is being impacted by an infrastructural issue. \
@@ -1669,7 +1676,7 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
 
       - name: Slack message failure
-        if: ${{ inputs.with_simulation_tests  && failure() && github.event_name != 'pull_request' }}
+        if: ${{ inputs.with_simulation_tests && (failure() || steps.provision_vms.outcome == 'failure' || steps.infra_outputs.outcome == 'failure') && github.event_name != 'pull_request' && steps.pre_slack_infra.outcome == 'success' }}
         uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
@@ -2474,7 +2481,7 @@ jobs:
           artifact_name: sbom-${{ matrix.image_target.name }}
 
   Publish:
-    needs: [Validate-boostrap-configs, Install-Simulator-Robot, Publish-Prepare, Generate-SBOM]
+    needs: [Validate-boostrap-configs, Install-Simulator-Robot, Validation-Simulator-Tests, Publish-Prepare, Generate-SBOM]
     if: ${{ always() }}
     runs-on: integration-pipeline
     outputs:
@@ -2689,11 +2696,25 @@ jobs:
         id: pre_slack
         shell: bash
         run: |
+          if [ "${{ needs.Validation-Simulator-Tests.result }}" = "failure" ]; then
+            STATUS_EMOJI=":x:"
+            STATUS_TEXT="failed due to simulation tests failure"
+          elif [ "${{ needs.Publish-Prepare.result }}" = "failure" ]; then
+            STATUS_EMOJI=":x:"
+            STATUS_TEXT="failed during publish preparation"
+          elif [ "${{ needs.Publish-Prepare.result }}" = "skipped" ] && [ "${{ needs.Validation-Simulator-Tests.result }}" = "failure" ]; then
+            STATUS_EMOJI=":x:"
+            STATUS_TEXT="failed (Validation-Simulator-Tests failed, skipping publish)"
+          else
+            STATUS_EMOJI=":white_check_mark:"
+            STATUS_TEXT="is stable"
+          fi
 
           if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
-            MESSAGE=":white_check_mark::waxing_crescent_moon: LONG RUN: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is stable (Cluster: ${{ inputs.cluster }}) :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            EMOJI_PREFIX=":waxing_crescent_moon:"
+            MESSAGE="${STATUS_EMOJI}${EMOJI_PREFIX} LONG RUN: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) ${STATUS_TEXT} (Cluster: ${{ inputs.cluster }}) :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           else
-            MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            MESSAGE="${STATUS_EMOJI} CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) ${STATUS_TEXT} :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           fi
           echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
 
