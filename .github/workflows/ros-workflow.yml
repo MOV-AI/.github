@@ -410,6 +410,22 @@ jobs:
             echo "No wheels found, skipping PyPI publish"
           fi
 
+    - name: Publish wheels to PyPI Integration
+      if: ${{ inputs.deploy == 'true' }}
+      shell: bash
+      run: |
+          WHEEL_COUNT=$(find artifacts -name "*.whl" | wc -l)
+          if [ "$WHEEL_COUNT" -gt 0 ]; then
+            echo "Found $WHEEL_COUNT wheel(s) to publish to PyPI Integration"
+            python3 -m pip install twine
+            python3 -m twine upload --repository-url https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/ \
+            --username "${{ secrets.nexus_publisher_user }}" \
+            --password "${{ secrets.nexus_publisher_password }}" \
+            artifacts/*.whl
+          else
+            echo "No wheels found, skipping PyPI publish"
+          fi
+
   Post-build-static-analysis:
     if: ${{ inputs.release == 'false' && needs.Check-static-analysis-config.outputs.pre_commit_exists == 'true' }}
     needs: [Check-static-analysis-config, Build]
@@ -781,18 +797,3 @@ jobs:
                 exit 1
               fi
             done
-
-    - name: Publish wheels to PyPI Integration
-      shell: bash
-      run: |
-          WHEEL_COUNT=$(find artifacts -name "*.whl" | wc -l)
-          if [ "$WHEEL_COUNT" -gt 0 ]; then
-            echo "Found $WHEEL_COUNT wheel(s) to publish to PyPI Integration"
-            python3 -m pip install twine
-            python3 -m twine upload --repository-url https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/ \
-            --username "${{ secrets.nexus_publisher_user }}" \
-            --password "${{ secrets.nexus_publisher_password }}" \
-            artifacts/*.whl
-          else
-            echo "No wheels found, skipping PyPI publish"
-          fi
