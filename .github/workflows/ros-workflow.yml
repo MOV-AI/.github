@@ -47,7 +47,7 @@ on:
       ROS_BUILDTOOLS_TAG:
         required: false
         type: string
-        default: "3.0.11"
+        default: "3.0.12"
       FLOW_INITIATOR_TAG:
         required: false
         type: string
