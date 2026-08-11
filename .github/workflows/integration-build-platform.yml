@@ -592,6 +592,7 @@ jobs:
         run: |
           set -e
           . .ci-venv/bin/activate
+          mkdir -p /tmp/ci
           integration-pipeline get_install_list \
             --manifest_platform_base_key product_components.simulator_components.plugins
           SIMULATOR_APT_PACKAGES="$(tr '\n' ' ' < packages.apt | xargs)"
