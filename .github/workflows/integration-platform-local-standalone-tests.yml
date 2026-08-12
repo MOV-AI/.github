@@ -328,7 +328,7 @@ jobs:
 
           PYTEST_ARGS="${{ inputs.pytest_args }}"
 
-          if [[ -z "$test_set" || "$test_set" == "None" ]]; then
+          if [[ -z "$test_set" || "$test_set" == "'None'" ]]; then
             PYTEST_ARGS=$(echo "$PYTEST_ARGS" | sed -E 's/[[:space:]]*-m[[:space:]]+[^[:space:]]+//')
           fi
 
