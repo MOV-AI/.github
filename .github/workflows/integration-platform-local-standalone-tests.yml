@@ -324,26 +324,33 @@ jobs:
         run: |
           . test-venv/bin/activate
           pip install buildkite-test-collector
-          echo "python3 -m pytest ${{ inputs.pytest_args}}"
 
-          PYTEST_ARGS="${{ inputs.pytest_args }}"
+          # base cmd
+          PYTEST_CMD=(python3 -m pytest --junit-xml=junit.xml)
 
-          if [[ -z "$test_set" || "$test_set" == "None" ]]; then
-            PYTEST_ARGS=$(echo "$PYTEST_ARGS" | sed -E 's/[[:space:]]*-m[[:space:]]+[^[:space:]]+//')
+          if [[ "${{ inputs.test_infra_key }}" == "install_tests" ]]; then
+              PYTEST_CMD+=(--installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --jira_report)
+
+              if [[ -n "$test_set" && "$test_set" != "None" ]]; then
+                  PYTEST_CMD+=(-k "$test_set")
+              fi
+          else
+              # default
+              PYTEST_CMD+=(--movai-ip "$host_ip" --movai-user "$movai_user" --movai-pw "$movai_pwd")
+
+              if [[ -n "$test_set" && "$test_set" != "None" ]]; then
+                  PYTEST_CMD+=(-m "$test_set")
+              fi
           fi
 
-          if [[ -n "$test_set" && "$test_set" != "None" ]]; then
-              PYTEST_ARGS=${PYTEST_ARGS/-m "$test_set"/-m "\"$test_set\""}
-          fi
-
-          echo "$test_args"
-
+          # append test_args if exist
           if [[ -n "$test_args" && "$test_args" != "None" ]]; then
-              PYTEST_ARGS="$test_args $PYTEST_ARGS"
+              PYTEST_CMD+=($test_args)
           fi
 
-          echo "python3 -m pytest $PYTEST_ARGS --junit-xml=junit.xml"
-          python3 -m pytest $PYTEST_ARGS --junit-xml=junit.xml
+          echo "exec: ${PYTEST_CMD[@]}"
+          "${PYTEST_CMD[@]}"
+
           deactivate
 
       - name: Publish test results trunk
