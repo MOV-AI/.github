@@ -154,7 +154,6 @@ env:
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.2.0-3"
   ARTIFACTS_RETENTION_DAYS: 15
-  DEFAULT_PYTEST_ARGS: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
   DEPENDENCY_TRACK_URL: "https://sbom.es.mov.ai"
   HARBOR_URL: "https://registry.cloud.mov.ai/"
 jobs:
@@ -169,7 +168,6 @@ jobs:
       slack_thread_id: ${{ steps.send-message.outputs.ts }}
       fleet_tests_list: ${{ steps.extract_test_lists.outputs.fleet_tests_list }}
       standalone_tests_list: ${{ steps.extract_test_lists.outputs.standalone_tests_list }}
-      default_pytest_args: ${{ steps.default_pytest_args.outputs.args }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -241,10 +239,6 @@ jobs:
               fh.write(f'fleet_tests_list={json.dumps(fleet_tests)}\n')
               fh.write(f'standalone_tests_list={json.dumps(standalone_tests)}\n')
           "
-
-      - name: Pass through default pytest args
-        id: default_pytest_args
-        run: echo "args=${DEFAULT_PYTEST_ARGS}" >> $GITHUB_OUTPUT
 
       - name: Stash component_artifacts
         uses: actions/upload-artifact@v7
@@ -478,7 +472,6 @@ jobs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: ${{ (matrix.test_key == 'ui_tests' || matrix.test_key == 'flow_initiator') && 120 || 30 }}
-      pytest_args: ${{ matrix.test_key == 'install_tests' && '-k "$test_set" --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --jira_report' || needs.Validate-bootstrap-configs.outputs.default_pytest_args }}
       xray_label: ${{ matrix.test_key == 'ui_tests' && 'UI_Automation' || '' }}
       slack_channel: ${{ inputs.slack_channel }}
 
