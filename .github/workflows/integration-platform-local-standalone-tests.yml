@@ -158,7 +158,7 @@ jobs:
 
           echo "tests_dir=${tests_dir}" >> $GITHUB_OUTPUT
           echo "jira_report=${jira_report}" >> $GITHUB_OUTPUT
-          echo "test_set='$test_set'" >> $GITHUB_OUTPUT
+          echo "test_set=${test_set}" >> $GITHUB_OUTPUT
           echo "platform_version=${platform_version}" >> $GITHUB_OUTPUT
           echo "test_args=${test_args}" >> $GITHUB_OUTPUT
           deactivate
@@ -328,8 +328,12 @@ jobs:
 
           PYTEST_ARGS="${{ inputs.pytest_args }}"
 
-          if [[ -z "$test_set" || "$test_set" == "'None'" ]]; then
+          if [[ -z "$test_set" || "$test_set" == "None" ]]; then
             PYTEST_ARGS=$(echo "$PYTEST_ARGS" | sed -E 's/[[:space:]]*-m[[:space:]]+[^[:space:]]+//')
+          fi
+
+          if [[ -n "$test_set" && "$test_set" != "None" ]]; then
+              PYTEST_ARGS=${PYTEST_ARGS/-m "$test_set"/-m "\"$test_set\""}
           fi
 
           echo "$test_args"
