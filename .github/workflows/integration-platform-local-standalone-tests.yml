@@ -329,6 +329,13 @@ jobs:
           # base cmd
           PYTEST_CMD=(python3 -m pytest --junit-xml=junit.xml)
 
+          # append test_args if exist
+          if [[ -n "$test_args" && "$test_args" != "None" ]]; then
+              PYTEST_CMD+=($test_args)
+          fi
+
+          PYTEST_CMD+=(--junit-xml=junit.xml)
+
           if [[ "${{ inputs.test_infra_key }}" == "install_tests" ]]; then
               PYTEST_CMD+=(--installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --jira_report)
 
@@ -342,11 +349,6 @@ jobs:
               if [[ -n "$test_set" && "$test_set" != "None" ]]; then
                   PYTEST_CMD+=(-m "$test_set")
               fi
-          fi
-
-          # append test_args if exist
-          if [[ -n "$test_args" && "$test_args" != "None" ]]; then
-              PYTEST_CMD+=($test_args)
           fi
 
           echo "exec: ${PYTEST_CMD[@]}"
