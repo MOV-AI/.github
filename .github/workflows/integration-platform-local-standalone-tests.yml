@@ -25,8 +25,9 @@ on:
         type: number
         default: 60
       pytest_args:
-        required: true
+        required: false
         type: string
+        default: ''
       xray_label:
         required: false
         type: string
