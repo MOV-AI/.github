@@ -25,8 +25,9 @@ on:
         type: number
         default: 60
       pytest_args:
-        required: true
+        required: false
         type: string
+        default: ''
       xray_label:
         required: false
         type: string
@@ -166,7 +167,7 @@ jobs:
           # setup tests venv in a step that is always executed
           python3 -m venv "${tests_dir}"/test-venv --clear
           . "${tests_dir}"/test-venv/bin/activate
-          pip install -r "${tests_dir}"/requirements.txt
+          pip install -r "${tests_dir}"/test-requirements.txt
           deactivate
 
       - name: Feature File Validation
@@ -320,11 +321,39 @@ jobs:
           movai_user: ${{ steps.install.outputs.movai_user }}
           movai_pwd: ${{ steps.install.outputs.movai_pwd }}
           test_set: ${{ steps.infra_tests_setup.outputs.test_set }}
+          test_args: ${{ steps.infra_tests_setup.outputs.test_args }}
         run: |
           . test-venv/bin/activate
           pip install buildkite-test-collector
-          echo "python3 -m pytest ${{ inputs.pytest_args}}"
-          python3 -m pytest ${{ inputs.pytest_args}} --junit-xml=junit.xml | tee pytest-output.log
+
+          # base cmd
+          PYTEST_CMD=(python3 -m pytest --junit-xml=junit.xml)
+
+          # append test_args if exist
+          if [[ -n "$test_args" && "$test_args" != "None" ]]; then
+              PYTEST_CMD+=($test_args)
+          fi
+
+          PYTEST_CMD+=(--junit-xml=junit.xml)
+
+          if [[ "${{ inputs.test_infra_key }}" == "install_tests" ]]; then
+              PYTEST_CMD+=(--installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --jira_report)
+
+              if [[ -n "$test_set" && "$test_set" != "None" ]]; then
+                  PYTEST_CMD+=(-k "$test_set")
+              fi
+          else
+              # default
+              PYTEST_CMD+=(--movai-ip "$host_ip" --movai-user "$movai_user" --movai-pw "$movai_pwd")
+
+              if [[ -n "$test_set" && "$test_set" != "None" ]]; then
+                  PYTEST_CMD+=(-m "$test_set")
+              fi
+          fi
+
+          echo "exec: ${PYTEST_CMD[@]}"
+          "${PYTEST_CMD[@]}"
+
           deactivate
 
       - name: Publish test results trunk
