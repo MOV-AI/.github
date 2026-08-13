@@ -327,7 +327,7 @@ jobs:
           pip install buildkite-test-collector
 
           # base cmd
-          PYTEST_CMD=(python3 -m pytest --junit-xml=junit.xml)
+          PYTEST_CMD=(python3 -m pytest)
 
           # append test_args if exist
           if [[ -n "$test_args" && "$test_args" != "None" ]]; then
