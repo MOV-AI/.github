@@ -166,7 +166,8 @@ jobs:
         password: ${{secrets.registry_password}}
     outputs:
       slack_thread_id: ${{ steps.send-message.outputs.ts }}
-      fleet_tests_list: ${{ steps.extract_fleet_tests_list.outputs.fleet_tests_list }}
+      fleet_tests_list: ${{ steps.extract_test_lists.outputs.fleet_tests_list }}
+      standalone_tests_list: ${{ steps.extract_test_lists.outputs.standalone_tests_list }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -210,22 +211,34 @@ jobs:
           mkdir component_artifacts
           cp ci_artifacts/* ./component_artifacts
 
-      - name: Extract fleet tests list
-        id: extract_fleet_tests_list
+      - name: Extract test lists
+        id: extract_test_lists
         run: |
-          FLEET_TESTS=$(python3 -c "
-          import yaml, json
+          python3 -c "
+          import yaml, json, os
           with open('product-manifest.yaml') as f:
               data = yaml.safe_load(f)
-          qa_config = data['product_components']['qa']
-          fleet_test_names = [
+          qa_config = data.get('product_components', {}).get('qa', {})
+
+          # Fleet tests
+          fleet_tests = [
               test_name for test_name, test_config in qa_config.items()
               if isinstance(test_config, dict) and 'fleet' in test_config
           ]
-          print(json.dumps(fleet_test_names))
-          ")
-          echo "fleet_tests_list=${FLEET_TESTS}" >> $GITHUB_OUTPUT
 
+          # Standalone tests (filtering out simul_flow_tests)
+          standalone_tests = [
+              test_name for test_name, test_config in qa_config.items()
+              if isinstance(test_config, dict) and 'standalone' in test_config and test_name != 'simul_flow_tests'
+          ]
+
+          print(f'Fleet tests: {json.dumps(fleet_tests)}')
+          print(f'Standalone tests: {json.dumps(standalone_tests)}')
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
+              fh.write(f'fleet_tests_list={json.dumps(fleet_tests)}\n')
+              fh.write(f'standalone_tests_list={json.dumps(standalone_tests)}\n')
+          "
 
       - name: Stash component_artifacts
         uses: actions/upload-artifact@v7
@@ -444,59 +457,26 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
-  Validation-UI-Tests:
-    needs: [Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
+  Validation-Standalone-Tests:
+    needs: [Validate-bootstrap-configs, Build-backend]
+    if: ${{ needs.Validate-bootstrap-configs.outputs.standalone_tests_list != '[]' && needs.Validate-bootstrap-configs.outputs.standalone_tests_list != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        test_key: ${{ fromJson(needs.Validate-bootstrap-configs.outputs.standalone_tests_list || '[]') }}
+    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@feat/DP-2014_standalone-tests
     secrets: inherit
     with:
-      collect_deployable_artifacts: true
-      test_infra_key: "ui_tests"
+      collect_deployable_artifacts: ${{ matrix.test_key == 'ui_tests' || matrix.test_key == 'install_tests' }}
+      test_infra_key: ${{ matrix.test_key }}
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-      test_timeout: 120
-      pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd --cucumberjson=./results.json'
-      xray_label: "UI_Automation"
-      slack_channel: ${{ inputs.slack_channel }}
-
-  Validation-Install-Tests:
-    needs: [Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
-    secrets: inherit
-    with:
-      collect_deployable_artifacts: true
-      test_infra_key: "install_tests"
-      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-      test_timeout: 30
-      pytest_args: '-k "$test_set" --installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../basic-standalone-noetic.json.ci" --jira_report'
-      slack_channel: ${{ inputs.slack_channel }}
-
-  Validation-API-Tests:
-    needs: [Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
-    secrets: inherit
-    with:
-      test_infra_key: "api_tests"
-      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-      test_timeout: 30
-      pytest_args: '--movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
-      slack_channel: ${{ inputs.slack_channel }}
-
-  Validation-Flow-Tests:
-    needs: [Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
-    secrets: inherit
-    with:
-      test_infra_key: "flow_tests"
-      slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
-      backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
-      test_timeout: 30
-      pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
+      test_timeout: ${{ (matrix.test_key == 'ui_tests' || matrix.test_key == 'flow_initiator') && 120 || 30 }}
+      xray_label: ${{ matrix.test_key == 'ui_tests' && 'UI_Automation' || '' }}
       slack_channel: ${{ inputs.slack_channel }}
 
   Validations-Finish:
-    needs: [Build-backend, Validation-UI-Tests, Validation-Install-Tests, Validation-API-Tests, Validation-Flow-Tests]
+    needs: [Build-backend, Validation-Standalone-Tests]
     runs-on: ubuntu-22.04
     outputs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
@@ -600,9 +580,12 @@ jobs:
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
         id: resolve_simulator_apt_packages
         shell: bash
+        env:
+          ROS_DISTRO: ${{ env.DISTRO }}
         run: |
           set -e
           . .ci-venv/bin/activate
+          mkdir -p /tmp/ci
           integration-pipeline get_install_list \
             --manifest_platform_base_key product_components.simulator_components.plugins
           SIMULATOR_APT_PACKAGES="$(tr '\n' ' ' < packages.apt | xargs)"
@@ -777,7 +760,7 @@ jobs:
       simulation_qa_version: ${{ inputs.simulation_qa_version }}
 
   Publish:
-    needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
+    needs: [Validations-Finish, Simulator-Validations, Robotic-Stack-Integration]
     runs-on: integration-pipeline
     outputs:
       slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
