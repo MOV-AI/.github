@@ -346,7 +346,7 @@ jobs:
               # default
               PYTEST_CMD+=(--movai-ip "$host_ip" --movai-user "$movai_user" --movai-pw "$movai_pwd")
 
-              if [[ -n "$test_set" && "$test_set" != "None" ]]; then
+              if [[ -n "$test_set" && "$test_set" != "None" && "${{ inputs.test_infra_key }}" != "ui_tests" ]]; then
                   PYTEST_CMD+=(-m "$test_set")
               fi
           fi
