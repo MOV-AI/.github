@@ -58,13 +58,13 @@ env:
   GITHUB_API_USR: "OttoMation-Movai"
   USERSPACE_FOLDER_PATH: "$(pwd)/userspace"
   REMOTE_WORKSPACE_PATH: workspace
-  CI_INTEGRATION_CONTAINER_VERSION: "registry.lis.mov.ai/qa/ci-tools:4.1.0.3"
+  CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.1.0.3"
   CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
   CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_access_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_access_key }}
   AWS_DEFAULT_REGION: "us-east-1"
-  REGISTRY: registry.lis.mov.ai
+  REGISTRY: registry.cloud.mov.ai
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.2.0-3"
   PROVISION_INFRA_DIR: "provision_scripts"
