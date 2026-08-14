@@ -61,7 +61,7 @@ on:
       docker_simulator_registry:
         required: false
         type: string
-        default: "registry.lis.mov.ai"
+        default: "registry.cloud.mov.ai"
         description: "Registry to pull images during simulation tests. Should be running in the lab optimal performance, but can be overridden for testing purposes"
       use_project_data_viewer:
         required: false
