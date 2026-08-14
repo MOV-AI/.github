@@ -82,7 +82,7 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   AWS_DEFAULT_REGION: "us-east-1"
-  REGISTRY: registry.lis.mov.ai
+  REGISTRY: registry.cloud.mov.ai
   MID_REGISTRY: registry.hel.mov.ai
   USERSPACE_FOLDER_PATH: /opt/userspace
   REMOTE_WORKSPACE_PATH: workspace
