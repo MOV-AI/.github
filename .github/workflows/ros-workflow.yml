@@ -73,7 +73,7 @@ on:
         type: string
       cluster:
         required: false
-        default: "mary"
+        default: "any"
         type: string
       debug_component_tests_keep_alive:
         required: false
@@ -457,9 +457,42 @@ jobs:
           python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ inputs.MOBTEST_VERSION }} --ignore-installed
           mobtest proj /opt/ros/${{ matrix.distro }}/share/
 
-  Package-Stack-Tests:
+  Select-Simtest-Node:
     if: ${{ always() && inputs.release == 'false' && inputs.deploy == 'true' && inputs.run_stack_tests && needs.Build.result == 'success' && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
     needs: [Build,Post-build-static-analysis]
+    runs-on: ubuntu-22.04
+    outputs:
+      resolved_cluster: ${{ steps.select_sim_cluster.outputs.resolved_cluster }}
+    steps:
+      - name: Checkout workflow scripts repository
+        uses: actions/checkout@v6
+        with:
+          repository: MOV-AI/.github
+          ref: v3
+          path: .github-workflows
+          token: ${{ secrets.gh_token }}
+
+      - name: Select simulation cluster
+        id: select_sim_cluster
+        shell: bash
+        run: |
+          set -e
+          selected_cluster="${{ inputs.cluster }}"
+          if [[ "$selected_cluster" == "any" || -z "$selected_cluster" ]]; then
+            selector_script=".github-workflows/.github/scripts/select_gpu_free_node.sh"
+            selected_cluster="$(bash "$selector_script")"
+          fi
+
+          if [[ -z "$selected_cluster" ]]; then
+            echo "::error::Simulation cluster is empty. Provide cluster/sim_cluster or use 'any'."
+            exit 1
+          fi
+
+          echo "resolved_cluster=$selected_cluster" >> "$GITHUB_OUTPUT"
+
+  Package-Stack-Tests:
+    if: ${{ always() && inputs.release == 'false' && inputs.deploy == 'true' && inputs.run_stack_tests && needs.Build.result == 'success' && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
+    needs: [Build,Post-build-static-analysis,Select-Simtest-Node]
     uses: MOV-AI/.github/.github/workflows/integration-build-robotics-component.yml@v2.3
     with:
       vs_product_name: ${{ inputs.vs_product_name }}
@@ -468,7 +501,7 @@ jobs:
       test_repo_name: ${{ inputs.test_repo_name }}
       test_set: ${{ inputs.test_set }}
       test_version: ${{ inputs.test_version }}
-      cluster: ${{ inputs.cluster }}
+      cluster: ${{ needs.Select-Simtest-Node.outputs.resolved_cluster }}
       debug_component_tests_keep_alive: ${{ inputs.debug_component_tests_keep_alive }}
     secrets: inherit
 
