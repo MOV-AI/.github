@@ -78,7 +78,7 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   AWS_DEFAULT_REGION: "us-east-1"
   REGISTRY: registry.cloud.mov.ai
-  SIM_MIRROR_REGISTRY: registry.cloud.mov.ai
+  SIM_MIRROR_REGISTRY: registry.lis.mov.ai
   USERSPACE_FOLDER_PATH: /opt/userspace
   REMOTE_WORKSPACE_PATH: workspace
   SIMULATION_ID: CI
