@@ -507,6 +507,7 @@ jobs:
               movai-cli robots user "$robot" "$MOVAI_USER" "$MOVAI_PWD"
               movai-cli set "$robot" orchestrator.extra-env "RAISE_FLOW_VALIDATION_ERRORS=False"
               movai-cli restart "$robot"
+              sleep 60
             done
 
             execution_status=$?
