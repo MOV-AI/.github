@@ -588,7 +588,7 @@ jobs:
           mkdir -p /tmp/ci
           integration-pipeline get_install_list \
             --manifest_platform_base_key product_components.simulator_components.plugins
-          SIMULATOR_APT_PACKAGES="$(tr '\n' ' ' < packages.apt | xargs)"
+          SIMULATOR_APT_PACKAGES="$(tr '\n' ' ' < /tmp/ci/packages.apt | xargs)"
           echo "simulator_apt_packages=${SIMULATOR_APT_PACKAGES}" >> $GITHUB_OUTPUT
           echo "Resolved simulator apt packages count: $(wc -w <<< "${SIMULATOR_APT_PACKAGES}")"
           deactivate
