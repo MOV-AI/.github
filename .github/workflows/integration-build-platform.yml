@@ -609,7 +609,7 @@ jobs:
           platforms: linux/amd64
           file: docker/${{ env.DISTRO }}/Dockerfile-simulator
           push: true
-          tags: "${{ env.REGISTRY }}/qa/${{ steps.pre_build.outputs.image_name }}"
+          tags: "${{ env.REGISTRY }}/ci/${{ steps.pre_build.outputs.image_name }}"
           pull: true
           build-args: |
             BASE_IMAGE=${{ steps.pre_build.outputs.base_name }}
@@ -619,7 +619,7 @@ jobs:
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.generate_sbom }}
         uses: MOV-AI/.github/.github/actions/attach-cyclonedx-sbom@v3
         with:
-          image: ${{ env.REGISTRY }}/qa/${{ steps.pre_build.outputs.image_name }}
+          image: ${{ env.REGISTRY }}/ci/${{ steps.pre_build.outputs.image_name }}
           digest: ${{ steps.build_simulator.outputs.digest }}
           sbom_file: sbom-simulator.cyclonedx.json
           artifact_name: sbom-simulator
