@@ -747,7 +747,7 @@ jobs:
   Robotic-Stack-Integration:
     if: ${{ inputs.with_robotic_stack_tests }}
     needs: [Select-Simtest-Node, Simulator-Validations, Build-backend, Build-Simulator]
-    uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@feat/select_sim_cluster
+    uses: MOV-AI/.github/.github/workflows/integration-robotic-stack-tests.yml@hotfix/robotic-tests-failing
     secrets: inherit
     with:
       product_name: ${{ inputs.product_name }}
