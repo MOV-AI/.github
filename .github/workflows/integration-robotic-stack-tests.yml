@@ -486,6 +486,7 @@ jobs:
             export USERSPACE_FOLDER_PATH="${{ env.USERSPACE_FOLDER_PATH }}"
             sudo mkdir -p $USERSPACE_FOLDER_PATH/.git;sudo chown 1000:1000 $USERSPACE_FOLDER_PATH/ -Rf
             export PUBLIC_IP="$(hostname -I | cut -d " " -f1)"
+            export REGISTRY="${{ env.REGISTRY }}"
             export SIMULATION_ID="${{ env.SIMULATION_ID }}"
             export ROBOTNAME="ci_${{ inputs.product_name }}"
             rm -rf userspace
@@ -496,8 +497,7 @@ jobs:
             sudo chmod -R +r /etc/movai
 
             # Configure registry
-            REGISTRY_VALUE="${{ env.REGISTRY }}"
-            jq --arg registry "$REGISTRY_VALUE" '.registry = $registry' "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
+            jq --arg registry "$REGISTRY" '.registry = $registry' "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
 
             wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
             chmod +x ./QuickStart_$(cat quickstart_version).bash
