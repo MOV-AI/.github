@@ -496,7 +496,8 @@ jobs:
             sudo chmod -R +r /etc/movai
 
             # Configure registry
-            jq '.registry = "${{ env.REGISTRY }}"' "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
+            REGISTRY_VALUE="${{ env.REGISTRY }}"
+            jq --arg registry "$REGISTRY_VALUE" '.registry = $registry' "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
 
             wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
             chmod +x ./QuickStart_$(cat quickstart_version).bash
