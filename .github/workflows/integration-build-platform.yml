@@ -132,7 +132,7 @@ on:
       dependency_track_api_key:
         required: false
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "4.3.0.4"
+  CI_INTEGRATION_SCRIPTS_VERSION: "4.3.0.7"
   MOBTEST_VERSION: "0.0.7.2"
   PACKAGE_DEPLOYER_VERSION: "2.0.0.2"
   GITHUB_API_USR: "OttoMation-Movai"
