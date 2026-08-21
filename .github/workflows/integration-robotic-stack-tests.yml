@@ -75,7 +75,7 @@ on:
       minio_secret_key_id:
         required: true
 env:
-  CI_INTEGRATION_CONTAINER_VERSION: "registry.lis.mov.ai/qa/ci-tools:4.2.0.9"
+  CI_INTEGRATION_CONTAINER_VERSION: "registry.lis.mov.ai/qa/ci-tools:4.2.0.10"
   CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
   CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
   GITHUB_API_USR: "OttoMation-Movai"
