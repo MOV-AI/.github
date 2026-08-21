@@ -244,6 +244,37 @@ jobs:
             echo "product_distro_list=$PRODUCT_DISTRO_LIST" >> "$GITHUB_OUTPUT"
           fi
 
+  Select-Simtest-Node:
+    runs-on: ubuntu-22.04
+    outputs:
+      sim_cluster: ${{ steps.select_sim_cluster.outputs.sim_cluster }}
+    steps:
+      - name: Checkout workflow scripts repository
+        uses: actions/checkout@v6
+        with:
+          repository: MOV-AI/.github
+          ref: v3
+          path: .github-workflows
+          token: ${{ secrets.gh_token }}
+
+      - name: Select simulation cluster
+        id: select_sim_cluster
+        shell: bash
+        run: |
+          set -e
+          selected_cluster="${{ inputs.cluster }}"
+
+          if [[ "$selected_cluster" == "any" || -z "$selected_cluster" ]]; then
+            selected_cluster="$(bash .github-workflows/.github/scripts/select_gpu_free_node.sh)"
+          fi
+
+          if [[ -z "$selected_cluster" ]]; then
+            echo "::error::Simulation cluster is empty. Provide cluster or use 'any'."
+            exit 1
+          fi
+
+          echo "sim_cluster=$selected_cluster" >> "$GITHUB_OUTPUT"
+
   Validate-boostrap-configs:
     runs-on: integration-pipeline
     container:
@@ -991,13 +1022,14 @@ jobs:
           docker image prune --all -f
 
   Build-Simulator:
-    needs: [Validate-boostrap-configs, Build-Workspace]
+    needs: [Validate-boostrap-configs, Build-Workspace, Select-Simtest-Node]
     runs-on: integration-pipeline
     env:
       DISTRO: noetic
     outputs:
       image_name: "${{ steps.pre_build.outputs.push_name }}"
       skip_simulator: "${{ steps.pre_simulator_build.outputs.skip_simulator_build }}"
+      sim_cluster: "${{ needs.Select-Simtest-Node.outputs.sim_cluster }}"
       simulator_tests_agent_name: "${{ steps.post_simulator_build.outputs.simul_tests_infra }}"
       slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
       commit_hash: ${{ needs.Build-Workspace.outputs.commit_hash }}
@@ -1169,7 +1201,7 @@ jobs:
         run: |
           if [ "${{ inputs.with_simulation_tests }}" = "true" ];
           then
-            echo "simul_tests_infra=simul-${{ inputs.cluster }}-queuer" >> $GITHUB_OUTPUT
+            echo "simul_tests_infra=simul-${{ needs.Select-Simtest-Node.outputs.sim_cluster }}-queuer" >> $GITHUB_OUTPUT
           else
             echo "simul_tests_infra=integration-pipeline-${{ inputs.proxmox_cluster_name }}" >> $GITHUB_OUTPUT
           fi
@@ -1470,6 +1502,7 @@ jobs:
       simulation_test_publish_url: ${{ steps.minio_publish.outputs.publish_url || 'not executed' }}
     env:
       REGISTRY: ${{ inputs.docker_simulator_registry }}
+      RESOLVED_CLUSTER: ${{ needs.Build-Simulator.outputs.sim_cluster }}
     steps:
       - uses: rtCamp/action-cleanup@master
         if: ${{ inputs.with_simulation_tests }}
@@ -1597,9 +1630,9 @@ jobs:
             run_type="lr"
           fi
 
-          local_manager_prefix="ip-$run_type-${{ inputs.cluster }}-${{ inputs.product_name }}-$branch-r${{ github.run_id }}"
+          local_manager_prefix="ip-$run_type-${{ env.RESOLVED_CLUSTER }}-${{ inputs.product_name }}-$branch-r${{ github.run_id }}"
 
-          tf_state="${{ inputs.cluster }}-sim-$local_manager_prefix"
+          tf_state="${{ env.RESOLVED_CLUSTER }}-sim-$local_manager_prefix"
           echo "simul_prefix=${local_manager_prefix}" | tee >> $GITHUB_OUTPUT
           echo "tfstate_name=${tf_state}" | tee >> $GITHUB_OUTPUT
 
@@ -1610,10 +1643,10 @@ jobs:
         shell: bash
         id: provision_vms
         run: |
-          multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..1})
+          multiply_node=$(printf '"${{ env.RESOLVED_CLUSTER }}",%.0s' {1..1})
           node_list_str=${multiply_node::-1}
 
-          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ env.RESOLVED_CLUSTER }}_simul_bpg.tfvars'
 
           echo "proxmox_host_list=[$node_list_str]">>input.tfvars
           echo "fleet_peer_nr=0">>input.tfvars
@@ -1628,7 +1661,7 @@ jobs:
 
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
-          terraform init -backend-config="key=${{ inputs.cluster }}-ci-simul-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
+          terraform init -backend-config="key=${{ env.RESOLVED_CLUSTER }}-ci-simul-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
           terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
           terraform refresh $var_file_arg -var-file=input.tfvars
 
@@ -2219,7 +2252,7 @@ jobs:
           count=0
           exit_status=-1
           while [ $count -lt $attempts ]; do
-            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
+            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ env.RESOLVED_CLUSTER }}_simul_bpg.tfvars'
             terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars -var "fleet_peer_nr=0"
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
