@@ -479,8 +479,7 @@ jobs:
           set -e
           selected_cluster="${{ inputs.cluster }}"
           if [[ "$selected_cluster" == "any" || -z "$selected_cluster" ]]; then
-            selector_script=".github-workflows/.github/scripts/select_gpu_free_node.sh"
-            selected_cluster="$(bash "$selector_script")"
+            selected_cluster="$(bash .github-workflows/.github/scripts/select_gpu_free_node.sh -H https://marvin.mov.ai:8006 -u ${{ secrets.proxmox_ve_sim_username }} -p ${{ secrets.proxmox_ve_sim_password }})"
           fi
 
           if [[ -z "$selected_cluster" ]]; then
