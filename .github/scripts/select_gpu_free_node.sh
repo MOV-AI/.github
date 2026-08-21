@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Priority-ordered list of allowed nodes
-PRIORITY_NODES=("mary" "kx-01" "kx-02" "bb-8" "bb-9" "marvin")
+PRIORITY_NODES=("kx-01" "kx-02" "bb-8" "bb-9" "marvin" "mary")
 
 # Default values
 PVE_HOST="${PVE_HOST:-https://127.0.0.1:8006}"
