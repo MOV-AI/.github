@@ -33,7 +33,7 @@ on:
         default: "UNDEFINED"
       cluster:
         required: false
-        default: "mary"
+        default: "any"
         type: string
       duration:
         required: false
