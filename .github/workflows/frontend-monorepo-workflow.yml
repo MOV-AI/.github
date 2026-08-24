@@ -211,6 +211,26 @@ jobs:
       if: ${{ inputs.run_tests == 'true' }}
       run: ${{ inputs.pm }} run test:ci
 
+    - name: Collect debug artifacts
+      if: ${{ always() }}
+      shell: bash
+      run: |
+        rm -rf debug_artifacts
+        mkdir -p debug_artifacts
+
+        cp -r /github/home/.npm/_logs debug_artifacts/npm_logs 2>/dev/null || true
+        find . -type f \( -name "junit.xml" -o -name "results.json" -o -name "pytest-output.log" -o -name "*.log" -o -name "*.trx" \) -exec cp --parents {} debug_artifacts/ \; 2>/dev/null || true
+        cp -r artifacts debug_artifacts/ 2>/dev/null || true
+
+    - name: Upload debug artifacts
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: fe_debug_${{ github.run_id }}_${{ github.run_attempt }}
+        path: debug_artifacts
+        if-no-files-found: ignore
+        retention-days: 15
+
     - name: Create SonarCloud project and disable autoscan
       uses: MOV-AI/action-sonarcloud-proj-config@v1
       with:
@@ -289,7 +309,7 @@ jobs:
     - name: Archive binary
       uses: actions/upload-artifact@v4
       with:
-        name: packages
+        name: packages_${{ github.run_id }}_${{ github.run_attempt }}
         path: artifacts/*
         retention-days: 5
 
@@ -341,7 +361,7 @@ jobs:
     - name: Download a single artifact
       uses: actions/download-artifact@v4
       with:
-        name: packages
+        name: packages_${{ github.run_id }}_${{ github.run_attempt }}
         path: artifacts
 
     - name: Publish to Nexus ppa-testing
