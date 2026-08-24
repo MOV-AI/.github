@@ -460,7 +460,7 @@ jobs:
   Select-Simtest-Node:
     if: ${{ always() && inputs.release == 'false' && inputs.deploy == 'true' && inputs.run_stack_tests && needs.Build.result == 'success' && (needs.Post-build-static-analysis.result == 'success' || needs.Post-build-static-analysis.result == 'skipped') }}
     needs: [Build,Post-build-static-analysis]
-    runs-on: ubuntu-22.04
+    runs-on: pt-agent
     outputs:
       resolved_cluster: ${{ steps.select_sim_cluster.outputs.resolved_cluster }}
     steps:

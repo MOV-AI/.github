@@ -245,7 +245,7 @@ jobs:
           fi
 
   Select-Simtest-Node:
-    runs-on: ubuntu-22.04
+    runs-on: pt-agent
     outputs:
       sim_cluster: ${{ steps.select_sim_cluster.outputs.sim_cluster }}
     steps:
