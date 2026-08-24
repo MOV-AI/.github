@@ -483,7 +483,7 @@ jobs:
           fi
 
           if [[ -z "$selected_cluster" ]]; then
-            echo "::error::Simulation cluster is empty. Provide cluster/sim_cluster or use 'any'."
+            echo "::error::Simulation cluster is empty. Provide cluster or use 'any'."
             exit 1
           fi
 
