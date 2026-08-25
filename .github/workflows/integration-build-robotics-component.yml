@@ -20,6 +20,10 @@ on:
       test_set:
         required: true
         type: string
+      sim_cluster:
+        required: false
+        default: "any"
+        type: string
       cluster:
         required: false
         default: "mary"
@@ -75,8 +79,45 @@ env:
   SLACK_CHANNEL: "G0102LEV1CL"
 
 jobs:
+  Select-Simtest-Node:
+    runs-on: pt-agent
+    outputs:
+      sim_cluster: ${{ steps.select_sim_cluster.outputs.sim_cluster }}
+    steps:
+      - name: Checkout workflow scripts repository
+        uses: actions/checkout@v6
+        with:
+          repository: MOV-AI/.github
+          ref: v3
+          path: .github-workflows
+          token: ${{ secrets.auto_commit_pwd }}
+
+      - name: Select simulation cluster
+        id: select_sim_cluster
+        shell: bash
+        run: |
+          set -e
+          selected_cluster="${{ inputs.sim_cluster }}"
+          if [[ -z "$selected_cluster" ]]; then
+            selected_cluster="${{ inputs.cluster }}"
+          fi
+
+          if [[ "$selected_cluster" == "any" || -z "$selected_cluster" ]]; then
+            selected_cluster="$(bash .github-workflows/.github/scripts/select_gpu_free_node.sh -H https://marvin.mov.ai:8006 -u ${{ secrets.proxmox_ve_sim_username }} -p ${{ secrets.proxmox_ve_sim_password }})"
+          fi
+
+          if [[ -z "$selected_cluster" ]]; then
+            echo "::error::Simulation cluster is empty. Provide cluster/sim_cluster or use 'any'."
+            exit 1
+          fi
+
+          echo "sim_cluster=$selected_cluster" >> "$GITHUB_OUTPUT"
+
   Stack-tests:
-    runs-on: simul-${{ inputs.cluster }}-queuer
+    needs: [Select-Simtest-Node]
+    runs-on: simul-${{ needs.Select-Simtest-Node.outputs.sim_cluster }}-queuer
+    env:
+      RESOLVED_CLUSTER: ${{ needs.Select-Simtest-Node.outputs.sim_cluster }}
 
     steps:
       - name: Cleanup Workspace
@@ -156,9 +197,9 @@ jobs:
 
           run_type="ci"
 
-          local_manager_prefix="ip-$run_type-${{ inputs.cluster }}-${{ inputs.component_name }}-$branch"
+          local_manager_prefix="ip-$run_type-${{ env.RESOLVED_CLUSTER }}-${{ inputs.component_name }}-$branch"
 
-          tf_state="${{ inputs.cluster }}-sim-$local_manager_prefix"
+          tf_state="${{ env.RESOLVED_CLUSTER }}-sim-$local_manager_prefix"
           echo "tf_state = $tf_state"
           echo "local_manager_prefix = $local_manager_prefix"
 
@@ -170,10 +211,10 @@ jobs:
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
         run: |
-          multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..1})
+          multiply_node=$(printf '"${{ env.RESOLVED_CLUSTER }}",%.0s' {1..1})
           node_list_str=${multiply_node::-1}
 
-          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ env.RESOLVED_CLUSTER }}_simul_bpg.tfvars'
 
           echo "proxmox_host_list=[$node_list_str]">>input.tfvars
           echo "fleet_peer_nr=0">>input.tfvars
@@ -188,7 +229,7 @@ jobs:
 
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
-          terraform init -backend-config="key=${{ inputs.cluster }}-ci-simul-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
+          terraform init -backend-config="key=${{ env.RESOLVED_CLUSTER }}-ci-simul-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
           terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
           terraform refresh $var_file_arg -var-file=input.tfvars
 
@@ -512,7 +553,7 @@ jobs:
           attempts=3
           count=0
           while [ $count -lt $attempts ]; do
-            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
+            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ env.RESOLVED_CLUSTER }}_simul_bpg.tfvars'
             terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars -var "fleet_peer_nr=0"
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
