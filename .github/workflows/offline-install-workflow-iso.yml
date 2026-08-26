@@ -177,7 +177,6 @@ jobs:
   Test-ISO:
     runs-on: packer-runner
     needs: Build
-    if: ${{ inputs.deploy == 'true' && inputs.release == 'false' }}
     steps:
       - name: Checkout
         if: ${{ inputs.run_iso_tests == true }}
