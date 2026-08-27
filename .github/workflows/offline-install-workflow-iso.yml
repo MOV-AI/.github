@@ -35,6 +35,10 @@ on:
         type: boolean
         required: false
         default: false
+      run_iso_tests:
+        type: boolean
+        required: false
+        default: true
     secrets:
       auto_commit_user:
         required: true
@@ -170,9 +174,73 @@ jobs:
           docker rm -f $(docker ps -a -q) || true
           docker rmi -f $(docker images -q) || true
 
+      - name: Restore workspace permissions
+        if: always()
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+          sudo find "$GITHUB_WORKSPACE" -type d -exec chmod u+rwx {} \; || true
+          sudo find "$GITHUB_WORKSPACE" -type f -exec chmod u+rw {} \; || true
+
+  Test-ISO:
+    runs-on: packer-runner
+    needs: Build
+    steps:
+      - name: Checkout
+        if: ${{ inputs.run_iso_tests == true }}
+        uses: actions/checkout@v6
+
+      - name: Resolve test credentials
+        if: ${{ inputs.run_iso_tests == true }}
+        id: test_creds
+        shell: bash
+        run: |
+          iso_user=$(grep -E '^DEFAULT_USER=' config.cfg | head -n1 | cut -d '=' -f2- || true)
+          iso_password=$(grep -E '^DEFAULT_PASSWORD=' config.cfg | head -n1 | cut -d '=' -f2- || true)
+
+          if [ -z "$iso_user" ]; then
+            iso_user=devops
+          fi
+
+          if [ -z "$iso_password" ]; then
+            iso_password=password
+          fi
+
+          echo "iso_user=$iso_user" >> $GITHUB_OUTPUT
+          echo "iso_password=$iso_password" >> $GITHUB_OUTPUT
+
+      - name: Init packer ISO tests
+        if: ${{ inputs.run_iso_tests == true }}
+        run: |
+          packer init tests/packer/test-iso.pkr.hcl
+
+      - name: Run ISO installation tests (headless VM)
+        if: ${{ inputs.run_iso_tests == true }}
+        env:
+          ISO_PATH: ${{ needs.Build.outputs.staged_iso_path }}
+          ISO_TEST_USER: ${{ steps.test_creds.outputs.iso_user }}
+          ISO_TEST_PASSWORD: ${{ steps.test_creds.outputs.iso_password }}
+        run: |
+          PACKER_LOG=1 packer build -force \
+            -var "iso_path=${ISO_PATH}" \
+            -var "default_user_name=${ISO_TEST_USER}" \
+            -var "default_user_password=${ISO_TEST_PASSWORD}" \
+            -var "pytest_args=tests/test_iso_minimal.py" \
+            tests/packer/test-iso.pkr.hcl
+
+      - name: Upload ISO test debug artifacts
+        if: ${{ failure() && inputs.run_iso_tests == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: iso-test-debug-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            output/**
+            *.log
+
   Create-Release:
     runs-on: ubuntu-latest
-    needs: Build
+    needs: [ Build, Test-ISO ]
     if: ${{ inputs.deploy == 'true' && inputs.release == 'false' }}
     steps:
       - name: Checkout
