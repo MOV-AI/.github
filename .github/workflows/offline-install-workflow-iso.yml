@@ -174,6 +174,13 @@ jobs:
           docker rm -f $(docker ps -a -q) || true
           docker rmi -f $(docker images -q) || true
 
+      - name: Restore workspace permissions
+        if: always()
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" || true
+          sudo find "$GITHUB_WORKSPACE" -type d -exec chmod u+rwx {} \; || true
+          sudo find "$GITHUB_WORKSPACE" -type f -exec chmod u+rw {} \; || true
+
   Test-ISO:
     runs-on: packer-runner
     needs: Build
