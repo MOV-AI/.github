@@ -852,6 +852,7 @@ jobs:
             python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==0.0.4.3 --ignore-installed
             mobtest proj /opt/ros/noetic/share/
           '
+
       - name: Collect Installed components
         if: always()
         shell: bash
@@ -1019,6 +1020,18 @@ jobs:
         run: |
           docker system prune -f
           docker image prune --all -f
+
+  # Validation-Sanity-Tests:
+  #   needs: [Validate-boostrap-configs, Normalize-Distro-Input, Build-Workspace]
+  #   if: ${{ github.event_name == 'pull_request' && github.event.label.name == 'trigger_sanity' }}
+  #   uses: MOV-AI/.github/.github/workflows/integration-local-standalone-tests.yml@feat/project_trigger_sanity_on_pr
+  #   secrets: inherit
+  #   with:
+  #     test_infra_key: "flow_tests"
+  #     slack_thread_id: "${{ needs.Build-Workspace.outputs.slack_thread_id }}"
+  #     test_timeout: 30
+  #     pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
+  #     slack_channel: "${{ inputs.overwrite_slack_channel }}"
 
   Build-Simulator:
     needs: [Validate-boostrap-configs, Build-Workspace, Select-Simtest-Node]
@@ -1256,7 +1269,6 @@ jobs:
           name: ${{ needs.Validate-boostrap-configs.outputs.pr_prefix }}all_robot_configs
           path: .
 
-
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         uses: docker/login-action@v4
@@ -1277,12 +1289,9 @@ jobs:
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
         run: |
           DISTROS=$(echo '${{ needs.Normalize-Distro-Input.outputs.product_distro_list }}' | jq -r '.[] | .distro')
-
           for distro in $DISTROS; do
             echo "Processing workspaces image for distro: ${distro}"
-
             IMAGE_URI="${{ env.PUSH_REGISTRY }}/ci/${{ inputs.product_name }}-${distro}:${{ needs.Build-Workspace.outputs.raised_version }}"
-
             docker pull "${IMAGE_URI}"
             docker tag "${IMAGE_URI}" "${{ env.IP_MIRROR_REGISTRY }}/qa/${{ inputs.product_name }}-${distro}:${{ needs.Build-Workspace.outputs.raised_version }}"
             docker tag "${IMAGE_URI}" "${{ env.PUSH_REGISTRY }}/qa/${{ inputs.product_name }}-${distro}:${{ needs.Build-Workspace.outputs.raised_version }}"
@@ -1299,17 +1308,8 @@ jobs:
         shell: bash
         run: |
           promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.PUSH_REGISTRY }}-${{ env.IP_MIRROR_REGISTRY }}-g")
-          promoted_name_push=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.IP_MIRROR_REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
-          # if event is pr create ci tags
-          if [ "${{ github.event_name }}" = "pull_request" ];
-          then
-            promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-${{ env.PUSH_REGISTRY }}-${{ env.IP_MIRROR_REGISTRY }}-g")
-            promoted_name_push=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-${{ env.IP_MIRROR_REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
-          fi
-
           docker pull "${{ needs.Build-Simulator.outputs.image_name }}"
-          docker tag "${{ needs.Build-Simulator.outputs.image_name }}" $promoted_name
-          docker tag "${{ needs.Build-Simulator.outputs.image_name }}" $promoted_name_push
+          docker tag "${{ needs.Build-Simulator.outputs.image_name }}" "${promoted_name}"
 
       - name: Installation
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
@@ -1494,7 +1494,7 @@ jobs:
   Validation-Simulator-Tests:
     needs: [Validate-boostrap-configs, Compute-timeout, Normalize-Distro-Input, Build-Workspace, Build-Simulator]
     runs-on: ${{ needs.Build-Simulator.outputs.simulator_tests_agent_name }}
-    if: ${{ github.event_name != 'pull_request'}}
+    if: ${{ github.event_name != 'pull_request' || github.event.label.name == 'trigger_sanity' }}
     timeout-minutes: ${{ fromJSON(needs.Compute-timeout.outputs.jobtimeout) }}
     outputs:
       simulation_test_version: ${{ steps.simulator_tests_setup.outputs.version || 'not executed' }}
@@ -1617,17 +1617,20 @@ jobs:
         id: infra_names
         shell: bash
         run: |
-          if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
-            BRANCH_NAME=${{inputs.nightly_run_branch}}
-          else
-            BRANCH_NAME=${GITHUB_REF#refs/heads/}
-          fi
-          branch=$(echo ${BRANCH_NAME} | sed "s;\.;-;g" )
-
           run_type="ci"
-          if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            raw_branch="pr-${{ github.event.pull_request.number }}"
+          elif [ "${{ inputs.is_nightly_run }}" = "true" ]; then
+            raw_branch="${{ inputs.nightly_run_branch }}"
             run_type="lr"
+          else
+            raw_branch="${GITHUB_REF_NAME}"
           fi
+          # Normalize to DNS-safe style
+          branch="$(echo "$raw_branch" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed -E 's#[^a-z0-9]+#-#g; s#(^-+|-+$)##g; s#-+#-#g' \
+            | cut -c1-64)"
 
           local_manager_prefix="ip-$run_type-${{ env.RESOLVED_CLUSTER }}-${{ inputs.product_name }}-$branch-r${{ github.run_id }}"
 
@@ -1829,7 +1832,6 @@ jobs:
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
-
             promoted_name=$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g" | sed "s-${{ env.PUSH_REGISTRY }}-${{ env.REGISTRY }}-g")
             docker manifest inspect "$promoted_name"
             if [ $? -ne 0 ]; then
