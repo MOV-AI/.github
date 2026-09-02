@@ -117,6 +117,7 @@ jobs:
         submodules: recursive
 
     - name: Clean repository from invalid package.xml files
+      continue-on-error: true
       run: |
         python3 -m pip install catkin_lint --quiet --no-cache-dir
         echo "Identifying and removing package.xml files that cause internal errors in catkin_lint..."
@@ -130,7 +131,6 @@ jobs:
         done
 
     - name: Validate Repository Package.xml
-      continue-on-error: true
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
