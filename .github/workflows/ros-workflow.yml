@@ -208,6 +208,13 @@ jobs:
       with:
         submodules: recursive
 
+    - name: Install MOBROS and dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y libxml2-dev libxslt1-dev --no-install-recommends
+        python3 -m pip install catkin_lint --quiet --no-cache-dir
+        sudo apt install -y mobros=${{ inputs.MOBROS_VERSION }}
+
     - name: Clean repository from invalid package.xml files
       run: |
         python3 -m pip install catkin_lint --quiet --no-cache-dir
@@ -252,11 +259,6 @@ jobs:
             done
             exit 1
         fi
-
-    - name: Install Mobros
-      run: |
-        sudo apt update
-        sudo apt install -y mobros=${{ inputs.MOBROS_VERSION }}
 
     - name: Setup link to Ros userspace
       run: |
