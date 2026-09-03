@@ -440,6 +440,8 @@ jobs:
         id: ansible_install_platform
         working-directory: ${{ steps.ansible_install_setup.outputs.target_dir }}
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.gh_token }}
         run: |
           set -eo pipefail
           export ANSIBLE_CONFIG="$SHARED_ANSIBLE_ASSETS_DIR/ansible.cfg"
@@ -457,7 +459,11 @@ jobs:
             python3.10 -m pip install -qq -r requirements.txt
           fi
           if [ -f requirements.yml ]; then
+            export GIT_CONFIG_COUNT=1
+            export GIT_CONFIG_KEY_0="url.https://x-access-token:${GH_TOKEN}@github.com/.insteadOf"
+            export GIT_CONFIG_VALUE_0="https://github.com/"
             ansible-galaxy install -r requirements.yml --timeout 120
+            unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
           fi
           echo "✓ Python venv and Ansible ready"
           echo "::endgroup::"
