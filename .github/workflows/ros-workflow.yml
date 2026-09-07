@@ -40,7 +40,7 @@ on:
       ROS_BUILDTOOLS_TAG:
         required: false
         type: string
-        default: "v2.1.3"
+        default: "v2.2.0"
       FLOW_INITIATOR_TAG:
         required: false
         type: string
