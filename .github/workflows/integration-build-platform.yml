@@ -80,7 +80,7 @@ jobs:
   Validate-boostrap-configs:
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      image: registry.hel.mov.ai/qa/py-buildserver:4.0.1
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -2386,4 +2386,3 @@ jobs:
           slack-channel: ${{ env.SLACK_CHANNEL }}
           slack-update-message-text: ${{ steps.pre_slack.outputs.msg_error }}
           slack-update-message-ts: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
-

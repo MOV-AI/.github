@@ -42,7 +42,7 @@ jobs:
 
     runs-on: ubuntu-22.04
     container:
-      image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
+      image: registry.hel.mov.ai/devops/npm-buildserver:latest
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -129,7 +129,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs:  [Build]
     container:
-      image: registry.aws.cloud.mov.ai/devops/npm-buildserver:latest
+      image: registry.hel.mov.ai/devops/npm-buildserver:latest
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}

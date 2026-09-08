@@ -36,7 +36,7 @@ jobs:
   Deploy-product:
     runs-on: ubuntu-22.04
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      image: registry.hel.mov.ai/qa/py-buildserver:4.0.1
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
