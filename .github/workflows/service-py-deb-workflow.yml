@@ -44,6 +44,10 @@ on:
         type: string
         default: ''
         description: build, patch, minor, major. If empty, will be auto-detected from PR labels/title.
+      py_buildserver_image:
+        required: false
+        type: string
+        default: 'registry.cloud.mov.ai/qa/py-buildserver:4.0.1'
 
     secrets:
       auto_commit_user:
@@ -124,7 +128,7 @@ jobs:
     if: ${{ inputs.release == 'false' }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.cloud.mov.ai/qa/py-buildserver:4.0.1
+      image: ${{ inputs.py_buildserver_image }}
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -417,7 +421,7 @@ jobs:
     needs: [Build, Pack, Package-Test, Package-Test-Rpm]
     runs-on: ubuntu-22.04
     container:
-      image: registry.cloud.mov.ai/qa/py-buildserver:4.0.1
+      image: ${{ inputs.py_buildserver_image }}
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -570,7 +574,7 @@ jobs:
         distro: ${{ fromJSON(inputs.distributions) }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.cloud.mov.ai/qa/py-buildserver:4.0.1
+      image: ${{ inputs.py_buildserver_image }}
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -609,7 +613,7 @@ jobs:
 
     runs-on: ubuntu-22.04
     container:
-      image: registry.cloud.mov.ai/qa/py-buildserver:4.0.1
+      image: ${{ inputs.py_buildserver_image }}
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -656,7 +660,7 @@ jobs:
         distro: ${{ fromJSON(inputs.distributions) }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.cloud.mov.ai/qa/py-buildserver:4.0.1
+      image: ${{ inputs.py_buildserver_image }}
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -695,7 +699,7 @@ jobs:
     runs-on: ubuntu-22.04
     if: ${{ inputs.deploy == 'true' }}
     container:
-      image: registry.cloud.mov.ai/qa/py-buildserver:4.0.1
+      image: ${{ inputs.py_buildserver_image }}
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -744,7 +748,7 @@ jobs:
     runs-on: ubuntu-22.04
     if: ${{ inputs.deploy == 'true' }}
     container:
-      image: registry.cloud.mov.ai/qa/py-buildserver:4.0.1
+      image: ${{ inputs.py_buildserver_image }}
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -804,7 +808,7 @@ jobs:
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.cloud.mov.ai/qa/py-buildserver:4.0.1
+      image: ${{ inputs.py_buildserver_image }}
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -839,7 +843,7 @@ jobs:
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.cloud.mov.ai/qa/py-buildserver:4.0.1
+      image: ${{ inputs.py_buildserver_image }}
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
