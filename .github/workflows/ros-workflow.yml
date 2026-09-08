@@ -240,13 +240,14 @@ jobs:
     - name: Install Mobros and build tools
       run: |
         sudo apt update
-        sudo apt install -y python3-catkin-lint
-        python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-edge/simple --extra-index-url https://pypi.org/simple mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
         if [ "${{ matrix.distro }}" = "noetic" ]; then
+          sudo apt install -y python3-catkin-lint
           sudo python3 -m pip install --upgrade wheel build
         else
-          python3 -m pip install --upgrade 'setuptools>=70.0,<80' jaraco-functools wheel build
+          python3 -m pip install catkin_lint --quiet --no-cache-dir
+          python3 -m pip install --quiet --no-cache-dir --upgrade 'setuptools>=70.0,<80' jaraco-functools wheel build
         fi
+        python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-edge/simple --extra-index-url https://pypi.org/simple mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
 
     - name: Clean repository from invalid package.xml files
       run: |
