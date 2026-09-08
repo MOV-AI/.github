@@ -277,7 +277,7 @@ jobs:
   Validate-boostrap-configs:
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      image: registry.hel.mov.ai/qa/py-buildserver:4.0.1
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -2290,7 +2290,7 @@ jobs:
       previous_version: ${{ steps.bump.outputs.previous_version }}
       sbom_matrix: ${{ steps.bump.outputs.sbom_matrix }}
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
+      image: registry.hel.mov.ai/qa/py-buildserver:4.0.1
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
