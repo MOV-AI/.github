@@ -147,7 +147,7 @@ jobs:
   Validate-bootstrap-configs:
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
+      image: registry.hel.mov.ai/qa/py-buildserver:4.0.1
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
