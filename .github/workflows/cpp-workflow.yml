@@ -72,7 +72,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: [pre_check]
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.16
+      image: registry.hel.mov.ai/qa/ros-buildtools-noetic:v2.2.0
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -175,7 +175,7 @@ jobs:
         if [[ "${{ matrix.sub_component }}" == "." || "${{ matrix.sub_component }}" == "./" ]]; then
           artifact_name="single"
         fi
-        
+
         echo "artifact_name=$artifact_name" >> $GITHUB_OUTPUT
 
     - name: Archive binary
@@ -194,7 +194,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs:  [Build]
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.16
+      image: registry.hel.mov.ai/qa/ros-buildtools-noetic:v2.2.0
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -293,7 +293,7 @@ jobs:
     if: ${{ inputs.deploy == 'true' }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.16
+      image: registry.hel.mov.ai/qa/ros-buildtools-noetic:v2.2.0
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -313,7 +313,7 @@ jobs:
           if [[ "${{ matrix.sub_component }}" == "." || "${{ matrix.sub_component }}" == "./" ]]; then
             artifact_name="single"
           fi
-          
+
           echo "artifact_name=$artifact_name" >> $GITHUB_OUTPUT
 
       - name: Download a single artifact
@@ -409,7 +409,7 @@ jobs:
     if: ${{ inputs.release == 'true' }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.16
+      image: registry.hel.mov.ai/qa/ros-buildtools-noetic:v2.2.0
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}

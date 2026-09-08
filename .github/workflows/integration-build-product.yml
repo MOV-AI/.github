@@ -113,7 +113,7 @@ jobs:
   Validate-boostrap-configs:
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v2.0.1
+      image: registry.hel.mov.ai/qa/py-buildserver:4.0.1
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -1663,7 +1663,7 @@ jobs:
     needs: [Install-Robot, Install-Simulator-Robot, Validation-Simulator-Tests]
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v2.0.1
+      image: registry.hel.mov.ai/qa/py-buildserver:4.0.1
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
