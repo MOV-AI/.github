@@ -136,7 +136,7 @@ jobs:
     if: ${{ inputs.deploy }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.hel.mov.ai/devops/py-buildserver:4.0.2
+      image: registry.hel.mov.ai/qa/py-buildserver:4.0.2
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
