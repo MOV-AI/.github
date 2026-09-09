@@ -277,7 +277,7 @@ jobs:
   Validate-boostrap-configs:
     runs-on: integration-pipeline
     container:
-      image: registry.hel.mov.ai/qa/py-buildserver:4.0.1
+      image: registry.hel.mov.ai/qa/py-buildserver:4.0.2
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -2290,7 +2290,7 @@ jobs:
       previous_version: ${{ steps.bump.outputs.previous_version }}
       sbom_matrix: ${{ steps.bump.outputs.sbom_matrix }}
     container:
-      image: registry.hel.mov.ai/qa/py-buildserver:4.0.1
+      image: registry.hel.mov.ai/qa/py-buildserver:4.0.2
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -2519,7 +2519,7 @@ jobs:
     outputs:
       slack_thread_id: ${{ needs.Install-Simulator-Robot.outputs.slack_thread_id }}
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:4.0.1
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:4.0.2
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
