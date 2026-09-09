@@ -5,61 +5,83 @@ on:
       fleet_test_infra_list:
         required: true
         type: string
+        description: 'JSON list of fleet test infrastructure keys to execute'
       robot_config:
         required: false
         type: string
         default: 'basic-standalone-noetic.json'
+        description: 'Robot configuration file name to use for fleet setup'
       slack_thread_id:
         required: true
         type: string
+        description: 'Slack thread timestamp used to group workflow notifications'
       backend_image_name_and_tag:
         required: false
         type: string
         default: ''
+        description: 'Backend Docker image name and tag to deploy on fleet hosts'
       test_timeout:
         required: false
         type: number
         default: 60
+        description: 'Timeout in minutes for fleet test execution'
       xray_label:
         required: false
         type: string
         default: 'label'
+        description: 'XRAY label associated with the test execution'
       provision_tf_env_repo:
         required: true
         type: string
+        description: 'Repository name that contains Terraform environment configuration'
       provision_tf_env_version:
         required: true
         type: string
+        description: 'Version or tag of the Terraform environment configuration repository'
       provision_infra_repo:
         required: true
         type: string
+        description: 'Repository name that contains Terraform provisioning scripts'
       provision_infra_version:
         required: true
         type: string
+        description: 'Version or tag of the Terraform provisioning scripts repository'
       fleet_number_members:
         required: true
         type: string
+        description: 'Number of fleet member VMs to provision in addition to the manager'
       debug_fleet_keep_alive:
         required: false
         type: boolean
+        description: 'Keep provisioned fleet VMs alive after the workflow for debugging'
       fleet_ips:
         required: true
         type: string
+        description: 'JSON list of IP addresses or DHCP placeholders for fleet VMs'
       proxmox_cluster_name:
         required: true
         type: string
+        description: 'Proxmox cluster name used for runner selection and provisioning variables'
       with_fleet_tests:
         required: false
         type: boolean
         default: false
+        description: 'Run remote fleet tests after provisioning when enabled'
       slack_channel:
         required: false
         type: string
         default: 'C02PB9A9F45' # rnd-platform
+        description: 'Slack channel ID for workflow notifications'
       robot_config_download:
         required: false
         type: boolean
         default: true
+        description: 'Download robot configuration artifacts before provisioning'
+      vm_name_prefix:
+        required: false
+        type: string
+        default: ''
+        description: 'Prefix for the VM names to be used in the Fleet provisioning process'
 
     secrets:
       auto_commit_user:
@@ -214,6 +236,10 @@ jobs:
       - name: Setup Infrastructure Configuration
         id: infra_setup
         shell: bash
+        env:
+          VM_NAME_PREFIX: ${{ inputs.vm_name_prefix }}
+          CALLER_REPO_NAME: ${{ github.event.repository.name }}
+          CALLER_REPOSITORY: ${{ github.repository }}
         run: |
           # shellcheck disable=SC2129
           set -eo pipefail
@@ -244,16 +270,77 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::Define instance names"
-          branch="${GITHUB_REF#refs/heads/}"
-          branch="${branch//./-}"
+          sanitize_name_part() {
+            echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-//;s/-$//'
+          }
 
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            branch="${clean_ref#refs/pull/}"
-            branch=$(echo "$clean_ref" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-//;s/-$//' | cut -c1-30 | sed 's/-$//')
+          repo_prefix="$VM_NAME_PREFIX"
+          if [[ -n "$repo_prefix" ]]; then
+            repo_prefix=$(sanitize_name_part "$repo_prefix")
+            repo_prefix="${repo_prefix:0:5}"
+            repo_prefix="${repo_prefix%-}"
+          else
+            repo_name="$CALLER_REPO_NAME"
+            if [[ -z "$repo_name" ]]; then
+              repository="$CALLER_REPOSITORY"
+              repo_name="${repository##*/}"
+            fi
+
+            repo_slug=$(sanitize_name_part "$repo_name")
+            IFS='-' read -r -a repo_parts <<< "$repo_slug"
+            if [[ ${#repo_parts[@]} -gt 1 ]]; then
+              last_index=$((${#repo_parts[@]} - 1))
+              if [[ "${repo_parts[$last_index]}" == "test" || "${repo_parts[$last_index]}" == "tests" ]]; then
+                unset "repo_parts[$last_index]"
+                repo_parts=("${repo_parts[@]}")
+              fi
+            fi
+
+            if [[ ${#repo_parts[@]} -eq 1 ]]; then
+              repo_prefix="${repo_parts[0]:0:5}"
+            else
+              last_index=$((${#repo_parts[@]} - 1))
+              repo_prefix="${repo_parts[0]:0:2}-${repo_parts[$last_index]:0:2}"
+            fi
           fi
 
-          local_manager_prefix="ip-${branch}-manager"
-          local_worker_prefix="ip-${branch}-worker"
+          if [[ -z "$repo_prefix" ]]; then
+            echo "Could not resolve a VM name prefix from VM_NAME_PREFIX='$VM_NAME_PREFIX' or CALLER_REPOSITORY='$CALLER_REPOSITORY'" >&2
+            exit 1
+          fi
+
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" && -n "${GITHUB_HEAD_REF:-}" ]]; then
+            branch="$GITHUB_HEAD_REF"
+          else
+            branch="${GITHUB_REF_NAME:-${GITHUB_REF#refs/heads/}}"
+          fi
+          branch=$(sanitize_name_part "$branch")
+
+          if [[ -z "$branch" ]]; then
+            echo "Could not resolve a branch name from GITHUB_HEAD_REF='${GITHUB_HEAD_REF:-}' or GITHUB_REF='${GITHUB_REF:-}'" >&2
+            exit 1
+          fi
+
+          max_vm_name_length=41
+          manager_suffix="-manager"
+          worker_suffix="-worker"
+          manager_branch_length=$((max_vm_name_length - ${#repo_prefix} - ${#manager_suffix} - 1))
+          worker_branch_length=$((max_vm_name_length - ${#repo_prefix} - ${#worker_suffix} - 1))
+          branch_length=$manager_branch_length
+          if [[ $worker_branch_length -lt $branch_length ]]; then
+            branch_length=$worker_branch_length
+          fi
+
+          if [[ $branch_length -lt 1 ]]; then
+            echo "VM name prefix '$repo_prefix' leaves no room for a branch name" >&2
+            exit 1
+          fi
+
+          branch="${branch:0:$branch_length}"
+          branch="${branch%-}"
+
+          local_manager_prefix="${repo_prefix}-${branch}${manager_suffix}"
+          local_worker_prefix="${repo_prefix}-${branch}${worker_suffix}"
           total_resources=${{ inputs.fleet_number_members }}
           ((total_resources+=1))
 
