@@ -91,6 +91,11 @@ on:
         type: boolean
         default: false
         description: Generate CycloneDX SBOM and attach it as Harbor accessory for pushed images
+      metadata_test_skip_errors:
+        required: false
+        type: boolean
+        default: false
+        description: Skip failures from project-validation steps (mobtest / wac validate project) while they are being trialed
 
     secrets:
       auto_commit_user:
@@ -148,9 +153,12 @@ on:
 
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "4.2.0.7"
-  MOBTEST_VERSION: "0.0.6.1"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.40"
+  MOBTEST_VERSION: "0.0.7.2"
   GITHUB_API_USR: "OttoMation-Movai"
+  QA_TESTS_DEFAULT_TARGET_DIR: "qa_tests"
+  QA_TESTS_OUT_VALUES_MIN_VERSION: "2.0.0-24"
+  ORCHESTRATOR_WAC_MIN_VERSION: "5.13.3.2"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   PUSH_REGISTRY: registry.cloud.mov.ai
@@ -169,7 +177,7 @@ env:
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   TIMEOUT: 720
-  PROVISIONING_ENV_CONF: "0.2.2-5"
+  PROVISIONING_ENV_CONF: "0.2.2-6"
   DEPENDENCY_TRACK_URL: "https://sbom.es.mov.ai"
   HARBOR_URL: "https://registry.cloud.mov.ai/"
 
@@ -200,8 +208,8 @@ jobs:
           fi
           echo "simulation tests step timeout $calc_timeout"
           echo "Simulation tests job timeout $calc_jobtimeout"
-          echo "timeout=$calc_timeout" >> $GITHUB_OUTPUT
-          echo "jobtimeout=$calc_jobtimeout" >> $GITHUB_OUTPUT
+          echo "timeout=$calc_timeout" | tee >> $GITHUB_OUTPUT
+          echo "jobtimeout=$calc_jobtimeout" | tee >> $GITHUB_OUTPUT
 
   Normalize-Distro-Input:
     runs-on: integration-pipeline
@@ -286,6 +294,16 @@ jobs:
       commit_hash: ${{ steps.Checkout.outputs.commit_hash }}
       pr_prefix: ${{ steps.artifacts_prefix.outputs.pr_prefix }}
       init_version: ${{ steps.raise.outputs.init_version }}
+      orchestrator_version: ${{ steps.shared_config.outputs.orchestrator_version }}
+      services_version_noetic: ${{ steps.shared_config.outputs.services_version_noetic }}
+      quickstart_version_noetic: ${{ steps.shared_config.outputs.quickstart_version_noetic }}
+      services_version_simulator: ${{ steps.shared_config.outputs.services_version_simulator }}
+      quickstart_version_simulator: ${{ steps.shared_config.outputs.quickstart_version_simulator }}
+      qa_target_dir: ${{ steps.shared_config.outputs.qa_target_dir }}
+      qa_version: ${{ steps.shared_config.outputs.qa_version }}
+      qa_repo_name: ${{ steps.shared_config.outputs.qa_repo_name }}
+      qa_test_set: ${{ steps.shared_config.outputs.qa_test_set }}
+      qa_test_dir: ${{ steps.shared_config.outputs.qa_test_dir }}
 
     steps:
       - name: Checkout
@@ -303,15 +321,15 @@ jobs:
         run: |
           git config --global --add safe.directory $(pwd)
           git rev-parse HEAD > commit_hash
-          echo "commit_hash=$(cat commit_hash)" >> $GITHUB_OUTPUT
+          echo "commit_hash=$(cat commit_hash)" | tee >> $GITHUB_OUTPUT
 
       - name: Set PR prefix
         id: artifacts_prefix
         run: |
           if [ -n "${{ inputs.pr_id }}" ]; then
-            echo "pr_prefix=pr${{ inputs.pr_id }}~" >> $GITHUB_OUTPUT
+            echo "pr_prefix=pr${{ inputs.pr_id }}~" | tee >> $GITHUB_OUTPUT
           else
-            echo "pr_prefix=" >> $GITHUB_OUTPUT
+            echo "pr_prefix=" | tee >> $GITHUB_OUTPUT
           fi
 
       - name: Job Summary Header
@@ -353,7 +371,7 @@ jobs:
           fi
 
           # save branch name to output
-          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "branch_name=$BRANCH_NAME" | tee >> $GITHUB_OUTPUT
 
           git config --global --add safe.directory $(pwd)
           git fetch
@@ -396,13 +414,13 @@ jobs:
           cp ci_artifacts/* ./simulator_artifacts
           fi
 
-      - name: raise
+      - name: Raise
         id: raise
         shell: bash
         run: |
           mkdir platform_configs
           source ci_scripts/bin/activate
-          echo "init_version=$(cat product.version)" >> $GITHUB_OUTPUT
+          echo "init_version=$(cat product.version)" | tee >> $GITHUB_OUTPUT
           # Check if a PR triggered the workflow
           if [ -n "${{ inputs.pr_id }}" ]; then
             # raised version has sufix of PR number
@@ -453,6 +471,56 @@ jobs:
           integration-pipeline generate_meta_artifacts "${args[@]}"
           deactivate
 
+      - name: Resolve shared config values
+        id: shared_config
+        shell: bash
+        run: |
+          source ci_scripts/bin/activate
+
+          get_json_or_empty () {
+            local file=$1 key=$2 out=$3
+            if [ -f "$file" ]; then
+              integration-pipeline get_json_value --file "$file" --key "$key" --output_file "$out" || echo "" > "$out"
+            else
+              echo "" > "$out"
+            fi
+          }
+          get_yml_or_empty () {
+            local key=$1 out=$2
+            integration-pipeline get_yml_value --file product-manifest.yaml --key "$key" --output_file "$out" || echo "" > "$out"
+          }
+
+          get_json_or_empty "${{ inputs.product_name }}-noetic.json.ci" services_version services_version_noetic.txt
+          get_json_or_empty "${{ inputs.product_name }}-noetic.json.ci" quickstart_version quickstart_version_noetic.txt
+          get_json_or_empty "standalone-${{ inputs.product_name }}-simulator-noetic.json.ci" services_version services_version_simulator.txt
+          get_json_or_empty "standalone-${{ inputs.product_name }}-simulator-noetic.json.ci" quickstart_version quickstart_version_simulator.txt
+
+          get_yml_or_empty product_components.platform_config.orchestrator.version orchestrator_version.txt
+
+          qa_key="${{ inputs.simulation_qa_key }}"
+          get_yml_or_empty "product_components.qa.$qa_key.target_dir" qa_target_dir.txt
+          qa_target_dir_val=$(cat qa_target_dir.txt)
+          if [ -z "$qa_target_dir_val" ] || [ "$qa_target_dir_val" = "None" ] || [ "$qa_target_dir_val" = "null" ]; then
+            echo "${{ env.QA_TESTS_DEFAULT_TARGET_DIR }}" > qa_target_dir.txt
+          fi
+          get_yml_or_empty "product_components.qa.$qa_key.version" qa_version.txt
+          get_yml_or_empty "product_components.qa.$qa_key.name" qa_repo_name.txt
+          get_yml_or_empty "product_components.qa.$qa_key.test_set" qa_test_set.txt
+          get_yml_or_empty "product_components.qa.$qa_key.test_dir" qa_test_dir.txt
+
+          deactivate
+
+          echo "services_version_noetic=$(cat services_version_noetic.txt)" | tee >> $GITHUB_OUTPUT
+          echo "quickstart_version_noetic=$(cat quickstart_version_noetic.txt)" | tee >> $GITHUB_OUTPUT
+          echo "services_version_simulator=$(cat services_version_simulator.txt)" | tee >> $GITHUB_OUTPUT
+          echo "quickstart_version_simulator=$(cat quickstart_version_simulator.txt)" | tee >> $GITHUB_OUTPUT
+          echo "orchestrator_version=$(cat orchestrator_version.txt)" | tee >> $GITHUB_OUTPUT
+          echo "qa_target_dir=$(cat qa_target_dir.txt)" | tee >> $GITHUB_OUTPUT
+          echo "qa_version=$(cat qa_version.txt)" | tee >> $GITHUB_OUTPUT
+          echo "qa_repo_name=$(cat qa_repo_name.txt)" | tee >> $GITHUB_OUTPUT
+          echo "qa_test_set=$(cat qa_test_set.txt)" | tee >> $GITHUB_OUTPUT
+          echo "qa_test_dir=$(cat qa_test_dir.txt)" | tee >> $GITHUB_OUTPUT
+
       - name: Stash All Robot Configs
         uses: actions/upload-artifact@v7
         with:
@@ -480,7 +548,7 @@ jobs:
           if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
             MESSAGE=":loading::waxing_crescent_moon: LONG RUN: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is starting to be validated on ${{ inputs.cluster }} :mag_right: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           fi
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" | tee >> $GITHUB_OUTPUT
 
       - name: Send Slack Message
         if: ${{ github.event_name != 'pull_request' }}
@@ -634,10 +702,10 @@ jobs:
             ext=""
           fi
 
-          echo "base_name=$(cat ci_artifacts/${service_name_file_pattern}_base_name${ext}.ci)" >> $GITHUB_OUTPUT
-          echo "base_version=$(cat ci_artifacts/${service_name_file_pattern}_base_version${ext}.ci)" >> $GITHUB_OUTPUT
-          echo "raised_version=${version}" >> $GITHUB_OUTPUT
-          echo "target_tag=${product_name}-${{ matrix.workspace['distro'] }}" >> $GITHUB_OUTPUT
+          echo "base_name=$(cat ci_artifacts/${service_name_file_pattern}_base_name${ext}.ci)" | tee >> $GITHUB_OUTPUT
+          echo "base_version=$(cat ci_artifacts/${service_name_file_pattern}_base_version${ext}.ci)" | tee >> $GITHUB_OUTPUT
+          echo "raised_version=${version}" | tee >> $GITHUB_OUTPUT
+          echo "target_tag=${product_name}-${{ matrix.workspace['distro'] }}" | tee >> $GITHUB_OUTPUT
           # Check if propagated project is false
           if [ "${{ inputs.propagate_project }}" = "false" ]; then
             mkdir -p dependency_version
@@ -676,7 +744,7 @@ jobs:
         run: |
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee | tee >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -686,8 +754,8 @@ jobs:
         run: |
           MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
           MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" | tee >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" | tee >> $GITHUB_OUTPUT
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
@@ -801,27 +869,18 @@ jobs:
           cp *.json artifacts/
           CONFIG_FILE_NAME=${{ inputs.product_name }}-noetic.json
 
-          python3 -m venv .ci-venv --clear
-          . .ci-venv/bin/activate
-          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
-
           export ROBOTNAME="ci_${{ inputs.product_name }}"
           export REGISTRY="${{ env.IP_MIRROR_REGISTRY }}"
           sudo rm -rf $USERSPACE_FOLDER_PATH || true
           sudo mkdir -p $USERSPACE_FOLDER_PATH
           sudo chmod 777 $USERSPACE_FOLDER_PATH
-          integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
-          integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
-          deactivate
 
           export PUBLIC_IP=$(hostname -I | awk '{print $1}')
-          wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
-          chmod +x ./QuickStart_$(cat quickstart_version).bash
-          ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
-
-          rm movai_service_version
-          rm quickstart_version
+          quickstart_version="${{ needs.Validate-boostrap-configs.outputs.quickstart_version_noetic }}"
+          services_version="${{ needs.Validate-boostrap-configs.outputs.services_version_noetic }}"
+          wget https://movai-scripts.s3.amazonaws.com/QuickStart_${quickstart_version}.bash
+          chmod +x ./QuickStart_${quickstart_version}.bash
+          ./QuickStart_${quickstart_version}.bash --apps ${services_version} $CONFIG_FILE_NAME
 
       - name: Collect Install logs
         if: always()
@@ -841,17 +900,40 @@ jobs:
           path: install_logs/*
           retention-days: 5
 
-      - name: Run mobtest
+      - name: Run project validation
+        id: project_validation
         if: ${{ inputs.deployment_project == false }}
+        continue-on-error: ${{ inputs.metadata_test_skip_errors }}
         shell: bash
         run: |
+          set -o pipefail
           container_id=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace-.*)")
-          docker exec -t "$container_id" bash -c '
-            set -e
-            export PATH="$HOME/.local/bin:$PATH"
-            python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==0.0.4.3 --ignore-installed
-            mobtest proj /opt/ros/noetic/share/
-          '
+          orchestrator_version="${{ needs.Validate-boostrap-configs.outputs.orchestrator_version }}"
+          min_version="${{ env.ORCHESTRATOR_WAC_MIN_VERSION }}"
+          if [[ "$(printf '%s\n%s\n' "$min_version" "$orchestrator_version" | sort -V | head -n1)" == "$min_version" ]]; then
+            echo "Orchestrator $orchestrator_version >= $min_version: running wac validate project"
+            docker exec -t "$container_id" bash -c 'set -e; wac validate project' 2>&1 | tee validation_output.log
+          else
+            echo "Orchestrator $orchestrator_version < $min_version: running mobtest"
+            docker exec -t "$container_id" bash -c '
+              set -e
+              export PATH="$HOME/.local/bin:$PATH"
+              python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
+              mobtest proj /opt/ros/noetic/share/
+            ' 2>&1 | tee validation_output.log
+          fi
+
+      - name: Publish project validation output to summary
+        if: ${{ always() && inputs.deployment_project == false }}
+        shell: bash
+        run: |
+          {
+            echo "### Project validation"
+            echo '```'
+            cat validation_output.log 2>/dev/null || echo "No output captured."
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+
       - name: Collect Installed components
         if: always()
         shell: bash
@@ -932,9 +1014,9 @@ jobs:
         shell: bash
         run: |
           PROJECT_VERSION=$(cat product.version)
-          echo "PROJECT_VERSION=$PROJECT_VERSION" >> $GITHUB_OUTPUT
+          echo "PROJECT_VERSION=$PROJECT_VERSION" | tee >> $GITHUB_OUTPUT
           MOVAI_SOLUTION_VERSION=$(cat dependency_version/base_version)
-          echo "MOVAI_SOLUTION_VERSION=$MOVAI_SOLUTION_VERSION" >> $GITHUB_OUTPUT
+          echo "MOVAI_SOLUTION_VERSION=$MOVAI_SOLUTION_VERSION" | tee >> $GITHUB_OUTPUT
 
       - name: Publish to project data viewer
         id: publish_to_pdv
@@ -954,7 +1036,7 @@ jobs:
         run: |
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee | tee >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -964,8 +1046,8 @@ jobs:
         run: |
           MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
           MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" | tee >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" | tee >> $GITHUB_OUTPUT
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
@@ -1075,13 +1157,13 @@ jobs:
         if: ${{ inputs.with_simulation == 'true' }}
         run: |
           if [ ! -f "simulator_artifacts/version" ]; then
-            echo "skip_simulator_build=true" >> $GITHUB_OUTPUT
+            echo "skip_simulator_build=true" | tee >> $GITHUB_OUTPUT
             echo "SUCCESS: No package changes detected. Skipping Docker build."
           else
-            echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
+            echo "skip_simulator_build=false" | tee >> $GITHUB_OUTPUT
             echo "NOTICE: Package changes detected. Proceeding to Docker build."
           fi
-          echo "image_name=${{ env.PUSH_REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
+          echo "image_name=${{ env.PUSH_REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)" | tee >> $GITHUB_OUTPUT
 
       - name: Lint docker image
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' && inputs.with_simulation == 'true' }}
@@ -1123,8 +1205,8 @@ jobs:
         id: pre_build
         run: |
           push_name_tmp=$(echo "${{ steps.pre_simulator_build.outputs.image_name }}")
-          echo "base_name=$(cat simulator_artifacts/simulator_base.ci)" | tee  >> $GITHUB_OUTPUT
-          echo "push_name=$push_name_tmp" | tee  >> $GITHUB_OUTPUT
+          echo "base_name=$(cat simulator_artifacts/simulator_base.ci)" | tee  | tee >> $GITHUB_OUTPUT
+          echo "push_name=$push_name_tmp" | tee  | tee >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -1149,7 +1231,7 @@ jobs:
         run: |
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee | tee >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -1159,8 +1241,8 @@ jobs:
         run: |
           MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
           MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" | tee >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" | tee >> $GITHUB_OUTPUT
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
@@ -1201,9 +1283,9 @@ jobs:
         run: |
           if [ "${{ inputs.with_simulation_tests }}" = "true" ];
           then
-            echo "simul_tests_infra=simul-${{ needs.Select-Simtest-Node.outputs.sim_cluster }}-queuer" >> $GITHUB_OUTPUT
+            echo "simul_tests_infra=simul-${{ needs.Select-Simtest-Node.outputs.sim_cluster }}-queuer" | tee >> $GITHUB_OUTPUT
           else
-            echo "simul_tests_infra=integration-pipeline-${{ inputs.proxmox_cluster_name }}" >> $GITHUB_OUTPUT
+            echo "simul_tests_infra=integration-pipeline-${{ inputs.proxmox_cluster_name }}" | tee >> $GITHUB_OUTPUT
           fi
 
   Install-Simulator-Robot:
@@ -1232,16 +1314,6 @@ jobs:
         run: |
           echo "public ip: $(curl ipinfo.io/ip)"
           echo "private ip: $(hostname -I | awk '{print $1}')"
-
-      - name: Setup CI Scripts in .ci-venv
-        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
-        shell: bash
-        run: |
-          python3 -m venv .ci-venv --clear
-          . .ci-venv/bin/activate
-          [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install --upgrade pyOpenSSL cryptography
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
 
       - name: unstash raised_meta
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
@@ -1330,18 +1402,14 @@ jobs:
           export ROBOTNAME="ci_${{ inputs.product_name }}"
           export REGISTRY="${{ env.IP_MIRROR_REGISTRY }}"
 
-          . .ci-venv/bin/activate
-          integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
-          integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
-          deactivate
-
-          wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
-          chmod +x ./QuickStart_$(cat quickstart_version).bash
-          ./QuickStart_$(cat quickstart_version).bash --apps $(cat movai_service_version) $CONFIG_FILE_NAME
+          quickstart_version="${{ needs.Validate-boostrap-configs.outputs.quickstart_version_simulator }}"
+          services_version="${{ needs.Validate-boostrap-configs.outputs.services_version_simulator }}"
+          wget https://movai-scripts.s3.amazonaws.com/QuickStart_${quickstart_version}.bash
+          chmod +x ./QuickStart_${quickstart_version}.bash
+          ./QuickStart_${quickstart_version}.bash --apps ${services_version} $CONFIG_FILE_NAME
 
           execution_status=$?
           exit $execution_status
-          rm movai_service_version
         env:
           SIMULATION_ID: "CI"
           DISPLAY: ":0"
@@ -1365,17 +1433,39 @@ jobs:
           path: install_logs/*
           retention-days: 5
 
-      - name: Run mobtest
+      - name: Run project validation
+        id: project_validation
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' && inputs.deployment_project == false}}
+        continue-on-error: ${{ inputs.metadata_test_skip_errors }}
         shell: bash
         run: |
+          set -o pipefail
           container_id=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace-.*)")
-          docker exec -t "$container_id" bash -c '
-            set -e
-            export PATH="$HOME/.local/bin:$PATH"
-            python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
-            mobtest proj /opt/ros/noetic/share/
-          '
+          orchestrator_version="${{ needs.Validate-boostrap-configs.outputs.orchestrator_version }}"
+          min_version="${{ env.ORCHESTRATOR_WAC_MIN_VERSION }}"
+          if [[ "$(printf '%s\n%s\n' "$min_version" "$orchestrator_version" | sort -V | head -n1)" == "$min_version" ]]; then
+            echo "Orchestrator $orchestrator_version >= $min_version: running wac validate project"
+            docker exec -t "$container_id" bash -c 'set -e; wac validate project' 2>&1 | tee validation_output.log
+          else
+            echo "Orchestrator $orchestrator_version < $min_version: running mobtest"
+            docker exec -t "$container_id" bash -c '
+              set -e
+              export PATH="$HOME/.local/bin:$PATH"
+              python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
+              mobtest proj /opt/ros/noetic/share/
+            ' 2>&1 | tee validation_output.log
+          fi
+
+      - name: Publish project validation output to summary
+        if: ${{ always() && needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' && inputs.deployment_project == false}}
+        shell: bash
+        run: |
+          {
+            echo "### Project validation"
+            echo '```'
+            cat validation_output.log 2>/dev/null || echo "No output captured."
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
 
       - name: Output simulator image
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
@@ -1384,7 +1474,7 @@ jobs:
         run: |
           sim_img_name="$(echo "${{ needs.Build-Simulator.outputs.image_name }}" | sed "s-/ci/-/qa/-g")"
           push_name=$(echo "$sim_img_name" | sed "s-${{ env.IP_MIRROR_REGISTRY }}-${{ env.PUSH_REGISTRY }}-g")
-          echo "image_name=$push_name" >> $GITHUB_OUTPUT
+          echo "image_name=$push_name" | tee >> $GITHUB_OUTPUT
 
       - name: Collect Installed components
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' }}
@@ -1426,7 +1516,7 @@ jobs:
         run: |
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee | tee >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -1436,8 +1526,8 @@ jobs:
         run: |
           MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
           MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" | tee >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" | tee >> $GITHUB_OUTPUT
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
@@ -1594,7 +1684,7 @@ jobs:
           . .ci-venv/bin/activate
           integration-pipeline fetch_by_tag --repo $env_configs_repo_name --version $env_configs_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $env_configs_dir
           ls -la $env_configs_dir
-          echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
+          echo "target_dir=${env_configs_dir}" | tee >> $GITHUB_OUTPUT
           deactivate
 
       - name: Setup terraform proxmox provisioner
@@ -1611,7 +1701,7 @@ jobs:
           integration-pipeline fetch_by_tag --repo $provision_infra_repo_name --version $provision_infra_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $provision_infra_dir
           deactivate
           ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+          echo "target_dir=${provision_infra_dir}" | tee >> $GITHUB_OUTPUT
 
       - name: Define Instance names
         if: ${{ inputs.with_simulation_tests }}
@@ -1633,8 +1723,8 @@ jobs:
           local_manager_prefix="ip-$run_type-${{ env.RESOLVED_CLUSTER }}-${{ inputs.product_name }}-$branch-r${{ github.run_id }}"
 
           tf_state="${{ env.RESOLVED_CLUSTER }}-sim-$local_manager_prefix"
-          echo "simul_prefix=${local_manager_prefix}" | tee >> $GITHUB_OUTPUT
-          echo "tfstate_name=${tf_state}" | tee >> $GITHUB_OUTPUT
+          echo "simul_prefix=${local_manager_prefix}" | tee | tee >> $GITHUB_OUTPUT
+          echo "tfstate_name=${tf_state}" | tee | tee >> $GITHUB_OUTPUT
 
 
       - name: Provision remote vms (Proxmox)
@@ -1667,7 +1757,7 @@ jobs:
 
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
           sudo chmod 600 ~/.ssh/ci_priv_key.pem
-          echo "provision_status=success" >> $GITHUB_OUTPUT
+          echo "provision_status=success" | tee >> $GITHUB_OUTPUT
 
       - name: Gather Terraform outputs
         if: ${{ inputs.with_simulation_tests }}
@@ -1682,9 +1772,9 @@ jobs:
             exit 1
           fi
           user=$(terraform output user)
-          echo "host_ip=$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
-          echo "host_user=$(echo $user | sed "s;\";;g")" >> $GITHUB_OUTPUT
-          echo "ssh_connect_string=$(echo $user | sed "s;\";;g")@$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
+          echo "host_ip=$(echo $ip | sed "s;\";;g")" | tee >> $GITHUB_OUTPUT
+          echo "host_user=$(echo $user | sed "s;\";;g")" | tee >> $GITHUB_OUTPUT
+          echo "ssh_connect_string=$(echo $user | sed "s;\";;g")@$(echo $ip | sed "s;\";;g")" | tee >> $GITHUB_OUTPUT
 
       - name: Configure SSH
         if: ${{ inputs.with_simulation_tests }}
@@ -1706,7 +1796,7 @@ jobs:
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is being impacted by an infrastructural issue. \
           Provisioning of fleet infrastructure failed. Please take a look! \
           Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}" | tee >> $GITHUB_OUTPUT
 
       - name: Slack message failure
         if: ${{ inputs.with_simulation_tests && (failure() || steps.provision_vms.outcome == 'failure' || steps.infra_outputs.outcome == 'failure') && github.event_name != 'pull_request' && steps.pre_slack_infra.outcome == 'success' }}
@@ -1735,7 +1825,7 @@ jobs:
         id: nvidia_err_msg
         run: |
           echo "msg_error=Nvidia container error detected.\
-          Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
+          Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" | tee >> $GITHUB_OUTPUT
 
       - name: Remote - Detect Nvidia mismatch
         if: ${{ inputs.with_simulation_tests }}
@@ -1865,31 +1955,27 @@ jobs:
         shell: bash
         id: simulator_tests_setup
         run: |
-          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+          tests_dir="${{ needs.Validate-boostrap-configs.outputs.qa_target_dir }}"
+          tests_version="${{ needs.Validate-boostrap-configs.outputs.qa_version }}"
+          tests_repo_name="${{ needs.Validate-boostrap-configs.outputs.qa_repo_name }}"
+          test_set="${{ needs.Validate-boostrap-configs.outputs.qa_test_set }}"
+          qa_test_dir="${{ needs.Validate-boostrap-configs.outputs.qa_test_dir }}"
+
+          if [ -z "$tests_version" ] || [ -z "$tests_repo_name" ]; then
+            echo "::error::Missing QA config from Validate-boostrap-configs (version='$tests_version', name='$tests_repo_name'). Check product_components.qa.${{ inputs.simulation_qa_key }} in product-manifest.yaml."
+            exit 1
+          fi
+
+          test_exec_dir="."
+          if [ -n "$qa_test_dir" ]; then
+            test_exec_dir="$test_exec_dir/$qa_test_dir"
+          fi
+
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no "
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
+            export PATH=\"\$HOME/.local/bin:\$PATH\"
 
-            qa_key=${{ inputs.simulation_qa_key}}
-
-            rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt
-            export PATH="$HOME/.local/bin:$PATH"
-
-            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.target_dir --output_file /tmp/target_dir.txt
-            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
-            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
-            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.test_set --output_file /tmp/test_set.txt
-            integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.test_dir --output_file /tmp/test_dir.txt | true
-
-            tests_dir=$(cat /tmp/target_dir.txt)
-            tests_version=$(cat /tmp/version.txt)
-            tests_repo_name=$(cat /tmp/repo_name.txt)
-            test_set=$(cat /tmp/test_set.txt)
-
-            test_exec_dir="."
-            if [ -f /tmp/test_dir.txt ]; then
-              test_exec_dir="$test_exec_dir/$(cat /tmp/test_dir.txt)"
-            fi
-            echo "$test_exec_dir">/tmp/test_exec_dir.txt
             rm -rf $tests_repo_name
             integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user ${{ env.GITHUB_API_USR }} --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
             ls -la $tests_dir
@@ -1898,21 +1984,25 @@ jobs:
             sudo apt install -y --allow-downgrades python3-venv python3-rosnode python3-rosparam python3-rostopic
 
             # setup venv in a step that is always executed
-            pushd "${tests_dir}"
+            pushd \"$tests_dir\"
             python3 -m venv venv --clear
             . venv/bin/activate
             pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r requirements.txt
             deactivate
 
             popd
-          '
-          rm -f /tmp/target_dir.txt /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt /tmp/test_exec_dir.txt
-          scp -r -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no ${{ steps.infra_outputs.outputs.ssh_connect_string }}:/tmp/*.txt /tmp/
+          "
 
-          echo "target_dir=$(cat /tmp/target_dir.txt)" >> $GITHUB_OUTPUT
-          echo "version=$(cat /tmp/version.txt)" >> $GITHUB_OUTPUT
-          echo "test_set=$(cat /tmp/test_set.txt)" >> $GITHUB_OUTPUT
-          echo "test_exec_dir=$(cat /tmp/test_exec_dir.txt)" >> $GITHUB_OUTPUT
+          echo "target_dir=$tests_dir" | tee >> $GITHUB_OUTPUT
+          echo "version=$tests_version" | tee >> $GITHUB_OUTPUT
+          echo "test_set=$test_set" | tee >> $GITHUB_OUTPUT
+          echo "test_exec_dir=$test_exec_dir" | tee >> $GITHUB_OUTPUT
+
+          supports_out_values=false
+          if [[ "$(printf '%s\n%s\n' "${{ env.QA_TESTS_OUT_VALUES_MIN_VERSION }}" "$tests_version" | sort -V | head -n1)" == "${{ env.QA_TESTS_OUT_VALUES_MIN_VERSION }}" ]]; then
+            supports_out_values=true
+          fi
+          echo "supports_out_values=$supports_out_values" | tee >> $GITHUB_OUTPUT
 
       - name: Remote - Install
         if: ${{ inputs.with_simulation_tests }}
@@ -1935,8 +2025,8 @@ jobs:
           cp *.json artifacts/
           CONFIG_FILE_NAME="standalone-${{ inputs.product_name }}-simulator-noetic.json"
           export PATH="$HOME/.local/bin:$PATH"
-          integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
-          integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
+          echo "${{ needs.Validate-boostrap-configs.outputs.services_version_simulator }}" > movai_service_version
+          echo "${{ needs.Validate-boostrap-configs.outputs.quickstart_version_simulator }}" > quickstart_version
 
           export USERSPACE_FOLDER_PATH="/opt/userspace"
           sudo mkdir -p $USERSPACE_FOLDER_PATH/.git;sudo chown 1000:1000 $USERSPACE_FOLDER_PATH/ -Rf
@@ -1967,7 +2057,7 @@ jobs:
           exit $execution_status
           rm movai_service_version
           '
-          echo "movai_user=ci" >> $GITHUB_OUTPUT
+          echo "movai_user=ci" | tee >> $GITHUB_OUTPUT
           echo "movai_pwd=4Iva6UHAQq9DGITj" >> $GITHUB_OUTPUT
 
       - name: Remote - Simulation Tests
@@ -1977,17 +2067,14 @@ jobs:
         shell: bash
         run: |
           # Avoid setting github outputs from within a block that is executed remotely
-          save_outputs=false
-          if [[ "$(echo -e "${{ steps.simulator_tests_setup.outputs.version }}\n2.0.0-24" | sort -V | head -n1)" == "2.0.0-24" ]]; then
-            save_outputs=true
-          fi
-          echo "save_outputs=$save_outputs" >> $GITHUB_OUTPUT
+          save_outputs="${{ steps.simulator_tests_setup.outputs.supports_out_values }}"
+          echo "save_outputs=$save_outputs" | tee >> $GITHUB_OUTPUT
 
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
 
             export DISPLAY="$(w -oush | grep -Eo " :[0-9]+" | uniq | cut -d \  -f 2)"
-            echo "Display detected (dinamic) is $DISPLAY"
+            echo "Display detected (dynamic) is $DISPLAY"
             export DISPLAY=":0"
             echo "Display detected is $DISPLAY"
             xhost +local:docker
@@ -2004,11 +2091,10 @@ jobs:
             fi
 
             extra_options=""
-
             if [ "${{ inputs.duration }}" != "UNDEFINED" ] ; then
               extra_options="--duration ${{ inputs.duration }}"
             fi
-            if [[ "$(echo -e "${{ steps.simulator_tests_setup.outputs.version }}\n2.0.0-24" | sort -V | head -n1)" == "2.0.0-24" ]]; then
+            if [ "${{ steps.simulator_tests_setup.outputs.supports_out_values }}" == "true" ]; then
               extra_options="$extra_options --out-values test-output.json"
             fi
 
@@ -2019,6 +2105,10 @@ jobs:
               --movai-pw ${{ steps.install.outputs.movai_pwd }} \
               $extra_options
 
+            if [ ! -f test-output.json ]; then
+              # create the test output file since next steps are always expecting it
+              echo "{\"error\": \"test output not generated\"}" > test-output.json
+            fi
             deactivate
           '
 
@@ -2077,8 +2167,6 @@ jobs:
               influxd backup -portable -database platform_metrics /tmp/backup/platform_metrics_backup
             "
             docker cp "$CONTAINER_ID":/tmp/backup/platform_metrics_backup ./platform_metrics || true
-
-
           '
       - name: Remote - Stash QA artifacts & platform metrics
         if: ${{ always() &&  inputs.with_simulation_tests }}
@@ -2106,7 +2194,7 @@ jobs:
         run: |
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee | tee >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -2116,8 +2204,8 @@ jobs:
         run: |
           MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
           MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" | tee >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" | tee >> $GITHUB_OUTPUT
 
       - name: Slack message success
         if: ${{ github.event_name != 'pull_request' }}
@@ -2186,7 +2274,7 @@ jobs:
           fi
 
           PUBLISH_URL="${{ env.MINIO_PUBLIC_URL }}/browser/$URI_OBJ_PATH/"
-          echo "publish_url=$PUBLISH_URL" >> $GITHUB_OUTPUT
+          echo "publish_url=$PUBLISH_URL" | tee >> $GITHUB_OUTPUT
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.minio_key_id }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.minio_secret_key_id }}
@@ -2227,7 +2315,7 @@ jobs:
           fi
 
           PUBLISH_URL="https://ci-artefacts-es.s3.eu-south-2.amazonaws.com/$URI_OBJ_PATH" # Construct S3 URL
-          echo "publish_url=$PUBLISH_URL" >> $GITHUB_OUTPUT
+          echo "publish_url=$PUBLISH_URL" | tee >> $GITHUB_OUTPUT
 
       - name: Slack message Artifact info
         uses: slackapi/slack-github-action@v3
@@ -2465,7 +2553,7 @@ jobs:
           else
             sbom_matrix='[]'
           fi
-          echo "sbom_matrix=${sbom_matrix}" >> $GITHUB_OUTPUT
+          echo "sbom_matrix=${sbom_matrix}" | tee >> $GITHUB_OUTPUT
 
           cat product-manifest.yaml
           cp *.yaml deployment_artifacts
@@ -2476,8 +2564,8 @@ jobs:
           deactivate
 
           # values needed by downstream matrix and release jobs
-          echo "previous_version=${previous_version}" >> $GITHUB_OUTPUT
-          echo "version=${product_version}" >> $GITHUB_OUTPUT
+          echo "previous_version=${previous_version}" | tee >> $GITHUB_OUTPUT
+          echo "version=${product_version}" | tee >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -2557,7 +2645,7 @@ jobs:
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
         id: pre_raise
         run: |
-          echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+          echo "branch=${GITHUB_REF#refs/heads/}" | tee >> $GITHUB_OUTPUT
 
       - name: Create raise commit
         if: ${{ inputs.is_nightly_run == false && github.event_name != 'pull_request' }}
@@ -2749,7 +2837,7 @@ jobs:
           else
             MESSAGE="${STATUS_EMOJI} CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) ${STATUS_TEXT} :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           fi
-          echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
+          echo "msg=$MESSAGE" | tee >> $GITHUB_OUTPUT
 
       - name: Slack message
         uses: slackapi/slack-github-action@v3
@@ -2790,7 +2878,7 @@ jobs:
           if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
             MESSAGE_ERR=":x::waxing_crescent_moon: LONG RUN: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is unstable (or canceled) (Cluster: ${{ inputs.cluster }}) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           fi
-          echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}" | tee >> $GITHUB_OUTPUT
 
       - name: Slack message
         if: ${{ github.event_name != 'pull_request' }}
