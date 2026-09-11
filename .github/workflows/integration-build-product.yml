@@ -156,6 +156,7 @@ env:
   PACKAGE_DEPLOYER_VERSION: "1.0.0.40"
   MOBTEST_VERSION: "0.0.7.2"
   GITHUB_API_USR: "OttoMation-Movai"
+  QA_TESTS_TARGET_DIR: "qa_tests"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   PUSH_REGISTRY: registry.cloud.mov.ai
@@ -496,6 +497,10 @@ jobs:
 
           qa_key="${{ inputs.simulation_qa_key }}"
           get_yml_or_empty "product_components.qa.$qa_key.target_dir" qa_target_dir.txt
+          qa_target_dir_val=$(cat qa_target_dir.txt)
+          if [ -z "$qa_target_dir_val" ] || [ "$qa_target_dir_val" = "None" ] || [ "$qa_target_dir_val" = "null" ]; then
+            echo "${{ env.QA_TESTS_TARGET_DIR }}" > qa_target_dir.txt
+          fi
           get_yml_or_empty "product_components.qa.$qa_key.version" qa_version.txt
           get_yml_or_empty "product_components.qa.$qa_key.name" qa_repo_name.txt
           get_yml_or_empty "product_components.qa.$qa_key.test_set" qa_test_set.txt
@@ -1953,6 +1958,11 @@ jobs:
           tests_repo_name="${{ needs.Validate-boostrap-configs.outputs.qa_repo_name }}"
           test_set="${{ needs.Validate-boostrap-configs.outputs.qa_test_set }}"
           qa_test_dir="${{ needs.Validate-boostrap-configs.outputs.qa_test_dir }}"
+
+          if [ -z "$tests_version" ] || [ -z "$tests_repo_name" ]; then
+            echo "::error::Missing QA config from Validate-boostrap-configs (version='$tests_version', name='$tests_repo_name'). Check product_components.qa.${{ inputs.simulation_qa_key }} in product-manifest.yaml."
+            exit 1
+          fi
 
           test_exec_dir="."
           if [ -n "$qa_test_dir" ]; then
