@@ -33,7 +33,7 @@ on:
         default: "UNDEFINED"
       cluster:
         required: false
-        default: "mary"
+        default: "any"
         type: string
       duration:
         required: false
@@ -147,9 +147,9 @@ on:
         value: ${{ jobs.Validation-Simulator-Tests.outputs.simulation_test_publish_url || 'not executed' }}
 
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "4.2.0.5"
+  CI_INTEGRATION_SCRIPTS_VERSION: "4.2.0.7"
   MOBTEST_VERSION: "0.0.6.1"
-  PACKAGE_DEPLOYER_VERSION: "1.0.0.26"
+  PACKAGE_DEPLOYER_VERSION: "1.0.0.40"
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
@@ -244,10 +244,40 @@ jobs:
             echo "product_distro_list=$PRODUCT_DISTRO_LIST" >> "$GITHUB_OUTPUT"
           fi
 
+  Select-Simtest-Node:
+    runs-on: pt-agent
+    outputs:
+      sim_cluster: ${{ steps.select_sim_cluster.outputs.sim_cluster }}
+    steps:
+      - name: Checkout workflow scripts repository
+        uses: actions/checkout@v6
+        with:
+          repository: MOV-AI/.github
+          ref: v3
+          path: .github-workflows
+          token: ${{ secrets.gh_token }}
+
+      - name: Select simulation cluster
+        id: select_sim_cluster
+        shell: bash
+        run: |
+          set -e
+          selected_cluster="${{ inputs.cluster }}"
+          if [[ "${{ inputs.with_simulation_tests }}" == "true" && ( "$selected_cluster" == "any" || -z "$selected_cluster" ) ]]; then
+            selected_cluster="$(bash .github-workflows/.github/scripts/select_gpu_free_node.sh -H https://marvin.mov.ai:8006 -u ${{ secrets.proxmox_ve_username }} -p ${{ secrets.proxmox_ve_password }})"
+          fi
+
+          if [[ -z "$selected_cluster" ]]; then
+            echo "::error::Simulation cluster is empty. Provide cluster or use 'any'."
+            exit 1
+          fi
+
+          echo "sim_cluster=$selected_cluster" >> "$GITHUB_OUTPUT"
+
   Validate-boostrap-configs:
     runs-on: integration-pipeline
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.4
+      image: registry.hel.mov.ai/qa/py-buildserver:4.0.2
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -854,6 +884,7 @@ jobs:
             set -e
             sudo apt update
             export PATH="$HOME/.local/bin:$PATH"
+            python3 -m pip install --upgrade packaging setuptools wheel
             python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple movai-package-deployer==${{ env.PACKAGE_DEPLOYER_VERSION }} --ignore-installed
             package-deployer scan
             package-deployer scanAll
@@ -1004,13 +1035,14 @@ jobs:
   #     slack_channel: "${{ inputs.overwrite_slack_channel }}"
 
   Build-Simulator:
-    needs: [Validate-boostrap-configs, Build-Workspace]
+    needs: [Validate-boostrap-configs, Build-Workspace, Select-Simtest-Node]
     runs-on: integration-pipeline
     env:
       DISTRO: noetic
     outputs:
       image_name: "${{ steps.pre_build.outputs.push_name }}"
       skip_simulator: "${{ steps.pre_simulator_build.outputs.skip_simulator_build }}"
+      sim_cluster: "${{ needs.Select-Simtest-Node.outputs.sim_cluster }}"
       simulator_tests_agent_name: "${{ steps.post_simulator_build.outputs.simul_tests_infra }}"
       slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
       commit_hash: ${{ needs.Build-Workspace.outputs.commit_hash }}
@@ -1057,8 +1089,10 @@ jobs:
         run: |
           if [ ! -f "simulator_artifacts/version" ]; then
             echo "skip_simulator_build=true" >> $GITHUB_OUTPUT
+            echo "SUCCESS: No package changes detected. Skipping Docker build."
           else
             echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
+            echo "NOTICE: Package changes detected. Proceeding to Docker build."
           fi
           echo "image_name=${{ env.PUSH_REGISTRY }}/ci/$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
 
@@ -1180,7 +1214,7 @@ jobs:
         run: |
           if [ "${{ inputs.with_simulation_tests }}" = "true" ];
           then
-            echo "simul_tests_infra=simul-${{ inputs.cluster }}-queuer" >> $GITHUB_OUTPUT
+            echo "simul_tests_infra=simul-${{ needs.Select-Simtest-Node.outputs.sim_cluster }}-queuer" >> $GITHUB_OUTPUT
           else
             echo "simul_tests_infra=integration-pipeline-${{ inputs.proxmox_cluster_name }}" >> $GITHUB_OUTPUT
           fi
@@ -1468,6 +1502,7 @@ jobs:
       simulation_test_publish_url: ${{ steps.minio_publish.outputs.publish_url || 'not executed' }}
     env:
       REGISTRY: ${{ inputs.docker_simulator_registry }}
+      RESOLVED_CLUSTER: ${{ needs.Build-Simulator.outputs.sim_cluster }}
     steps:
       - uses: rtCamp/action-cleanup@master
         if: ${{ inputs.with_simulation_tests }}
@@ -1598,9 +1633,9 @@ jobs:
             | sed -E 's#[^a-z0-9]+#-#g; s#(^-+|-+$)##g; s#-+#-#g' \
             | cut -c1-64)"
 
-          local_manager_prefix="ip-$run_type-${{ inputs.cluster }}-${{ inputs.product_name }}-$branch"
+          local_manager_prefix="ip-$run_type-${{ env.RESOLVED_CLUSTER }}-${{ inputs.product_name }}-$branch-r${{ github.run_id }}"
 
-          tf_state="${{ inputs.cluster }}-sim-$local_manager_prefix"
+          tf_state="${{ env.RESOLVED_CLUSTER }}-sim-$local_manager_prefix"
           echo "simul_prefix=${local_manager_prefix}" | tee >> $GITHUB_OUTPUT
           echo "tfstate_name=${tf_state}" | tee >> $GITHUB_OUTPUT
 
@@ -1609,11 +1644,12 @@ jobs:
         if: ${{ inputs.with_simulation_tests }}
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
+        id: provision_vms
         run: |
-          multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..1})
+          multiply_node=$(printf '"${{ env.RESOLVED_CLUSTER }}",%.0s' {1..1})
           node_list_str=${multiply_node::-1}
 
-          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ env.RESOLVED_CLUSTER }}_simul_bpg.tfvars'
 
           echo "proxmox_host_list=[$node_list_str]">>input.tfvars
           echo "fleet_peer_nr=0">>input.tfvars
@@ -1628,12 +1664,13 @@ jobs:
 
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
-          terraform init -backend-config="key=${{ inputs.cluster }}-ci-simul-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
+          terraform init -backend-config="key=${{ env.RESOLVED_CLUSTER }}-ci-simul-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
           terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
           terraform refresh $var_file_arg -var-file=input.tfvars
 
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
           sudo chmod 600 ~/.ssh/ci_priv_key.pem
+          echo "provision_status=success" >> $GITHUB_OUTPUT
 
       - name: Gather Terraform outputs
         if: ${{ inputs.with_simulation_tests }}
@@ -1641,7 +1678,12 @@ jobs:
         id: infra_outputs
         shell: bash
         run: |
-          ip=$(terraform output manager_ip_address)
+          set -e
+          if ! ip=$(terraform output manager_ip_address 2>&1); then
+            echo "ERROR: Failed to get terraform output - manager_ip_address. Terraform state may be corrupted."
+            echo "IP retrieval failed" >&2
+            exit 1
+          fi
           user=$(terraform output user)
           echo "host_ip=$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
           echo "host_user=$(echo $user | sed "s;\";;g")" >> $GITHUB_OUTPUT
@@ -1661,7 +1703,7 @@ jobs:
           '
 
       - name: Prepare Devops provisioning slack message
-        if: ${{ inputs.with_simulation_tests && failure() && github.event_name != 'pull_request' }}
+        if: ${{ inputs.with_simulation_tests && (failure() || steps.provision_vms.outcome == 'failure' || steps.infra_outputs.outcome == 'failure') && github.event_name != 'pull_request' }}
         id: pre_slack_infra
         run: |
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), build: $(cat product.version) is being impacted by an infrastructural issue. \
@@ -1670,7 +1712,7 @@ jobs:
           echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
 
       - name: Slack message failure
-        if: ${{ inputs.with_simulation_tests  && failure() && github.event_name != 'pull_request' }}
+        if: ${{ inputs.with_simulation_tests && (failure() || steps.provision_vms.outcome == 'failure' || steps.infra_outputs.outcome == 'failure') && github.event_name != 'pull_request' && steps.pre_slack_infra.outcome == 'success' }}
         uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
@@ -2212,7 +2254,7 @@ jobs:
           count=0
           exit_status=-1
           while [ $count -lt $attempts ]; do
-            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
+            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ env.RESOLVED_CLUSTER }}_simul_bpg.tfvars'
             terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars -var "fleet_peer_nr=0"
             exit_status=$?
             if [ $exit_status -eq 0 ]; then
@@ -2251,7 +2293,7 @@ jobs:
       previous_version: ${{ steps.bump.outputs.previous_version }}
       sbom_matrix: ${{ steps.bump.outputs.sbom_matrix }}
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:v3.0.3
+      image: registry.hel.mov.ai/qa/py-buildserver:4.0.2
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -2474,13 +2516,13 @@ jobs:
           artifact_name: sbom-${{ matrix.image_target.name }}
 
   Publish:
-    needs: [Validate-boostrap-configs, Install-Simulator-Robot, Publish-Prepare, Generate-SBOM]
+    needs: [Validate-boostrap-configs, Install-Simulator-Robot, Validation-Simulator-Tests, Publish-Prepare, Generate-SBOM]
     if: ${{ always() }}
     runs-on: integration-pipeline
     outputs:
       slack_thread_id: ${{ needs.Install-Simulator-Robot.outputs.slack_thread_id }}
     container:
-      image: registry.aws.cloud.mov.ai/qa/py-buildserver:4.0.1
+      image: registry.aws.cloud.mov.ai/qa/py-buildserver:4.0.2
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
@@ -2689,11 +2731,25 @@ jobs:
         id: pre_slack
         shell: bash
         run: |
+          if [ "${{ needs.Validation-Simulator-Tests.result }}" = "failure" ]; then
+            STATUS_EMOJI=":x:"
+            STATUS_TEXT="failed due to simulation tests failure"
+          elif [ "${{ needs.Publish-Prepare.result }}" = "failure" ]; then
+            STATUS_EMOJI=":x:"
+            STATUS_TEXT="failed during publish preparation"
+          elif [ "${{ needs.Publish-Prepare.result }}" = "skipped" ] && [ "${{ needs.Validation-Simulator-Tests.result }}" = "failure" ]; then
+            STATUS_EMOJI=":x:"
+            STATUS_TEXT="failed (Validation-Simulator-Tests failed, skipping publish)"
+          else
+            STATUS_EMOJI=":white_check_mark:"
+            STATUS_TEXT="is stable"
+          fi
 
           if [ "${{ inputs.is_nightly_run }}" == "true" ] ; then
-            MESSAGE=":white_check_mark::waxing_crescent_moon: LONG RUN: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) is stable (Cluster: ${{ inputs.cluster }}) :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            EMOJI_PREFIX=":waxing_crescent_moon:"
+            MESSAGE="${STATUS_EMOJI}${EMOJI_PREFIX} LONG RUN: ${GITHUB_REPOSITORY} ${{inputs.nightly_run_branch}}, (Attempt: #${{ github.run_attempt }}) ${STATUS_TEXT} (Cluster: ${{ inputs.cluster }}) :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           else
-            MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            MESSAGE="${STATUS_EMOJI} CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) ${STATUS_TEXT} :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           fi
           echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
 
