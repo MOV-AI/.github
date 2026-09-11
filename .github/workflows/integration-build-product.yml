@@ -2058,7 +2058,7 @@ jobs:
           rm movai_service_version
           '
           echo "movai_user=ci" | tee >> $GITHUB_OUTPUT
-          echo "movai_pwd=4Iva6UHAQq9DGITj" | tee >> $GITHUB_OUTPUT
+          echo "movai_pwd=4Iva6UHAQq9DGITj" >> $GITHUB_OUTPUT
 
       - name: Remote - Simulation Tests
         if: ${{ inputs.with_simulation_tests }}
