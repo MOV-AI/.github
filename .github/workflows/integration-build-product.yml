@@ -94,7 +94,7 @@ on:
       metadata_test_skip_errors:
         required: false
         type: boolean
-        default: true
+        default: false
         description: Skip failures from project-validation steps (mobtest / wac validate project) while they are being trialed
 
     secrets:
