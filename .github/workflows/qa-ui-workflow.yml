@@ -350,6 +350,7 @@ jobs:
       with_fleet_tests: ${{ inputs.with_fleet_tests }}
       debug_fleet_keep_alive: ${{ inputs.keep_fleet_alive }}
       robot_config_download: false
+      repo_ci: true
 
   Run-Status:
     runs-on: ubuntu-22.04

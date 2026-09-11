@@ -82,6 +82,11 @@ on:
         type: string
         default: ''
         description: 'Prefix for the VM names to be used in the Fleet provisioning process'
+      repo_ci:
+        required: false
+        type: boolean
+        default: false
+        description: 'If enabled, fetch the test repository from the current CI ref'
 
     secrets:
       auto_commit_user:
@@ -734,7 +739,13 @@ jobs:
 
             echo "::group::Download test repository"
             rm -rf $tests_repo_name
-            integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user ${{ env.GITHUB_API_USR }} --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
+            if [[ "${{ inputs.repo_ci }}" == "false" ]] ; then
+              echo "Fetching test repository by tag $tests_version"
+              integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user ${{ env.GITHUB_API_USR }} --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
+            else
+              echo "Fetching test repository by branch ${github.ref}"
+              integration-pipeline fetch_by_tag --repo $tests_repo_name --version ${{ github.ref }} --gh_api_user ${{ env.GITHUB_API_USR }} --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
+            fi
             ls -la $tests_dir
             echo "✓ Test repository downloaded"
             echo "::endgroup::"
