@@ -743,7 +743,7 @@ jobs:
               echo "Fetching test repository by tag $tests_version"
               integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user ${{ env.GITHUB_API_USR }} --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
             else
-              echo "Fetching test repository by branch ${github.ref}"
+              echo "Fetching test repository by branch ${{ github.ref }}"
               integration-pipeline fetch_by_tag --repo $tests_repo_name --version ${{ github.ref }} --gh_api_user ${{ env.GITHUB_API_USR }} --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
             fi
             ls -la $tests_dir
