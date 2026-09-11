@@ -158,6 +158,7 @@ env:
   GITHUB_API_USR: "OttoMation-Movai"
   QA_TESTS_TARGET_DIR: "qa_tests"
   QA_TESTS_OUT_VALUES_MIN_VERSION: "2.0.0-24"
+  ORCHESTRATOR_WAC_MIN_VERSION: "5.13.3.2"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
   PUSH_REGISTRY: registry.cloud.mov.ai
@@ -908,7 +909,7 @@ jobs:
           set -o pipefail
           container_id=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace-.*)")
           orchestrator_version="${{ needs.Validate-boostrap-configs.outputs.orchestrator_version }}"
-          min_version="5.13.3.2"
+          min_version="${{ env.ORCHESTRATOR_WAC_MIN_VERSION }}"
           if [[ "$(printf '%s\n%s\n' "$min_version" "$orchestrator_version" | sort -V | head -n1)" == "$min_version" ]]; then
             echo "Orchestrator $orchestrator_version >= $min_version: running wac validate project"
             docker exec -t "$container_id" bash -c 'set -e; wac validate project' 2>&1 | tee validation_output.log
@@ -1441,7 +1442,7 @@ jobs:
           set -o pipefail
           container_id=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace-.*)")
           orchestrator_version="${{ needs.Validate-boostrap-configs.outputs.orchestrator_version }}"
-          min_version="5.13.3.2"
+          min_version="${{ env.ORCHESTRATOR_WAC_MIN_VERSION }}"
           if [[ "$(printf '%s\n%s\n' "$min_version" "$orchestrator_version" | sort -V | head -n1)" == "$min_version" ]]; then
             echo "Orchestrator $orchestrator_version >= $min_version: running wac validate project"
             docker exec -t "$container_id" bash -c 'set -e; wac validate project' 2>&1 | tee validation_output.log
