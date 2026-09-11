@@ -332,7 +332,7 @@ jobs:
 
   Run-Fleet-Tests:
     needs: [Validate, Resolve-fleet-context]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@v3
+    uses: MOV-AI/.github/.github/workflows/integration-platform-remote-fleet-tests.yml@bugfix/DP-2196-ui-tests-pipeline-fleet-tests-running-hardcoded-version
     secrets: inherit
     with:
       fleet_test_infra_list: ${{ needs.Resolve-fleet-context.outputs.fleet_tests_list }}
