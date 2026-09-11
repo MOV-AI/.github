@@ -415,6 +415,10 @@ jobs:
           sudo rm -rf logs
           sudo rm -rf test_venv
           sudo dnf remove movai-service* -y || true
+          # docker cleanup
+          sudo docker system prune -f -a --volumes
+          sudo docker image prune --all -f
+          sudo docker builder prune -f
 
   SonarCloud:
     if: ${{ inputs.release == 'false' }}
