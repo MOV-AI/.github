@@ -47,7 +47,7 @@ on:
       ROS_BUILDTOOLS_TAG:
         required: false
         type: string
-        default: "3.0.12"
+        default: "3.0.13"
       FLOW_INITIATOR_TAG:
         required: false
         type: string
@@ -237,9 +237,26 @@ jobs:
       with:
         submodules: recursive
 
+    - name: Install Mobros and build tools
+      run: |
+        sudo apt update
+
+        # Install Mobros from the specified repository
+        python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-edge/simple --extra-index-url https://pypi.org/simple mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
+
+        # Install additional build tools based on the ROS distribution
+        if [ "${{ matrix.distro }}" = "noetic" ]; then
+          sudo apt install -y python3-catkin-lint
+          sudo python3 -m pip install --upgrade wheel build
+        else
+          python3 -m pip install catkin_lint --quiet --no-cache-dir
+          # Force setuptools to a higher version than what mobros bring by upgrading it explicitly
+          python3 -m pip install --quiet --no-cache-dir --upgrade 'setuptools>=70.0,<80' jaraco-functools wheel build
+        fi
+
+
     - name: Clean repository from invalid package.xml files
       run: |
-        python3 -m pip install catkin_lint --quiet --no-cache-dir
         echo "Identifying and removing package.xml files that cause internal errors in catkin_lint..."
         find -L ./ -type f -name 'package.xml' ! -path '*/.git/*' ! -path '*/.github/*' 2>/dev/null | while read -r file; do
           pkg_dir=$(dirname "$file")
@@ -278,15 +295,6 @@ jobs:
               echo "::error file=$file::Please add $expected_url to the package.xml"
             done < "$VALIDATION_FILE"
             exit 1
-        fi
-
-    - name: Install Mobros and build tools
-      run: |
-        python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-edge/simple --extra-index-url https://pypi.org/simple mobros==${{ inputs.MOBROS_VERSION }} --ignore-installed
-        if [ "${{ matrix.distro }}" = "noetic" ]; then
-          python3 -m pip install --upgrade wheel build
-        else
-          python3 -m pip install --upgrade 'setuptools>=70.0,<80' jaraco-functools wheel build
         fi
 
     - name: Setup link to Ros userspace
@@ -406,6 +414,22 @@ jobs:
             --password "${{ secrets.nexus_publisher_password }}" \
             artifacts/*.whl
 
+          else
+            echo "No wheels found, skipping PyPI publish"
+          fi
+
+    - name: Publish wheels to PyPI Integration
+      if: ${{ inputs.deploy == 'true' }}
+      shell: bash
+      run: |
+          WHEEL_COUNT=$(find artifacts -name "*.whl" | wc -l)
+          if [ "$WHEEL_COUNT" -gt 0 ]; then
+            echo "Found $WHEEL_COUNT wheel(s) to publish to PyPI Integration"
+            python3 -m pip install twine
+            python3 -m twine upload --repository-url https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/ \
+            --username "${{ secrets.nexus_publisher_user }}" \
+            --password "${{ secrets.nexus_publisher_password }}" \
+            artifacts/*.whl
           else
             echo "No wheels found, skipping PyPI publish"
           fi
@@ -781,18 +805,3 @@ jobs:
                 exit 1
               fi
             done
-
-    - name: Publish wheels to PyPI Integration
-      shell: bash
-      run: |
-          WHEEL_COUNT=$(find artifacts -name "*.whl" | wc -l)
-          if [ "$WHEEL_COUNT" -gt 0 ]; then
-            echo "Found $WHEEL_COUNT wheel(s) to publish to PyPI Integration"
-            python3 -m pip install twine
-            python3 -m twine upload --repository-url https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/ \
-            --username "${{ secrets.nexus_publisher_user }}" \
-            --password "${{ secrets.nexus_publisher_password }}" \
-            artifacts/*.whl
-          else
-            echo "No wheels found, skipping PyPI publish"
-          fi
