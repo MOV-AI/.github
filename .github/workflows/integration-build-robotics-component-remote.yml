@@ -20,10 +20,6 @@ on:
       test_set:
         required: true
         type: string
-      sim_cluster:
-        required: false
-        default: "any"
-        type: string
       cluster:
         required: false
         default: "mary"
@@ -32,7 +28,16 @@ on:
         required: false
         default: false
         type: boolean
-
+      ci_integration_scripts_version:
+        required: false
+        type: string
+        default: "4.2.0.2"
+      generated_image_name:
+        required: false
+        type: string
+      generated_image_tag:
+        required: false
+        type: string
     secrets:
       auto_commit_user:
         required: true
@@ -58,17 +63,17 @@ on:
         required: true
 
 env:
-  CI_INTEGRATION_SCRIPTS_VERSION: "4.0.0.13"
   GITHUB_API_USR: "OttoMation-Movai"
   USERSPACE_FOLDER_PATH: "$(pwd)/userspace"
   REMOTE_WORKSPACE_PATH: workspace
-  CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.0.0.31"
+  CI_INTEGRATION_CONTAINER_VERSION: "registry.lis.mov.ai/qa/ci-tools:${{ inputs.ci_integration_scripts_version}}"
   CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
   CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_access_key_id }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_access_key }}
   AWS_DEFAULT_REGION: "us-east-1"
-  REGISTRY: registry.cloud.mov.ai
+  REGISTRY: "registry.lis.mov.ai"
+  REGISTRY_PUSH: "registry.cloud.mov.ai"
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
   PROVISION_INFRA_VERSION: "2.2.0-3"
   PROVISION_INFRA_DIR: "provision_scripts"
@@ -79,45 +84,8 @@ env:
   SLACK_CHANNEL: "G0102LEV1CL"
 
 jobs:
-  Select-Simtest-Node:
-    runs-on: pt-agent
-    outputs:
-      sim_cluster: ${{ steps.select_sim_cluster.outputs.sim_cluster }}
-    steps:
-      - name: Checkout workflow scripts repository
-        uses: actions/checkout@v6
-        with:
-          repository: MOV-AI/.github
-          ref: v3
-          path: .github-workflows
-          token: ${{ secrets.auto_commit_pwd }}
-
-      - name: Select simulation cluster
-        id: select_sim_cluster
-        shell: bash
-        run: |
-          set -e
-          selected_cluster="${{ inputs.sim_cluster }}"
-          if [[ -z "$selected_cluster" ]]; then
-            selected_cluster="${{ inputs.cluster }}"
-          fi
-
-          if [[ "$selected_cluster" == "any" || -z "$selected_cluster" ]]; then
-            selected_cluster="$(bash .github-workflows/.github/scripts/select_gpu_free_node.sh -H https://marvin.mov.ai:8006 -u ${{ secrets.proxmox_ve_sim_username }} -p ${{ secrets.proxmox_ve_sim_password }})"
-          fi
-
-          if [[ -z "$selected_cluster" ]]; then
-            echo "::error::Simulation cluster is empty. Provide cluster/sim_cluster or use 'any'."
-            exit 1
-          fi
-
-          echo "sim_cluster=$selected_cluster" >> "$GITHUB_OUTPUT"
-
   Stack-tests:
-    needs: [Select-Simtest-Node]
-    runs-on: simul-${{ needs.Select-Simtest-Node.outputs.sim_cluster }}-queuer
-    env:
-      RESOLVED_CLUSTER: ${{ needs.Select-Simtest-Node.outputs.sim_cluster }}
+    runs-on: simul-${{ inputs.cluster }}-queuer
 
     steps:
       - name: Cleanup Workspace
@@ -125,8 +93,6 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v6
-
-
 
       - name: Login to Private Registry
         uses: docker/login-action@v2
@@ -141,6 +107,7 @@ jobs:
           sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
           mkdir  -p ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
           sudo chmod -R 777 ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
 
       - name: Setup infra environment configs
         id: infra_env_configs_setup
@@ -197,9 +164,9 @@ jobs:
 
           run_type="ci"
 
-          local_manager_prefix="ip-$run_type-${{ env.RESOLVED_CLUSTER }}-${{ inputs.component_name }}-$branch"
+          local_manager_prefix="ip-$run_type-${{ inputs.cluster }}-${{ inputs.component_name }}"
 
-          tf_state="${{ env.RESOLVED_CLUSTER }}-sim-$local_manager_prefix"
+          tf_state="${{ inputs.cluster }}-sim-$local_manager_prefix"
           echo "tf_state = $tf_state"
           echo "local_manager_prefix = $local_manager_prefix"
 
@@ -211,10 +178,10 @@ jobs:
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
         shell: bash
         run: |
-          multiply_node=$(printf '"${{ env.RESOLVED_CLUSTER }}",%.0s' {1..1})
+          multiply_node=$(printf '"${{ inputs.cluster }}",%.0s' {1..1})
           node_list_str=${multiply_node::-1}
 
-          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ env.RESOLVED_CLUSTER }}_simul_bpg.tfvars'
+          var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
 
           echo "proxmox_host_list=[$node_list_str]">>input.tfvars
           echo "fleet_peer_nr=0">>input.tfvars
@@ -229,7 +196,7 @@ jobs:
 
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
-          terraform init -backend-config="key=${{ env.RESOLVED_CLUSTER }}-ci-simul-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
+          terraform init -backend-config="key=${{ inputs.cluster }}-ci-simul-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
           terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
           terraform refresh $var_file_arg -var-file=input.tfvars
 
@@ -341,6 +308,15 @@ jobs:
           name: packages
           path: artifacts/
 
+      - name: Prepare component artifacts for transfer
+        shell: bash
+        run: |
+          cd artifacts
+          for deb in *.deb; do
+            dpkg-deb -f "$deb" Depends | tr ',' '\n' | grep '(=' | sed -E 's/[[:space:]]*\((=|>=|<=|<<|>>)\s*([^)]+)\)[[:space:]]*/=\2/'>dependencies.apt
+          done
+          cp ../regression_install_overwrites.yaml .
+
       - name: Remote - Move component artifacts
         shell: bash
         run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ./artifacts ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
@@ -397,35 +373,44 @@ jobs:
             . test-venv/bin/activate
             python3 -m pip install -r $tests_dir/requirements.txt
             deactivate
-
           '
 
-      - name: Remote - fetch product version
+      - name: Copy pre-install
+        shell: bash
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no .github/workflows/pre_install_platform.bash ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
+
+      - name: Remote - Pre-Install
         shell: bash
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
             cd ${{ env.REMOTE_WORKSPACE_PATH }}
 
-            product_dir=${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product
+            PRODUCT_NAME="${{ inputs.vs_product_name }}"
+            PRODUCT_NAME="${PRODUCT_NAME#project-}"
+            PRODUCT_NAME="${PRODUCT_NAME#movai-}"
+            if [[ "$PRODUCT_NAME" == "studio" ]]; then
+              PRODUCT_NAME="solution"
+            fi
+            export CONFIG_FILE_NAME="product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
 
-            rm -rf $product_dir
-            mkdir -p $product_dir
-            sudo chmod -R 777 $product_dir
+            cp artifacts/*.deb ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+            cp artifacts/regression_install_overwrites.yaml "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/regression_install_overwrites.yaml"
 
-            docker run -u root \
-              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
-              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
-              fetch_product_by_version \
-              --product_version_search ${{ inputs.vs_product_version_pattern}} \
-              --repo ${{ inputs.vs_product_name }} \
-              --gh_api_user ${{ secrets.auto_commit_user }} \
-              --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
-              --target_dir ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/product
-
+            echo "Printing content of execution folder"
             ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
+            # Inputs pre_install_platform.bash
+            export GITHUB_API_USR=${{ secrets.auto_commit_user }}
+            export GITHUB_API_PWD=${{ secrets.auto_commit_pwd }}
+            export LOCAL_MAIN_DEB="true"
+            export CI_TOOLS=${{ env.CI_INTEGRATION_CONTAINER_VERSION }}
+            export PRODUCT_REPO="${{ inputs.vs_product_name }}"
+            export PRODUCT_VERSION="${{ inputs.vs_product_version_pattern }}"
+            export CI_TOOLS_EXEC_FOLDER="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
             sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
 
+            bash pre_install_platform.bash
           '
 
       - name: Remote - Install
@@ -444,22 +429,23 @@ jobs:
 
             export PATH="$HOME/.local/bin:$PATH"
 
-            PRODUCT_NAME="$(echo ${{ inputs.vs_product_name }} | sed '\''s/^project-\(movai-\)\?//'\'' )"
+            PRODUCT_NAME="${{ inputs.vs_product_name }}"
+            PRODUCT_NAME="${PRODUCT_NAME#project-}"
+            PRODUCT_NAME="${PRODUCT_NAME#movai-}"
             if [[ "$PRODUCT_NAME" == "studio" ]]; then
               PRODUCT_NAME="solution"
             fi
             export CONFIG_FILE_NAME="product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
 
-            cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/* ./ && sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
-
+            cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/* ./
             export USERSPACE_FOLDER_PATH="${{ env.USERSPACE_FOLDER_PATH }}"
             sudo mkdir -p $USERSPACE_FOLDER_PATH/.git;sudo chown 1000:1000 $USERSPACE_FOLDER_PATH/ -Rf
             export PUBLIC_IP="$(hostname -I | cut -d " " -f1)"
             export SIMULATION_ID="${{ env.SIMULATION_ID }}"
             export ROBOTNAME="ci_${{ inputs.component_name }}"
+            export REGISTRY="${{ env.REGISTRY }}"
             jq --version
             jq '\''.robot.name = "$ROBOTNAME"'\'' $CONFIG_FILE_NAME > tmp.json && mv tmp.json $CONFIG_FILE_NAME
-
             # Enable debug logs of movai-service
             sudo mkdir -p /etc/movai/
             sudo sh -c "echo MOVAI_SERVICE_LOGGER_LEVEL=DEBUG >> /etc/movai/config.env"
@@ -484,6 +470,28 @@ jobs:
           echo "movai_pwd=4Iva6UHAQq9DGITj" >> $GITHUB_OUTPUT
           echo "robot_name=ci_${{ inputs.component_name }}" >> $GITHUB_OUTPUT
 
+      - name: Copy post-install
+        shell: bash
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no .github/workflows/post_install_platform.bash ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/
+
+      - name: Remote - Post-Install
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+
+            echo "Printing content of execution folder"
+            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+
+            # Inputs pre_install_platform.bash
+            export GITHUB_API_USR=${{ secrets.auto_commit_user }}
+            export GITHUB_API_PWD=${{ secrets.auto_commit_pwd }}
+            export CI_TOOLS=${{ env.CI_INTEGRATION_CONTAINER_VERSION }}
+            export CI_TOOLS_EXEC_FOLDER="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
+
+            bash post_install_platform.bash
+          '
 
       - name: Remote - Run tests
         shell: bash
@@ -498,9 +506,8 @@ jobs:
             cd stack_tests
 
             pytest ${{ inputs.test_set }} \
-              --component-pkgs ../artifacts \
               --movai-user ${{ steps.install.outputs.movai_user }} \
-              --movai-pw ${{ steps.install.outputs.movai_pwd }}
+              --movai-pw ${{ steps.install.outputs.movai_pwd }} -s
 
             deactivate
           '
@@ -533,6 +540,24 @@ jobs:
             ls -la
           '
 
+      - name: Remote - Collect ros1-workspace
+        shell: bash
+        if: always()
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+            container_id=$(docker ps --format "{{.Names}}" --filter "name=(^spawner-.*|^ros1-workspace-.*)")
+            docker exec -t "$container_id" bash -c '\''
+            ls $MOVAI_HOME
+            rm $MOVAI_HOME/.first_run_metadata
+            '\''
+            movai-cli stop "ci_${{ inputs.component_name }}"
+            sleep 2
+            docker commit ${container_id} ${{ env.REGISTRY_PUSH }}/ci/${{ inputs.generated_image_name }}:${{ inputs.generated_image_tag }}
+            docker login ${{ env.REGISTRY_PUSH }} -u ${{ secrets.registry_user }} -p ${{ secrets.registry_password }}
+            docker push ${{ env.REGISTRY_PUSH }}/ci/${{ inputs.generated_image_name }}:${{ inputs.generated_image_tag }}
+          '
       - name: Remote - Move test artifacts
         if: always()
         shell: bash
@@ -553,7 +578,7 @@ jobs:
           attempts=3
           count=0
           while [ $count -lt $attempts ]; do
-            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ env.RESOLVED_CLUSTER }}_simul_bpg.tfvars'
+            var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/marvin/${{ inputs.cluster }}_simul_bpg.tfvars'
             terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars -var "fleet_peer_nr=0"
             exit_status=$?
             if [ $exit_status -eq 0 ]; then

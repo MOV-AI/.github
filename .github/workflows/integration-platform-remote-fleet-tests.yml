@@ -135,7 +135,7 @@ jobs:
         uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Agent info
         run: |
@@ -252,18 +252,24 @@ jobs:
 
       - name: Stash provision_infra_dir
         uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
         with:
           name: provision_infra_dir
           path: ${{ steps.provision_infra_setup.outputs.target_dir }}
 
       - name: Stash infra_env_configs
         uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
         with:
           name: infra_env_configs
           path: ${{ steps.infra_env_configs_setup.outputs.target_dir }}
 
       - name: Stash provisioned_inventory
         uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
         with:
           name: provisioned_inventory
           path: ${{ steps.provision_infra_setup.outputs.target_dir }}/provisioned_inventory.yml
@@ -364,9 +370,10 @@ jobs:
             --key-file ~/.ssh/aws_slave.pem \
             --extra-vars=@"$(pwd)/.."/product-manifest.yaml \
             -e fleet_domain_dns="" \
-            -e "{\"proxycerts__remote_redis_servers_fqn\": [$(cat ../staging/manager_private_ip.txt)]}" \
+            -e "{\"fleet__redis_masters_fqdn\": [$(cat ../staging/manager_private_ip.txt)]}" \
             -e "{\"fleet_manager_san\": [ \"DNS:$(cat ../staging/manager_private_ip.txt)\" ]}" \
-            -e "{\"fleet_extra_hosts\": [ \"10.26.0.10    registry.${{ inputs.proxmox_cluster_name }}.mov.ai traefik\", \"$(cat ../staging/manager_private_ip.txt)    manager ${{ steps.infra_names.outputs.manager_prefix }}\" ]}" \
+            -e "{\"movai_fleet_extra_hosts\": [ \"10.26.0.10    registry.${{ inputs.proxmox_cluster_name }}.mov.ai traefik\", \"$(cat ../staging/manager_private_ip.txt)    manager ${{ steps.infra_names.outputs.manager_prefix }}\" ]}" \
+            --limit 'fleet' \
             --skip-tags "validate,ufw,hardening"
           execution_status=$?
           deactivate
@@ -424,7 +431,7 @@ jobs:
       QA_ARTIFACTS_PATH: ${{ matrix.fleet_test_name }}_qa_artifacts
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Remote - Setup QA ${{ matrix.fleet_test_name }} tests
         if: ${{ inputs.with_fleet_tests }}
@@ -569,23 +576,25 @@ jobs:
     if: always()
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Unstash provision_infra_dir
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: provision_infra_dir
           path: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
 
       - name: Unstash infra_env_configs
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: infra_env_configs
           path: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_infra_env_configs }}
 
       - name: Teardown remote vms (Proxmox)
         working-directory: ${{ needs.Fleet-Tests-Provisioning.outputs.target_dir_provision_infra }}
-        if: ${{ ( !inputs.debug_fleet_keep_alive && success() ) || cancelled() || ( !inputs.debug_fleet_keep_alive && failure() ) }}
+        if: ${{ needs.Fleet-Tests-Provisioning.result != 'skipped' && ( ( !inputs.debug_fleet_keep_alive && success() ) || cancelled() || ( !inputs.debug_fleet_keep_alive && failure() ) ) }}
         shell: bash
         run: |
           set +e

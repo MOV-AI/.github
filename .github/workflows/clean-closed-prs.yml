@@ -33,7 +33,7 @@ jobs:
         registry: ${{ fromJSON(inputs.registries) }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Clean Artifacts from github
         id: clean_artifacts

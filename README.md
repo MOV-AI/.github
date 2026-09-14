@@ -42,6 +42,26 @@ This workflow builds projects of type composite (multiple products/squads in one
 ## - name: Build Product
 This workflow builds projects running on the MOV.AI platform.
 
+### Retro-compatibility
+
+To maintain compatibility with older projects, this workflow supports two configuration formats.
+
+- **Versions earlier than 3.0.0** only support ROS 1 and use the legacy `ros_distro` parameter. Existing projects using this format remain fully supported:
+
+```yaml
+product_name: "spawner-name"
+ros_distro: '["noetic"]'
+```
+
+- **Version 3.0.0 and later** support multiple workspace services and distributions. New projects should use the product_distro_list parameter instead:
+
+```yaml
+product_name: "spawner-name"
+product_distro_list: '[{"service":"ros1-workspace","distro":"noetic"}]'
+```
+
+For docker base artifact resolution in the Build Product workflow, the `_<distro>` suffix is now decided by service type, not product version: it is added only when the workspace service is `spawner`.
+
 ## - name: Install Tests
 This workflow run QA install tests for the MOV.AI platform.
 

@@ -70,7 +70,7 @@ jobs:
       deploy: ${{ inputs.deploy }}
       release: ${{ inputs.release }}
       run_black: ${{ inputs.run_black }}
-      with_docs: true
+      with_docs: ${{ inputs.with_docs }}
       prod_publish_repos: ${{ inputs.prod_publish_pypi }}
       PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
       test_on_host: ${{ inputs.test_on_host }}
@@ -80,7 +80,7 @@ jobs:
     needs: [Build]
     runs-on: ubuntu-22.04
     container:
-      image: registry.aws.cloud.mov.ai/qa/ros-buildtools-noetic:v2.0.18
+      image: registry.hel.mov.ai/qa/ros-buildtools-noetic:v2.2.0
       options: --user root
       credentials:
         username: ${{secrets.registry_user}}
@@ -97,7 +97,7 @@ jobs:
         echo "Raise commit: ${{ needs.Build.outputs.commit_id }}"
 
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
 
@@ -136,13 +136,13 @@ jobs:
     if: ${{ inputs.deploy }}
     runs-on: ubuntu-22.04
     container:
-      image: registry.aws.cloud.mov.ai/devops/py-buildserver:latest
+      image: registry.hel.mov.ai/qa/py-buildserver:4.0.2
       credentials:
         username: ${{secrets.registry_user}}
         password: ${{secrets.registry_password}}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -248,7 +248,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Set tag output
       id: vars
