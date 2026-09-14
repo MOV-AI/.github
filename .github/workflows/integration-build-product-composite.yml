@@ -111,14 +111,14 @@ env:
   USERSPACE_FOLDER_PATH: /opt/movai/userspace
   REMOTE_WORKSPACE_PATH: workspace
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-16"
+  PROVISION_INFRA_VERSION: "2.0.0-17"
   # slack channel movai-projects
   SLACK_CHANNEL: ${{ inputs.overwrite_slack_channel }}
   # development slack channel
   # SLACK_CHANNEL: "C05K2KF1UP8"
   PROJECT_DATA_VIEWER_API: "https://personal-7vf0v2cu.outsystemscloud.com/ProjectDataViewer5/rest/V1//CreateProject"
   MINIO_S3_URL: "https://s3.mov.ai"
-  PROVISIONING_ENV_VERSION: 0.1.0-17
+  PROVISIONING_ENV_VERSION: 0.2.0-6
   PROVISIONING_ENV_REPO: devops-tf-env-conf
 
 jobs:
@@ -135,11 +135,11 @@ jobs:
 
       - name: Checkout
         if: ${{ inputs.is_nightly_run == false }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Nightly Checkout
         if: ${{ inputs.is_nightly_run }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.nightly_run_branch }}
 
@@ -231,6 +231,15 @@ jobs:
           path: platform_configs/*
           retention-days: 5
 
+      - name: Cleanup CI workspace
+        if: always()
+        shell: bash
+        run: |
+          rm -rf ci-venv
+          rm -rf ci_artifacts
+          rm -rf simulator_artifacts
+          rm -rf platform_configs
+
   Build-Spawner:
     needs: [Validate-boostrap-configs]
     strategy:
@@ -244,7 +253,7 @@ jobs:
       - uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Agent info
         run: |
@@ -415,7 +424,7 @@ jobs:
       - uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Agent info
         run: |
@@ -635,7 +644,7 @@ jobs:
         if: ${{ inputs.with_simulation }}
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         if: ${{ inputs.with_simulation }}
 
       - name: Agent info
@@ -819,7 +828,7 @@ jobs:
 
       - name: Checkout
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Agent info
         if: ${{ inputs.with_simulation }}
@@ -828,6 +837,7 @@ jobs:
           echo "private ip: $(hostname -I | awk '{print $1}')"
 
       - name: Setup CI Scripts in ci-venv
+        if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation }}
         shell: bash
         run: |
           python3 -m venv ci-venv --clear
@@ -1054,7 +1064,7 @@ jobs:
       - uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Agent info
         run: |
@@ -1452,7 +1462,7 @@ jobs:
       - uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Agent info
         run: |
@@ -1814,7 +1824,7 @@ jobs:
       - uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Agent info
         run: |
@@ -1972,11 +1982,13 @@ jobs:
           echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
       - name: Raise App version
-        uses: CasperWA/push-protected@v2.14.0
+        uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
         with:
           token: ${{ secrets.auto_commit_pwd }}
+          git_user_email: ${{ secrets.auto_commit_mail }}
+          git_user_name: ${{ secrets.auto_commit_user }}
           branch: ${{ steps.pre_raise.outputs.branch }}
-          unprotect_reviews: true
+          repository: ${{ github.repository }}
 
       - name: Github Publish
         shell: bash

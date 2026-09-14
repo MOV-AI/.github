@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
     - id: check-json                # checks if json files are valid
     - id: check-added-large-files   # checks if large files were added
@@ -12,7 +12,7 @@ repos:
       args: [--fix=lf]
     - id: trailing-whitespace       # removes trailing whitespaces from text files
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.7
+    rev: v1.7.8
     hooks:
       - id: actionlint
         args:
@@ -26,3 +26,5 @@ repos:
           - 'label ".+" is unknown'
           - -ignore  # Ignore SC2129: Consider using { cmd1; cmd2; } >> file instead of individual redirects
           - SC2129
+          - -ignore  # Ignore SC1083: This { is literal. Check expression (missing ;/\n?) or quote to prevent this.
+          - SC1083

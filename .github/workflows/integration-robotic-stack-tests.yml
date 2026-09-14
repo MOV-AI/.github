@@ -72,12 +72,12 @@ env:
   JIRA_PASSWORD: ${{ secrets.jira_password}}
   SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-16"
+  PROVISION_INFRA_VERSION: "2.0.0-17"
   PROVISION_INFRA_DIR: "provision_scripts"
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISIONING_ENV_CONF_VERSION: "0.1.0-17"
+  PROVISIONING_ENV_CONF_VERSION: "0.2.0-6"
   PROVISION_ENV_CONF_DIR: "infra_env_configs"
 
 jobs:
@@ -268,7 +268,7 @@ jobs:
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
               sudo systemctl restart docker
               sleep 3
-              docker run --gpus=all --rm nvcr.io/nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi 2>&1
+              docker run --gpus=all --rm nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi 2>&1
               '
 
       - name: Slack message failure
@@ -543,7 +543,7 @@ jobs:
             # for sanity
             docker ps -a
 
-            for container in backend spawner messager-server; do
+            for container in backend spawner message-server; do
               CONTAINER_ID=$(docker ps -a --format '{{.Names}}' --filter "name=^${container}-.*")
               docker logs "${CONTAINER_ID}" &> "${container}.log" || true
             done || true

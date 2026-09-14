@@ -112,7 +112,7 @@ env:
   USERSPACE_FOLDER_PATH: /opt/movai/userspace
   REMOTE_WORKSPACE_PATH: workspace
   PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
-  PROVISION_INFRA_VERSION: "2.0.0-16"
+  PROVISION_INFRA_VERSION: "2.0.0-17"
   # slack channel movai-projects
   SLACK_CHANNEL: ${{ inputs.overwrite_slack_channel }}
   # development slack channel
@@ -121,7 +121,7 @@ env:
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   TIMEOUT: 720
-  PROVISIONING_ENV_VERSION: 0.1.0-17
+  PROVISIONING_ENV_VERSION: 0.2.0-6
   PROVISIONING_ENV_REPO: devops-tf-env-conf
 
 jobs:
@@ -168,11 +168,11 @@ jobs:
     steps:
       - name: Checkout
         if: ${{ inputs.is_nightly_run == false }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Nightly Checkout
         if: ${{ inputs.is_nightly_run }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.nightly_run_branch }}
 
@@ -314,11 +314,11 @@ jobs:
       - uses: rtCamp/action-cleanup@master
       - name: Checkout
         if: ${{ inputs.is_nightly_run == false }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Nightly Checkout
         if: ${{ inputs.is_nightly_run }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.Validate-boostrap-configs.outputs.commit_hash }}
 
@@ -489,11 +489,11 @@ jobs:
 
       - name: Checkout
         if: ${{ inputs.is_nightly_run == false }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Nightly Checkout
         if: ${{ inputs.is_nightly_run }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.Build-Spawner.outputs.commit_hash }}
 
@@ -613,7 +613,8 @@ jobs:
         shell: bash
         run: |
           set -e
-          movai-cli apt_cache stop
+          movai-cli apt_cache stop || true
+          movai-cli apt_cache disable || true
 
           robots_str=$(movai-cli robots list)
           readarray -t robots <<< "$robots_str"
@@ -787,11 +788,11 @@ jobs:
 
       - name: Checkout
         if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run == false }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Nightly Checkout
         if: ${{ inputs.with_simulation == 'true' && inputs.is_nightly_run }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.Build-Spawner.outputs.commit_hash }}
 
@@ -977,11 +978,11 @@ jobs:
 
       - name: Checkout
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' && inputs.is_nightly_run == false }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Nightly Checkout
         if: ${{ needs.Build-Simulator.outputs.skip_simulator == 'false' && inputs.with_simulation == 'true' && inputs.is_nightly_run }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.Build-Spawner.outputs.commit_hash }}
 
@@ -1246,11 +1247,11 @@ jobs:
 
       - name: Checkout
         if: ${{ inputs.with_simulation_tests && inputs.is_nightly_run == false }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Nightly Checkout
         if: ${{ inputs.with_simulation_tests && inputs.is_nightly_run }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.Build-Spawner.outputs.commit_hash }}
 
@@ -1453,7 +1454,7 @@ jobs:
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
               sudo systemctl restart docker
               sleep 3
-              docker run --gpus=all --rm nvcr.io/nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi 2>&1
+              docker run --gpus=all --rm nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi 2>&1
           '
 
       - name: Slack message failure
@@ -1942,7 +1943,7 @@ jobs:
         if: ${{ inputs.is_nightly_run == false }}
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         if: ${{ inputs.is_nightly_run == false }}
 
       - name: Agent info
@@ -2115,11 +2116,13 @@ jobs:
 
       - name: Raise App version
         if: ${{ inputs.is_nightly_run == false }}
-        uses: CasperWA/push-protected@v2.14.0
+        uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
         with:
           token: ${{ secrets.auto_commit_pwd }}
+          git_user_email: ${{ secrets.auto_commit_mail }}
+          git_user_name: ${{ secrets.auto_commit_user }}
           branch: ${{ steps.pre_raise.outputs.branch }}
-          unprotect_reviews: true
+          repository: ${{ github.repository }}
 
       - name: Github Publish
         if: ${{ inputs.is_nightly_run == false }}

@@ -95,7 +95,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v6
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -171,7 +171,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v6
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -253,7 +253,7 @@ jobs:
       commit_id: ${{ steps.commit_id.outputs.commit_id }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -292,11 +292,13 @@ jobs:
 
       - name: Raise App version
         if: ${{ inputs.deploy == 'true' }}
-        uses: CasperWA/push-protected@v2.14.0
+        uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
         with:
           token: ${{ secrets.auto_commit_pwd }}
+          git_user_email: ${{ secrets.auto_commit_mail }}
+          git_user_name: ${{ secrets.auto_commit_user }}
           branch: ${{ steps.var_branch.outputs.branch }}
-          unprotect_reviews: true
+          repository: ${{ github.repository }}
 
       - name: Commit of version
         id: commit_id
@@ -323,7 +325,7 @@ jobs:
       commit_id: ${{ needs.Raise.outputs.commit_id }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v6
       with:
         submodules: recursive
 
@@ -385,7 +387,7 @@ jobs:
 
     - name: Checkout
       if: ${{ inputs.release == 'false' && inputs.rpm_build == 'true' }}
-      uses: actions/checkout@v3
+      uses: actions/checkout@v6
       with:
         submodules: recursive
 
@@ -456,7 +458,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -613,7 +615,7 @@ jobs:
         password: ${{secrets.registry_password}}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -777,7 +779,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v6
 
     - name: Set tag output
       id: vars

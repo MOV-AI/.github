@@ -91,7 +91,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -138,7 +138,7 @@ jobs:
         fi
 
     - name: Run lint-staged
-      if: ${{ inputs.run_lint_staged == 'true' }}
+      if: ${{ inputs.run_lint_staged == 'true' && github.event_name == 'pull_request' }}
       run: |
         echo "The following files were changed from origin/${GITHUB_BASE_REF}...origin/${GITHUB_HEAD_REF} and will be validated:"
         git --no-pager diff "origin/${GITHUB_BASE_REF}...origin/${GITHUB_HEAD_REF}" --name-only
@@ -186,7 +186,11 @@ jobs:
           }
 
     - name: Build
-      run: ${{ inputs.pm }} run build
+      id: build_step
+      run: |
+        node_path=$(which node)
+        echo "node_path=$node_path" >> $GITHUB_OUTPUT
+        ${{ inputs.pm }} run build
 
     - name: Check NPM log on failure
       if: ${{ failure() }}
@@ -203,22 +207,23 @@ jobs:
         sonar_token: ${{ secrets.sonar_token }}
 
     - name: SonarCloud Scan
-      uses: SonarSource/sonarcloud-github-action@v2.0.2
+      uses: SonarSource/sonarqube-scan-action@v6
       env:
         GITHUB_TOKEN: ${{ github.token }}  # Needed to get PR information, if any
         SONAR_TOKEN: ${{ secrets.sonar_token }}
       with:
         projectBaseDir: ./
         args: >
-          -Dsonar.organization=mov-ai
-          -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
-          -Dsonar.sources=.
-          -Dsonar.scm.provider=git
-          -Dsonar.qualitygate.wait=true
-          -Dsonar.qualitygate.timeout=300
-          -Dsonar.coverage.exclusions=**/*.test.js,**/*.test.jsx
-          -Dsonar.cpd.exclusions=**/*.test.js,**/*.test.jsx
-          -Dsonar.javascript.lcov.reportPaths=./coverage/lcov.info
+          "-Dsonar.organization=mov-ai"
+          "-Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}"
+          "-Dsonar.sources=."
+          "-Dsonar.scm.provider=git"
+          "-Dsonar.qualitygate.wait=true"
+          "-Dsonar.qualitygate.timeout=300"
+          "-Dsonar.coverage.exclusions=**/*.test.js,**/*.test.jsx"
+          "-Dsonar.cpd.exclusions=**/*.test.js,**/*.test.jsx"
+          "-Dsonar.javascript.lcov.reportPaths=./coverage/lcov.info"
+          "-Dsonar.nodejs.executable=${{ steps.build_step.outputs.node_path }}"
 
     - name: Link to SonarCloud dashboard
       shell: bash
@@ -284,7 +289,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
@@ -374,11 +379,13 @@ jobs:
         echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
     - name: Raise App version
-      uses: CasperWA/push-protected@v2.14.0
+      uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
       with:
         token: ${{ secrets.auto_commit_pwd }}
+        git_user_email: ${{ secrets.auto_commit_mail }}
+        git_user_name: ${{ secrets.auto_commit_user }}
         branch: ${{ steps.pre_raise.outputs.branch }}
-        unprotect_reviews: true
+        repository: ${{ github.repository }}
 
     - name: Find Package details
       id: vars-after-raise
@@ -431,7 +438,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Set tag output
       id: vars

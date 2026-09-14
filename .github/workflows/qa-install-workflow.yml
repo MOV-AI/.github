@@ -45,7 +45,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+
+      - name: Configure git safe directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Feature file validation
         shell: bash
@@ -73,7 +76,10 @@ jobs:
         uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+
+      - name: Configure git safe directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Agent info
         id: agent_info
@@ -83,10 +89,11 @@ jobs:
 
       - name: Update/upgrade host packages
         run: |
+          export DEBIAN_FRONTEND=noninteractive
           while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
           sudo apt-get update
           while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do echo Waiting for other software managers to finish... ; sleep 5;done
-          sudo apt-get upgrade -y
+          sudo apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -y
 
       - name: Setup venv
         shell: bash
@@ -125,7 +132,7 @@ jobs:
         shell: bash
         run: |
           # added to match EE job
-          container_id=$(docker ps --format '{{.Names}}' --filter "name=^spawner-.*")
+          container_id=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace.*)")
           docker exec -t "$container_id" bash -c '
             set -e
             export PATH="$HOME/.local/bin:$PATH"

@@ -41,7 +41,7 @@ on:
         required: true
 
 env:
-  RUN_STAGING_DIR: "/home/devops/packer-ci/staging/${{ github.repository }}/${{ github.run_id}}/"
+  RUN_STAGING_DIR: "/media/nfs-share/devops-packer-img/${{ github.repository }}/${{ github.run_id}}/"
   PROXMOX_NFS_SERVER_PATH: "/media/nas-mary/template/iso"
   PROXMOX_NFS_SERVER_URL: "https://hel.mov.ai:8006/#v1:0:=storage%2Fhel%2Fnas-mary:4:5:=contentIso:::::"
   PACKER_GITHUB_API_TOKEN: ${{ secrets.packer_token_id }}
@@ -66,7 +66,7 @@ jobs:
     if: ${{ inputs.release == 'false' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install pre-reqs
         run: |
@@ -99,7 +99,14 @@ jobs:
         uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+
+      - name: Install pre-reqs
+        run: |
+          curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+          sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+          sudo apt update
+          sudo apt install -y --no-install-recommends qemu qemu-kvm qemu-utils virt-manager bridge-utils cloud-init genisoimage packer
 
       - name: Raise Version
         id: raise
@@ -113,6 +120,16 @@ jobs:
           echo $RAISED_COMP_VERSION>version
           echo $RAISED_COMP_VERSION
           echo "raised_version=$RAISED_COMP_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Reset SSH known_hosts for packer localhost forwards
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          touch ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          # Packer uses ephemeral localhost forwarded ports. On persistent runners,
+          # old entries can trigger host key mismatch and break ansible provisioning.
+          : > ~/.ssh/known_hosts
 
       - name: Packer build
         shell: bash
@@ -143,7 +160,7 @@ jobs:
     if: ${{ inputs.deploy == 'true' && inputs.release == 'false' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Commit raise
         if: ${{ inputs.deploy == 'true' }}
@@ -164,11 +181,13 @@ jobs:
           echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
       - name: Raise App version
-        uses: CasperWA/push-protected@v2
+        uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
         with:
           token: ${{ secrets.auto_commit_pwd }}
+          git_user_email: ${{ secrets.auto_commit_mail }}
+          git_user_name: ${{ secrets.auto_commit_user }}
           branch: ${{ steps.pre_raise_push.outputs.branch }}
-          unprotect_reviews: true
+          repository: ${{ github.repository }}
 
       - name: Commit info
         id: commit
@@ -194,7 +213,7 @@ jobs:
     if: ${{ inputs.deploy == 'true' && inputs.release == 'false' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Test NFS server
         run: |
@@ -267,7 +286,7 @@ jobs:
       tag: ${{ steps.vars.outputs.tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Test NFS server
         run: |

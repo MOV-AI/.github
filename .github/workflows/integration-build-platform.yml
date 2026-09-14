@@ -98,8 +98,10 @@ env:
   SLACK_CHANNEL: "C02U028NMB7" # rnd-platform
   # development slack channel
   #SLACK_CHANNEL: "C05K2KF1UP8"
-  PROVISIONING_ENV_VERSION: 0.1.0-17
+  PROVISIONING_ENV_VERSION: 0.2.0-6
   PROVISIONING_ENV_REPO: devops-tf-env-conf
+  PROVISION_INFRA_REPO: "devops-tf-proxmox-bpg"
+  PROVISION_INFRA_VERSION: "2.0.0-17"
   ARTIFACTS_RETENTION_DAYS: 15
 
 jobs:
@@ -114,7 +116,7 @@ jobs:
       slack_thread_id: ${{ fromJson(steps.send-message.outputs.slack-result).response.message.ts }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate Manifest
         shell: bash
@@ -211,7 +213,7 @@ jobs:
         uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Agent info
         id: agent_info
@@ -368,7 +370,7 @@ jobs:
             --movai-user ${{ steps.install.outputs.movai_user }} \
             --movai-pw ${{ steps.install.outputs.movai_pwd }} \
             --cucumberjson=./results.json \
-            --junit-xml=junit.xml 
+            --junit-xml=junit.xml
 
           curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
           ./trunk flakytests upload \
@@ -514,7 +516,7 @@ jobs:
         uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Agent info
         id: agent_info
@@ -622,13 +624,13 @@ jobs:
           pip install buildkite-test-collector
           curl -LO https://trunk.io/releases/trunk && chmod +x ./trunk
           if [ "${{ steps.install_tests_setup.outputs.jira_report }}" == "True" ] ; then
-          
+
           python3 -m pytest tests/ \
               -ra \
               -k '${{ steps.install_tests_setup.outputs.test_set }}' \
               --installPath="." --jsonConfigFilePath="../basic-standalone-noetic.json.ci" \
               --jira_report \
-              --junit-xml=junit.xml 
+              --junit-xml=junit.xml
 
           else
           python3 -m pytest tests/ \
@@ -641,7 +643,7 @@ jobs:
               --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
               --junit-paths "junit.xml" # replace this with the path to your junit files
           deactivate
-          
+
           user=$(cat results/credentials.txt | awk -F: '{print $1}')
           pwd=$(cat results/credentials.txt | awk -F: '{print $2}')
 
@@ -820,7 +822,7 @@ jobs:
         uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Agent info
         id: agent_info
@@ -920,7 +922,7 @@ jobs:
             -m "not fleet" \
             --junit-xml=junit.xml
 
-            
+
           ./trunk flakytests upload \
               --org-url-slug "movai" \
               --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
@@ -1032,7 +1034,7 @@ jobs:
         uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Agent info
         id: agent_info
@@ -1274,7 +1276,7 @@ jobs:
         uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Agent info
         id: agent_info
@@ -1315,8 +1317,8 @@ jobs:
         shell: bash
         run: |
           provision_infra_dir=provision_scripts
-          provision_infra_version=1.0.0-3
-          provision_infra_repo_name=devops-tf-proxmox-bpg
+          provision_infra_version=${{ env.PROVISION_INFRA_VERSION }}
+          provision_infra_repo_name=${{ env.PROVISION_INFRA_REPO }}
 
           rm -rf $provision_infra_dir
           . .ci-venv/bin/activate
@@ -1636,7 +1638,7 @@ jobs:
         uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Agent info
         id: agent_info
@@ -1794,7 +1796,7 @@ jobs:
       - uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Agent info
         run: |
@@ -1932,7 +1934,7 @@ jobs:
             -m 'simulator' \
             --tb=short \
             --junit-xml=junit.xml
-            
+
           ./trunk flakytests upload \
             --org-url-slug "movai" \
             --token "60df2c8fa3c66877002b26c722ec2708e80d7fad" \
@@ -2102,7 +2104,7 @@ jobs:
         uses: rtCamp/action-cleanup@master
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Agent info
         id: agent_info
@@ -2199,11 +2201,13 @@ jobs:
           echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
       - name: Raise App version
-        uses: CasperWA/push-protected@v2.14.0
+        uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
         with:
           token: ${{ secrets.auto_commit_pwd }}
+          git_user_email: ${{ secrets.auto_commit_mail }}
+          git_user_name: ${{ secrets.auto_commit_user }}
           branch: ${{ steps.pre_raise.outputs.branch }}
-          unprotect_reviews: true
+          repository: ${{ github.repository }}
 
       - name: Github Publish
         shell: bash
