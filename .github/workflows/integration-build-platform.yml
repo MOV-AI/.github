@@ -760,7 +760,7 @@ jobs:
       simulation_qa_version: ${{ inputs.simulation_qa_version }}
 
   Publish:
-    needs: [Validations-Finish, Simulator-Validations, Robotic-Stack-Integration]
+    needs: [Validations-Finish, Fleet-Validations, Simulator-Validations, Robotic-Stack-Integration]
     runs-on: integration-pipeline
     outputs:
       slack_thread_id: ${{ needs.Validations-Finish.outputs.slack_thread_id }}
