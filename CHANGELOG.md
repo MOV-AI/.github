@@ -9,6 +9,9 @@ All notable changes to this repository will be documented in this file.
   SARIF upload to code scanning, unit tests, optional Docker-backed component tests, coverage in
   lcov or cobertura, and the SonarCloud quality gate. Scoped to testing only; build, versioning
   and publishing stay in the consuming repository.
+- `test_filter` input on `rust-test-workflow.yml`: a cargo-nextest filter expression, the
+  equivalent of `cargo test -- --skip <pattern>` for repositories that exclude a class of
+  tests from the main run.
 - Documentation for `Rust Tests and Coverage` in README.md and docs/workflows.md.
 
 ### Changed

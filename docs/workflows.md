@@ -171,6 +171,7 @@ Keep those stages in the consuming repository.
 | `runner_label` | string | `ubuntu-24.04` | Runner label |
 | `packages` | string | - | Cargo package selection, e.g. `--workspace` or `-p my-crate`. A virtual workspace manifest needs `--workspace` |
 | `unit_test_args` | string | `--lib --bins` | Target selection for the unit tier. The default excludes `tests/`, where Docker- or network-dependent tests usually live. Pass an empty string when `tests/` is hermetic |
+| `test_filter` | string | - | A cargo-nextest filter expression appended to the unit run, e.g. `not test(regression)`. This is the nextest equivalent of `cargo test -- --skip <pattern>`; nextest has no `--skip`, it filters by expression |
 | `component_tests` | boolean | `false` | Run a second pass over `tests/` with a longer slow-test timeout. Requires a Docker daemon |
 | `component_test_threads` | number | `2` | Concurrency for the component pass. Several database containers plus an identity provider will exhaust a 4 GB hosted runner at full parallelism |
 | `install_protoc` | boolean | `false` | Install `protobuf-compiler` from apt. Leave `false` when `build.rs` uses `protoc-bin-vendored` |

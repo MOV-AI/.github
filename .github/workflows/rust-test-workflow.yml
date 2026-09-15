@@ -37,6 +37,16 @@ on:
           is where integration tests that need Docker or a network normally live.
           Pass an empty string for a repository whose tests/ are all hermetic.
 
+      test_filter:
+        required: false
+        type: string
+        default: ''
+        description: >
+          A cargo-nextest filter expression appended to the unit run, e.g.
+          "not test(regression)" to exclude tests whose name contains
+          "regression". This is the nextest equivalent of `cargo test -- --skip
+          <pattern>`; nextest has no `--skip`, it filters by expression.
+
       component_tests:
         required: false
         type: boolean
@@ -175,7 +185,8 @@ jobs:
           cargo llvm-cov ${{ inputs.packages }} ${{ inputs.unit_test_args }} \
             --${{ inputs.coverage_format }} \
             --output-path coverage-unit.${{ inputs.coverage_format == 'lcov' && 'info' || 'xml' }} \
-            nextest --no-fail-fast
+            nextest --no-fail-fast \
+            ${{ inputs.test_filter && format('-E ''{0}''', inputs.test_filter) || '' }}
 
       - name: Doc tests
         run: cargo test ${{ inputs.packages }} --doc
