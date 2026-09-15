@@ -739,7 +739,7 @@ jobs:
 
             echo "::group::Download test repository"
             rm -rf $tests_repo_name
-            tests_ref="${{ github.head_ref || github.ref_name }}"
+            tests_ref="${{ github.ref }}"
             if [[ "${{ inputs.fetch_tests_from_triggering_ref }}" == "true" && -n "$tests_ref" ]]; then
               echo "Fetching test repository by ref $tests_ref"
               integration-pipeline fetch_by_tag --repo $tests_repo_name --version "$tests_ref" --gh_api_user ${{ env.GITHUB_API_USR }} --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
