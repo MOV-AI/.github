@@ -3,6 +3,25 @@
 
 All notable changes to this repository will be documented in this file.
 
+## [v3] - 2026-09-15
+### Added
+- `rust-test-workflow.yml`: shared white-box stage for Rust repositories — rustfmt, clippy with
+  SARIF upload to code scanning, unit tests, optional Docker-backed component tests, coverage in
+  lcov or cobertura, and the SonarCloud quality gate. Scoped to testing only; build, versioning
+  and publishing stay in the consuming repository.
+- Documentation for `Rust Tests and Coverage` in README.md and docs/workflows.md.
+
+### Changed
+- N/A
+
+### Fixed
+- N/A
+
+### Removed
+- N/A
+
+---
+
 ## [v3] - 2026-03-27
 ### Added
 - Support for multiple ROS distros (Noetic and Humble) in `ros-workflow.yml` with dynamic Docker image selection based on distro

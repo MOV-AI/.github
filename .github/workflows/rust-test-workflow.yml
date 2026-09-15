@@ -1,0 +1,232 @@
+name: Rust Tests and Coverage
+
+# Scope is deliberately narrow: format, lint, test, coverage, Sonar. It does NOT
+# build release binaries, raise versions, publish to Nexus or cut releases.
+# Those steps are where repositories genuinely differ — workspace-agent ships two
+# musl binaries plus a Python wheel, metaplanner ships two container images — and
+# folding them in is what makes a "shared" workflow accumulate repo-specific
+# branches until nobody dares touch it.
+#
+# Two consumers are in view:
+#   workspace-agent   single crate + Python bindings, protoc from apt
+#   movai-metaplanner 11-crate workspace, protoc vendored, Docker-backed
+#                     component tests that must be separated from unit tests
+#
+# Everything they disagree about is an input below.
+
+on:
+  workflow_call:
+    inputs:
+      runner_label:
+        required: false
+        type: string
+        default: ubuntu-24.04
+        description: Runner label. Note ubuntu-22.04 is on the deprecation path.
+
+      packages:
+        required: false
+        type: string
+        default: ''
+        description: >
+          Cargo package selection, e.g. '--workspace' or '-p my-crate'. Empty
+          means cargo's default for the manifest. A virtual workspace manifest
+          needs '--workspace' for anything that is not already workspace-wide.
+
+      unit_test_args:
+        required: false
+        type: string
+        default: '--lib --bins'
+        description: >
+          Target selection for the unit tier. The default excludes tests/, which
+          is where integration tests that need Docker or a network normally live.
+          Pass an empty string for a repository whose tests/ are all hermetic.
+
+      component_tests:
+        required: false
+        type: boolean
+        default: false
+        description: >
+          Run a second pass over tests/ with a longer slow-test timeout. Requires
+          a Docker daemon on the runner.
+
+      component_test_threads:
+        required: false
+        type: number
+        default: 2
+        description: >
+          Concurrency for the component pass. Several database containers plus an
+          identity provider will exhaust a 4 GB hosted runner at full parallelism.
+
+      install_protoc:
+        required: false
+        type: boolean
+        default: false
+        description: >
+          Install protobuf-compiler from apt. Leave false when build.rs uses
+          protoc-bin-vendored, which already ships a pinned binary.
+
+      build_warnings:
+        required: false
+        type: string
+        default: warn
+        description: >
+          Passed to setup-rust-toolchain, which sets CARGO_BUILD_WARNINGS. That
+          action defaults this to 'deny'; the default here is 'warn' so adopting
+          the workflow does not immediately fail a repository with an existing
+          warning backlog. Move to 'deny' once the backlog is cleared.
+
+      clippy:
+        required: false
+        type: boolean
+        default: true
+      clippy_blocking:
+        required: false
+        type: boolean
+        default: false
+        description: >
+          When false, clippy findings are uploaded to code scanning as SARIF and
+          the job does not fail. This is how a repository measures its backlog
+          before committing to it.
+
+      coverage_format:
+        required: false
+        type: string
+        default: lcov
+        description: lcov or cobertura.
+
+      sonar:
+        required: false
+        type: boolean
+        default: true
+      sonar_args:
+        required: false
+        type: string
+        default: ''
+        description: >
+          Extra -D flags. Prefer a sonar-project.properties file in the consuming
+          repository: source and exclusion lists belong in a reviewable file, not
+          in a one-line string. The quality-gate wait is added automatically.
+
+    secrets:
+      sonar_token:
+        required: false
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  rust:
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Sonar derives new-code from git blame. A shallow clone silently
+          # degrades that, and the failure is invisible — the scan still passes.
+          fetch-depth: 0
+
+      - name: Install protoc
+        if: inputs.install_protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends protobuf-compiler
+          protoc --version
+
+      # Installs whatever rust-toolchain.toml declares when `toolchain` is
+      # omitted, and caches internally — so no separate rust-cache step.
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache-shared-key: shared
+          cache-save-if: ${{ github.event_name == 'push' }}
+          build-warnings: ${{ inputs.build_warnings }}
+
+      # Prebuilt binaries. `cargo install` would compile each of these from
+      # source on every run.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,cargo-llvm-cov,clippy-sarif,sarif-fmt
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        id: clippy
+        if: inputs.clippy
+        continue-on-error: ${{ !inputs.clippy_blocking }}
+        run: |
+          set -o pipefail
+          cargo clippy ${{ inputs.packages }} --all-targets --all-features \
+            --message-format=json | clippy-sarif | tee clippy.sarif | sarif-fmt
+
+      - name: Upload clippy SARIF
+        if: always() && inputs.clippy && hashFiles('clippy.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: clippy.sarif
+          category: clippy
+
+      - name: Unit tests with coverage
+        run: |
+          cargo llvm-cov ${{ inputs.packages }} ${{ inputs.unit_test_args }} \
+            --${{ inputs.coverage_format }} \
+            --output-path coverage-unit.${{ inputs.coverage_format == 'lcov' && 'info' || 'xml' }} \
+            nextest --no-fail-fast
+
+      - name: Doc tests
+        run: cargo test ${{ inputs.packages }} --doc
+
+      - name: Component tests
+        if: inputs.component_tests
+        env:
+          # Ryuk reaps containers, which an ephemeral runner does anyway, and it
+          # is a recurring cause of CI hangs.
+          TESTCONTAINERS_RYUK_DISABLED: "true"
+        run: |
+          cargo llvm-cov ${{ inputs.packages }} --tests \
+            --${{ inputs.coverage_format }} \
+            --output-path coverage-component.${{ inputs.coverage_format == 'lcov' && 'info' || 'xml' }} \
+            nextest --no-fail-fast --test-threads ${{ inputs.component_test_threads }}
+
+      - name: Coverage summary
+        if: always() && inputs.coverage_format == 'lcov'
+        run: |
+          for f in coverage-*.info; do
+            [ -f "$f" ] || continue
+            awk -F: -v n="$f" '/^LF:/{t+=$2} /^LH:/{h+=$2} END{
+              if (t>0) printf "%s: %.1f%% (%d/%d lines)\n", n, 100*h/t, h, t }' "$f"
+          done | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rust-coverage
+          path: coverage-*
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Creates the project if absent and turns Automatic Analysis off, which is
+      # required: Rust analysis runs only in CI and needs cargo on PATH.
+      - uses: MOV-AI/action-sonarcloud-proj-config@v1
+        if: inputs.sonar
+        with:
+          sonar_org: mov-ai
+          sonar_token: ${{ secrets.sonar_token }}
+
+      - uses: SonarSource/sonarqube-scan-action@v7
+        if: inputs.sonar
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SONAR_TOKEN: ${{ secrets.sonar_token }}
+        with:
+          args: >
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
+            ${{ inputs.sonar_args }}
+
+      - name: Link to the SonarCloud dashboard
+        if: always() && inputs.sonar
+        run: |
+          key="${{ github.repository_owner }}_${{ github.event.repository.name }}"
+          echo "Report: https://sonarcloud.io/project/overview?id=${key}" \
+            | tee -a "$GITHUB_STEP_SUMMARY"

@@ -39,6 +39,7 @@ See [docs/workflows.md](docs/workflows.md) for detailed specifications, inputs, 
 | **Generic Remote Fleet Tests** | Runs QA tests on provisioned remote fleet infrastructure with Terraform provisioning and Ansible deployment, including infrastructure recreation with dedicated robotics-sim, redhat-oracle, and packer runner pools |
 | **Install Tests** | Runs QA install tests on platform deployments |
 | **Publish to Project Data Viewer** | Publishes data to the [project data viewer website](https://personal-7vf0v2cu.outsystemscloud.com/ProjectDataViewer5/) |
+| **Rust Tests and Coverage** | Runs the white-box stage for Rust repositories: rustfmt, clippy with SARIF upload, unit and optional Docker-backed component tests, coverage, and the SonarCloud quality gate |
 | **Robotic Component Pipeline** | Builds and tests robotic stack components with remote provisioning and test execution |
 | **Robotic Tests** | Runs comprehensive robotic stack integration tests with simulator support |
 | **UI Tests** | Runs UI tests on platform instances |

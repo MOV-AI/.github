@@ -5,7 +5,8 @@ Detailed specifications and examples for all shared GitHub Actions workflows in 
 ## Table of Contents
 1. [Build Docker Images](#build-docker-images)
 2. [Build and Pack ROS Packages](#build-and-pack-ros-packages)
-3. [Quick Reference](#quick-reference)
+3. [Rust Tests and Coverage](#rust-tests-and-coverage)
+4. [Quick Reference](#quick-reference)
 
 ---
 
@@ -153,6 +154,72 @@ jobs:
 
 ---
 
+## Rust Tests and Coverage
+
+Runs the white-box stage for a Rust repository: format check, clippy, unit tests, optional
+Docker-backed component tests, coverage, and the SonarCloud quality gate.
+
+The scope stops there on purpose. It does not build release binaries, raise versions,
+publish to Nexus or cut releases, because that is where Rust repositories genuinely
+differ — one ships musl binaries and a Python wheel, another ships container images.
+Keep those stages in the consuming repository.
+
+**Inputs:**
+
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| `runner_label` | string | `ubuntu-24.04` | Runner label |
+| `packages` | string | - | Cargo package selection, e.g. `--workspace` or `-p my-crate`. A virtual workspace manifest needs `--workspace` |
+| `unit_test_args` | string | `--lib --bins` | Target selection for the unit tier. The default excludes `tests/`, where Docker- or network-dependent tests usually live. Pass an empty string when `tests/` is hermetic |
+| `component_tests` | boolean | `false` | Run a second pass over `tests/` with a longer slow-test timeout. Requires a Docker daemon |
+| `component_test_threads` | number | `2` | Concurrency for the component pass. Several database containers plus an identity provider will exhaust a 4 GB hosted runner at full parallelism |
+| `install_protoc` | boolean | `false` | Install `protobuf-compiler` from apt. Leave `false` when `build.rs` uses `protoc-bin-vendored` |
+| `build_warnings` | string | `warn` | Passed to `setup-rust-toolchain`, which sets `CARGO_BUILD_WARNINGS`. That action defaults to `deny`; this defaults to `warn` so adopting the workflow does not immediately fail a repository with an existing warning backlog |
+| `clippy` | boolean | `true` | Run clippy |
+| `clippy_blocking` | boolean | `false` | When `false`, findings upload to code scanning as SARIF and the job does not fail. This is how a repository measures its backlog before committing to it |
+| `coverage_format` | string | `lcov` | `lcov` or `cobertura` |
+| `sonar` | boolean | `true` | Run the SonarCloud scan |
+| `sonar_args` | string | - | Extra `-D` flags. Prefer a `sonar-project.properties` file in the consuming repository; the quality-gate wait is added automatically |
+
+**Optional Secrets:**
+- `sonar_token`: SonarCloud token. Required when `sonar` is enabled.
+
+**Workflow Stages:**
+
+1. **Checkout**: Full history (`fetch-depth: 0`), which SonarCloud needs for new-code blame
+2. **Install protoc**: Only when `install_protoc` is enabled
+3. **Setup toolchain**: Installs whatever `rust-toolchain.toml` declares and restores the cargo cache
+4. **Format**: `cargo fmt --all --check`
+5. **Clippy**: Uploads SARIF to code scanning; blocking or advisory per `clippy_blocking`
+6. **Unit tests**: Coverage over `--lib --bins` by default
+7. **Component tests**: Second coverage pass over `tests/` when enabled
+8. **Sonar**: Creates the project if absent, disables Automatic Analysis, scans, waits on the quality gate
+
+**Notes:**
+
+- Rust analysis in SonarCloud runs only in CI and needs `cargo` on `PATH`. Automatic Analysis
+  must stay disabled, which the bootstrap step handles.
+- The cache is written only on `push` events. Without that, every pull-request branch writes
+  its own multi-gigabyte entry, the 10 GB repository cache limit starts evicting, and the
+  cache silently stops helping.
+
+**Example Usage:**
+
+```yaml
+jobs:
+  rust:
+    uses: MOV-AI/.github/.github/workflows/rust-test-workflow.yml@v3
+    with:
+      packages: '--workspace'
+      component_tests: true
+      build_warnings: warn
+      clippy_blocking: false
+    secrets:
+      sonar_token: ${{ secrets.SONAR_TOKEN }}
+```
+
+---
+
 ## Quick Reference
 
 ### Common Workflow Patterns
@@ -175,6 +242,16 @@ jobs:
     install_test: true
     deploy: false
   secrets: inherit
+```
+
+**Rust White-Box Stage:**
+```yaml
+- uses: MOV-AI/.github/.github/workflows/rust-test-workflow.yml@v3
+  with:
+    packages: '--workspace'
+    component_tests: true
+  secrets:
+    sonar_token: ${{ secrets.SONAR_TOKEN }}
 ```
 
 **Release to Production:**
