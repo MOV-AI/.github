@@ -2,10 +2,6 @@ name: Rust Tests and Coverage
 
 # Scope is deliberately narrow: format, lint, test, coverage, Sonar. It does NOT
 # build release binaries, raise versions, publish to Nexus or cut releases.
-# Those steps are where repositories genuinely differ — workspace-agent ships two
-# musl binaries plus a Python wheel, metaplanner ships two container images — and
-# folding them in is what makes a "shared" workflow accumulate repo-specific
-# branches until nobody dares touch it.
 #
 # Two consumers are in view:
 #   workspace-agent   single crate + Python bindings, protoc from apt
@@ -79,6 +75,10 @@ on:
         required: false
         type: boolean
         default: true
+        description: >
+          Run clippy on the codebase. Findings are uploaded to code scanning as SARIF.
+          Set this to false to skip clippy entirely.
+
       clippy_blocking:
         required: false
         type: boolean
@@ -98,6 +98,10 @@ on:
         required: false
         type: boolean
         default: true
+        description: >
+          Enable SonarQube analysis for the repository. Set this to false to skip SonarQube entirely.
+          Requires a valid `sonar_token` secret to be set.
+
       sonar_args:
         required: false
         type: string
@@ -135,7 +139,7 @@ jobs:
 
       # Installs whatever rust-toolchain.toml declares when `toolchain` is
       # omitted, and caches internally — so no separate rust-cache step.
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           cache-shared-key: shared
           cache-save-if: ${{ github.event_name == 'push' }}
