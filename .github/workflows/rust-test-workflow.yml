@@ -134,7 +134,7 @@ jobs:
     runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # Sonar derives new-code from git blame. A shallow clone silently
           # degrades that, and the failure is invisible — the scan still passes.
