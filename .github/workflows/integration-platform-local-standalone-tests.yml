@@ -397,7 +397,7 @@ jobs:
           case "${{ inputs.project_validator }}" in
             wac)
               echo "::group::Run wac tests"
-              docker exec -t "$container_id" bash -c '
+              docker exec -t "$container_id" bash -ic '
                 set -e
                 wac validate project
               '
@@ -406,7 +406,7 @@ jobs:
               ;;
             mobtest)
               echo "::group::Install mobtest"
-              docker exec -t "$container_id" bash -c '
+              docker exec -t "$container_id" bash -ic '
                 set -e
                 export PATH="$HOME/.local/bin:$PATH"
                 python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ inputs.mobtest_version }} --ignore-installed
