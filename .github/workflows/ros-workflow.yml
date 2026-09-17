@@ -163,9 +163,9 @@ jobs:
         id: check
         run: |
           if [ -f ".pre-commit-config.yaml" ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Compute distro specific vars
@@ -186,8 +186,8 @@ jobs:
             exit 1
           fi
 
-          echo "static_test_image_name=$static_test_image_name" >> $GITHUB_OUTPUT
-          echo "ros_workspace=$ros_workspace" >> $GITHUB_OUTPUT
+          echo "static_test_image_name=$static_test_image_name" >> "$GITHUB_OUTPUT"
+          echo "ros_workspace=$ros_workspace" >> "$GITHUB_OUTPUT"
 
   Static-analysis:
     needs: [Check-static-analysis-config]
@@ -331,10 +331,10 @@ jobs:
         echo "Searching for Python packages with setup.py..."
         # Find all directories with setup.py files (excluding .git and .github directories)
         if find . -type f -name "setup.py" ! -path '*/.git/*' ! -path '*/.github/*' | grep -q .; then
-          echo "setup_found=true" >> $GITHUB_OUTPUT
+          echo "setup_found=true" >> "$GITHUB_OUTPUT"
           echo "✓ Found setup.py file(s), will proceed with wheel building"
         else
-          echo "setup_found=false" >> $GITHUB_OUTPUT
+          echo "setup_found=false" >> "$GITHUB_OUTPUT"
           echo "No setup.py files found, skipping wheel building"
         fi
 
@@ -374,7 +374,7 @@ jobs:
       if: ${{ inputs.run_catkin_tests && matrix.distro == 'noetic' }}
       shell: bash
       run: |
-        cd $ROS1_USER_WS
+        cd "$ROS1_USER_WS"
         catkin test
 
     - name: Archive binary

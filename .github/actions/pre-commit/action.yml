@@ -57,9 +57,9 @@ runs:
       id: capture_output
       shell: bash
       run: |
-        echo "report<<EOF" >> $GITHUB_OUTPUT
-        sed -n '/Failed/,$ { /Passed/d; s/\x1B\[[0-9;]*[mK]//g; p }' pre-commit-report.txt >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        echo "report<<EOF" >> "$GITHUB_OUTPUT"
+        sed -n '/Failed/,$ { /Passed/d; s/\x1B\[[0-9;]*[mK]//g; p }' pre-commit-report.txt >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
     - name: Publish pre-commit results to PR comment
       if: ${{ failure() && github.event_name == 'pull_request' }}
       uses: peter-evans/create-or-update-comment@v5

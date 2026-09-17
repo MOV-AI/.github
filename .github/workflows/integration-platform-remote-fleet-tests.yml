@@ -668,7 +668,7 @@ jobs:
 
           echo "::group::Install CI Scripts on remote"
           ssh ${{ steps.infra_provision.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no \
-            "set -e ; python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION"
+            "set -e ; python3 -m pip install integration-pipeline==\"$CI_INTEGRATION_SCRIPTS_VERSION\""
           echo "✓ CI Scripts installed"
           echo "::endgroup::"
 
@@ -707,10 +707,10 @@ jobs:
             set -e
 
             tests_dir="fleet_${{ matrix.fleet_test_name }}"
-            qa_key=${{ matrix.fleet_test_name }}
+            qa_key="${{ matrix.fleet_test_name }}"
 
-            mkdir -p ${{ env.REMOTE_WORKSPACE_PATH }}
-            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+            mkdir -p "${{ env.REMOTE_WORKSPACE_PATH }}"
+            cd "${{ env.REMOTE_WORKSPACE_PATH }}"
 
             echo "::group::Extract test metadata"
             rm -f /tmp/version.txt /tmp/repo_name.txt /tmp/test_set.txt
@@ -732,19 +732,19 @@ jobs:
             echo "::endgroup::"
 
             echo "::group::Download test repository"
-            rm -rf $tests_repo_name
-            integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user ${{ env.GITHUB_API_USR }} --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
-            ls -la $tests_dir
+            rm -rf "$tests_repo_name"
+            integration-pipeline fetch_by_tag --repo "$tests_repo_name" --version "$tests_version" --gh_api_user ${{ env.GITHUB_API_USR }} --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir "$tests_dir"
+            ls -la "$tests_dir"
             echo "✓ Test repository downloaded"
             echo "::endgroup::"
 
             echo "::group::Setup test environment"
-            pushd "${tests_dir}"
+            pushd "$tests_dir"
             python3 -m venv test-venv --clear
             . test-venv/bin/activate
-            if  [ -f test-requirements.txt ]; then
+            if  [ -f "./test-requirements.txt" ]; then
               echo "Installing test requirements from test-requirements.txt"
-              pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r test-requirements.txt
+              pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple -r "./test-requirements.txt"
             else
               echo "No test-requirements.txt file found!"
               exit 1
@@ -758,11 +758,11 @@ jobs:
           # shellcheck disable=SC2086,SC2129
           scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no "${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:/tmp/*.txt" /tmp/
 
-          echo "tests_dir=fleet_${{ matrix.fleet_test_name }}" >> "$GITHUB_OUTPUT"
-          echo "version=$(cat /tmp/version.txt)" >> "$GITHUB_OUTPUT"
-          echo "test_set=$(cat /tmp/test_set.txt)" >> "$GITHUB_OUTPUT"
-          echo "test_exec_dir=$(cat /tmp/test_exec_dir.txt)" >> "$GITHUB_OUTPUT"
-          echo "test_args=$(cat /tmp/test_args.txt || echo \"\")" >> "$GITHUB_OUTPUT"
+          echo "tests_dir=\"fleet_${{ matrix.fleet_test_name }}\"" >> "$GITHUB_OUTPUT"
+          echo "version=\"$(cat /tmp/version.txt)\"" >> "$GITHUB_OUTPUT"
+          echo "test_set=\"$(cat /tmp/test_set.txt)\"" >> "$GITHUB_OUTPUT"
+          echo "test_exec_dir=\"$(cat /tmp/test_exec_dir.txt)\"" >> "$GITHUB_OUTPUT"
+          echo "test_args=\"$(cat /tmp/test_args.txt || echo \"\")\"" >> "$GITHUB_OUTPUT"
 
       - name: Remote - Run Fleet test [${{ matrix.fleet_test_name }}]
         if: ${{ inputs.with_fleet_tests }}
@@ -771,7 +771,7 @@ jobs:
         run: |
           ssh ${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }} -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no '
             set -e
-            cd ${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.tests_dir }}
+            cd "${{ env.REMOTE_WORKSPACE_PATH }}/${{ steps.tests_setup.outputs.tests_dir }}"
             export host_ip=${{ needs.Fleet-Tests-Provisioning.outputs.host_ip }}
             export movai_user=movai
             export movai_pwd=movai123

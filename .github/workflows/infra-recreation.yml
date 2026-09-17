@@ -66,7 +66,7 @@ jobs:
         id: pre_slack
         run: |
           MESSAGE="Infrastructure recreation in progress on ${{ inputs.INFRA_NODES }} :construction:"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
 
       - name: Send Slack Message
         uses: slackapi/slack-github-action@v2
@@ -106,7 +106,7 @@ jobs:
           . .ci-venv/bin/activate
           python3 -m pip install pyOpenSSL --upgrade pip
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install integration-pipeline=="$CI_INTEGRATION_SCRIPTS_VERSION" --ignore-installed
 
       - name: Setup env conf
         id: provision_infra_env_conf
@@ -125,7 +125,7 @@ jobs:
             --target_dir $provision_infra_dir
 
           ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+          echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
@@ -144,7 +144,7 @@ jobs:
             --target_dir $provision_infra_dir
 
           ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+          echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
       - name: Destroy remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -198,7 +198,7 @@ jobs:
         id: job_info
         run: |
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee -a "$GITHUB_OUTPUT"
         env:
           GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
 
@@ -208,8 +208,8 @@ jobs:
         run: |
           MESSAGE=":white_check_mark: ${{ github.job }} ${{ matrix.node }} IP runners destroyed (Attempt: #${{ github.run_attempt }})"
           MESSAGE_ERR=":x: ${{ github.job }} ${{ matrix.node }} Failed to destroy IP runners (Attempt: #${{ github.run_attempt }})"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> "$GITHUB_OUTPUT"
 
       - name: Send Slack Message
         uses: slackapi/slack-github-action@v2
@@ -263,7 +263,7 @@ jobs:
         . .ci-venv/bin/activate
         python3 -m pip install pyOpenSSL --upgrade pip
         [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-        python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        python3 -m pip install integration-pipeline=="$CI_INTEGRATION_SCRIPTS_VERSION" --ignore-installed
 
     - name: Setup env conf
       id: provision_infra_env_conf
@@ -282,7 +282,7 @@ jobs:
           --target_dir $provision_infra_dir
 
         ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+        echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
     - name: Setup terraform proxmox provisioner
       id: provision_infra_setup
@@ -301,7 +301,7 @@ jobs:
           --target_dir $provision_infra_dir
 
         ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+        echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
     - name: Provision remote vms (Proxmox)
       working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -354,7 +354,7 @@ jobs:
       id: job_info
       run: |
         job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-        echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+        echo "job_url=$job_html_url" | tee -a "$GITHUB_OUTPUT"
       env:
         GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
 
@@ -364,8 +364,8 @@ jobs:
       run: |
         MESSAGE=":white_check_mark: ${{ github.job }} ${{ fromJson(inputs.INFRA_IP_CONFIGURATION)[matrix.node] }} IP runners provisioned successfully in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
         MESSAGE_ERR=":x: ${{ github.job }} Failed to provision IP runners in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
-        echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-        echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+        echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+        echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> "$GITHUB_OUTPUT"
 
     - name: Send Slack Message
       uses: slackapi/slack-github-action@v2
@@ -419,7 +419,7 @@ jobs:
           . .ci-venv/bin/activate
           python3 -m pip install pyOpenSSL --upgrade pip
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install integration-pipeline=="$CI_INTEGRATION_SCRIPTS_VERSION" --ignore-installed
 
       - name: Setup env conf
         id: provision_infra_env_conf
@@ -438,7 +438,7 @@ jobs:
             --target_dir $provision_infra_dir
 
           ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+          echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
@@ -457,7 +457,7 @@ jobs:
             --target_dir $provision_infra_dir
 
           ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+          echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
       - name: Destroy remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -511,7 +511,7 @@ jobs:
         id: job_info
         run: |
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee -a "$GITHUB_OUTPUT"
         env:
           GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
 
@@ -521,8 +521,8 @@ jobs:
         run: |
           MESSAGE=":white_check_mark: ${{ github.job }} ${{ matrix.node }} QA runners destroyed (Attempt: #${{ github.run_attempt }})"
           MESSAGE_ERR=":x: ${{ github.job }} ${{ matrix.node }} Failed to destroy QA runners (Attempt: #${{ github.run_attempt }})"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> "$GITHUB_OUTPUT"
 
       - name: Send Slack Message
         uses: slackapi/slack-github-action@v2
@@ -575,7 +575,7 @@ jobs:
         . .ci-venv/bin/activate
         python3 -m pip install pyOpenSSL --upgrade pip
         [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-        python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        python3 -m pip install integration-pipeline=="$CI_INTEGRATION_SCRIPTS_VERSION" --ignore-installed
 
     - name: Setup env conf
       id: provision_infra_env_conf
@@ -594,7 +594,7 @@ jobs:
           --target_dir $provision_infra_dir
 
         ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+        echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
     - name: Setup terraform proxmox provisioner
       id: provision_infra_setup
@@ -613,7 +613,7 @@ jobs:
           --target_dir $provision_infra_dir
 
         ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+        echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
     - name: Provision remote vms (Proxmox)
       working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -666,7 +666,7 @@ jobs:
       id: job_info
       run: |
         job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-        echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+        echo "job_url=$job_html_url" | tee -a "$GITHUB_OUTPUT"
       env:
         GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
 
@@ -676,8 +676,8 @@ jobs:
       run: |
         MESSAGE=":white_check_mark: ${{ github.job }} ${{ fromJson(inputs.INFRA_QA_CONFIGURATION)[matrix.node] }} QA runners provisioned successfully in ${{matrix.node}}! (Attempt: #${{ github.run_attempt }})"
         MESSAGE_ERR=":x: ${{ github.job }} Failed to provision QA runners in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
-        echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-        echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+        echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+        echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> "$GITHUB_OUTPUT"
 
     - name: Send Slack Message
       uses: slackapi/slack-github-action@v2
@@ -731,7 +731,7 @@ jobs:
           . .ci-venv/bin/activate
           python3 -m pip install pyOpenSSL --upgrade pip
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install integration-pipeline=="$CI_INTEGRATION_SCRIPTS_VERSION" --ignore-installed
 
       - name: Setup env conf
         id: provision_infra_env_conf
@@ -750,7 +750,7 @@ jobs:
             --target_dir $provision_infra_dir
 
           ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+          echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
@@ -769,7 +769,7 @@ jobs:
             --target_dir $provision_infra_dir
 
           ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+          echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
       - name: Destroy remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -823,7 +823,7 @@ jobs:
         id: job_info
         run: |
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee -a "$GITHUB_OUTPUT"
         env:
           GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
 
@@ -833,8 +833,8 @@ jobs:
         run: |
           MESSAGE=":white_check_mark: ${{ github.job }} ${{ matrix.node }} Robotics Sim runners destroyed (Attempt: #${{ github.run_attempt }})"
           MESSAGE_ERR=":x: ${{ github.job }} ${{ matrix.node }} Failed to destroy Robotics Sim runners (Attempt: #${{ github.run_attempt }})"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> "$GITHUB_OUTPUT"
 
       - name: Send Slack Message
         uses: slackapi/slack-github-action@v2
@@ -887,7 +887,7 @@ jobs:
         . .ci-venv/bin/activate
         python3 -m pip install pyOpenSSL --upgrade pip
         [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-        python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        python3 -m pip install integration-pipeline=="$CI_INTEGRATION_SCRIPTS_VERSION" --ignore-installed
 
     - name: Setup env conf
       id: provision_infra_env_conf
@@ -906,7 +906,7 @@ jobs:
           --target_dir $provision_infra_dir
 
         ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+        echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
     - name: Setup terraform proxmox provisioner
       id: provision_infra_setup
@@ -925,7 +925,7 @@ jobs:
           --target_dir $provision_infra_dir
 
         ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+        echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
     - name: Provision remote vms (Proxmox)
       working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -978,7 +978,7 @@ jobs:
       id: job_info
       run: |
         job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-        echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+        echo "job_url=$job_html_url" | tee -a "$GITHUB_OUTPUT"
       env:
         GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
 
@@ -988,8 +988,8 @@ jobs:
       run: |
         MESSAGE=":white_check_mark: ${{ github.job }} ${{ fromJson(inputs.INFRA_ROBOTICS_SIM_CONFIGURATION)[matrix.node] }} Robotics Sim runners provisioned successfully in ${{matrix.node}}! (Attempt: #${{ github.run_attempt }})"
         MESSAGE_ERR=":x: ${{ github.job }} Failed to provision Robotics Sim runners in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
-        echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-        echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+        echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+        echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> "$GITHUB_OUTPUT"
 
     - name: Send Slack Message
       uses: slackapi/slack-github-action@v2
@@ -1043,7 +1043,7 @@ jobs:
           . .ci-venv/bin/activate
           python3 -m pip install pyOpenSSL --upgrade pip
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install integration-pipeline=="$CI_INTEGRATION_SCRIPTS_VERSION" --ignore-installed
 
       - name: Setup env conf
         id: provision_infra_env_conf
@@ -1062,7 +1062,7 @@ jobs:
             --target_dir $provision_infra_dir
 
           ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+          echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
@@ -1081,7 +1081,7 @@ jobs:
             --target_dir $provision_infra_dir
 
           ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+          echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
       - name: Destroy remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -1135,7 +1135,7 @@ jobs:
         id: job_info
         run: |
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee -a "$GITHUB_OUTPUT"
         env:
           GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
 
@@ -1145,8 +1145,8 @@ jobs:
         run: |
           MESSAGE=":white_check_mark: ${{ github.job }} ${{ matrix.node }} Redhat Oracle runners destroyed (Attempt: #${{ github.run_attempt }})"
           MESSAGE_ERR=":x: ${{ github.job }} ${{ matrix.node }} Failed to destroy Redhat Oracle runners (Attempt: #${{ github.run_attempt }})"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> "$GITHUB_OUTPUT"
 
       - name: Send Slack Message
         uses: slackapi/slack-github-action@v2
@@ -1199,7 +1199,7 @@ jobs:
         . .ci-venv/bin/activate
         python3 -m pip install pyOpenSSL --upgrade pip
         [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-        python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        python3 -m pip install integration-pipeline=="$CI_INTEGRATION_SCRIPTS_VERSION" --ignore-installed
 
     - name: Setup env conf
       id: provision_infra_env_conf
@@ -1218,7 +1218,7 @@ jobs:
           --target_dir $provision_infra_dir
 
         ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+        echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
     - name: Setup terraform proxmox provisioner
       id: provision_infra_setup
@@ -1237,7 +1237,7 @@ jobs:
           --target_dir $provision_infra_dir
 
         ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+        echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
     - name: Provision remote vms (Proxmox)
       working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -1290,7 +1290,7 @@ jobs:
       id: job_info
       run: |
         job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-        echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+        echo "job_url=$job_html_url" | tee -a "$GITHUB_OUTPUT"
       env:
         GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
 
@@ -1300,8 +1300,8 @@ jobs:
       run: |
         MESSAGE=":white_check_mark: ${{ github.job }} ${{ fromJson(inputs.INFRA_REDHAT_ORACLE_CONFIGURATION)[matrix.node] }} Redhat Oracle runners provisioned successfully in ${{matrix.node}}! (Attempt: #${{ github.run_attempt }})"
         MESSAGE_ERR=":x: ${{ github.job }} Failed to provision Redhat Oracle runners in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
-        echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-        echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+        echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+        echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> "$GITHUB_OUTPUT"
 
     - name: Send Slack Message
       uses: slackapi/slack-github-action@v2
@@ -1355,7 +1355,7 @@ jobs:
           . .ci-venv/bin/activate
           python3 -m pip install pyOpenSSL --upgrade pip
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install integration-pipeline=="$CI_INTEGRATION_SCRIPTS_VERSION" --ignore-installed
 
       - name: Setup env conf
         id: provision_infra_env_conf
@@ -1374,7 +1374,7 @@ jobs:
             --target_dir $provision_infra_dir
 
           ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+          echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
@@ -1393,7 +1393,7 @@ jobs:
             --target_dir $provision_infra_dir
 
           ls -la $provision_infra_dir
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+          echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
       - name: Destroy remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -1447,7 +1447,7 @@ jobs:
         id: job_info
         run: |
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee -a "$GITHUB_OUTPUT"
         env:
           GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
 
@@ -1457,8 +1457,8 @@ jobs:
         run: |
           MESSAGE=":white_check_mark: ${{ github.job }} ${{ matrix.node }} Packer runners destroyed (Attempt: #${{ github.run_attempt }})"
           MESSAGE_ERR=":x: ${{ github.job }} ${{ matrix.node }} Failed to destroy Packer runners (Attempt: #${{ github.run_attempt }})"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> "$GITHUB_OUTPUT"
 
       - name: Send Slack Message
         uses: slackapi/slack-github-action@v2
@@ -1511,7 +1511,7 @@ jobs:
         . .ci-venv/bin/activate
         python3 -m pip install pyOpenSSL --upgrade pip
         [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
-        python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+        python3 -m pip install integration-pipeline=="$CI_INTEGRATION_SCRIPTS_VERSION" --ignore-installed
 
     - name: Setup env conf
       id: provision_infra_env_conf
@@ -1530,7 +1530,7 @@ jobs:
           --target_dir $provision_infra_dir
 
         ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+        echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
     - name: Setup terraform proxmox provisioner
       id: provision_infra_setup
@@ -1549,7 +1549,7 @@ jobs:
           --target_dir $provision_infra_dir
 
         ls -la $provision_infra_dir
-        echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+        echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
     - name: Provision remote vms (Proxmox)
       working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -1602,7 +1602,7 @@ jobs:
       id: job_info
       run: |
         job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-        echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+        echo "job_url=$job_html_url" | tee -a "$GITHUB_OUTPUT"
       env:
         GITHUB_TOKEN: ${{ secrets.auto_commit_pwd }}
 
@@ -1612,8 +1612,8 @@ jobs:
       run: |
         MESSAGE=":white_check_mark: ${{ github.job }} ${{ fromJson(inputs.INFRA_PACKER_CONFIGURATION)[matrix.node] }} Packer runners provisioned successfully in ${{matrix.node}}! (Attempt: #${{ github.run_attempt }})"
         MESSAGE_ERR=":x: ${{ github.job }} Failed to provision Packer runners in ${{ matrix.node }}! (Attempt: #${{ github.run_attempt }})"
-        echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-        echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+        echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+        echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> "$GITHUB_OUTPUT"
 
     - name: Send Slack Message
       uses: slackapi/slack-github-action@v2
@@ -1651,8 +1651,8 @@ jobs:
         run: |
           MESSAGE="Infrastructure recreated successfully  on ${{ inputs.INFRA_NODES }} ! :sunny:"
           MESSAGE_ERR="Infrastructure recreation failed  on ${{ inputs.INFRA_NODES }} ! :rain_cloud:"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_err=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+          echo "msg_err=${MESSAGE_ERR}" >> "$GITHUB_OUTPUT"
 
       - name: Send Slack Message
         if: ${{ needs.Provision-IP-Runners.result == 'success' && needs.Provision-QA-Runners.result == 'success' && needs.Provision-Robotics-Sim-Runners.result == 'success' && needs.Provision-Redhat-Oracle-Runners.result == 'success' && needs.Provision-Packer-Runners.result == 'success' }}

@@ -77,7 +77,11 @@ on:
         required: false
         type: string
         default: "2.2.0-3"
-
+      metadata_test_skip_errors:
+        required: false
+        type: boolean
+        default: false
+        description: Skip failures from project-validation steps (mobtest / wac validate project) while they are being trialed
     secrets:
       auto_commit_user:
         required: true
@@ -133,6 +137,7 @@ on:
         required: false
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "4.3.0.7"
+  MOBTEST_VERSION: "0.0.7.2"
   PACKAGE_DEPLOYER_VERSION: "2.0.0.2"
   GITHUB_API_USR: "OttoMation-Movai"
   AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
@@ -155,6 +160,7 @@ env:
   ARTIFACTS_RETENTION_DAYS: 15
   DEPENDENCY_TRACK_URL: "https://sbom.es.mov.ai"
   HARBOR_URL: "https://registry.cloud.mov.ai/"
+  ORCHESTRATOR_WAC_MIN_VERSION: "5.13.3.2"
 jobs:
   Validate-bootstrap-configs:
     runs-on: integration-pipeline
@@ -167,6 +173,14 @@ jobs:
       slack_thread_id: ${{ steps.send-message.outputs.ts }}
       fleet_tests_list: ${{ steps.extract_test_lists.outputs.fleet_tests_list }}
       standalone_tests_list: ${{ steps.extract_test_lists.outputs.standalone_tests_list }}
+      standalone_tests_metadata: ${{ steps.extract_workflow_metadata.outputs.standalone_tests_metadata }}
+      frontend_apt_packages: ${{ steps.extract_workflow_metadata.outputs.frontend_apt_packages }}
+      orchestrator_version: ${{ steps.extract_workflow_metadata.outputs.orchestrator_version }}
+      project_validator: ${{ steps.extract_workflow_metadata.outputs.project_validator }}
+      default_services_version: ${{ steps.extract_workflow_metadata.outputs.default_services_version }}
+      default_quickstart_version: ${{ steps.extract_workflow_metadata.outputs.default_quickstart_version }}
+      simulator_services_version: ${{ steps.extract_workflow_metadata.outputs.simulator_services_version }}
+      simulator_quickstart_version: ${{ steps.extract_workflow_metadata.outputs.simulator_quickstart_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -179,11 +193,11 @@ jobs:
       - name: Install CI Scripts in container
         shell: bash
         run: |
-          python3 -m pip install -q integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install -q integration-pipeline=="$CI_INTEGRATION_SCRIPTS_VERSION" --ignore-installed
 
       - name: raise version
         run: |
-          git config --global --add safe.directory $(pwd)
+          git config --global --add safe.directory "$(pwd)"
           git fetch
           git checkout origin/${GITHUB_REF#refs/heads/} -- product.version
           integration-pipeline raise
@@ -239,6 +253,80 @@ jobs:
               fh.write(f'standalone_tests_list={json.dumps(standalone_tests)}\n')
           "
 
+      - name: Extract workflow metadata
+        id: extract_workflow_metadata
+        shell: bash
+        run: |
+          set -eo pipefail
+
+          get_json_or_empty () {
+            local file=$1 key=$2 out=$3
+            if [ -f "$file" ]; then
+              integration-pipeline get_json_value --file "$file" --key "$key" --output_file "$out" || echo "" > "$out"
+            else
+              echo "" > "$out"
+            fi
+          }
+
+          get_yml_or_empty () {
+            local key=$1 out=$2
+            integration-pipeline get_yml_value --file product-manifest.yaml --key "$key" --output_file "$out" || echo "" > "$out"
+          }
+
+          get_yml_or_empty product_components.platform_config.frontend.apps frontend.packages.apt
+          frontend_apt_packages="$(tr '\n' ' ' < frontend.packages.apt | xargs)"
+
+          get_yml_or_empty product_components.platform_config.orchestrator.version orchestrator_version.txt
+          orchestrator_version="$(cat orchestrator_version.txt)"
+
+          project_validator="$(ORCHESTRATOR_VERSION="$orchestrator_version" python3 -c '
+          import os, re
+          current = os.environ.get("ORCHESTRATOR_VERSION", "").strip()
+          minimum = os.environ["ORCHESTRATOR_WAC_MIN_VERSION"].strip()
+          def parts(value):
+              return tuple(int(part) for part in re.findall(r"\d+", value))
+          if current and parts(current) >= parts(minimum):
+              print("wac")
+          else:
+              print("mobtest")
+          ')"
+
+          get_json_or_empty basic-standalone-noetic.json.ci services_version default_services_version.txt
+          get_json_or_empty basic-standalone-noetic.json.ci quickstart_version default_quickstart_version.txt
+          get_json_or_empty basic-standalone-ignition-noetic.json.ci services_version simulator_services_version.txt
+          get_json_or_empty basic-standalone-ignition-noetic.json.ci quickstart_version simulator_quickstart_version.txt
+
+          standalone_tests_metadata="$(python3 -c '
+          import json, yaml
+          with open("product-manifest.yaml") as fh:
+              data = yaml.safe_load(fh) or {}
+          qa_config = data.get("product_components", {}).get("qa", {}) or {}
+          platform_version = data.get("version", "")
+          metadata = {}
+          for test_name, test_config in qa_config.items():
+              if not isinstance(test_config, dict) or "standalone" not in test_config:
+                  continue
+              standalone = test_config.get("standalone") or {}
+              metadata[test_name] = {
+                  "version": test_config.get("version", ""),
+                  "name": test_config.get("name", ""),
+                  "jira_report": test_config.get("jira_report", ""),
+                  "test_set": standalone.get("test_set", ""),
+                  "test_args": standalone.get("test_args", ""),
+                  "platform_version": platform_version,
+              }
+          print(json.dumps(metadata, separators=(",", ":")))
+          ')"
+
+          echo "frontend_apt_packages=${frontend_apt_packages}" >> "$GITHUB_OUTPUT"
+          echo "orchestrator_version=${orchestrator_version}" >> "$GITHUB_OUTPUT"
+          echo "project_validator=${project_validator}" >> "$GITHUB_OUTPUT"
+          echo "default_services_version=$(cat default_services_version.txt)" >> "$GITHUB_OUTPUT"
+          echo "default_quickstart_version=$(cat default_quickstart_version.txt)" >> "$GITHUB_OUTPUT"
+          echo "simulator_services_version=$(cat simulator_services_version.txt)" >> "$GITHUB_OUTPUT"
+          echo "simulator_quickstart_version=$(cat simulator_quickstart_version.txt)" >> "$GITHUB_OUTPUT"
+          echo "standalone_tests_metadata=${standalone_tests_metadata}" >> "$GITHUB_OUTPUT"
+
       - name: Stash component_artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -272,7 +360,7 @@ jobs:
         id: pre_slack
         run: |
           MESSAGE=":loading: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is starting to be validated :mag_right: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
 
       - name: Send Slack Message
         uses: slackapi/slack-github-action@v3
@@ -318,7 +406,7 @@ jobs:
           python3 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -q -r ci-requirements.txt
-          python3 -m pip install -q integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install -q integration-pipeline=="$CI_INTEGRATION_SCRIPTS_VERSION" --ignore-installed
 
       - name: unstash raised_meta
         uses: actions/download-artifact@v8
@@ -343,26 +431,11 @@ jobs:
           docker run --rm -i -e HADOLINT_FAILURE_THRESHOLD=error hadolint/hadolint < docker/backend/Dockerfile
 
       - name: Login to ${{ env.REGISTRY }} Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
           registry: ${{ env.REGISTRY }}
-
-      - name: Resolve frontend apt packages
-        id: resolve_frontend_apt_packages
-        shell: bash
-        run: |
-          set -e
-          . .ci-venv/bin/activate
-          integration-pipeline get_yml_value \
-            --file product-manifest.yaml \
-            --key product_components.platform_config.frontend.apps \
-            --output_file frontend.packages.apt
-          FRONTEND_APT_PACKAGES="$(tr '\n' ' ' < frontend.packages.apt | xargs)"
-          echo "frontend_apt_packages=${FRONTEND_APT_PACKAGES}" >> $GITHUB_OUTPUT
-          echo "Resolved frontend apt packages count: $(wc -w <<< "${FRONTEND_APT_PACKAGES}")"
-          deactivate
 
       - name: Prepare docker build variables
         id: pre_build
@@ -390,7 +463,7 @@ jobs:
             --build-arg DOCKER_REGISTRY=${{ env.REGISTRY }} \
             --build-arg BASE_IMAGE=${{ steps.pre_build.outputs.base_name }} \
             --build-arg TAG=${{ steps.pre_build.outputs.base_version }} \
-            --build-arg FRONTEND_APT_PACKAGES="${{ steps.resolve_frontend_apt_packages.outputs.frontend_apt_packages }}" \
+            --build-arg FRONTEND_APT_PACKAGES="${{ needs.Validate-bootstrap-configs.outputs.frontend_apt_packages }}" \
             --file docker/backend/Dockerfile \
             --platform linux/amd64 \
             --tag ${{ env.REGISTRY }}/ci/${{ inputs.backend_name }}:${{ steps.pre_build.outputs.raised_version }} \
@@ -401,7 +474,7 @@ jobs:
         id: store_image_name
         shell: bash
         run: |
-          echo "backend_image=${{ inputs.backend_name }}:${{ steps.pre_build.outputs.raised_version }}" >> $GITHUB_OUTPUT
+          echo "backend_image=${{ inputs.backend_name }}:${{ steps.pre_build.outputs.raised_version }}" >> "$GITHUB_OUTPUT"
 
       - name: Get current job id
         if: always()
@@ -410,8 +483,8 @@ jobs:
         run: |
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
-          echo "$job_id=$job_id" | tee >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee -a "$GITHUB_OUTPUT"
+          echo "job_id=$job_id" | tee -a "$GITHUB_OUTPUT"
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -421,8 +494,8 @@ jobs:
         run: |
           MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
           MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> "$GITHUB_OUTPUT"
 
       - name: Slack message success
         uses: slackapi/slack-github-action@v3
@@ -463,7 +536,7 @@ jobs:
       fail-fast: false
       matrix:
         test_key: ${{ fromJson(needs.Validate-bootstrap-configs.outputs.standalone_tests_list || '[]') }}
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v2.3
+    uses: ./.github/workflows/integration-platform-local-standalone-tests.yml
     secrets: inherit
     with:
       collect_deployable_artifacts: ${{ matrix.test_key == 'ui_tests' || matrix.test_key == 'install_tests' }}
@@ -471,8 +544,16 @@ jobs:
       slack_thread_id: ${{ needs.Build-backend.outputs.slack_thread_id }}
       backend_image_name_and_tag: ${{ needs.Build-backend.outputs.backend_image }}
       test_timeout: ${{ (matrix.test_key == 'ui_tests' || matrix.test_key == 'flow_initiator') && 120 || 30 }}
+      pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
       xray_label: ${{ matrix.test_key == 'ui_tests' && 'UI_Automation' || '' }}
       slack_channel: ${{ inputs.slack_channel }}
+      metadata_test_skip_errors: ${{ inputs.metadata_test_skip_errors }}
+      standalone_tests_metadata: ${{ needs.Validate-bootstrap-configs.outputs.standalone_tests_metadata }}
+      services_version: ${{ needs.Validate-bootstrap-configs.outputs.default_services_version }}
+      quickstart_version: ${{ needs.Validate-bootstrap-configs.outputs.default_quickstart_version }}
+      project_validator: ${{ needs.Validate-bootstrap-configs.outputs.project_validator }}
+      orchestrator_version: ${{ needs.Validate-bootstrap-configs.outputs.orchestrator_version }}
+      mobtest_version: "0.0.7.2"
 
   Validations-Finish:
     needs: [Build-backend, Validation-Standalone-Tests]
@@ -531,7 +612,7 @@ jobs:
           python3 -m venv .ci-venv --clear
           . .ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -q -r ci-requirements.txt
-          python3 -m pip install -q integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install -q integration-pipeline=="$CI_INTEGRATION_SCRIPTS_VERSION" --ignore-installed
 
       - name: unstash sim_configs
         uses: actions/download-artifact@v8
@@ -543,9 +624,9 @@ jobs:
         id: pre_simulator_build
         run: |
           if [ ! -f "simulator_artifacts/version" ]; then
-            echo "skip_simulator_build=true" >> $GITHUB_OUTPUT
+            echo "skip_simulator_build=true" >> "$GITHUB_OUTPUT"
           else
-            echo "skip_simulator_build=false" >> $GITHUB_OUTPUT
+            echo "skip_simulator_build=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Lint docker image
@@ -569,7 +650,7 @@ jobs:
 
       - name: Login to Private Registry
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -588,7 +669,7 @@ jobs:
           integration-pipeline get_install_list \
             --manifest_platform_base_key product_components.simulator_components.plugins
           SIMULATOR_APT_PACKAGES="$(tr '\n' ' ' < /tmp/ci/packages.apt | xargs)"
-          echo "simulator_apt_packages=${SIMULATOR_APT_PACKAGES}" >> $GITHUB_OUTPUT
+          echo "simulator_apt_packages=${SIMULATOR_APT_PACKAGES}" >> "$GITHUB_OUTPUT"
           echo "Resolved simulator apt packages count: $(wc -w <<< "${SIMULATOR_APT_PACKAGES}")"
           deactivate
 
@@ -596,8 +677,8 @@ jobs:
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
         id: pre_build
         run: |
-          echo "image_name=$(cat simulator_artifacts/simulator_name.ci)" >> $GITHUB_OUTPUT
-          echo "base_name=$(cat simulator_artifacts/simulator_base.ci)" >> $GITHUB_OUTPUT
+          echo "image_name=$(cat simulator_artifacts/simulator_name.ci)" >> "$GITHUB_OUTPUT"
+          echo "base_name=$(cat simulator_artifacts/simulator_base.ci)" >> "$GITHUB_OUTPUT"
 
       - name: Build with args and push
         if: ${{ steps.pre_simulator_build.outputs.skip_simulator_build == 'false' }}
@@ -643,7 +724,7 @@ jobs:
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "$job_id"
           echo "$job_html_url"
-          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" >> "$GITHUB_OUTPUT"
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -653,8 +734,8 @@ jobs:
         run: |
           MESSAGE=":white_check_mark: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job passed"
           MESSAGE_ERR=":x: ${{ github.job }} (Attempt: #${{ github.run_attempt }}) job failed"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+          echo "msg_error=${MESSAGE_ERR}\n  Details: ${{ steps.job_info.outputs.job_url }}" >> "$GITHUB_OUTPUT"
 
       - name: Slack message success
         uses: slackapi/slack-github-action@v3
@@ -701,8 +782,8 @@ jobs:
           docker image prune --all -f
 
   Simulator-Validations:
-    needs: [Build-Simulator, Build-backend]
-    uses: MOV-AI/.github/.github/workflows/integration-platform-local-standalone-tests.yml@v3
+    needs: [Build-Simulator, Build-backend, Validate-bootstrap-configs]
+    uses: ./.github/workflows/integration-platform-local-standalone-tests.yml
     secrets: inherit
     with:
       test_infra_key: "simul_flow_tests"
@@ -713,6 +794,13 @@ jobs:
       pytest_args: '-m "$test_set" --movai-ip $host_ip --movai-user $movai_user --movai-pw $movai_pwd'
       slack_channel: ${{ inputs.slack_channel }}
       robot_config: 'basic-standalone-ignition-noetic.json'
+      metadata_test_skip_errors: ${{ inputs.metadata_test_skip_errors }}
+      standalone_tests_metadata: ${{ needs.Validate-bootstrap-configs.outputs.standalone_tests_metadata }}
+      services_version: ${{ needs.Validate-bootstrap-configs.outputs.simulator_services_version }}
+      quickstart_version: ${{ needs.Validate-bootstrap-configs.outputs.simulator_quickstart_version }}
+      project_validator: ${{ needs.Validate-bootstrap-configs.outputs.project_validator }}
+      orchestrator_version: ${{ needs.Validate-bootstrap-configs.outputs.orchestrator_version }}
+      mobtest_version: "0.0.7.2"
 
   Select-Simtest-Node:
     if: ${{ inputs.with_robotic_stack_tests }}
@@ -741,7 +829,6 @@ jobs:
           fi
           echo "Free node: $free_node"
           echo "free_node=$free_node" >> "$GITHUB_OUTPUT"
-
 
   Robotic-Stack-Integration:
     if: ${{ inputs.with_robotic_stack_tests }}
@@ -800,14 +887,14 @@ jobs:
           path: .
 
       - name: Login to ${{ env.REGISTRY }} Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
           registry: ${{ env.REGISTRY }}
 
       - name: Login to ${{ env.PUSH_REGISTRY }} Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -819,7 +906,7 @@ jobs:
           python3 -m venv .ci-venv --clear --system-site-packages
           . .ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -q -r ci-requirements.txt
-          python3 -m pip install -q integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install -q integration-pipeline=="$CI_INTEGRATION_SCRIPTS_VERSION" --ignore-installed
           python3 -m pip install -q movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
 
       - name: Publish and create release
@@ -829,7 +916,7 @@ jobs:
           set -m
           set -e
           . .ci-venv/bin/activate
-          git config --global --add safe.directory $(pwd)
+          git config --global --add safe.directory "$(pwd)"
           git config --global user.name '${{ secrets.auto_commit_user }}'
           git config --global user.email '${{ secrets.auto_commit_mail }}'
           git config --global user.password ${{ secrets.auto_commit_pwd }}
@@ -875,7 +962,7 @@ jobs:
           git pull
 
           # get previous version so we can generate the release report
-          echo "previous_version=$(cat product.version)" >> $GITHUB_OUTPUT
+          echo "previous_version=$(cat product.version)" >> "$GITHUB_OUTPUT"
 
           # write the raised version to be committed
           echo "$product_version" > product.version
@@ -897,7 +984,7 @@ jobs:
       - name: Prepare raise variables
         id: pre_raise
         run: |
-          echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+          echo "branch=${GITHUB_REF#refs/heads/}" >> "$GITHUB_OUTPUT"
 
       - name: Raise App version
         uses: MOV-AI/.github/.github/actions/push-to-protected-branch@v3
@@ -926,9 +1013,9 @@ jobs:
           fi
           gh release create -p --generate-notes $previous_version_option --target "$commit_hash" -t "${{ inputs.product_name }} $product_version" $product_version
           # add all files in the deployment_artifacts folder
-          find deployment_artifacts -type f -exec gh release upload $product_version {} \;
+          find deployment_artifacts -type f -exec gh release upload "$product_version" {} \;
           # add all CycloneDX SBOM files
-          find . -name "sbom-*.cyclonedx.json" -type f -exec gh release upload $product_version {} \;
+          find . -name "sbom-*.cyclonedx.json" -type f -exec gh release upload "$product_version" {} \;
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
@@ -936,7 +1023,7 @@ jobs:
         shell: bash
         run: |
           # release version
-          product_version=$(cat product.version)
+          product_version="$(cat product.version)"
 
           # get existent release body
           ORIGINAL_RN=$(gh release view "${product_version}" --json body | jq -r .body)
@@ -1012,7 +1099,7 @@ jobs:
         id: pre_slack
         run: |
           MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
 
       - name: Slack message
         uses: slackapi/slack-github-action@v3
@@ -1047,7 +1134,7 @@ jobs:
         id: pre_slack
         run: |
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), build: $(cat product.version) (Attempt: #${{ github.run_attempt }}) is unstable (or cancelled) :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}" >> "$GITHUB_OUTPUT"
 
       - name: Slack message
         uses: slackapi/slack-github-action@v3
