@@ -29,8 +29,10 @@ on:
         type: number
         default: 60
       pytest_args:
-        required: true
+        required: false
         type: string
+        default: ''
+        description: Extra pytest arguments appended to the command built from the manifest
       metadata_test_skip_errors:
         required: false
         type: boolean
@@ -260,7 +262,15 @@ jobs:
           # setup tests venv in a step that is always executed
           python3 -m venv "${tests_dir}"/test-venv --clear
           . "${tests_dir}"/test-venv/bin/activate
-          pip install -r "${tests_dir}"/requirements.txt
+          if [ -f "${tests_dir}/test-requirements.txt" ]; then
+            pip install -r "${tests_dir}/test-requirements.txt"
+          elif [ -f "${tests_dir}/requirements.txt" ]; then
+            pip install -r "${tests_dir}/requirements.txt"
+          else
+            echo "ERROR: neither test-requirements.txt nor requirements.txt found in ${tests_dir}"
+            ls -la "${tests_dir}"
+            exit 1
+          fi
           deactivate
 
       - name: Configure Test Environment
@@ -420,11 +430,50 @@ jobs:
           movai_user: ${{ steps.system_prep.outputs.movai_user }}
           movai_pwd: ${{ steps.system_prep.outputs.movai_pwd }}
           test_set: ${{ steps.infra_tests_setup.outputs.test_set }}
+          test_args: ${{ steps.infra_tests_setup.outputs.test_args }}
+          test_infra_key: ${{ inputs.test_infra_key }}
+          robot_config: ${{ inputs.robot_config }}
+          extra_pytest_args: ${{ inputs.pytest_args }}
         run: |
           . test-venv/bin/activate
           pip install buildkite-test-collector
-          echo "python3 -m pytest ${{ inputs.pytest_args}}"
-          python3 -m pytest ${{ inputs.pytest_args}} --junit-xml=junit.xml | tee pytest-output.log
+
+          # base cmd
+          PYTEST_CMD=(python3 -m pytest)
+
+          # append the manifest test_args first, they may carry positional paths
+          # (e.g. "tests/regression" for backend / message_server / flow-initiator)
+          if [[ -n "$test_args" && "$test_args" != "None" ]]; then
+            PYTEST_CMD+=($test_args)
+          fi
+
+          PYTEST_CMD+=(--junit-xml=junit.xml)
+
+          if [[ "$test_infra_key" == "install_tests" ]]; then
+            # install tests run before the platform exists, so there is no
+            # movai_user / movai_pwd / movai-ip to pass
+            PYTEST_CMD+=(--installPath="$USERSPACE_FOLDER_PATH" --jsonConfigFilePath="../${robot_config}.ci" --jira_report)
+
+            # test_set is an Xray test set id, selected by name not by marker
+            if [[ -n "$test_set" && "$test_set" != "None" ]]; then
+              PYTEST_CMD+=(-k "$test_set")
+            fi
+          else
+            PYTEST_CMD+=(--movai-ip "$host_ip" --movai-user "$movai_user" --movai-pw "$movai_pwd")
+
+            # ui_tests resolve their test set through "xray download", not through markers
+            if [[ -n "$test_set" && "$test_set" != "None" && "$test_infra_key" != "ui_tests" ]]; then
+              PYTEST_CMD+=(-m "$test_set")
+            fi
+          fi
+
+          if [[ -n "$extra_pytest_args" ]]; then
+            PYTEST_CMD+=($extra_pytest_args)
+          fi
+
+          echo "exec: ${PYTEST_CMD[*]}"
+          "${PYTEST_CMD[@]}" | tee pytest-output.log
+
           deactivate
 
       - name: Publish test results trunk
