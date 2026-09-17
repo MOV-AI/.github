@@ -149,10 +149,10 @@ jobs:
         id: export_env
         shell: bash
         run: |
-          echo "PROVISIONING_ENV_REPO=${PROVISIONING_ENV_REPO}" >> $GITHUB_OUTPUT
-          echo "PROVISIONING_ENV_VERSION=${PROVISIONING_ENV_VERSION}" >> $GITHUB_OUTPUT
-          echo "PROVISION_INFRA_REPO=${PROVISION_INFRA_REPO}" >> $GITHUB_OUTPUT
-          echo "PROVISION_INFRA_VERSION=${PROVISION_INFRA_VERSION}" >> $GITHUB_OUTPUT
+          echo "PROVISIONING_ENV_REPO=${PROVISIONING_ENV_REPO}" >> "$GITHUB_OUTPUT"
+          echo "PROVISIONING_ENV_VERSION=${PROVISIONING_ENV_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "PROVISION_INFRA_REPO=${PROVISION_INFRA_REPO}" >> "$GITHUB_OUTPUT"
+          echo "PROVISION_INFRA_VERSION=${PROVISION_INFRA_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Extract fleet tests list
         id: extract_fleet_tests_list
@@ -169,7 +169,7 @@ jobs:
           fleet_test_names = ['ui_tests'] if isinstance(ui_tests_config, dict) and 'fleet' in ui_tests_config else []
           print(json.dumps(fleet_test_names))
           ")
-          echo "fleet_tests_list=${FLEET_TESTS}" >> $GITHUB_OUTPUT
+          echo "fleet_tests_list=${FLEET_TESTS}" >> "$GITHUB_OUTPUT"
 
       - name: Extract backend info
         id: extract_backend_info
@@ -196,15 +196,15 @@ jobs:
           BACKEND_NAME=$(echo "$BACKEND_INFO" | python3 -c "import sys, json; print(json.load(sys.stdin)['name'])")
           BACKEND_VERSION=$(echo "$BACKEND_INFO" | python3 -c "import sys, json; print(json.load(sys.stdin)['version'])")
 
-          echo "backend_name=${BACKEND_NAME}" >> $GITHUB_OUTPUT
-          echo "backend_version=${BACKEND_VERSION}" >> $GITHUB_OUTPUT
+          echo "backend_name=${BACKEND_NAME}" >> "$GITHUB_OUTPUT"
+          echo "backend_version=${BACKEND_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Prepare slack variables
         id: pre_slack
         shell: bash
         run: |
           MESSAGE=":loading: QA UI Fleet validations started for ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}) - Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
 
       - name: Send Slack Message
         uses: slackapi/slack-github-action@v4
@@ -232,7 +232,7 @@ jobs:
         id: agent_info
         run: |
           ip_tmp=$(hostname -I | awk '{print $1}')
-          echo "ip=$ip_tmp" | tee >> $GITHUB_OUTPUT
+          echo "ip=$ip_tmp" | tee -a "$GITHUB_OUTPUT"
 
       - name: Update/upgrade host packages
         run: |
@@ -296,10 +296,10 @@ jobs:
           # tests artifacts
           # *.log and *.zip might not exist if the test fails early
           mkdir -p qa_artifacts
-          cp -r *.log ./qa_artifacts || true
-          cp -r *.tar ./qa_artifacts || true
-          cp -r *.json ./qa_artifacts || true
-          cp -r *.html ./qa_artifacts || true
+          cp -r ./*.log ./qa_artifacts || true
+          cp -r ./*.tar ./qa_artifacts || true
+          cp -r ./*.json ./qa_artifacts || true
+          cp -r ./*.html ./qa_artifacts || true
           cp -r tests_artifacts ./qa_artifacts || true
 
           # install
@@ -324,11 +324,14 @@ jobs:
         if: always()
         shell: bash
         run: |
-          if [ "$(docker ps -aq)" ]; then
-            docker rm -f $(docker ps -aq)
+          mapfile -t containers < <(docker ps -aq 2>/dev/null || true)
+
+          if [ "${#containers[@]}" -gt 0 ]; then
+            docker rm -f "${containers[@]}" >/dev/null 2>&1 || true
           fi
-          docker system prune -f
-          docker image prune --all -f
+
+          docker system prune -f >/dev/null 2>&1 || true
+          docker image prune --all -f >/dev/null 2>&1 || true
 
   Run-Fleet-Tests:
     needs: [Validate, Resolve-fleet-context]

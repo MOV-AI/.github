@@ -15,3 +15,5 @@ self-hosted-runner:
     - oracle
     - qa-runner
     - infra-runner
+    - integration-pipeline
+    - pt-agent

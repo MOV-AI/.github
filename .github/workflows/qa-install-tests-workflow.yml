@@ -181,8 +181,8 @@ jobs:
         run: |
           MESSAGE=":white_check_mark: CI: ${GITHUB_REPOSITORY} (${GITHUB_REF#refs/heads/}), stable :sunny: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/}), unstable :rain_cloud: Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          echo "msg=$MESSAGE" >> $GITHUB_OUTPUT
-          echo "msg_error=$MESSAGE_ERR" >> $GITHUB_OUTPUT
+          echo "msg=$MESSAGE" >> "$GITHUB_OUTPUT"
+          echo "msg_error=$MESSAGE_ERR" >> "$GITHUB_OUTPUT"
 
       - name: Slack message success
         if: ${{ inputs.nightly && ( needs.Validate-features.result == 'success' && needs.Install-Tests.result == 'success' ) }}

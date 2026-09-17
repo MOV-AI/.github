@@ -62,7 +62,7 @@ jobs:
         run: |
           python3 -m venv ci_scripts --clear
           source ci_scripts/bin/activate
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install integration-pipeline=="$CI_INTEGRATION_SCRIPTS_VERSION" --ignore-installed
           deactivate
 
       - name: Download component artifacts for patching
@@ -139,8 +139,8 @@ jobs:
             movai-cli robots user "$robot" "$MOVAI_USER" "$MOVAI_PWD"
           done
 
-          echo "movai_user=${MOVAI_USER}" >> $GITHUB_OUTPUT
-          echo "movai_pwd=${MOVAI_PWD}" >> $GITHUB_OUTPUT
+          echo "movai_user=${MOVAI_USER}" >> "$GITHUB_OUTPUT"
+          echo "movai_pwd=${MOVAI_PWD}" >> "$GITHUB_OUTPUT"
 
       - name: post-install patch
         shell: bash
@@ -203,10 +203,10 @@ jobs:
           integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
           ls -la $tests_dir
 
-          echo "target_dir=${tests_dir}" >> $GITHUB_OUTPUT
-          echo "jira_report=${jira_report}" >> $GITHUB_OUTPUT
-          echo "test_set=${test_set}" >> $GITHUB_OUTPUT
-          echo "platform_version=${platform_version}" >> $GITHUB_OUTPUT
+          echo "target_dir=${tests_dir}" >> "$GITHUB_OUTPUT"
+          echo "jira_report=${jira_report}" >> "$GITHUB_OUTPUT"
+          echo "test_set=${test_set}" >> "$GITHUB_OUTPUT"
+          echo "platform_version=${platform_version}" >> "$GITHUB_OUTPUT"
           deactivate
 
           # setup tests venv in a step that is always executed
@@ -278,7 +278,7 @@ jobs:
         shell: bash
         run: |
           CONTAINERS=$(docker ps -a --format '{{.Names}}')
-          for container in "${CONTAINERS}"; do
+          for container in ${CONTAINERS}; do
             docker logs "${container}" &> "${container}.log" || true
           done || true
 

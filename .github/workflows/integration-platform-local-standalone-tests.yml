@@ -31,6 +31,34 @@ on:
       pytest_args:
         required: true
         type: string
+      metadata_test_skip_errors:
+        required: false
+        type: boolean
+        default: false
+      standalone_tests_metadata:
+        required: false
+        type: string
+        default: '{}'
+      services_version:
+        required: false
+        type: string
+        default: ''
+      quickstart_version:
+        required: false
+        type: string
+        default: ''
+      project_validator:
+        required: false
+        type: string
+        default: 'wac'
+      orchestrator_version:
+        required: false
+        type: string
+        default: ''
+      mobtest_version:
+        required: false
+        type: string
+        default: '0.0.7.2'
       xray_label:
         required: false
         type: string
@@ -70,7 +98,6 @@ env:
   # ===== CI Infrastructure Versions =====
   CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.1.0.3"
   CI_INTEGRATION_SCRIPTS_VERSION: "4.1.0.3"
-  MOBTEST_VERSION: "0.0.6.1"
   PACKAGE_DEPLOYER_VERSION: "1.0.0.25"
   # ===== Container & Workspace Paths =====
   CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
@@ -164,7 +191,7 @@ jobs:
           . .ci-venv/bin/activate
           [ -f ci-requirements.txt ] && pip install -r ci-requirements.txt
           python3 -m pip install --upgrade pyOpenSSL cryptography
-          python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
+          python3 -m pip install integration-pipeline=="$CI_INTEGRATION_SCRIPTS_VERSION" --ignore-installed
           python3 -m pip install movai-package-deployer==$PACKAGE_DEPLOYER_VERSION --ignore-installed
           echo "✓ CI Scripts venv ready"
           echo "::endgroup::"
@@ -181,20 +208,34 @@ jobs:
         id: infra_tests_setup
         shell: bash
         env:
-          qa_key: ${{ inputs.test_infra_key }}
+          QA_KEY: ${{ inputs.test_infra_key }}
+          STANDALONE_TESTS_METADATA: ${{ inputs.standalone_tests_metadata }}
         run: |
           tests_dir=standalone_${{ inputs.test_infra_key }}
 
-          rm -f /tmp/version.txt /tmp/repo_name.txt /tmp/jira_report.txt /tmp/test_set.txt
-          . .ci-venv/bin/activate
-          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.version --output_file /tmp/version.txt
-          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.name --output_file /tmp/repo_name.txt
-          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.jira_report --output_file /tmp/jira_report.txt
+          rm -f /tmp/version.txt /tmp/repo_name.txt /tmp/jira_report.txt /tmp/test_set.txt /tmp/test_args.txt /tmp/platform_version.txt
+          python3 - <<'PY'
+          import json, os, sys
 
-          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.standalone.test_set --output_file /tmp/test_set.txt
-          integration-pipeline get_yml_value --file product-manifest.yaml --key product_components.qa.$qa_key.standalone.test_args --output_file /tmp/test_args.txt
+          metadata = json.loads(os.environ.get("STANDALONE_TESTS_METADATA") or "{}")
+          qa_key = os.environ["QA_KEY"]
+          test_metadata = metadata.get(qa_key)
+          if not test_metadata:
+              print(f"ERROR: Missing centralized metadata for QA key: {qa_key}", file=sys.stderr)
+              sys.exit(1)
 
-          integration-pipeline get_yml_value --file product-manifest.yaml --key version --output_file /tmp/platform_version.txt
+          output_files = {
+              "version": "/tmp/version.txt",
+              "name": "/tmp/repo_name.txt",
+              "jira_report": "/tmp/jira_report.txt",
+              "test_set": "/tmp/test_set.txt",
+              "test_args": "/tmp/test_args.txt",
+              "platform_version": "/tmp/platform_version.txt",
+          }
+          for key, path in output_files.items():
+              with open(path, "w") as fh:
+                  fh.write(str(test_metadata.get(key) or ""))
+          PY
 
           tests_version=$(cat /tmp/version.txt)
           tests_repo_name=$(cat /tmp/repo_name.txt)
@@ -203,16 +244,17 @@ jobs:
           test_args=$(cat /tmp/test_args.txt)
           platform_version=$(cat /tmp/platform_version.txt)
 
-          rm -rf $tests_repo_name
+          rm -rf "$tests_repo_name"
 
-          integration-pipeline fetch_by_tag --repo $tests_repo_name --version $tests_version --gh_api_user $GITHUB_API_USR --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir $tests_dir
-          ls -la $tests_dir
+          . .ci-venv/bin/activate
+          integration-pipeline fetch_by_tag --repo "$tests_repo_name" --version "$tests_version" --gh_api_user "$GITHUB_API_USR" --gh_api_pwd ${{ secrets.auto_commit_pwd }} --target_dir "$tests_dir"
+          ls -la "$tests_dir"
 
-          echo "tests_dir=${tests_dir}" >> $GITHUB_OUTPUT
-          echo "jira_report=${jira_report}" >> $GITHUB_OUTPUT
-          echo "test_set=${test_set}" >> $GITHUB_OUTPUT
-          echo "platform_version=${platform_version}" >> $GITHUB_OUTPUT
-          echo "test_args=${test_args}" >> $GITHUB_OUTPUT
+          echo "tests_dir=${tests_dir}" >> "$GITHUB_OUTPUT"
+          echo "jira_report=${jira_report}" >> "$GITHUB_OUTPUT"
+          echo "test_set=${test_set}" >> "$GITHUB_OUTPUT"
+          echo "platform_version=${platform_version}" >> "$GITHUB_OUTPUT"
+          echo "test_args=${test_args}" >> "$GITHUB_OUTPUT"
           deactivate
 
           # setup tests venv in a step that is always executed
@@ -290,11 +332,13 @@ jobs:
             mkdir -p artifacts
             cp *.json artifacts/
 
-            . .ci-venv/bin/activate
             CONFIG_FILE_NAME="${{ inputs.robot_config }}"
-            integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key services_version --output_file movai_service_version
-            integration-pipeline get_json_value --file $CONFIG_FILE_NAME.ci --key quickstart_version --output_file quickstart_version
-            deactivate
+            echo "${{ inputs.services_version }}" > movai_service_version
+            echo "${{ inputs.quickstart_version }}" > quickstart_version
+            if [ ! -s movai_service_version ] || [ ! -s quickstart_version ]; then
+              echo "ERROR: Missing centralized services_version or quickstart_version for $CONFIG_FILE_NAME"
+              exit 1
+            fi
 
             sudo rm -rf $USERSPACE_FOLDER_PATH || true
             sudo mkdir -p $USERSPACE_FOLDER_PATH $USERSPACE_FOLDER_PATH/models_shared
@@ -314,20 +358,9 @@ jobs:
             for robot in $(movai-cli robots list); do
               movai-cli robots user "$robot" "$MOVAI_USER" "$MOVAI_PWD"
             done
-            echo "movai_user=${MOVAI_USER}" >> $GITHUB_OUTPUT
-            echo "movai_pwd=${MOVAI_PWD}" >> $GITHUB_OUTPUT
+            echo "movai_user=${MOVAI_USER}" >> "$GITHUB_OUTPUT"
+            echo "movai_pwd=${MOVAI_PWD}" >> "$GITHUB_OUTPUT"
             echo "✓ Robots configured"
-            echo "::endgroup::"
-
-            echo "::group::Install mobtest"
-            container_id=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace-.*)")
-            docker exec -t "$container_id" bash -c '
-              set -e
-              export PATH="$HOME/.local/bin:$PATH"
-              python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ env.MOBTEST_VERSION }} --ignore-installed
-              mobtest proj /opt/ros/noetic/share/
-            '
-            echo "✓ mobtest installed and configured"
             echo "::endgroup::"
 
           else
@@ -338,6 +371,45 @@ jobs:
             echo "✓ Install tests environment prepared"
             echo "::endgroup::"
           fi
+
+      - name: Validate project metadata
+        if: ${{ inputs.test_infra_key != 'install_tests' }}
+        continue-on-error: ${{ inputs.metadata_test_skip_errors }}
+        shell: bash
+        run: |
+          set -eo pipefail
+          container_id=$(docker ps --format '{{.Names}}' --filter "name=(^spawner-.*|^ros1-workspace-.*)")
+          if [ -z "$container_id" ]; then
+            echo "ERROR: Could not find spawner or ros1 workspace container"
+            exit 1
+          fi
+
+          case "${{ inputs.project_validator }}" in
+            wac)
+              echo "::group::Run wac tests"
+              docker exec -t "$container_id" bash -c '
+                set -e
+                wac validate project
+              '
+              echo "✓ wac validated project"
+              echo "::endgroup::"
+              ;;
+            mobtest)
+              echo "::group::Install mobtest"
+              docker exec -t "$container_id" bash -c '
+                set -e
+                export PATH="$HOME/.local/bin:$PATH"
+                python3 -m pip install -i https://artifacts.cloud.mov.ai/repository/pypi-integration/simple --extra-index-url https://pypi.org/simple mobtest==${{ inputs.mobtest_version }} --ignore-installed
+                mobtest proj /opt/ros/noetic/share/
+              '
+              echo "✓ mobtest installed and configured"
+              echo "::endgroup::"
+              ;;
+            *)
+              echo "ERROR: Unsupported project validator: ${{ inputs.project_validator }}"
+              exit 1
+              ;;
+          esac
 
       - name: Run tests
         timeout-minutes: ${{ inputs.test_timeout }}
@@ -385,7 +457,7 @@ jobs:
             deactivate
           fi
 
-          echo "status=${status}" >> $GITHUB_OUTPUT
+          echo "status=${status}" >> "$GITHUB_OUTPUT"
 
       - name: Slack message Xray failure
         uses: slackapi/slack-github-action@v2
@@ -409,14 +481,14 @@ jobs:
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
           echo "Job URL: $job_html_url"
-          echo "job_url=$job_html_url" >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" >> "$GITHUB_OUTPUT"
           echo "::endgroup::"
 
           echo "::group::Prepare Slack Messages"
           MESSAGE=":white_check_mark: ${{ github.job }}/${{inputs.test_infra_key}} (Attempt: #${{ github.run_attempt }}) job passed"
           MESSAGE_ERR=":x: ${{ github.job }}/${{inputs.test_infra_key}} (Attempt: #${{ github.run_attempt }}) job failed - Details: $job_html_url"
-          echo "msg=${MESSAGE}" >> $GITHUB_OUTPUT
-          echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+          echo "msg=${MESSAGE}" >> "$GITHUB_OUTPUT"
+          echo "msg_error=${MESSAGE_ERR}" >> "$GITHUB_OUTPUT"
           echo "::endgroup::"
 
         env:

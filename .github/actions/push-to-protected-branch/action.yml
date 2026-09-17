@@ -60,10 +60,10 @@ runs:
       run: |
         BRANCH="${{ inputs.branch }}"
         if git push origin "$BRANCH" 2>&1; then
-          echo "direct_push_success=true" >> $GITHUB_OUTPUT
+          echo "direct_push_success=true" >> "$GITHUB_OUTPUT"
           echo "✓ Successfully pushed directly to protected branch"
         else
-          echo "direct_push_success=false" >> $GITHUB_OUTPUT
+          echo "direct_push_success=false" >> "$GITHUB_OUTPUT"
           echo "ℹ Direct push failed, will attempt alternative method"
         fi
 
@@ -94,13 +94,13 @@ runs:
         CLASSIC_CHECK=$(gh api "/repos/$REPO/branches/$BRANCH/protection" 2>/dev/null | jq -r '.url' 2>/dev/null || echo "")
 
         if [ "$RULESET_CHECK" -gt 0 ]; then
-          echo "protection_type=ruleset" >> $GITHUB_OUTPUT
+          echo "protection_type=ruleset" >> "$GITHUB_OUTPUT"
           echo "✓ Repository uses branch rulesets for '$BRANCH'"
         elif [ -n "$CLASSIC_CHECK" ]; then
-          echo "protection_type=classic" >> $GITHUB_OUTPUT
+          echo "protection_type=classic" >> "$GITHUB_OUTPUT"
           echo "✓ Repository uses classic branch protection"
         else
-          echo "protection_type=none" >> $GITHUB_OUTPUT
+          echo "protection_type=none" >> "$GITHUB_OUTPUT"
           echo "⚠ No protection rules detected (unexpected)"
         fi
 
@@ -123,7 +123,7 @@ runs:
         TEMP_BRANCH="temp-bypass-$(date +%s)"
 
         # Save temp branch name early for cleanup on failure
-        echo "temp_branch=$TEMP_BRANCH" >> $GITHUB_OUTPUT
+        echo "temp_branch=$TEMP_BRANCH" >> "$GITHUB_OUTPUT"
 
         # Push temporary branch
         echo "Creating temporary branch: $TEMP_BRANCH"
@@ -150,8 +150,8 @@ runs:
           exit 1
         fi
 
-        echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-        echo "merge_method=$MERGE_METHOD" >> $GITHUB_OUTPUT
+        echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+        echo "merge_method=$MERGE_METHOD" >> "$GITHUB_OUTPUT"
         echo "✓ Created PR #$PR_NUMBER"
 
         # Wait for PR to be ready
@@ -190,7 +190,7 @@ runs:
         if [ $MERGE_EXIT_CODE -ne 0 ]; then
           echo "✗ Merge API call failed with exit code $MERGE_EXIT_CODE"
           echo "$MERGE_JSON"
-          echo "merge_failed=true" >> $GITHUB_OUTPUT
+          echo "merge_failed=true" >> "$GITHUB_OUTPUT"
           exit 1
         fi
 
@@ -198,7 +198,7 @@ runs:
         if ! echo "$MERGE_JSON" | jq empty 2>/dev/null; then
           echo "✗ Failed to parse merge response as JSON:"
           echo "$MERGE_JSON"
-          echo "merge_failed=true" >> $GITHUB_OUTPUT
+          echo "merge_failed=true" >> "$GITHUB_OUTPUT"
           exit 1
         fi
 
@@ -220,12 +220,12 @@ runs:
             else
               echo "✗ Force merge also failed"
               echo "Merge response: $MERGE_MESSAGE"
-              echo "merge_failed=true" >> $GITHUB_OUTPUT
+              echo "merge_failed=true" >> "$GITHUB_OUTPUT"
               exit 1
             fi
           else
             echo "✗ Merge failed: $MERGE_MESSAGE"
-            echo "merge_failed=true" >> $GITHUB_OUTPUT
+            echo "merge_failed=true" >> "$GITHUB_OUTPUT"
             exit 1
           fi
         fi
