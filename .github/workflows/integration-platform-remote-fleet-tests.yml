@@ -771,11 +771,11 @@ jobs:
           # shellcheck disable=SC2086,SC2129
           scp -r -i ~/.ssh/aws_slave.pem -o StrictHostKeyChecking=no "${{ needs.Fleet-Tests-Provisioning.outputs.ssh_connect_string }}:/tmp/*.txt" /tmp/
 
-          echo "tests_dir=\"fleet_${{ matrix.fleet_test_name }}\"" >> "$GITHUB_OUTPUT"
-          echo "version=\"$(cat /tmp/version.txt)\"" >> "$GITHUB_OUTPUT"
-          echo "test_set=\"$(cat /tmp/test_set.txt)\"" >> "$GITHUB_OUTPUT"
-          echo "test_exec_dir=\"$(cat /tmp/test_exec_dir.txt)\"" >> "$GITHUB_OUTPUT"
-          echo "test_args=\"$(cat /tmp/test_args.txt || echo \"\")\"" >> "$GITHUB_OUTPUT"
+          echo "tests_dir=fleet_${{ matrix.fleet_test_name }}" >> "$GITHUB_OUTPUT"
+          echo "version=$(cat /tmp/version.txt)" >> "$GITHUB_OUTPUT"
+          echo "test_set=$(cat /tmp/test_set.txt)" >> "$GITHUB_OUTPUT"
+          echo "test_exec_dir=$(cat /tmp/test_exec_dir.txt)" >> "$GITHUB_OUTPUT"
+          echo "test_args=$(cat /tmp/test_args.txt || echo \"\")" >> "$GITHUB_OUTPUT"
 
       - name: Remote - Run Fleet test [${{ matrix.fleet_test_name }}]
         if: ${{ inputs.with_fleet_tests }}
