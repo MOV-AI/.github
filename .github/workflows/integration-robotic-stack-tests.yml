@@ -508,7 +508,7 @@ jobs:
             for robot in $(movai-cli robots list); do
               movai-cli robots user "$robot" "$MOVAI_USER" "$MOVAI_PWD"
               movai-cli stop "$robot" --wait
-              movai-cli set "$robot" orchestrator.extra-env "RAISE_FLOW_VALIDATION_ERRORS=False"
+              movai-cli set "$robot" orchestrator.extra-env "[RAISE_FLOW_VALIDATION_ERRORS=False,RAISE_METADATA_VALIDATION_ERRORS=False]"
               movai-cli restart "$robot"
               sleep 5
 
