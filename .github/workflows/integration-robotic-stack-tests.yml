@@ -498,12 +498,13 @@ jobs:
 
             # Configure registry
             echo "REGISTRY: $REGISTRY"
-            jq --arg registry "$REGISTRY" '.registry = $registry' "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
+            # No single quotes here: this script is already inside the ssh single-quoted string
+            jq --arg registry "$REGISTRY" ".registry = \$registry" "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
 
             # Set feature flags
-            jq '."orchestrator"."extra-env" += ["RAISE_FLOW_VALIDATION_ERRORS=False"]' "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
-            jq '."orchestrator"."extra-env" += ["RAISE_METADATA_VALIDATION_ERRORS=False"]' "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
-            jq '."ros1-workspace"."extra-env" += ["RAISE_METADATA_VALIDATION_ERRORS=False"]' "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
+            jq ".orchestrator[\"extra-env\"] += [\"RAISE_FLOW_VALIDATION_ERRORS=False\"]" "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
+            jq ".orchestrator[\"extra-env\"] += [\"RAISE_METADATA_VALIDATION_ERRORS=False\"]" "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
+            jq ".[\"ros1-workspace\"][\"extra-env\"] += [\"RAISE_METADATA_VALIDATION_ERRORS=False\"]" "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
 
             wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
             chmod +x ./QuickStart_$(cat quickstart_version).bash
