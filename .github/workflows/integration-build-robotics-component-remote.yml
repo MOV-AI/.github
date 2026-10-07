@@ -78,7 +78,7 @@ env:
   PROVISION_INFRA_VERSION: "2.2.0-3"
   PROVISION_INFRA_DIR: "provision_scripts"
   PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISIONING_ENV_CONF_VERSION: "0.2.2-5"
+  PROVISIONING_ENV_CONF_VERSION: "0.2.2-6"
   PROVISION_ENV_CONF_DIR: "infra_env_configs"
   SIMULATION_ID: CI
   SLACK_CHANNEL: "G0102LEV1CL"
@@ -170,8 +170,8 @@ jobs:
           echo "tf_state = $tf_state"
           echo "local_manager_prefix = $local_manager_prefix"
 
-          echo "simul_prefix=${local_manager_prefix}" | tee >> $GITHUB_OUTPUT
-          echo "tfstate_name=${tf_state}" | tee >> $GITHUB_OUTPUT
+          echo "simul_prefix=${local_manager_prefix}" | tee -a "$GITHUB_OUTPUT"
+          echo "tfstate_name=${tf_state}" | tee -a "$GITHUB_OUTPUT"
 
 
       - name: Provision remote vms (Proxmox)
@@ -373,7 +373,6 @@ jobs:
             . test-venv/bin/activate
             python3 -m pip install -r $tests_dir/requirements.txt
             deactivate
-          
           '
 
       - name: Copy pre-install

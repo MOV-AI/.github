@@ -98,7 +98,7 @@ env:
   MINIO_S3_URL: "https://s3.mov.ai"
   MINIO_PUBLIC_URL: "https://minio.mov.ai"
   PROVISIONING_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISIONING_ENV_CONF_VERSION: "0.2.2-5"
+  PROVISIONING_ENV_CONF_VERSION: "0.2.2-6"
   PROVISION_ENV_CONF_DIR: "infra_env_configs"
 
 jobs:
@@ -231,8 +231,8 @@ jobs:
           local_manager_prefix="ip-$run_type-${{ env.RESOLVED_CLUSTER }}-${{ inputs.product_name }}-$branch"
 
           tf_state="${{ env.RESOLVED_CLUSTER }}-sim-$local_manager_prefix"
-          echo "simul_prefix=${local_manager_prefix}" | tee >> $GITHUB_OUTPUT
-          echo "tfstate_name=${tf_state}" | tee >> $GITHUB_OUTPUT
+          echo "simul_prefix=${local_manager_prefix}" | tee -a "$GITHUB_OUTPUT"
+          echo "tfstate_name=${tf_state}" | tee -a "$GITHUB_OUTPUT"
 
       - name: Provision remote vms (Proxmox)
         working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
@@ -701,7 +701,7 @@ jobs:
         run: |
           job_id=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | .[0].id')
           job_html_url=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id}}/attempts/${{ github.run_attempt }}/jobs | jq -r '.jobs | map(select(.name | contains("${{ github.job }}"))) | .[0].html_url')
-          echo "job_url=$job_html_url" | tee >> $GITHUB_OUTPUT
+          echo "job_url=$job_html_url" | tee -a "$GITHUB_OUTPUT"
         env:
           GITHUB_TOKEN: ${{ secrets.gh_token }}
 
