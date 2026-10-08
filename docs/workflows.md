@@ -195,7 +195,7 @@ Job `rust`, one matrix leg per entry in `working_directories`, all run in that d
 3. **Setup toolchain**: Installs whatever `rust-toolchain.toml` declares and restores the cargo cache for that directory
 4. **Format**: `cargo fmt --all --check`
 5. **Clippy**: Uploads SARIF to code scanning, one category per leg; blocking or advisory per `clippy_blocking`
-6. **Unit tests**: Coverage over `--lib --bins` by default
+6. **Unit tests**: Coverage over `--lib --bins` by default, narrowed to the targets the crate has (a binary-only crate gets `--bins`). A crate with no unit tests passes with a warning
 7. **Doc tests**: Skipped for a crate with no library target
 8. **Component tests**: Second coverage pass over `tests/` when enabled
 9. **Coverage artifact**: `rust-coverage-<dir>`

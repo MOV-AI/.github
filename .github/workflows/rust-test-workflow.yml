@@ -210,24 +210,40 @@ jobs:
           sarif_file: clippy-${{ steps.leg.outputs.slug }}.sarif
           category: clippy-${{ steps.leg.outputs.slug }}
 
+      # `--lib` on a binary-only crate, and `--doc` on any crate without a
+      # library, make cargo stop with "no library targets found". The default
+      # unit selection is therefore narrowed to the targets that exist.
+      - name: Detect targets
+        id: targets
+        env:
+          UNIT_TEST_ARGS: ${{ inputs.unit_test_args }}
+        run: |
+          kinds=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '[.packages[].targets[].kind[]] | unique | join(" ")')
+          has_lib=false
+          case " $kinds " in *" lib "*|*" rlib "*|*" proc-macro "*) has_lib=true ;; esac
+          unit="$UNIT_TEST_ARGS"
+          if [ "$unit" = "--lib --bins" ]; then
+            unit=""
+            [ "$has_lib" = true ] && unit="--lib"
+            case " $kinds " in *" bin "*) unit="$unit --bins" ;; esac
+          fi
+          echo "Target kinds: $kinds -> unit selection: '${unit}', doc tests: ${has_lib}"
+          echo "has_lib=${has_lib}" >> "$GITHUB_OUTPUT"
+          echo "unit=${unit}" >> "$GITHUB_OUTPUT"
+
+      # --no-tests=warn: a crate with no unit tests is not a failure.
       - name: Unit tests with coverage
         run: |
-          cargo llvm-cov ${{ inputs.packages }} ${{ inputs.unit_test_args }} \
+          cargo llvm-cov ${{ inputs.packages }} ${{ steps.targets.outputs.unit }} \
             --${{ inputs.coverage_format }} \
             --output-path "$GITHUB_WORKSPACE/coverage-unit-${{ steps.leg.outputs.slug }}.${{ inputs.coverage_format == 'lcov' && 'info' || 'xml' }}" \
-            nextest --no-fail-fast \
+            nextest --no-fail-fast --no-tests=warn \
             ${{ inputs.test_filter && format('-E ''{0}''', inputs.test_filter) || '' }}
 
-      # Doc tests exist only for library targets; a binary-only crate makes
-      # `cargo test --doc` fail with "no library targets found".
       - name: Doc tests
-        run: |
-          if cargo metadata --no-deps --format-version 1 \
-              | jq -e 'any(.packages[].targets[].kind[]; . == "lib" or . == "proc-macro")' >/dev/null; then
-            cargo test ${{ inputs.packages }} --doc
-          else
-            echo "No library target: no doc tests to run."
-          fi
+        if: steps.targets.outputs.has_lib == 'true'
+        run: cargo test ${{ inputs.packages }} --doc
 
       - name: Component tests
         if: inputs.component_tests
@@ -239,7 +255,7 @@ jobs:
           cargo llvm-cov ${{ inputs.packages }} --tests \
             --${{ inputs.coverage_format }} \
             --output-path "$GITHUB_WORKSPACE/coverage-component-${{ steps.leg.outputs.slug }}.${{ inputs.coverage_format == 'lcov' && 'info' || 'xml' }}" \
-            nextest --no-fail-fast --test-threads ${{ inputs.component_test_threads }}
+            nextest --no-fail-fast --no-tests=warn --test-threads ${{ inputs.component_test_threads }}
 
       - name: Coverage summary
         if: always() && inputs.coverage_format == 'lcov'
