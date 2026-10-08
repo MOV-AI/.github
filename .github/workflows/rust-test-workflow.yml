@@ -323,7 +323,12 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           SONAR_TOKEN: ${{ secrets.sonar_token }}
         with:
+          # Organization and key match the project the bootstrap step creates
+          # and the dashboard link below. sonar_args comes last, so a caller
+          # can still override either.
           args: >
+            -Dsonar.organization=mov-ai
+            -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
             -Dsonar.qualitygate.wait=true
             -Dsonar.qualitygate.timeout=300
             ${{ steps.coverage.outputs.arg }}

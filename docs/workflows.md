@@ -181,7 +181,7 @@ Keep those stages in the consuming repository.
 | `clippy_blocking` | boolean | `false` | When `false`, findings upload to code scanning as SARIF and the job does not fail. This is how a repository measures its backlog before committing to it |
 | `coverage_format` | string | `lcov` | `lcov` or `cobertura` |
 | `sonar` | boolean | `true` | Run the SonarCloud scan |
-| `sonar_args` | string | - | Extra `-D` flags. Prefer a `sonar-project.properties` file in the consuming repository; the quality-gate wait is added automatically |
+| `sonar_args` | string | - | Extra `-D` flags. Prefer a `sonar-project.properties` file in the consuming repository. The organization (`mov-ai`), the project key (`<owner>_<repo>`), the coverage report paths and the quality-gate wait are set automatically; a flag here overrides them |
 
 **Optional Secrets:**
 - `sonar_token`: SonarCloud token. Required when `sonar` is enabled.
