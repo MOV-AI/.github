@@ -69,15 +69,18 @@ on:
           Run a second pass over tests/ with a longer slow-test timeout. Requires
           a Docker daemon on the runner.
 
-      component_test_filter:
+      component_test_filters:
         required: false
         type: string
-        default: ''
+        default: '{}'
         description: >
-          A cargo-nextest filter expression for the component pass, e.g.
-          "not binary_id(my-crate::needs_a_local_image)" to leave out one suite
-          that cannot run on a hosted runner while every other tests/ target
-          still runs.
+          JSON object of cargo-nextest filter expressions for the component
+          pass, keyed by working directory, e.g.
+          '{"backend": "not binary(needs_a_local_image)"}', to leave out one
+          suite that cannot run on a hosted runner while every other tests/
+          target still runs. Per directory because nextest rejects a binary or
+          package matcher that matches nothing in the crate; a directory with
+          no entry runs unfiltered.
 
       component_test_threads:
         required: false
@@ -271,13 +274,16 @@ jobs:
           # Ryuk reaps containers, which an ephemeral runner does anyway, and it
           # is a recurring cause of CI hangs.
           TESTCONTAINERS_RYUK_DISABLED: "true"
+          FILTER: ${{ fromJSON(inputs.component_test_filters)[matrix.dir] || '' }}
         run: |
+          filter=()
+          if [ -n "$FILTER" ]; then filter=(-E "$FILTER"); fi
           set -o pipefail
           cargo llvm-cov ${{ inputs.packages }} --tests \
             --${{ inputs.coverage_format }} \
             --output-path "$GITHUB_WORKSPACE/coverage-component-${{ steps.leg.outputs.slug }}.${{ inputs.coverage_format == 'lcov' && 'info' || 'xml' }}" \
             nextest --no-fail-fast --no-tests=warn --test-threads ${{ inputs.component_test_threads }} \
-            ${{ inputs.component_test_filter && format('-E ''{0}''', inputs.component_test_filter) || '' }} \
+            "${filter[@]}" \
             2>&1 | tee "$RUNNER_TEMP/component-tests.log"
 
       - name: Coverage summary

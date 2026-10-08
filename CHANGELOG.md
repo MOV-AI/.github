@@ -15,8 +15,9 @@ All notable changes to this repository will be documented in this file.
 - `report` job on `rust-test-workflow.yml`: one table of every crate's format, test and coverage
   results with the failing tests listed, in the run summary and as a single pull-request
   comment updated on each push.
-- `component_test_filter` input on `rust-test-workflow.yml`: a cargo-nextest filter expression
-  for the component pass, to leave out one suite without turning off every `tests/` target.
+- `component_test_filters` input on `rust-test-workflow.yml`: cargo-nextest filter expressions
+  for the component pass, keyed by working directory, to leave out one suite without turning
+  off every `tests/` target.
 - `test_filter` input on `rust-test-workflow.yml`: a cargo-nextest filter expression, the
   equivalent of `cargo test -- --skip <pattern>` for repositories that exclude a class of
   tests from the main run.
