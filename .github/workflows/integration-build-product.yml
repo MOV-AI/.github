@@ -252,36 +252,6 @@ jobs:
             echo "product_distro_list=$PRODUCT_DISTRO_LIST" >> "$GITHUB_OUTPUT"
           fi
 
-  Select-Simtest-Node:
-    runs-on: pt-agent
-    outputs:
-      sim_cluster: ${{ steps.select_sim_cluster.outputs.sim_cluster }}
-    steps:
-      - name: Checkout workflow scripts repository
-        uses: actions/checkout@v6
-        with:
-          repository: MOV-AI/.github
-          ref: v3
-          path: .github-workflows
-          token: ${{ secrets.gh_token }}
-
-      - name: Select simulation cluster
-        id: select_sim_cluster
-        shell: bash
-        run: |
-          set -e
-          selected_cluster="${{ inputs.cluster }}"
-          if [[ "${{ inputs.with_simulation_tests }}" == "true" && ( "$selected_cluster" == "any" || -z "$selected_cluster" ) ]]; then
-            selected_cluster="$(bash .github-workflows/.github/scripts/select_gpu_free_node.sh -H https://marvin.mov.ai:8006 -u ${{ secrets.proxmox_ve_username }} -p ${{ secrets.proxmox_ve_password }})"
-          fi
-
-          if [[ -z "$selected_cluster" ]]; then
-            echo "::error::Simulation cluster is empty. Provide cluster or use 'any'."
-            exit 1
-          fi
-
-          echo "sim_cluster=$selected_cluster" >> "$GITHUB_OUTPUT"
-
   Validate-boostrap-configs:
     runs-on: integration-pipeline
     container:
@@ -1104,15 +1074,13 @@ jobs:
           docker image prune --all -f
 
   Build-Simulator:
-    needs: [Validate-boostrap-configs, Build-Workspace, Select-Simtest-Node]
+    needs: [Validate-boostrap-configs, Build-Workspace]
     runs-on: integration-pipeline
     env:
       DISTRO: noetic
     outputs:
       image_name: "${{ steps.pre_build.outputs.push_name }}"
       skip_simulator: "${{ steps.pre_simulator_build.outputs.skip_simulator_build }}"
-      sim_cluster: "${{ needs.Select-Simtest-Node.outputs.sim_cluster }}"
-      simulator_tests_agent_name: "${{ steps.post_simulator_build.outputs.simul_tests_infra }}"
       slack_thread_id: ${{ needs.Validate-boostrap-configs.outputs.slack_thread_id }}
       commit_hash: ${{ needs.Build-Workspace.outputs.commit_hash }}
     steps:
@@ -1276,17 +1244,6 @@ jobs:
         run: |
           docker system prune -f
           docker image prune --all -f
-
-      - name: Setup simulation Tests
-        id: post_simulator_build
-        shell: bash
-        run: |
-          if [ "${{ inputs.with_simulation_tests }}" = "true" ];
-          then
-            echo "simul_tests_infra=simul-${{ needs.Select-Simtest-Node.outputs.sim_cluster }}-queuer" | tee >> $GITHUB_OUTPUT
-          else
-            echo "simul_tests_infra=integration-pipeline-${{ inputs.proxmox_cluster_name }}" | tee >> $GITHUB_OUTPUT
-          fi
 
   Install-Simulator-Robot:
     needs: [Validate-boostrap-configs, Normalize-Distro-Input, Build-Workspace, Build-Simulator]
@@ -1582,9 +1539,51 @@ jobs:
           docker system prune -f
           docker image prune --all -f
 
-  Validation-Simulator-Tests:
+  Select-Simtest-Node:
+    runs-on: pt-agent
     needs: [Validate-boostrap-configs, Compute-timeout, Normalize-Distro-Input, Build-Workspace, Build-Simulator]
-    runs-on: ${{ needs.Build-Simulator.outputs.simulator_tests_agent_name }}
+    outputs:
+      sim_cluster: ${{ steps.select_sim_cluster.outputs.sim_cluster }}
+      sim_tests_infra: ${{ steps.sim_tests_infra.outputs.sim_tests_infra }}
+    steps:
+      - name: Checkout workflow scripts repository
+        uses: actions/checkout@v6
+        with:
+          repository: MOV-AI/.github
+          ref: v3
+          path: .github-workflows
+          token: ${{ secrets.gh_token }}
+
+      - name: Select simulation cluster
+        id: select_sim_cluster
+        shell: bash
+        run: |
+          set -e
+          selected_cluster="${{ inputs.cluster }}"
+          if [[ "${{ inputs.with_simulation_tests }}" == "true" && ( "$selected_cluster" == "any" || -z "$selected_cluster" ) ]]; then
+            selected_cluster="$(bash .github-workflows/.github/scripts/select_gpu_free_node.sh -H https://marvin.mov.ai:8006 -u ${{ secrets.proxmox_ve_username }} -p ${{ secrets.proxmox_ve_password }})"
+          fi
+
+          if [[ -z "$selected_cluster" ]]; then
+            echo "::error::Simulation cluster is empty. Provide cluster or use 'any'."
+            exit 1
+          fi
+          echo "sim_cluster=$selected_cluster" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Setup simulation Tests
+        id: sim_tests_infra
+        shell: bash
+        run: |
+          if [ "${{ inputs.with_simulation_tests }}" = "true" ];
+          then
+            echo "sim_tests_infra=simul-${{ steps.select_sim_cluster.outputs.sim_cluster }}-queuer" | tee -a $GITHUB_OUTPUT
+          else
+            echo "sim_tests_infra=integration-pipeline-${{ inputs.proxmox_cluster_name }}" | tee -a $GITHUB_OUTPUT
+          fi
+
+  Validation-Simulator-Tests:
+    needs: [Validate-boostrap-configs, Compute-timeout, Normalize-Distro-Input, Build-Workspace, Build-Simulator, Select-Simtest-Node]
+    runs-on: ${{ needs.Select-Simtest-Node.outputs.sim_tests_infra }}s
     if: ${{ github.event_name != 'pull_request'}}
     timeout-minutes: ${{ fromJSON(needs.Compute-timeout.outputs.jobtimeout) }}
     outputs:
@@ -1592,7 +1591,7 @@ jobs:
       simulation_test_publish_url: ${{ steps.minio_publish.outputs.publish_url || 'not executed' }}
     env:
       REGISTRY: ${{ inputs.docker_simulator_registry }}
-      RESOLVED_CLUSTER: ${{ needs.Build-Simulator.outputs.sim_cluster }}
+      RESOLVED_CLUSTER: ${{ needs.Select-Simtest-Node.outputs.sim_cluster }}
     steps:
       - uses: rtCamp/action-cleanup@master
         if: ${{ inputs.with_simulation_tests }}
