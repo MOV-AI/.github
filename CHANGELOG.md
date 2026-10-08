@@ -12,6 +12,9 @@ All notable changes to this repository will be documented in this file.
 - `working_directories` input on `rust-test-workflow.yml`: a JSON list of crate directories,
   each tested in its own matrix leg, for repositories of independent crates with no root
   workspace. Sonar runs once, in its own job, over the coverage of every leg.
+- `report` job on `rust-test-workflow.yml`: one table of every crate's format, test and coverage
+  results with the failing tests listed, in the run summary and as a single pull-request
+  comment updated on each push.
 - `test_filter` input on `rust-test-workflow.yml`: a cargo-nextest filter expression, the
   equivalent of `cargo test -- --skip <pattern>` for repositories that exclude a class of
   tests from the main run.

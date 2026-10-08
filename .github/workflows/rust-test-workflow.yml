@@ -191,6 +191,7 @@ jobs:
           tool: cargo-nextest,cargo-llvm-cov,clippy-sarif,sarif-fmt
 
       - name: Format
+        id: fmt
         run: cargo fmt --all --check
 
       - name: Clippy
@@ -215,6 +216,7 @@ jobs:
       # unit selection is therefore narrowed to the targets that exist.
       - name: Detect targets
         id: targets
+        if: ${{ !cancelled() }}
         env:
           UNIT_TEST_ARGS: ${{ inputs.unit_test_args }}
         run: |
@@ -233,29 +235,39 @@ jobs:
           echo "unit=${unit}" >> "$GITHUB_OUTPUT"
 
       # --no-tests=warn: a crate with no unit tests is not a failure.
+      # The output is kept for the report job: nextest's Summary line and its
+      # FAIL lines are the test counts and the failing test names.
       - name: Unit tests with coverage
+        id: unit
+        if: ${{ !cancelled() && steps.targets.outcome == 'success' }}
         run: |
+          set -o pipefail
           cargo llvm-cov ${{ inputs.packages }} ${{ steps.targets.outputs.unit }} \
             --${{ inputs.coverage_format }} \
             --output-path "$GITHUB_WORKSPACE/coverage-unit-${{ steps.leg.outputs.slug }}.${{ inputs.coverage_format == 'lcov' && 'info' || 'xml' }}" \
             nextest --no-fail-fast --no-tests=warn \
-            ${{ inputs.test_filter && format('-E ''{0}''', inputs.test_filter) || '' }}
+            ${{ inputs.test_filter && format('-E ''{0}''', inputs.test_filter) || '' }} \
+            2>&1 | tee "$RUNNER_TEMP/unit-tests.log"
 
       - name: Doc tests
-        if: steps.targets.outputs.has_lib == 'true'
+        id: doc
+        if: ${{ !cancelled() && steps.targets.outputs.has_lib == 'true' }}
         run: cargo test ${{ inputs.packages }} --doc
 
       - name: Component tests
-        if: inputs.component_tests
+        id: component
+        if: ${{ !cancelled() && inputs.component_tests && steps.targets.outcome == 'success' }}
         env:
           # Ryuk reaps containers, which an ephemeral runner does anyway, and it
           # is a recurring cause of CI hangs.
           TESTCONTAINERS_RYUK_DISABLED: "true"
         run: |
+          set -o pipefail
           cargo llvm-cov ${{ inputs.packages }} --tests \
             --${{ inputs.coverage_format }} \
             --output-path "$GITHUB_WORKSPACE/coverage-component-${{ steps.leg.outputs.slug }}.${{ inputs.coverage_format == 'lcov' && 'info' || 'xml' }}" \
-            nextest --no-fail-fast --no-tests=warn --test-threads ${{ inputs.component_test_threads }}
+            nextest --no-fail-fast --no-tests=warn --test-threads ${{ inputs.component_test_threads }} \
+            2>&1 | tee "$RUNNER_TEMP/component-tests.log"
 
       - name: Coverage summary
         if: always() && inputs.coverage_format == 'lcov'
@@ -273,6 +285,51 @@ jobs:
           name: rust-coverage-${{ steps.leg.outputs.slug }}
           path: coverage-*
           if-no-files-found: ignore
+          retention-days: 7
+
+      # One small JSON per leg; the report job turns them into one table.
+      - name: Record the result of this leg
+        if: always()
+        working-directory: .
+        env:
+          DIR: ${{ matrix.dir }}
+          SLUG: ${{ steps.leg.outputs.slug }}
+          FMT: ${{ steps.fmt.outcome }}
+          UNIT: ${{ steps.unit.outcome }}
+          DOC: ${{ steps.doc.outcome }}
+          COMPONENT: ${{ steps.component.outcome }}
+        run: |
+          # nextest: "Summary [ 2.0s] 131 tests run: 128 passed, 3 failed, 0 skipped"
+          # and one "FAIL [ 0.5s] (1/131) crate::binary test_name" per failure.
+          tests() {
+            if [ ! -f "$1" ]; then echo null; return; fi
+            clean=$(sed -E 's/\x1b\[[0-9;]*m//g' "$1")
+            summary=$(printf '%s\n' "$clean" | grep -E '^ *Summary \[' | tail -n 1 \
+              | sed -E 's/^ *Summary \[[^]]*\] *//')
+            failed=$(printf '%s\n' "$clean" \
+              | grep -E '^ *(FAIL|TIMEOUT|SIGSEGV|SIGABRT|SIGKILL|ABORT) \[' \
+              | sed -E 's/^ *[A-Z]+ \[[^]]*\] *(\( *[0-9]+\/ *[0-9]+\) *)?//' \
+              | sort -u | jq -R . | jq -s .)
+            jq -n --arg s "$summary" --argjson f "$failed" '{summary: $s, failed: $f}'
+          }
+          coverage=null
+          f="coverage-unit-${SLUG}.info"
+          if [ -f "$f" ]; then
+            coverage=$(awk -F: '/^LF:/{t+=$2} /^LH:/{h+=$2} END{ if (t>0) printf "%.1f", 100*h/t; else print "null" }' "$f")
+          fi
+          jq -n --arg dir "$DIR" --arg fmt "$FMT" --arg unit "$UNIT" --arg doc "$DOC" \
+            --arg component "$COMPONENT" --argjson coverage "$coverage" \
+            --argjson unit_tests "$(tests "$RUNNER_TEMP/unit-tests.log")" \
+            --argjson component_tests "$(tests "$RUNNER_TEMP/component-tests.log")" \
+            '{dir: $dir, fmt: $fmt, unit: $unit, doc: $doc, component: $component,
+              coverage: $coverage, unit_tests: $unit_tests, component_tests: $component_tests}' \
+            | tee "result-${SLUG}.json"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rust-result-${{ steps.leg.outputs.slug }}
+          path: result-${{ steps.leg.outputs.slug }}.json
           retention-days: 7
 
   # One scan for the whole repository, whatever the number of matrix legs: each
@@ -340,3 +397,120 @@ jobs:
           key="${{ github.repository_owner }}_${{ github.event.repository.name }}"
           echo "Report: https://sonarcloud.io/project/overview?id=${key}" \
             | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # One readable table for the whole run, in the run summary and, on a pull
+  # request, in a single comment that every push updates instead of adding one.
+  report:
+    name: Report
+    needs: [rust, sonar]
+    if: ${{ !cancelled() }}
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rust-result-*
+          merge-multiple: true
+          path: results
+
+      - name: Build the report
+        env:
+          DIRS: ${{ inputs.working_directories }}
+          COMPONENT_TESTS: ${{ inputs.component_tests }}
+          SONAR: ${{ inputs.sonar }}
+          SONAR_RESULT: ${{ needs.sonar.result }}
+          SONAR_KEY: ${{ github.repository_owner }}_${{ github.event.repository.name }}
+          PR: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          icon() { case "$1" in success) echo "✅";; failure) echo "❌";; cancelled) echo "⏹️";; *) echo "–";; esac; }
+          # "131 tests run: 128 passed, 3 failed, 0 skipped" -> "128 passed, 3 failed"
+          counts() {
+            jq -r 'if . == null or .summary == "" then "" else
+              (.summary | sub("^[0-9]+ tests? run: "; "") | gsub(", 0 [a-z ]+"; "")) end'
+          }
+          total=0; ok=0; rows=""; failures=""
+          for dir in $(jq -r '.[]' <<<"$DIRS"); do
+            total=$((total + 1))
+            slug=$(printf '%s' "$dir" | tr -c 'A-Za-z0-9_-' '_'); [ "$dir" = "." ] && slug=root
+            f="results/result-${slug}.json"
+            if [ ! -f "$f" ]; then
+              row="| \`${dir}\` | ❔ | ❔ no result | ❔ |"
+              [ "$COMPONENT_TESTS" = true ] && row+=" ❔ |"
+              rows+="${row} |"$'\n'; continue
+            fi
+            r=$(cat "$f")
+            fmt=$(jq -r .fmt <<<"$r"); unit=$(jq -r .unit <<<"$r"); doc=$(jq -r .doc <<<"$r")
+            comp=$(jq -r .component <<<"$r")
+            unit_counts=$(jq '.unit_tests' <<<"$r" | counts)
+            case "$unit_counts" in "") [ "$unit" = failure ] && unit_counts="build or run failed" ;; esac
+            [ "$(jq -r '.unit_tests.summary // ""' <<<"$r")" = "0 tests run: 0 passed, 0 skipped" ] && unit_counts="no tests"
+            cov=$(jq -r 'if .coverage == null then "" else "\(.coverage)%" end' <<<"$r")
+            row="| \`${dir}\` | $(icon "$fmt") | $(icon "$unit") ${unit_counts} | $(icon "$doc") |"
+            if [ "$COMPONENT_TESTS" = true ]; then
+              comp_counts=$(jq '.component_tests' <<<"$r" | counts)
+              row+=" $(icon "$comp") ${comp_counts} |"
+            fi
+            rows+="${row} ${cov} |"$'\n'
+            leg_ok=true
+            for o in "$fmt" "$unit" "$doc" "$comp"; do [ "$o" = failure ] || [ "$o" = cancelled ] && leg_ok=false; done
+            [ "$leg_ok" = true ] && ok=$((ok + 1))
+            [ "$fmt" = failure ] && failures+="- \`${dir}\`: formatting differs — run \`cargo fmt --all\` in \`${dir}\`"$'\n'
+            # "crate::binary test_name" -> "`test_name` (crate::binary)"
+            while IFS= read -r t; do
+              [ -n "$t" ] && failures+="- \`${dir}\`: \`${t#* }\` (${t%% *})"$'\n'
+            done < <(jq -r '[.unit_tests.failed[]?, .component_tests.failed[]?] | unique | .[]' <<<"$r")
+          done
+
+          header="| Crate | Format | Unit tests | Doc tests |"; sep="|---|:-:|---|:-:|"
+          if [ "$COMPONENT_TESTS" = true ]; then header+=" Component tests |"; sep+="---|"; fi
+          header+=" Coverage |"; sep+="--:|"
+
+          title="✅ Rust: all ${total} crates passed"
+          [ "$ok" -lt "$total" ] && title="❌ Rust: ${ok}/${total} crates passed"
+          {
+            echo "<!-- rust-test-workflow -->"
+            echo "### ${title}"
+            echo
+            echo "$header"; echo "$sep"; printf '%s' "$rows"
+            if [ -n "$failures" ]; then
+              echo; echo "**To fix**"; echo; printf '%s' "$failures"
+            fi
+            if [ "$SONAR" = true ]; then
+              link="https://sonarcloud.io/dashboard?id=${SONAR_KEY}${PR:+&pullRequest=${PR}}"
+              echo
+              case "$SONAR_RESULT" in
+                success) echo "**SonarCloud:** ✅ quality gate passed — [dashboard](${link})" ;;
+                failure) echo "**SonarCloud:** ❌ quality gate failed or the scan errored — [dashboard](${link})" ;;
+                *) echo "**SonarCloud:** – not run, because a crate failed" ;;
+              esac
+            fi
+            echo
+            echo "Coverage is line coverage of the unit tests. [Logs of this run](${RUN_URL})"
+          } > report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          cat report.md
+
+      # A pull request from a fork gets a read-only token; the table is still
+      # in the run summary.
+      - name: Comment on the pull request
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          id=$(gh api --paginate "repos/${GH_REPO}/issues/${PR}/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]"
+                    and (.body | contains("<!-- rust-test-workflow -->"))) | .id' | head -n 1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${GH_REPO}/issues/comments/${id}" -F body=@report.md >/dev/null
+            echo "Updated comment ${id}"
+          else
+            gh api -X POST "repos/${GH_REPO}/issues/${PR}/comments" -F body=@report.md >/dev/null
+            echo "Added a comment"
+          fi

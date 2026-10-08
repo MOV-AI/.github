@@ -199,12 +199,20 @@ Job `rust`, one matrix leg per entry in `working_directories`, all run in that d
 7. **Doc tests**: Skipped for a crate with no library target
 8. **Component tests**: Second coverage pass over `tests/` when enabled
 9. **Coverage artifact**: `rust-coverage-<dir>`
+10. **Result**: `rust-result-<dir>`, a small JSON with each step's outcome, nextest's test counts, the names of failing tests and the line coverage
+
+The test steps still run when formatting fails, so one push reports every problem.
 
 Job `sonar`, once, after every leg passes:
 
 1. **Checkout**: Full history (`fetch-depth: 0`), which SonarCloud needs for new-code blame
 2. **Coverage**: Downloads every leg's report and passes them all as `sonar.rust.lcov.reportPaths` (or `sonar.rust.cobertura.reportPaths`)
 3. **Sonar**: Creates the project if absent, disables Automatic Analysis, scans, waits on the quality gate
+
+Job `report`, once, even when a leg failed:
+
+1. **Table**: One row per crate — format, unit tests (passed / failed), doc tests, component tests, coverage — then a **To fix** list with each failing test and each crate to reformat, and the SonarCloud result. Written to the run summary.
+2. **Pull-request comment**: The same table as one comment, updated on every push instead of adding a new one. On a pull request from a fork the token is read-only; the table is then only in the run summary.
 
 **Notes:**
 
@@ -215,6 +223,9 @@ Job `sonar`, once, after every leg passes:
   `sonar.rust.*.reportPaths` in `sonar-project.properties` as well.
 - `clippy` uploads to GitHub code scanning, which needs Code Security on a private or internal
   repository. Without it, set `clippy: false`.
+- The caller must grant the permissions the jobs request, because a called workflow cannot be
+  given more than its caller: `contents: read`, `security-events: write` (clippy SARIF) and
+  `pull-requests: write` (the results comment).
 - The cache is written only on `push` events. Without that, every pull-request branch writes
   its own multi-gigabyte entry, the 10 GB repository cache limit starts evicting, and the
   cache silently stops helping.
