@@ -5,10 +5,13 @@ name: Rust Tests and Coverage
 #
 # Two consumers are in view:
 #   workspace-agent   single crate + Python bindings, protoc from apt
-#   movai-metaplanner 11-crate workspace, protoc vendored, Docker-backed
-#                     component tests that must be separated from unit tests
+#   movai-metaplanner 11 independent crates (no root workspace), protoc
+#                     vendored, Docker-backed component tests that must be
+#                     separated from unit tests
 #
-# Everything they disagree about is an input below.
+# Everything they disagree about is an input below. Each directory in
+# `working_directories` is tested in its own matrix leg; Sonar then runs once,
+# from the repository root, over the coverage of every leg.
 
 on:
   workflow_call:
@@ -18,6 +21,17 @@ on:
         type: string
         default: ubuntu-24.04
         description: Runner label. Note ubuntu-22.04 is on the deprecation path.
+
+      working_directories:
+        required: false
+        type: string
+        default: '["."]'
+        description: >
+          JSON list of directories, each holding a Cargo.toml, e.g.
+          '["backend", "orderManagement"]'. Each one is formatted, linted and
+          tested in its own matrix leg. Use this for a repository of independent
+          crates; a Cargo workspace needs only the default '["."]' plus
+          `packages: --workspace`.
 
       packages:
         required: false
@@ -131,14 +145,28 @@ permissions:
 
 jobs:
   rust:
+    name: Rust (${{ matrix.dir }})
     runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: ${{ fromJSON(inputs.working_directories) }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          # Sonar derives new-code from git blame. A shallow clone silently
-          # degrades that, and the failure is invisible — the scan still passes.
-          fetch-depth: 0
+
+      # Artifact names, SARIF categories and cache keys cannot carry a path.
+      - name: Name this leg
+        id: leg
+        env:
+          DIR: ${{ matrix.dir }}
+        run: |
+          slug=$(printf '%s' "$DIR" | tr -c 'A-Za-z0-9_-' '_')
+          [ "$DIR" = "." ] && slug=root
+          echo "slug=${slug}" >> "$GITHUB_OUTPUT"
 
       - name: Install protoc
         if: inputs.install_protoc
@@ -151,7 +179,8 @@ jobs:
       # omitted, and caches internally — so no separate rust-cache step.
       - uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
-          cache-shared-key: shared
+          cache-shared-key: rust-test-${{ steps.leg.outputs.slug }}
+          cache-workspaces: ${{ matrix.dir }}
           cache-save-if: ${{ github.event_name == 'push' }}
           build-warnings: ${{ inputs.build_warnings }}
 
@@ -171,25 +200,34 @@ jobs:
         run: |
           set -o pipefail
           cargo clippy ${{ inputs.packages }} --all-targets --all-features \
-            --message-format=json | clippy-sarif | tee clippy.sarif | sarif-fmt
+            --message-format=json | clippy-sarif \
+            | tee "$GITHUB_WORKSPACE/clippy-${{ steps.leg.outputs.slug }}.sarif" | sarif-fmt
 
       - name: Upload clippy SARIF
-        if: always() && inputs.clippy && hashFiles('clippy.sarif') != ''
+        if: always() && inputs.clippy && hashFiles(format('clippy-{0}.sarif', steps.leg.outputs.slug)) != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: clippy.sarif
-          category: clippy
+          sarif_file: clippy-${{ steps.leg.outputs.slug }}.sarif
+          category: clippy-${{ steps.leg.outputs.slug }}
 
       - name: Unit tests with coverage
         run: |
           cargo llvm-cov ${{ inputs.packages }} ${{ inputs.unit_test_args }} \
             --${{ inputs.coverage_format }} \
-            --output-path coverage-unit.${{ inputs.coverage_format == 'lcov' && 'info' || 'xml' }} \
+            --output-path "$GITHUB_WORKSPACE/coverage-unit-${{ steps.leg.outputs.slug }}.${{ inputs.coverage_format == 'lcov' && 'info' || 'xml' }}" \
             nextest --no-fail-fast \
             ${{ inputs.test_filter && format('-E ''{0}''', inputs.test_filter) || '' }}
 
+      # Doc tests exist only for library targets; a binary-only crate makes
+      # `cargo test --doc` fail with "no library targets found".
       - name: Doc tests
-        run: cargo test ${{ inputs.packages }} --doc
+        run: |
+          if cargo metadata --no-deps --format-version 1 \
+              | jq -e 'any(.packages[].targets[].kind[]; . == "lib" or . == "proc-macro")' >/dev/null; then
+            cargo test ${{ inputs.packages }} --doc
+          else
+            echo "No library target: no doc tests to run."
+          fi
 
       - name: Component tests
         if: inputs.component_tests
@@ -200,11 +238,12 @@ jobs:
         run: |
           cargo llvm-cov ${{ inputs.packages }} --tests \
             --${{ inputs.coverage_format }} \
-            --output-path coverage-component.${{ inputs.coverage_format == 'lcov' && 'info' || 'xml' }} \
+            --output-path "$GITHUB_WORKSPACE/coverage-component-${{ steps.leg.outputs.slug }}.${{ inputs.coverage_format == 'lcov' && 'info' || 'xml' }}" \
             nextest --no-fail-fast --test-threads ${{ inputs.component_test_threads }}
 
       - name: Coverage summary
         if: always() && inputs.coverage_format == 'lcov'
+        working-directory: .
         run: |
           for f in coverage-*.info; do
             [ -f "$f" ] || continue
@@ -215,21 +254,55 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: rust-coverage
+          name: rust-coverage-${{ steps.leg.outputs.slug }}
           path: coverage-*
           if-no-files-found: ignore
           retention-days: 7
 
+  # One scan for the whole repository, whatever the number of matrix legs: each
+  # leg's scan would otherwise overwrite the previous one on the same project.
+  sonar:
+    name: SonarCloud
+    needs: rust
+    if: inputs.sonar
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Sonar derives new-code from git blame. A shallow clone silently
+          # degrades that, and the failure is invisible — the scan still passes.
+          fetch-depth: 0
+
+      # Rust analysis runs cargo, so the pinned toolchain must be on PATH.
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          cache: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rust-coverage-*
+          merge-multiple: true
+
+      - name: Collect coverage reports
+        id: coverage
+        run: |
+          ext=${{ inputs.coverage_format == 'lcov' && 'info' || 'xml' }}
+          paths=$(find . -maxdepth 1 -name "coverage-*.${ext}" -printf '%f\n' | sort | paste -sd, -)
+          echo "Coverage reports: ${paths:-none}"
+          [ -n "$paths" ] && echo "arg=-Dsonar.rust.${{ inputs.coverage_format }}.reportPaths=${paths}" >> "$GITHUB_OUTPUT"
+          true
+
       # Creates the project if absent and turns Automatic Analysis off, which is
       # required: Rust analysis runs only in CI and needs cargo on PATH.
       - uses: MOV-AI/action-sonarcloud-proj-config@v1
-        if: inputs.sonar
         with:
           sonar_org: mov-ai
           sonar_token: ${{ secrets.sonar_token }}
 
       - uses: SonarSource/sonarqube-scan-action@v7
-        if: inputs.sonar
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SONAR_TOKEN: ${{ secrets.sonar_token }}
@@ -237,10 +310,11 @@ jobs:
           args: >
             -Dsonar.qualitygate.wait=true
             -Dsonar.qualitygate.timeout=300
+            ${{ steps.coverage.outputs.arg }}
             ${{ inputs.sonar_args }}
 
       - name: Link to the SonarCloud dashboard
-        if: always() && inputs.sonar
+        if: always()
         run: |
           key="${{ github.repository_owner }}_${{ github.event.repository.name }}"
           echo "Report: https://sonarcloud.io/project/overview?id=${key}" \

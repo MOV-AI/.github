@@ -169,6 +169,7 @@ Keep those stages in the consuming repository.
 | Input | Type | Default | Description |
 |-------|------|---------|-------------|
 | `runner_label` | string | `ubuntu-24.04` | Runner label |
+| `working_directories` | string | `["."]` | JSON list of directories that each hold a `Cargo.toml`, e.g. `["backend", "orderManagement"]`. Each is tested in its own matrix leg. For a repository of independent crates; a Cargo workspace keeps the default and sets `packages: --workspace` |
 | `packages` | string | - | Cargo package selection, e.g. `--workspace` or `-p my-crate`. A virtual workspace manifest needs `--workspace` |
 | `unit_test_args` | string | `--lib --bins` | Target selection for the unit tier. The default excludes `tests/`, where Docker- or network-dependent tests usually live. Pass an empty string when `tests/` is hermetic |
 | `test_filter` | string | - | A cargo-nextest filter expression appended to the unit run, e.g. `not test(regression)`. This is the nextest equivalent of `cargo test -- --skip <pattern>`; nextest has no `--skip`, it filters by expression |
@@ -187,19 +188,33 @@ Keep those stages in the consuming repository.
 
 **Workflow Stages:**
 
-1. **Checkout**: Full history (`fetch-depth: 0`), which SonarCloud needs for new-code blame
+Job `rust`, one matrix leg per entry in `working_directories`, all run in that directory:
+
+1. **Checkout**
 2. **Install protoc**: Only when `install_protoc` is enabled
-3. **Setup toolchain**: Installs whatever `rust-toolchain.toml` declares and restores the cargo cache
+3. **Setup toolchain**: Installs whatever `rust-toolchain.toml` declares and restores the cargo cache for that directory
 4. **Format**: `cargo fmt --all --check`
-5. **Clippy**: Uploads SARIF to code scanning; blocking or advisory per `clippy_blocking`
+5. **Clippy**: Uploads SARIF to code scanning, one category per leg; blocking or advisory per `clippy_blocking`
 6. **Unit tests**: Coverage over `--lib --bins` by default
-7. **Component tests**: Second coverage pass over `tests/` when enabled
-8. **Sonar**: Creates the project if absent, disables Automatic Analysis, scans, waits on the quality gate
+7. **Doc tests**: Skipped for a crate with no library target
+8. **Component tests**: Second coverage pass over `tests/` when enabled
+9. **Coverage artifact**: `rust-coverage-<dir>`
+
+Job `sonar`, once, after every leg passes:
+
+1. **Checkout**: Full history (`fetch-depth: 0`), which SonarCloud needs for new-code blame
+2. **Coverage**: Downloads every leg's report and passes them all as `sonar.rust.lcov.reportPaths` (or `sonar.rust.cobertura.reportPaths`)
+3. **Sonar**: Creates the project if absent, disables Automatic Analysis, scans, waits on the quality gate
 
 **Notes:**
 
 - Rust analysis in SonarCloud runs only in CI and needs `cargo` on `PATH`. Automatic Analysis
   must stay disabled, which the bootstrap step handles.
+- Sonar runs once per call, never per matrix leg: one scan per leg would overwrite the previous
+  one on the same project. The coverage report paths are set by the workflow; do not set
+  `sonar.rust.*.reportPaths` in `sonar-project.properties` as well.
+- `clippy` uploads to GitHub code scanning, which needs Code Security on a private or internal
+  repository. Without it, set `clippy: false`.
 - The cache is written only on `push` events. Without that, every pull-request branch writes
   its own multi-gigabyte entry, the 10 GB repository cache limit starts evicting, and the
   cache silently stops helping.
@@ -215,6 +230,19 @@ jobs:
       component_tests: true
       build_warnings: warn
       clippy_blocking: false
+    secrets:
+      sonar_token: ${{ secrets.SONAR_TOKEN }}
+```
+
+A repository of independent crates, with no root workspace:
+
+```yaml
+jobs:
+  rust:
+    uses: MOV-AI/.github/.github/workflows/rust-test-workflow.yml@v3
+    with:
+      working_directories: '["backend", "orderManagement", "order-contract"]'
+      component_tests: true
     secrets:
       sonar_token: ${{ secrets.SONAR_TOKEN }}
 ```
