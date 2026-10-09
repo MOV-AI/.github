@@ -113,29 +113,36 @@ on:
         type: boolean
         default: true
         description: >
-          Run clippy on the codebase. Findings are uploaded to code scanning as SARIF.
-          Set this to false to skip clippy entirely.
+          Run clippy on the codebase. Findings go to the job log and the results
+          table. Set clippy_sarif to send them to code scanning as well. Set
+          this to false to skip clippy entirely.
 
       clippy_sarif:
         required: false
         type: boolean
-        default: true
+        default: false
         description: >
-          Upload clippy findings to GitHub code scanning as SARIF. A private or
-          internal repository needs Code Security for the upload; without it,
-          set this to false and the findings stay in the job log and the
-          results table. A caller that leaves this true must grant the job
-          `security-events: write` and, on a private or internal repository,
-          `actions: read`.
+          Also upload clippy findings to GitHub code scanning as SARIF.
+
+          Off by default, because the upload needs things that a repository
+          does not have unless somebody turned them on. Code Security must be
+          enabled on the repository, or the step stops with "Code Security must
+          be enabled for this repository to use code scanning". The calling job
+          must grant `security-events: write`, and on a private or internal
+          repository `actions: read` as well, because codeql-action reads the
+          workflow run through the Actions API before it uploads.
+
+          With this off, clippy still runs. The findings stay in the job log
+          and the results table, which is where most repositories read them.
 
       clippy_blocking:
         required: false
         type: boolean
         default: false
         description: >
-          When false, clippy findings are uploaded to code scanning as SARIF and
-          the job does not fail. This is how a repository measures its backlog
-          before committing to it.
+          When false, clippy findings are reported and the job does not fail.
+          This is how a repository measures its backlog before committing to
+          it. Set it to true once the count is zero.
 
       coverage_format:
         required: false
