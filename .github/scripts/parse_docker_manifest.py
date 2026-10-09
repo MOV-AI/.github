@@ -90,7 +90,7 @@ def parse_from_manifest(manifest_file, global_args):
     }
 
 
-def parse_from_inputs(args):
+def parse_from_inputs(args, global_args):
     """Parse matrix from workflow input parameters."""
     # Validate required parameters
     if not args.docker_file:
@@ -253,7 +253,11 @@ def main():
     }
 
     # Determine which mode to use
-    outputs = parse_from_manifest(args.manifest_file, global_args) if args.manifest_file else parse_from_inputs(args)
+    outputs = (
+        parse_from_manifest(args.manifest_file, global_args)
+        if args.manifest_file
+        else parse_from_inputs(args, global_args)
+    )
 
     # Write outputs to GitHub Actions
     write_github_output(outputs)

@@ -88,7 +88,7 @@ jobs:
 
 
       - name: Login to Private Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.registry_user }}
           password: ${{ secrets.registry_password }}
@@ -121,7 +121,7 @@ jobs:
           cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/$env_configs_dir ./$env_configs_dir
 
           ls -la $env_configs_dir
-          echo "target_dir=${env_configs_dir}" >> $GITHUB_OUTPUT
+          echo "target_dir=${env_configs_dir}" >> "$GITHUB_OUTPUT"
 
       - name: Setup terraform proxmox provisioner
         id: provision_infra_setup
@@ -143,7 +143,7 @@ jobs:
           cp -r "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/$provision_infra_dir" "./$provision_infra_dir"
 
           ls -la "$provision_infra_dir"
-          echo "target_dir=${provision_infra_dir}" >> $GITHUB_OUTPUT
+          echo "target_dir=${provision_infra_dir}" >> "$GITHUB_OUTPUT"
 
       - name: Define Instance names
         id: infra_names
@@ -162,8 +162,8 @@ jobs:
           echo "tf_state = $tf_state"
           echo "local_manager_prefix = $local_manager_prefix"
 
-          echo "simul_prefix=${local_manager_prefix}" | tee >> $GITHUB_OUTPUT
-          echo "tfstate_name=${tf_state}" | tee >> $GITHUB_OUTPUT
+          echo "simul_prefix=${local_manager_prefix}" | tee -a "$GITHUB_OUTPUT"
+          echo "tfstate_name=${tf_state}" | tee -a "$GITHUB_OUTPUT"
 
 
       - name: Provision remote vms (Proxmox)
@@ -202,9 +202,9 @@ jobs:
         run: |
           ip=$(terraform output manager_ip_address)
           user=$(terraform output user)
-          echo "host_ip=$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
-          echo "host_user=$(echo $user | sed "s;\";;g")" >> $GITHUB_OUTPUT
-          echo "ssh_connect_string=$(echo $user | sed "s;\";;g")@$(echo $ip | sed "s;\";;g")" >> $GITHUB_OUTPUT
+          echo "host_ip=$(echo $ip | sed "s;\";;g")" >> "$GITHUB_OUTPUT"
+          echo "host_user=$(echo $user | sed "s;\";;g")" >> "$GITHUB_OUTPUT"
+          echo "ssh_connect_string=$(echo $user | sed "s;\";;g")@$(echo $ip | sed "s;\";;g")" >> "$GITHUB_OUTPUT"
 
       - name: Configure SSH
         id: remote_ssh_setup
@@ -225,7 +225,7 @@ jobs:
           MESSAGE_ERR=":x: CI: ${GITHUB_REPOSITORY}, (${GITHUB_REF#refs/heads/})is being impacted by an infrastructural issue. \
           Provisioning of Stack component pipeline infrastructure failed. Please take a look! \
           Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          echo "msg_error=${MESSAGE_ERR}" >> $GITHUB_OUTPUT
+          echo "msg_error=${MESSAGE_ERR}" >> "$GITHUB_OUTPUT"
 
       - name: Slack message failure
         if: ${{ failure() && github.event_name != 'pull_request' }}
@@ -251,7 +251,7 @@ jobs:
         id: nvidia_err_msg
         run: |
           echo "msg_error=Nvidia container error detected.\
-          Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
+          Details: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
 
       - name: Remote - Detect Nvidia mismatch
         shell: bash
@@ -309,11 +309,10 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
-            cd ${{ env.REMOTE_WORKSPACE_PATH }}
-
-            sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
-            mkdir  -p ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
-            sudo chmod -R 777 ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+            cd "${{ env.REMOTE_WORKSPACE_PATH }}"
+            sudo rm -rf "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
+            mkdir -p "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
+            sudo chmod -R 777 "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
           '
 
       - name: Remote - Login to Registry
@@ -330,31 +329,31 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
-            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+            cd "${{ env.REMOTE_WORKSPACE_PATH }}"
 
-            tests_dir=${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/stack_tests
+            tests_dir="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/stack_tests"
 
-            rm -rf $tests_dir
-            mkdir -p $tests_dir
-            sudo chmod -R 777 $tests_dir
+            rm -rf "$tests_dir"
+            mkdir -p "$tests_dir"
+            sudo chmod -R 777 "$tests_dir"
 
             docker run -u root \
-              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":"${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}" \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               fetch_by_tag \
               --repo ${{ inputs.test_repo_name }} \
               --version ${{ inputs.test_version }} \
               --gh_api_user ${{ secrets.auto_commit_user }} \
               --gh_api_pwd  ${{ secrets.auto_commit_pwd }} \
-              --target_dir ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/stack_tests
+              --target_dir "${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/stack_tests"
 
-            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
-            sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+            ls -la "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
+            sudo chmod 777 -R "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
 
             # setup tests venv in a step that is always executed
             python3 -m venv test-venv --clear
             . test-venv/bin/activate
-            python3 -m pip install -r $tests_dir/requirements.txt
+            python3 -m pip install -r "$tests_dir/requirements.txt"
             deactivate
 
           '
@@ -364,26 +363,26 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
-            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+            cd "${{ env.REMOTE_WORKSPACE_PATH }}"
 
-            product_dir=${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product
+            product_dir="${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/product"
 
-            rm -rf $product_dir
-            mkdir -p $product_dir
-            sudo chmod -R 777 $product_dir
+            rm -rf "$product_dir"
+            mkdir -p "$product_dir"
+            sudo chmod -R 777 "$product_dir"
 
             docker run -u root \
-              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }} \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":"${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}" \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
               fetch_product_by_version \
               --product_version_search ${{ inputs.vs_product_version_pattern}} \
               --repo ${{ inputs.vs_product_name }} \
               --gh_api_user ${{ secrets.auto_commit_user }} \
               --gh_api_pwd ${{ secrets.auto_commit_pwd }} \
-              --target_dir ${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/product
+              --target_dir "${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}/product"
 
-            ls -la ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
-            sudo chmod 777 -R ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+            ls -la "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
+            sudo chmod 777 -R "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
 
           '
 
@@ -399,7 +398,7 @@ jobs:
             export DISPLAY=":0"
             echo "Display detected is $DISPLAY"
 
-            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+            cd "${{ env.REMOTE_WORKSPACE_PATH }}"
 
             export PATH="$HOME/.local/bin:$PATH"
 
@@ -409,10 +408,10 @@ jobs:
             fi
             export CONFIG_FILE_NAME="product/standalone-spawner-$PRODUCT_NAME-simulator-noetic.json"
 
-            cp -r ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/* ./ && sudo rm -rf ${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}
+            cp -r "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"/* ./ && sudo rm -rf "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}"
 
             export USERSPACE_FOLDER_PATH="${{ env.USERSPACE_FOLDER_PATH }}"
-            sudo mkdir -p $USERSPACE_FOLDER_PATH/.git;sudo chown 1000:1000 $USERSPACE_FOLDER_PATH/ -Rf
+            sudo mkdir -p "$USERSPACE_FOLDER_PATH/.git";sudo chown 1000:1000 "$USERSPACE_FOLDER_PATH/" -Rf
             export PUBLIC_IP="$(hostname -I | cut -d " " -f1)"
             export SIMULATION_ID="${{ env.SIMULATION_ID }}"
             export ROBOTNAME="ci_${{ inputs.component_name }}"
@@ -424,11 +423,11 @@ jobs:
             sudo sh -c "echo MOVAI_SERVICE_LOGGER_LEVEL=DEBUG >> /etc/movai/config.env"
             sudo chmod -R +r /etc/movai
 
-            ls -la ${{ env.USERSPACE_FOLDER_PATH }}
+            ls -la "${{ env.USERSPACE_FOLDER_PATH }}"
 
-            wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat product/quickstart_version.txt).bash
-            chmod +x ./QuickStart_$(cat product/quickstart_version.txt).bash
-            ./QuickStart_$(cat product/quickstart_version.txt).bash --apps $(cat product/service_version.txt) $CONFIG_FILE_NAME
+            wget "https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat product/quickstart_version.txt).bash"
+            chmod +x "./QuickStart_$(cat product/quickstart_version.txt).bash"
+            "./QuickStart_$(cat product/quickstart_version.txt).bash" --apps "$(cat product/service_version.txt)" "$CONFIG_FILE_NAME"
             MOVAI_USER="ci"
             MOVAI_PWD="4Iva6UHAQq9DGITj"
             for robot in $(movai-cli robots list); do
@@ -437,11 +436,11 @@ jobs:
 
             execution_status=$?
             exit $execution_status
-            rm service_version.txt
+            rm "service_version.txt"
           '
-          echo "movai_user=ci" >> $GITHUB_OUTPUT
-          echo "movai_pwd=4Iva6UHAQq9DGITj" >> $GITHUB_OUTPUT
-          echo "robot_name=ci_${{ inputs.component_name }}" >> $GITHUB_OUTPUT
+          echo "movai_user=ci" >> "$GITHUB_OUTPUT"
+          echo "movai_pwd=4Iva6UHAQq9DGITj" >> "$GITHUB_OUTPUT"
+          echo "robot_name=ci_${{ inputs.component_name }}" >> "$GITHUB_OUTPUT"
 
 
       - name: Remote - Run tests
@@ -449,8 +448,7 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
-
-            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+            cd "${{ env.REMOTE_WORKSPACE_PATH }}"
 
             . test-venv/bin/activate
 
@@ -470,13 +468,13 @@ jobs:
         run: |
           ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
             set -e
-            cd ${{ env.REMOTE_WORKSPACE_PATH }}
+            cd "${{ env.REMOTE_WORKSPACE_PATH }}"
             mkdir -p tests_artifacts
             cd tests_artifacts
 
             # for sanity
             CONTAINERS=$(docker ps -a --format '{{.Names}}')
-            for container in "${CONTAINERS}"; do
+            for container in ${CONTAINERS}; do
               docker logs "${container}" &> "${container}.log" || true
             done || true
 
@@ -493,7 +491,7 @@ jobs:
       - name: Remote - Move test artifacts
         if: always()
         shell: bash
-        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ${{ steps.infra_outputs.outputs.ssh_connect_string }}:${{ env.REMOTE_WORKSPACE_PATH }}/tests_artifacts tests_artifacts
+        run: scp -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no -r ${{ steps.infra_outputs.outputs.ssh_connect_string }}:"${{ env.REMOTE_WORKSPACE_PATH }}/tests_artifacts" tests_artifacts
 
       - name: Upload test_artifacts
         if: always()
