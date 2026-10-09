@@ -3,6 +3,40 @@
 
 All notable changes to this repository will be documented in this file.
 
+## [v3] - 2026-09-15
+### Added
+- `rust-test-workflow.yml`: shared white-box stage for Rust repositories — rustfmt, clippy with
+  SARIF upload to code scanning, unit tests, optional Docker-backed component tests, coverage in
+  lcov or cobertura, and the SonarCloud quality gate. Scoped to testing only; build, versioning
+  and publishing stay in the consuming repository.
+- `working_directories` input on `rust-test-workflow.yml`: a JSON list of crate directories,
+  each tested in its own matrix leg, for repositories of independent crates with no root
+  workspace. Sonar runs once, in its own job, over the coverage of every leg.
+- `report` job on `rust-test-workflow.yml`: one table of every crate's format, test and coverage
+  results with the failing tests listed, in the run summary and as a single pull-request
+  comment updated on each push.
+- `clippy_sarif` input on `rust-test-workflow.yml`: run clippy without the SARIF upload, for
+  repositories without Code Security; the results table gains a Clippy column with a count.
+- `rust-test-workflow.yml` installs `llvm-tools-preview` itself.
+- `component_test_filters` input on `rust-test-workflow.yml`: cargo-nextest filter expressions
+  for the component pass, keyed by working directory, to leave out one suite without turning
+  off every `tests/` target.
+- `test_filter` input on `rust-test-workflow.yml`: a cargo-nextest filter expression, the
+  equivalent of `cargo test -- --skip <pattern>` for repositories that exclude a class of
+  tests from the main run.
+- Documentation for `Rust Tests and Coverage` in README.md and docs/workflows.md.
+
+### Changed
+- N/A
+
+### Fixed
+- N/A
+
+### Removed
+- N/A
+
+---
+
 ## [v3] - 2026-03-27
 ### Added
 - Support for multiple ROS distros (Noetic and Humble) in `ros-workflow.yml` with dynamic Docker image selection based on distro
