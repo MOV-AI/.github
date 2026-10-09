@@ -231,9 +231,13 @@ jobs:
               --message-format=json | clippy-sarif \
               | tee "$GITHUB_WORKSPACE/clippy-${{ steps.leg.outputs.slug }}.sarif" | sarif-fmt
           else
+            # --color never: setup-rust-toolchain sets CARGO_TERM_COLOR=always,
+            # and colour codes would hide every finding from the count below.
             cargo clippy ${{ inputs.packages }} --all-targets --all-features \
-              --message-format=short 2>&1 | tee "$RUNNER_TEMP/clippy.log"
-            count=$(grep -cE '^[^ ]+:[0-9]+:[0-9]+: (warning|error)' "$RUNNER_TEMP/clippy.log" || true)
+              --message-format=short --color never 2>&1 | tee "$RUNNER_TEMP/clippy.log"
+            # A finding in a binary and in its test target is printed twice.
+            count=$(grep -E '^[^ ]+:[0-9]+:[0-9]+: (warning|error)' "$RUNNER_TEMP/clippy.log" \
+              | sed -E 's#^(src/bin/\.\./)#src/#' | sort -u | grep -c . || true)
             echo "warnings=${count}" >> "$GITHUB_OUTPUT"
             echo "clippy: ${count} finding(s)"
             [ "$count" -eq 0 ]
