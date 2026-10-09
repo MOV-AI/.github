@@ -757,8 +757,8 @@ jobs:
         if: always()
         shell: bash
         run: |
-          docker system prune -f
-          docker image prune --all -f
+          docker system prune -f || true
+          docker image prune --all -f || true
 
   Install-Robot:
     needs: [Validate-boostrap-configs, Normalize-Distro-Input, Build-Workspace]
@@ -1070,8 +1070,8 @@ jobs:
         if: always()
         shell: bash
         run: |
-          docker system prune -f
-          docker image prune --all -f
+          docker system prune -f || true
+          docker image prune --all -f || true
 
   Build-Simulator:
     needs: [Validate-boostrap-configs, Build-Workspace]
@@ -1242,8 +1242,8 @@ jobs:
         if: always()
         shell: bash
         run: |
-          docker system prune -f
-          docker image prune --all -f
+          docker system prune -f || true
+          docker image prune --all -f || true
 
   Install-Simulator-Robot:
     needs: [Validate-boostrap-configs, Normalize-Distro-Input, Build-Workspace, Build-Simulator]
@@ -1536,8 +1536,8 @@ jobs:
         if: always()
         shell: bash
         run: |
-          docker system prune -f
-          docker image prune --all -f
+          docker system prune -f || true
+          docker image prune --all -f || true
 
   Select-Simtest-Node:
     runs-on: pt-agent
