@@ -230,7 +230,16 @@ jobs:
       # source on every run.
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest,cargo-llvm-cov,clippy-sarif,sarif-fmt
+          tool: cargo-nextest,cargo-llvm-cov
+
+      # Only the SARIF path needs these two, and install-action has no prebuilt
+      # binary for either, so it falls back to cargo-binstall and spends about
+      # two minutes on them. Installing them unconditionally cost that on every
+      # run of every repository, for tools almost none of them use.
+      - uses: taiki-e/install-action@v2
+        if: inputs.clippy && inputs.clippy_sarif
+        with:
+          tool: clippy-sarif,sarif-fmt
 
       - name: Format
         id: fmt
