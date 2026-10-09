@@ -124,7 +124,9 @@ on:
           Upload clippy findings to GitHub code scanning as SARIF. A private or
           internal repository needs Code Security for the upload; without it,
           set this to false and the findings stay in the job log and the
-          results table.
+          results table. A caller that leaves this true must grant the job
+          `security-events: write` and, on a private or internal repository,
+          `actions: read`.
 
       clippy_blocking:
         required: false
@@ -165,6 +167,13 @@ on:
 permissions:
   contents: read
   security-events: write
+  # github/codeql-action/upload-sarif reads the workflow run through the
+  # Actions API before it uploads. On a private or internal repository that
+  # call needs `actions: read`, and without it the step stops with
+  # "Resource not accessible by integration" on get-a-workflow-run.
+  # A called workflow cannot be granted more than its caller, so every caller
+  # that sets clippy_sarif: true has to grant `actions: read` as well.
+  actions: read
 
 jobs:
   rust:
@@ -245,7 +254,7 @@ jobs:
 
       - name: Upload clippy SARIF
         if: always() && inputs.clippy && inputs.clippy_sarif && hashFiles(format('clippy-{0}.sarif', steps.leg.outputs.slug)) != ''
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: clippy-${{ steps.leg.outputs.slug }}.sarif
           category: clippy-${{ steps.leg.outputs.slug }}
