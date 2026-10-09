@@ -179,6 +179,7 @@ Keep those stages in the consuming repository.
 | `install_protoc` | boolean | `false` | Install `protobuf-compiler` from apt. Leave `false` when `build.rs` uses `protoc-bin-vendored` |
 | `build_warnings` | string | `warn` | Passed to `setup-rust-toolchain`, which sets `CARGO_BUILD_WARNINGS`. That action defaults to `deny`; this defaults to `warn` so adopting the workflow does not immediately fail a repository with an existing warning backlog |
 | `clippy` | boolean | `true` | Run clippy |
+| `clippy_sarif` | boolean | `true` | Upload clippy findings to code scanning as SARIF. Needs Code Security on a private or internal repository; with `false`, findings stay in the job log and the results table, with a count per crate |
 | `clippy_blocking` | boolean | `false` | When `false`, findings upload to code scanning as SARIF and the job does not fail. This is how a repository measures its backlog before committing to it |
 | `coverage_format` | string | `lcov` | `lcov` or `cobertura` |
 | `sonar` | boolean | `true` | Run the SonarCloud scan |
@@ -223,7 +224,10 @@ Job `report`, once, even when a leg failed:
   one on the same project. The coverage report paths are set by the workflow; do not set
   `sonar.rust.*.reportPaths` in `sonar-project.properties` as well.
 - `clippy` uploads to GitHub code scanning, which needs Code Security on a private or internal
-  repository. Without it, set `clippy: false`.
+  repository. Without it, set `clippy_sarif: false`: clippy still runs, and its findings appear
+  in the job log and in the results table.
+- `llvm-tools-preview`, which `cargo-llvm-cov` needs, is installed by the workflow. A
+  repository's `rust-toolchain.toml` does not need to list it.
 - The caller must grant the permissions the jobs request, because a called workflow cannot be
   given more than its caller: `contents: read`, `security-events: write` (clippy SARIF) and
   `pull-requests: write` (the results comment).

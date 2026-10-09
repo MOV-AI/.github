@@ -116,6 +116,16 @@ on:
           Run clippy on the codebase. Findings are uploaded to code scanning as SARIF.
           Set this to false to skip clippy entirely.
 
+      clippy_sarif:
+        required: false
+        type: boolean
+        default: true
+        description: >
+          Upload clippy findings to GitHub code scanning as SARIF. A private or
+          internal repository needs Code Security for the upload; without it,
+          set this to false and the findings stay in the job log and the
+          results table.
+
       clippy_blocking:
         required: false
         type: boolean
@@ -194,6 +204,9 @@ jobs:
         with:
           cache-shared-key: rust-test-${{ steps.leg.outputs.slug }}
           cache-workspaces: ${{ matrix.dir }}
+          # cargo-llvm-cov needs it. Installed here so that rust-toolchain.toml
+          # does not make every developer machine download it.
+          components: llvm-tools-preview
           cache-save-if: ${{ github.event_name == 'push' }}
           build-warnings: ${{ inputs.build_warnings }}
 
@@ -213,12 +226,21 @@ jobs:
         continue-on-error: ${{ !inputs.clippy_blocking }}
         run: |
           set -o pipefail
-          cargo clippy ${{ inputs.packages }} --all-targets --all-features \
-            --message-format=json | clippy-sarif \
-            | tee "$GITHUB_WORKSPACE/clippy-${{ steps.leg.outputs.slug }}.sarif" | sarif-fmt
+          if [ "${{ inputs.clippy_sarif }}" = true ]; then
+            cargo clippy ${{ inputs.packages }} --all-targets --all-features \
+              --message-format=json | clippy-sarif \
+              | tee "$GITHUB_WORKSPACE/clippy-${{ steps.leg.outputs.slug }}.sarif" | sarif-fmt
+          else
+            cargo clippy ${{ inputs.packages }} --all-targets --all-features \
+              --message-format=short 2>&1 | tee "$RUNNER_TEMP/clippy.log"
+            count=$(grep -cE '^[^ ]+:[0-9]+:[0-9]+: (warning|error)' "$RUNNER_TEMP/clippy.log" || true)
+            echo "warnings=${count}" >> "$GITHUB_OUTPUT"
+            echo "clippy: ${count} finding(s)"
+            [ "$count" -eq 0 ]
+          fi
 
       - name: Upload clippy SARIF
-        if: always() && inputs.clippy && hashFiles(format('clippy-{0}.sarif', steps.leg.outputs.slug)) != ''
+        if: always() && inputs.clippy && inputs.clippy_sarif && hashFiles(format('clippy-{0}.sarif', steps.leg.outputs.slug)) != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: clippy-${{ steps.leg.outputs.slug }}.sarif
@@ -312,6 +334,8 @@ jobs:
           DIR: ${{ matrix.dir }}
           SLUG: ${{ steps.leg.outputs.slug }}
           FMT: ${{ steps.fmt.outcome }}
+          CLIPPY: ${{ steps.clippy.outcome }}
+          CLIPPY_WARNINGS: ${{ steps.clippy.outputs.warnings }}
           UNIT: ${{ steps.unit.outcome }}
           DOC: ${{ steps.doc.outcome }}
           COMPONENT: ${{ steps.component.outcome }}
@@ -335,10 +359,12 @@ jobs:
             coverage=$(awk -F: '/^LF:/{t+=$2} /^LH:/{h+=$2} END{ if (t>0) printf "%.1f", 100*h/t; else print "null" }' "$f")
           fi
           jq -n --arg dir "$DIR" --arg fmt "$FMT" --arg unit "$UNIT" --arg doc "$DOC" \
+            --arg clippy "$CLIPPY" --arg clippy_warnings "$CLIPPY_WARNINGS" \
             --arg component "$COMPONENT" --argjson coverage "$coverage" \
             --argjson unit_tests "$(tests "$RUNNER_TEMP/unit-tests.log")" \
             --argjson component_tests "$(tests "$RUNNER_TEMP/component-tests.log")" \
-            '{dir: $dir, fmt: $fmt, unit: $unit, doc: $doc, component: $component,
+            '{dir: $dir, fmt: $fmt, clippy: $clippy, clippy_warnings: $clippy_warnings,
+              unit: $unit, doc: $doc, component: $component,
               coverage: $coverage, unit_tests: $unit_tests, component_tests: $component_tests}' \
             | tee "result-${SLUG}.json"
 
@@ -437,6 +463,8 @@ jobs:
         env:
           DIRS: ${{ inputs.working_directories }}
           COMPONENT_TESTS: ${{ inputs.component_tests }}
+          CLIPPY: ${{ inputs.clippy }}
+          CLIPPY_BLOCKING: ${{ inputs.clippy_blocking }}
           SONAR: ${{ inputs.sonar }}
           SONAR_RESULT: ${{ needs.sonar.result }}
           SONAR_KEY: ${{ github.repository_owner }}_${{ github.event.repository.name }}
@@ -455,7 +483,9 @@ jobs:
             slug=$(printf '%s' "$dir" | tr -c 'A-Za-z0-9_-' '_'); [ "$dir" = "." ] && slug=root
             f="results/result-${slug}.json"
             if [ ! -f "$f" ]; then
-              row="| \`${dir}\` | ❔ | ❔ no result | ❔ |"
+              row="| \`${dir}\` | ❔ |"
+              [ "$CLIPPY" = true ] && row+=" ❔ |"
+              row+=" ❔ no result | ❔ |"
               [ "$COMPONENT_TESTS" = true ] && row+=" ❔ |"
               rows+="${row} |"$'\n'; continue
             fi
@@ -466,7 +496,14 @@ jobs:
             case "$unit_counts" in "") [ "$unit" = failure ] && unit_counts="build or run failed" ;; esac
             [ "$(jq -r '.unit_tests.summary // ""' <<<"$r")" = "0 tests run: 0 passed, 0 skipped" ] && unit_counts="no tests"
             cov=$(jq -r 'if .coverage == null then "" else "\(.coverage)%" end' <<<"$r")
-            row="| \`${dir}\` | $(icon "$fmt") | $(icon "$unit") ${unit_counts} | $(icon "$doc") |"
+            clippy=$(jq -r '.clippy // ""' <<<"$r"); clippy_n=$(jq -r '.clippy_warnings // ""' <<<"$r")
+            row="| \`${dir}\` | $(icon "$fmt") |"
+            if [ "$CLIPPY" = true ]; then
+              if [ "$clippy" = failure ] && [ "$CLIPPY_BLOCKING" != true ]; then c="⚠️"; else c=$(icon "$clippy"); fi
+              [ -n "$clippy_n" ] && [ "$clippy_n" != 0 ] && c+=" ${clippy_n}"
+              row+=" ${c} |"
+            fi
+            row+=" $(icon "$unit") ${unit_counts} | $(icon "$doc") |"
             if [ "$COMPONENT_TESTS" = true ]; then
               comp_counts=$(jq '.component_tests' <<<"$r" | counts)
               row+=" $(icon "$comp") ${comp_counts} |"
@@ -474,15 +511,19 @@ jobs:
             rows+="${row} ${cov} |"$'\n'
             leg_ok=true
             for o in "$fmt" "$unit" "$doc" "$comp"; do [ "$o" = failure ] || [ "$o" = cancelled ] && leg_ok=false; done
+            [ "$CLIPPY_BLOCKING" = true ] && [ "$clippy" = failure ] && leg_ok=false
             [ "$leg_ok" = true ] && ok=$((ok + 1))
             [ "$fmt" = failure ] && failures+="- \`${dir}\`: formatting differs — run \`cargo fmt --all\` in \`${dir}\`"$'\n'
+            [ "$clippy" = failure ] && failures+="- \`${dir}\`: ${clippy_n:-some} clippy finding(s) — run \`cargo clippy --all-targets --all-features\` in \`${dir}\`$([ "$CLIPPY_BLOCKING" = true ] || echo ' (not blocking yet)')"$'\n'
             # "crate::binary test_name" -> "`test_name` (crate::binary)"
             while IFS= read -r t; do
               [ -n "$t" ] && failures+="- \`${dir}\`: \`${t#* }\` (${t%% *})"$'\n'
             done < <(jq -r '[.unit_tests.failed[]?, .component_tests.failed[]?] | unique | .[]' <<<"$r")
           done
 
-          header="| Crate | Format | Unit tests | Doc tests |"; sep="|---|:-:|---|:-:|"
+          header="| Crate | Format |"; sep="|---|:-:|"
+          if [ "$CLIPPY" = true ]; then header+=" Clippy |"; sep+=":-:|"; fi
+          header+=" Unit tests | Doc tests |"; sep+="---|:-:|"
           if [ "$COMPONENT_TESTS" = true ]; then header+=" Component tests |"; sep+="---|"; fi
           header+=" Coverage |"; sep+="--:|"
 

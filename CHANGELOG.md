@@ -15,6 +15,9 @@ All notable changes to this repository will be documented in this file.
 - `report` job on `rust-test-workflow.yml`: one table of every crate's format, test and coverage
   results with the failing tests listed, in the run summary and as a single pull-request
   comment updated on each push.
+- `clippy_sarif` input on `rust-test-workflow.yml`: run clippy without the SARIF upload, for
+  repositories without Code Security; the results table gains a Clippy column with a count.
+- `rust-test-workflow.yml` installs `llvm-tools-preview` itself.
 - `component_test_filters` input on `rust-test-workflow.yml`: cargo-nextest filter expressions
   for the component pass, keyed by working directory, to leave out one suite without turning
   off every `tests/` target.
