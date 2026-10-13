@@ -75,6 +75,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Configure Git Safe Directory
+        run: git config --global --add safe.directory $(pwd)
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ inputs.PYTHON_VERSION }}
@@ -89,7 +92,6 @@ jobs:
 
       - name: Run pre-commit
         run: |
-          git config --global --add safe.directory $(pwd)
           python -m pre_commit run --show-diff-on-failure --color=always --all-files
 
   Build:
@@ -108,6 +110,9 @@ jobs:
         # Disabling shallow clone is recommended for improving relevancy of reporting
         fetch-depth: 0
         submodules: recursive
+
+    - name: Configure Git Safe Directory
+      run: git config --global --add safe.directory $(pwd)
 
     - uses: actions/setup-python@v5
       with:
@@ -223,7 +228,6 @@ jobs:
     - name: Commit auto raise version
       id: raise
       run: |
-        git config --global --add safe.directory $(pwd)
         git config --global user.name ${{ secrets.auto_commit_user }}
         git config --global user.email ${{ secrets.auto_commit_mail }}
         git commit -am "[skip actions] Automatic Bump of build version to ${{ steps.bump.outputs.current_version }}"
@@ -324,7 +328,6 @@ jobs:
       shell: bash
       run: |
         title="Release of ${{ steps.bump.outputs.current_version }}"
-        git config --global --add safe.directory $(pwd)
 
         gh release create -p -t "$title" -n "Release notes for ${{ github.event.repository.name }}" \
         --target ${{ steps.commit_id.outputs.commit_id }} \
@@ -354,13 +357,15 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
+    - name: Configure Git Safe Directory
+      run: git config --global --add safe.directory $(pwd)
+    
     - name: Set tag output
       id: vars
       run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
 
     - name: Fetch artifact from github release
       run: |
-        git config --global --add safe.directory $(pwd)
         mkdir dist
         cd dist
         gh release download ${{ steps.vars.outputs.tag}} -p *.whl
