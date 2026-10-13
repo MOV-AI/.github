@@ -25,24 +25,25 @@ See [docs/workflows.md](docs/workflows.md) for detailed specifications, inputs, 
 
 ### Summary
 
-| Workflow | Purpose |
-|----------|---------|
-| **Build and Pack FE Packages** | Builds and packages frontend packages for the MOV.AI platform |
-| **Build and Pack Npm Components** | Builds and packages npm components for the MOV.AI platform |
-| **Build and Pack ROS Packages** | Builds and publishes ROS packages (Debian) for ROS 1 (Noetic) and ROS 2 (Humble). Automatically builds and publishes Python wheel packages for ROS packages containing a setup.py file. |
-| **Build and Validate Platform** | Builds and validates the MOV.AI platform |
-| **Build Docker Images** | Builds and publishes Docker images with static analysis, Snyk scanning, and optional multi-platform support |
-| **Build Packer Images** | Builds ISO images for CICD using Packer, QEMU/KVM/Libvirt, and cloud-init |
-| **Build Product** | Orchestrates complete product build pipeline including validation, workspace build, simulator setup, and testing |
-| **Build Product Composite** | Builds composite projects (multiple products/squads) |
-| **Generic Local Standalone Tests** | Runs QA tests on locally deployed platform instances (install tests, UI tests, etc.) |
-| **Generic Remote Fleet Tests** | Runs QA tests on provisioned remote fleet infrastructure with Terraform provisioning and Ansible deployment, including infrastructure recreation with dedicated robotics-sim, redhat-oracle, and packer runner pools |
-| **Install Tests** | Runs QA install tests on platform deployments |
-| **Publish to Project Data Viewer** | Publishes data to the [project data viewer website](https://personal-7vf0v2cu.outsystemscloud.com/ProjectDataViewer5/) |
-| **Rust Tests and Coverage** | Runs the white-box stage for Rust repositories: rustfmt, clippy with SARIF upload, unit and optional Docker-backed component tests, coverage, and the SonarCloud quality gate |
-| **Robotic Component Pipeline** | Builds and tests robotic stack components with remote provisioning and test execution |
-| **Robotic Tests** | Runs comprehensive robotic stack integration tests with simulator support |
-| **UI Tests** | Runs UI tests on platform instances |
+| Workflow | Purpose | Supported version |
+|----------|---------|---------|
+| **Build and Pack FE Packages** | Builds and packages frontend packages for the MOV.AI platform | v3 |
+| **Build and Pack Npm Components** | Builds and packages npm components for the MOV.AI platform | v3 |
+| **Build and Pack ROS Packages** | Builds and publishes ROS packages (Debian) for ROS 1 (Noetic) and ROS 2 (Humble). Automatically builds and publishes Python wheel packages for ROS packages containing a setup.py file. | v3 |
+| **Build and Validate Platform** | Builds and validates the MOV.AI platform | v3 |
+| **Build Docker Images** | Builds and publishes Docker images with static analysis, Snyk scanning, and optional multi-platform support | v3 |
+| **Build Packer Images** | Builds ISO images for CICD using Packer, QEMU/KVM/Libvirt, and cloud-init | v3 |
+| **Build Product** | Orchestrates complete product build pipeline including validation, workspace build, simulator setup, and testing | v3 |
+| **Build Product Composite** | Builds composite projects (multiple products/squads) | v3 |
+| **Generic Local Standalone Tests** | Runs QA tests on locally deployed platform instances (install tests, UI tests, etc.) | v3 |
+| **Generic Remote Fleet Tests** | Runs QA tests on provisioned remote fleet infrastructure with Terraform provisioning and Ansible deployment, including infrastructure recreation with dedicated robotics-sim, redhat-oracle, and packer runner pools | v3 |
+| **Install Tests** | Runs QA install tests on platform deployments | v3 |
+| **Publish to Project Data Viewer** | Publishes data to the [project data viewer website](https://personal-7vf0v2cu.outsystemscloud.com/ProjectDataViewer5/) | v3 |
+| **Rust Tests and Coverage** | Runs the white-box stage for Rust repositories: rustfmt, clippy with SARIF upload, unit and optional Docker-backed component tests, coverage, and the SonarCloud quality gate | v3 |
+| **Robotic Component Pipeline** | Builds and tests robotic stack components with remote provisioning and test execution | v3 |
+| **Robotic Tests** | Runs comprehensive robotic stack integration tests with simulator support | v3 |
+| **UI Tests** | Runs UI tests on platform instances | v3 |
+| **Build and Pack Python Packages** | Builds and packages Python packages | v2.3 |
 
 ## Composite Actions
 - **publish-to-nexus**: Publishes artifacts (Debian/RPM packages) to Nexus repository.
