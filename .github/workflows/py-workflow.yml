@@ -62,7 +62,7 @@ on:
         value: ${{ jobs.Build.outputs.current_version }}
       commit_id:
         description: The commit id used for the deployment
-        value: ${{ jobs.Post-Build.outputs.commit_id }}
+        value: ${{ jobs.Publish.outputs.commit_id }}
 env:
   REGISTRY: "registry.hel.mov.ai"
 
@@ -329,7 +329,9 @@ jobs:
         retention-days: 5
 
   Build:
-    if: ${{ always() && (needs.Test-on-container.result == 'success' || needs.Test-on-host.result == 'success') }}
+    # Builds only: nothing is pushed or published here, so a failure in this job
+    # leaves the repository and Nexus untouched.
+    if: ${{ !cancelled() && (needs.Test-on-container.result == 'success' || needs.Test-on-host.result == 'success') }}
     runs-on: ubuntu-22.04
     needs: [ Test-on-container , Test-on-host ]
     outputs:
@@ -389,58 +391,29 @@ jobs:
         path: dist/*
         retention-days: 5
 
-    - name: Publish package to TestPyPI Experimental
-      run: |
-        python -m twine upload --repository-url https://artifacts.aws.cloud.mov.ai/repository/pypi-experimental/ \
-          --username ${{ secrets.nexus_publisher_user }} \
-          --password ${{ secrets.nexus_publisher_password }} \
-          dist/*
-
     - name: Build docs
       if: ${{ inputs.with_docs }}
       run: |
         VERSION=${GITHUB_REF##*/} tox -e docs
 
-    - name: Checkout gh-pages
+    - name: Archive docs
       if: ${{ inputs.deploy && inputs.with_docs }}
-      uses: actions/checkout@v6
+      uses: actions/upload-artifact@v4
       with:
-        ref: gh-pages
-        path: gh-pages
+        name: docs
+        path: docs/build
+        retention-days: 5
 
-    - name: Push docs
-      if: ${{ inputs.deploy && inputs.with_docs }}
-      run: |
-        cd gh-pages
-        touch .nojekyll
-        rm -rf ${GITHUB_REF##*/}
-        cp -r ../docs/build/* .
-        ls -mQd */ | sed 's/\///g' | sed 's/^/[/' | sed 's/$/]/' > versions.json
-        git config --global user.email "${{ github.actor }}@users.noreply.github.com"
-        git config --global user.name "${{ github.actor }}"
-        git add .
-        git commit -am "Updating docs for commit ${GITHUB_SHA} in ${GITHUB_REF}"
-        git push --force --set-upstream origin gh-pages
-
-    - name: Publish package to TestPyPI Integration
-      if: ${{ inputs.deploy }}
-      run: |
-        python -m twine upload --repository-url https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/ \
-          --username ${{ secrets.nexus_publisher_user }} \
-          --password ${{ secrets.nexus_publisher_password }} \
-          dist/*
-
-  Post-Build:
-    needs: [ Pre-build, Build ]
-    if: |
-      ${{ !inputs.release &&
-          (always() ||
-          needs.Pre-build.result == 'success' &&
-          needs.Build.result == 'success')
-      }}
+  SonarCloud:
+    needs: [ Linting, Test-on-container, Test-on-host ]
+    if: >-
+      ${{ !cancelled() && !inputs.release &&
+          needs.Linting.result == 'success' &&
+          (needs.Test-on-container.result == 'success' || needs.Test-on-host.result == 'success') }}
+    # On deploy a failed quality gate is reported but does not fail the workflow
+    # call, so the caller's deploy jobs still run for the published version.
+    continue-on-error: ${{ inputs.deploy }}
     runs-on: ubuntu-22.04
-    outputs:
-      commit_id: ${{ steps.commit_id.outputs.commit_id }}
 
     steps:
     - name: Checkout
@@ -494,6 +467,27 @@ jobs:
       run: |
         echo "Please check report here: https://sonarcloud.io/project/overview?id=${{ github.repository_owner }}_${{ github.event.repository.name }}"
 
+  Publish:
+    # Pushes the version bump and, right after, publishes the package built for
+    # that version. A failed push publishes nothing; a failed upload after the
+    # push only skips that version number.
+    needs: [ Pre-build, Build ]
+    if: ${{ !cancelled() && !inputs.release && needs.Pre-build.result == 'success' && needs.Build.result == 'success' }}
+    runs-on: ubuntu-22.04
+    outputs:
+      current_version: ${{ steps.bump.outputs.current_version }}
+      commit_id: ${{ steps.commit_id.outputs.commit_id }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+
+    - name: Download packages
+      uses: actions/download-artifact@v4
+      with:
+        name: packages
+        path: dist
+
     - name: Raise version before commit
       id: bump
       run: |
@@ -501,10 +495,16 @@ jobs:
         . venv/bin/activate
         pip install bump-my-version==0.29.0
         bump-my-version bump build --no-tag --no-commit
+        pip install twine
         echo "current_version=$(bump-my-version show current_version)" | tee -a $GITHUB_OUTPUT
+        if [ "$(bump-my-version show current_version)" != "${{ needs.Build.outputs.current_version }}" ]; then
+          echo "::error::Raised version does not match the version built by the Build job (${{ needs.Build.outputs.current_version }})"
+          exit 1
+        fi
 
     - name: Commit version bump
       id: commit_bump
+      if: ${{ inputs.deploy }}
       run: |
         git config --global user.name ${{ secrets.auto_commit_user }}
         git config --global user.email ${{ secrets.auto_commit_mail }}
@@ -528,21 +528,80 @@ jobs:
         commit_hash=$(git log --format="%H" -n 1)
         echo "commit_id=${commit_hash}" >> $GITHUB_OUTPUT
 
+    - name: Publish package to TestPyPI Experimental
+      run: |
+        . venv/bin/activate
+        python -m twine upload --repository-url https://artifacts.aws.cloud.mov.ai/repository/pypi-experimental/ \
+          --username ${{ secrets.nexus_publisher_user }} \
+          --password ${{ secrets.nexus_publisher_password }} \
+          dist/*
+
+    - name: Publish package to TestPyPI Integration
+      if: ${{ inputs.deploy }}
+      run: |
+        . venv/bin/activate
+        python -m twine upload --repository-url https://artifacts.aws.cloud.mov.ai/repository/pypi-integration/ \
+          --username ${{ secrets.nexus_publisher_user }} \
+          --password ${{ secrets.nexus_publisher_password }} \
+          dist/*
+
+    - name: Download docs
+      if: ${{ inputs.deploy && inputs.with_docs }}
+      uses: actions/download-artifact@v4
+      with:
+        name: docs
+        path: docs/build
+
+    - name: Checkout gh-pages
+      if: ${{ inputs.deploy && inputs.with_docs }}
+      uses: actions/checkout@v6
+      with:
+        ref: gh-pages
+        path: gh-pages
+
+    - name: Push docs
+      if: ${{ inputs.deploy && inputs.with_docs }}
+      run: |
+        cd gh-pages
+        touch .nojekyll
+        rm -rf ${GITHUB_REF##*/}
+        cp -r ../docs/build/* .
+        ls -mQd */ | sed 's/\///g' | sed 's/^/[/' | sed 's/$/]/' > versions.json
+        git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+        git config --global user.name "${{ github.actor }}"
+        git add .
+        git commit -am "Updating docs for commit ${GITHUB_SHA} in ${GITHUB_REF}"
+        git push --force --set-upstream origin gh-pages
+
+  Post-Build:
+    needs: [ Publish ]
+    if: ${{ !cancelled() && inputs.deploy && needs.Publish.result == 'success' }}
+    runs-on: ubuntu-22.04
+    env:
+      GH_REPO: ${{ github.repository }}
+
+    steps:
+    - name: Download packages
+      uses: actions/download-artifact@v4
+      with:
+        name: packages
+        path: dist
+
     - name: Create Github Release
       if: ${{ inputs.deploy }}
       shell: bash
       run: |
-        title="Release of ${{ steps.bump.outputs.current_version }}"
+        title="Release of ${{ needs.Publish.outputs.current_version }}"
 
         gh release create -p -t "$title" -n "Release notes for ${{ github.event.repository.name }}" \
-        --target ${{ steps.commit_id.outputs.commit_id }} \
+        --target ${{ needs.Publish.outputs.commit_id }} \
         --generate-notes \
-        "${{ steps.bump.outputs.current_version }}"
+        "${{ needs.Publish.outputs.current_version }}"
 
         assets=()
         for asset in dist/*; do
           if [[ $asset != "dist/*" ]]; then
-            gh release upload ${{ steps.bump.outputs.current_version }} $asset
+            gh release upload ${{ needs.Publish.outputs.current_version }} $asset
           fi
         done
 
@@ -552,7 +611,7 @@ jobs:
     - name: Filter Release Notes
       shell: bash
       run: |
-        product_version="${{ steps.bump.outputs.current_version }}"
+        product_version="${{ needs.Publish.outputs.current_version }}"
 
         current_notes=$(gh release view "$product_version" --json body --jq .body)
 
