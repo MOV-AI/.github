@@ -400,7 +400,7 @@ jobs:
       if: ${{ inputs.deploy && inputs.with_docs }}
       uses: actions/upload-artifact@v4
       with:
-        name: docs
+        name: py-workflow-docs
         path: docs/build
         retention-days: 5
 
@@ -410,9 +410,6 @@ jobs:
       ${{ !cancelled() && !inputs.release &&
           needs.Linting.result == 'success' &&
           (needs.Test-on-container.result == 'success' || needs.Test-on-host.result == 'success') }}
-    # On deploy a failed quality gate is reported but does not fail the workflow
-    # call, so the caller's deploy jobs still run for the published version.
-    continue-on-error: ${{ inputs.deploy }}
     runs-on: ubuntu-22.04
 
     steps:
@@ -471,9 +468,16 @@ jobs:
     # Pushes the version bump and, right after, publishes the package built for
     # that version. A failed push publishes nothing; a failed upload after the
     # push only skips that version number.
-    needs: [ Pre-build, Build ]
-    if: ${{ !cancelled() && !inputs.release && needs.Pre-build.result == 'success' && needs.Build.result == 'success' }}
+    needs: [ Pre-build, Build, SonarCloud ]
+    if: >-
+      ${{ !cancelled() && !inputs.release &&
+          needs.Pre-build.result == 'success' &&
+          needs.Build.result == 'success' &&
+          needs.SonarCloud.result == 'success' }}
     runs-on: ubuntu-22.04
+    concurrency:
+      group: py-workflow-publish-${{ github.repository }}-${{ needs.Pre-build.outputs.branch || github.ref }}
+      cancel-in-progress: false
     outputs:
       current_version: ${{ steps.bump.outputs.current_version }}
       commit_id: ${{ steps.commit_id.outputs.commit_id }}
@@ -481,6 +485,8 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
 
     - name: Download packages
       uses: actions/download-artifact@v4
@@ -488,22 +494,29 @@ jobs:
         name: packages
         path: dist
 
+    - name: Check branch was not bumped since this run started
+      if: ${{ inputs.deploy }}
+      run: |
+        git fetch origin "${{ needs.Pre-build.outputs.branch }}"
+        if ! git merge-base --is-ancestor "${{ github.sha }}" FETCH_HEAD; then
+          echo "::error::Branch ${{ needs.Pre-build.outputs.branch }} no longer contains ${{ github.sha }}; not publishing."
+          exit 1
+        fi
+        if git log "${{ github.sha }}..FETCH_HEAD" --format=%s | grep -F "Automatic Bump of build version"; then
+          echo "::error::Branch ${{ needs.Pre-build.outputs.branch }} was already bumped after this run started; not publishing ${{ needs.Build.outputs.current_version }}."
+          exit 1
+        fi
+
     - name: Raise version before commit
       id: bump
       run: |
         python3 -m venv venv --clear
         . venv/bin/activate
         pip install bump-my-version==0.29.0
-        bump-my-version bump build --no-tag --no-commit
-        pip install twine
+        bump-my-version bump build --no-tag --no-commit --new-version "${{ needs.Build.outputs.current_version }}"
         echo "current_version=$(bump-my-version show current_version)" | tee -a $GITHUB_OUTPUT
-        if [ "$(bump-my-version show current_version)" != "${{ needs.Build.outputs.current_version }}" ]; then
-          echo "::error::Raised version does not match the version built by the Build job (${{ needs.Build.outputs.current_version }})"
-          exit 1
-        fi
 
     - name: Commit version bump
-      id: commit_bump
       if: ${{ inputs.deploy }}
       run: |
         git config --global user.name ${{ secrets.auto_commit_user }}
@@ -525,16 +538,21 @@ jobs:
       if: ${{ inputs.deploy }}
       id: commit_id
       run: |
-        commit_hash=$(git log --format="%H" -n 1)
-        echo "commit_id=${commit_hash}" >> $GITHUB_OUTPUT
+        # The push may land as a squash merge of a temporary PR, so look up the
+        # bump commit on the branch rather than using the local HEAD.
+        git fetch origin "${{ needs.Pre-build.outputs.branch }}"
+        commit_hash=$(git log FETCH_HEAD -n 1 --format=%H --fixed-strings \
+          --grep "Automatic Bump of build version to ${{ steps.bump.outputs.current_version }}")
+        if [ -z "$commit_hash" ]; then
+          echo "::error::Version bump commit for ${{ steps.bump.outputs.current_version }} not found on ${{ needs.Pre-build.outputs.branch }}"
+          exit 1
+        fi
+        echo "commit_id=${commit_hash}" | tee -a $GITHUB_OUTPUT
 
-    - name: Publish package to TestPyPI Experimental
+    - name: Install twine
       run: |
         . venv/bin/activate
-        python -m twine upload --repository-url https://artifacts.aws.cloud.mov.ai/repository/pypi-experimental/ \
-          --username ${{ secrets.nexus_publisher_user }} \
-          --password ${{ secrets.nexus_publisher_password }} \
-          dist/*
+        pip install twine
 
     - name: Publish package to TestPyPI Integration
       if: ${{ inputs.deploy }}
@@ -545,22 +563,37 @@ jobs:
           --password ${{ secrets.nexus_publisher_password }} \
           dist/*
 
+    - name: Publish package to TestPyPI Experimental
+      run: |
+        . venv/bin/activate
+        python -m twine upload --repository-url https://artifacts.aws.cloud.mov.ai/repository/pypi-experimental/ \
+          --username ${{ secrets.nexus_publisher_user }} \
+          --password ${{ secrets.nexus_publisher_password }} \
+          dist/*
+
+  Docs:
+    # Runs after the package is published; a docs failure does not block the release.
+    needs: [ Publish ]
+    if: ${{ !cancelled() && inputs.deploy && inputs.with_docs && needs.Publish.result == 'success' }}
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+
     - name: Download docs
-      if: ${{ inputs.deploy && inputs.with_docs }}
       uses: actions/download-artifact@v4
       with:
-        name: docs
+        name: py-workflow-docs
         path: docs/build
 
     - name: Checkout gh-pages
-      if: ${{ inputs.deploy && inputs.with_docs }}
       uses: actions/checkout@v6
       with:
         ref: gh-pages
         path: gh-pages
 
     - name: Push docs
-      if: ${{ inputs.deploy && inputs.with_docs }}
       run: |
         cd gh-pages
         touch .nojekyll
@@ -570,7 +603,11 @@ jobs:
         git config --global user.email "${{ github.actor }}@users.noreply.github.com"
         git config --global user.name "${{ github.actor }}"
         git add .
-        git commit -am "Updating docs for commit ${GITHUB_SHA} in ${GITHUB_REF}"
+        if git diff --cached --quiet; then
+          echo "Docs unchanged, nothing to push"
+          exit 0
+        fi
+        git commit -m "Updating docs for commit ${GITHUB_SHA} in ${GITHUB_REF}"
         git push --force --set-upstream origin gh-pages
 
   Post-Build:
@@ -588,22 +625,20 @@ jobs:
         path: dist
 
     - name: Create Github Release
-      if: ${{ inputs.deploy }}
       shell: bash
       run: |
-        title="Release of ${{ needs.Publish.outputs.current_version }}"
+        version="${{ needs.Publish.outputs.current_version }}"
+        title="Release of ${version}"
 
-        gh release create -p -t "$title" -n "Release notes for ${{ github.event.repository.name }}" \
-        --target ${{ needs.Publish.outputs.commit_id }} \
-        --generate-notes \
-        "${{ needs.Publish.outputs.current_version }}"
+        # Safe to re-run: create the release only once, replace assets if present.
+        if ! gh release view "$version" > /dev/null 2>&1; then
+          gh release create -p -t "$title" -n "Release notes for ${{ github.event.repository.name }}" \
+          --target ${{ needs.Publish.outputs.commit_id }} \
+          --generate-notes \
+          "$version"
+        fi
 
-        assets=()
-        for asset in dist/*; do
-          if [[ $asset != "dist/*" ]]; then
-            gh release upload ${{ needs.Publish.outputs.current_version }} $asset
-          fi
-        done
+        gh release upload "$version" dist/* --clobber
 
       env:
         GITHUB_TOKEN: ${{ secrets.gh_token }}
