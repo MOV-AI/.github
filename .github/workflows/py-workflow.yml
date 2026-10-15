@@ -411,6 +411,7 @@ jobs:
           needs.Linting.result == 'success' &&
           (needs.Test-on-container.result == 'success' || needs.Test-on-host.result == 'success') }}
     runs-on: ubuntu-22.04
+    continue-on-error: ${{ inputs.deploy }}
 
     steps:
     - name: Checkout
