@@ -30,6 +30,10 @@ All notable changes to this repository will be documented in this file.
   the leg.
 - `service-py-deb-workflow.yml` sets `fail-fast: false` on the `Package-Test` matrix, so one distro's
   failure no longer cancels the other legs. Every consumer inherits this without opting in.
+- `refresh_source` input on `service-py-deb-workflow.yml` (default `'true'`, so existing consumers
+  are unchanged): `'false'` skips the `RefreshSource` job. On a push event the auto-update action
+  merges the pushed branch into every open pull request based on it, so callers triggered by push
+  to a shared branch such as `dev` should pass `'false'`.
 - Documentation for `Rust Tests and Coverage` in README.md and docs/workflows.md.
 
 ### Changed

@@ -27,6 +27,15 @@ on:
         required: false
         type: string
         default: 'true'
+      refresh_source:
+        required: false
+        type: string
+        default: 'true'
+        description: >-
+          When 'false' the RefreshSource job (chinthakagodawita/autoupdate-action) is skipped.
+          On a pull_request event that action updates the one PR; on a push event it merges the
+          pushed branch into every open pull request based on it. A caller triggered by push to a
+          shared branch such as dev should pass 'false' to avoid rewriting every open PR branch.
       # movai-service is about to start passing test_tier; this input must exist in v3 first.
       # 'quick' means -m "not liverobot or smoke". Both names are defined in MOV-AI/movai-service's
       # pytest.ini; if either drifts, a lost 'liverobot' runs the whole suite into the timeout and a
@@ -80,7 +89,7 @@ on:
 
 jobs:
   RefreshSource:
-    if: ${{ inputs.deploy == 'false' && inputs.release == 'false' }}
+    if: ${{ inputs.deploy == 'false' && inputs.release == 'false' && inputs.refresh_source != 'false' }}
     runs-on: ubuntu-22.04
     steps:
       - uses: docker://chinthakagodawita/autoupdate-action:v1
