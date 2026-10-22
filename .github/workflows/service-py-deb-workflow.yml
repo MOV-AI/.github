@@ -27,6 +27,10 @@ on:
         required: false
         type: string
         default: 'true'
+      # movai-service is about to start passing test_tier; this input must exist in v3 first.
+      # 'quick' means -m "not liverobot or smoke". Both names are defined in MOV-AI/movai-service's
+      # pytest.ini; if either drifts, a lost 'liverobot' runs the whole suite into the timeout and a
+      # lost 'smoke' goes green having dropped the only proof that a robot starts.
       test_tier:
         required: false
         type: string
