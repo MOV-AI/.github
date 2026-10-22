@@ -27,6 +27,11 @@ on:
         required: false
         type: string
         default: 'true'
+      test_tier:
+        required: false
+        type: string
+        default: 'full'
+        description: "'quick' runs everything but the live-robot tests plus one smoke cycle; 'full' runs the suite"
       publish_endpoint:
         required: false
         type: string
@@ -268,16 +273,27 @@ jobs:
 
   Package-Test:
     strategy:
+      fail-fast: false
       matrix:
         distro: ${{ fromJSON(inputs.distributions) }}
     needs: [Build, Pack]
     if: ${{ inputs.release == 'false' && inputs.install_test == 'true' }}
     # for rocky8 we use ubuntu-24.04 for simple install test
     runs-on: ${{ matrix.distro == 'focal' && 'ubuntu-20.04' || matrix.distro == 'jammy' && 'ubuntu-22.04' || matrix.distro == 'noble' && 'ubuntu-24.04' || matrix.distro == 'rocky8' && 'ubuntu-24.04' }}
-    timeout-minutes: 90
+    timeout-minutes: ${{ inputs.test_tier == 'quick' && 20 || 90 }}
     env:
-      TOX_MARKER: ""
+      TOX_MARKER: ${{ inputs.test_tier == 'quick' && 'not liverobot or smoke' || '' }}
     steps:
+      - name: Validate test_tier
+        shell: bash
+        env:
+          TEST_TIER: ${{ inputs.test_tier }}
+        run: |
+          case "$TEST_TIER" in
+            quick|full) ;;
+            *) echo "::error::test_tier must be 'quick' or 'full', got '$TEST_TIER'"; exit 1 ;;
+          esac
+
       - name: Maximize build space
         uses: AdityaGarg8/remove-unwanted-software@v4.1
         with:
@@ -367,11 +383,21 @@ jobs:
     if: ${{ inputs.release == 'false' && inputs.install_test == 'true' && inputs.skip_testing != 'true' }}
     needs: [Build, Pack]
     runs-on: oracle
-    timeout-minutes: 90
+    timeout-minutes: ${{ inputs.test_tier == 'quick' && 20 || 90 }}
     env:
       RPM_DISTRO: rocky8
-      TOX_MARKER: "not simulatortest"
+      TOX_MARKER: ${{ inputs.test_tier == 'quick' && 'not liverobot or smoke' || 'not simulatortest' }}
     steps:
+      - name: Validate test_tier
+        shell: bash
+        env:
+          TEST_TIER: ${{ inputs.test_tier }}
+        run: |
+          case "$TEST_TIER" in
+            quick|full) ;;
+            *) echo "::error::test_tier must be 'quick' or 'full', got '$TEST_TIER'"; exit 1 ;;
+          esac
+
       - name: Checkout
         uses: actions/checkout@v6
 
