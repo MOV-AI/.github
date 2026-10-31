@@ -47,6 +47,8 @@ env:
   PROVISION_ENV_CONF_VERSION: "0.2.2-6"
   PROVISION_POOL: "GithubRunners"
   PROVISION_TF_PARALLELISM: "2" # limit concurrent Proxmox operations: parallel VM creation causes lock errors and node SSH failures (DP-2134)
+  PROVISION_TF_ATTEMPTS: "3" # retry terraform apply/destroy on transient Proxmox errors (HTTP 596, node SSH, VM start) (DP-2134)
+  PROVISION_TF_RETRY_DELAY: "60"
   SLACK_CHANNEL: "G0102LEV1CL" #C05K2KF1UP8
   NAMES_PREFIX: "ng-" # temporary to avoid conflicts with existing runners, can be removed once we validated new infrastructure
   # INFRA_NODES: '["hel0", "hel1"]'
@@ -182,7 +184,15 @@ jobs:
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
           terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-ip-runners.tfstate"
-          terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+          for attempt in $(seq 1 "$PROVISION_TF_ATTEMPTS"); do
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars && break
+            if [ "$attempt" -eq "$PROVISION_TF_ATTEMPTS" ]; then
+              echo "::error::terraform destroy failed after $attempt attempts"
+              exit 1
+            fi
+            echo "::warning::terraform destroy attempt $attempt failed, retrying in ${PROVISION_TF_RETRY_DELAY}s"
+            sleep "$PROVISION_TF_RETRY_DELAY"
+          done
           ./scripts/unregister-runners.sh "${{ env.NAMES_PREFIX }}${{ matrix.node }}-ip-runner"
           terraform refresh $var_file_arg -var-file=input.tfvars
 
@@ -340,7 +350,15 @@ jobs:
         echo "File args: $var_file_arg"
         echo "Input File args: $(cat input.tfvars)"
         terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-ip-runners.tfstate"
-        terraform apply -auto-approve -parallelism=${{ env.PROVISION_TF_PARALLELISM }} $var_file_arg -var-file=input.tfvars
+        for attempt in $(seq 1 "$PROVISION_TF_ATTEMPTS"); do
+          terraform apply -auto-approve -parallelism=${{ env.PROVISION_TF_PARALLELISM }} $var_file_arg -var-file=input.tfvars && break
+          if [ "$attempt" -eq "$PROVISION_TF_ATTEMPTS" ]; then
+            echo "::error::terraform apply failed after $attempt attempts"
+            exit 1
+          fi
+          echo "::warning::terraform apply attempt $attempt failed, retrying in ${PROVISION_TF_RETRY_DELAY}s"
+          sleep "$PROVISION_TF_RETRY_DELAY"
+        done
         terraform refresh $var_file_arg -var-file=input.tfvars
 
         echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
@@ -497,7 +515,15 @@ jobs:
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
           terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-qa-runners.tfstate"
-          terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+          for attempt in $(seq 1 "$PROVISION_TF_ATTEMPTS"); do
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars && break
+            if [ "$attempt" -eq "$PROVISION_TF_ATTEMPTS" ]; then
+              echo "::error::terraform destroy failed after $attempt attempts"
+              exit 1
+            fi
+            echo "::warning::terraform destroy attempt $attempt failed, retrying in ${PROVISION_TF_RETRY_DELAY}s"
+            sleep "$PROVISION_TF_RETRY_DELAY"
+          done
           ./scripts/unregister-runners.sh "${{ env.NAMES_PREFIX }}${{ matrix.node }}-qa-runner"
           terraform refresh $var_file_arg -var-file=input.tfvars
 
@@ -654,7 +680,15 @@ jobs:
         echo "File args: $var_file_arg"
         echo "Input File args: $(cat input.tfvars)"
         terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-qa-runners.tfstate"
-        terraform apply -auto-approve -parallelism=${{ env.PROVISION_TF_PARALLELISM }} $var_file_arg -var-file=input.tfvars
+        for attempt in $(seq 1 "$PROVISION_TF_ATTEMPTS"); do
+          terraform apply -auto-approve -parallelism=${{ env.PROVISION_TF_PARALLELISM }} $var_file_arg -var-file=input.tfvars && break
+          if [ "$attempt" -eq "$PROVISION_TF_ATTEMPTS" ]; then
+            echo "::error::terraform apply failed after $attempt attempts"
+            exit 1
+          fi
+          echo "::warning::terraform apply attempt $attempt failed, retrying in ${PROVISION_TF_RETRY_DELAY}s"
+          sleep "$PROVISION_TF_RETRY_DELAY"
+        done
         terraform refresh $var_file_arg -var-file=input.tfvars
 
         echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
@@ -811,7 +845,15 @@ jobs:
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
           terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-robotics-sim-runners.tfstate"
-          terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+          for attempt in $(seq 1 "$PROVISION_TF_ATTEMPTS"); do
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars && break
+            if [ "$attempt" -eq "$PROVISION_TF_ATTEMPTS" ]; then
+              echo "::error::terraform destroy failed after $attempt attempts"
+              exit 1
+            fi
+            echo "::warning::terraform destroy attempt $attempt failed, retrying in ${PROVISION_TF_RETRY_DELAY}s"
+            sleep "$PROVISION_TF_RETRY_DELAY"
+          done
           ./scripts/unregister-runners.sh "${{ env.NAMES_PREFIX }}${{ matrix.node }}-robotics-sim-runner"
           terraform refresh $var_file_arg -var-file=input.tfvars
 
@@ -968,7 +1010,15 @@ jobs:
         echo "File args: $var_file_arg"
         echo "Input File args: $(cat input.tfvars)"
         terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-robotics-sim-runners.tfstate"
-        terraform apply -auto-approve -parallelism=${{ env.PROVISION_TF_PARALLELISM }} $var_file_arg -var-file=input.tfvars
+        for attempt in $(seq 1 "$PROVISION_TF_ATTEMPTS"); do
+          terraform apply -auto-approve -parallelism=${{ env.PROVISION_TF_PARALLELISM }} $var_file_arg -var-file=input.tfvars && break
+          if [ "$attempt" -eq "$PROVISION_TF_ATTEMPTS" ]; then
+            echo "::error::terraform apply failed after $attempt attempts"
+            exit 1
+          fi
+          echo "::warning::terraform apply attempt $attempt failed, retrying in ${PROVISION_TF_RETRY_DELAY}s"
+          sleep "$PROVISION_TF_RETRY_DELAY"
+        done
         terraform refresh $var_file_arg -var-file=input.tfvars
 
         echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
@@ -1125,7 +1175,15 @@ jobs:
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
           terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-redhat-oracle-runners.tfstate"
-          terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+          for attempt in $(seq 1 "$PROVISION_TF_ATTEMPTS"); do
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars && break
+            if [ "$attempt" -eq "$PROVISION_TF_ATTEMPTS" ]; then
+              echo "::error::terraform destroy failed after $attempt attempts"
+              exit 1
+            fi
+            echo "::warning::terraform destroy attempt $attempt failed, retrying in ${PROVISION_TF_RETRY_DELAY}s"
+            sleep "$PROVISION_TF_RETRY_DELAY"
+          done
           ./scripts/unregister-runners.sh "${{ env.NAMES_PREFIX }}${{ matrix.node }}-redhat-oracle-runner"
           terraform refresh $var_file_arg -var-file=input.tfvars
 
@@ -1282,7 +1340,15 @@ jobs:
         echo "File args: $var_file_arg"
         echo "Input File args: $(cat input.tfvars)"
         terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-redhat-oracle-runners.tfstate"
-        terraform apply -auto-approve -parallelism=${{ env.PROVISION_TF_PARALLELISM }} $var_file_arg -var-file=input.tfvars
+        for attempt in $(seq 1 "$PROVISION_TF_ATTEMPTS"); do
+          terraform apply -auto-approve -parallelism=${{ env.PROVISION_TF_PARALLELISM }} $var_file_arg -var-file=input.tfvars && break
+          if [ "$attempt" -eq "$PROVISION_TF_ATTEMPTS" ]; then
+            echo "::error::terraform apply failed after $attempt attempts"
+            exit 1
+          fi
+          echo "::warning::terraform apply attempt $attempt failed, retrying in ${PROVISION_TF_RETRY_DELAY}s"
+          sleep "$PROVISION_TF_RETRY_DELAY"
+        done
         terraform refresh $var_file_arg -var-file=input.tfvars
 
         echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
@@ -1439,7 +1505,15 @@ jobs:
           echo "File args: $var_file_arg"
           echo "Input File args: $(cat input.tfvars)"
           terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-packer-runners.tfstate"
-          terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+          for attempt in $(seq 1 "$PROVISION_TF_ATTEMPTS"); do
+            terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars && break
+            if [ "$attempt" -eq "$PROVISION_TF_ATTEMPTS" ]; then
+              echo "::error::terraform destroy failed after $attempt attempts"
+              exit 1
+            fi
+            echo "::warning::terraform destroy attempt $attempt failed, retrying in ${PROVISION_TF_RETRY_DELAY}s"
+            sleep "$PROVISION_TF_RETRY_DELAY"
+          done
           ./scripts/unregister-runners.sh "${{ env.NAMES_PREFIX }}${{ matrix.node }}-packer-runner"
           terraform refresh $var_file_arg -var-file=input.tfvars
 
@@ -1596,7 +1670,15 @@ jobs:
         echo "File args: $var_file_arg"
         echo "Input File args: $(cat input.tfvars)"
         terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-packer-runners.tfstate"
-        terraform apply -auto-approve -parallelism=${{ env.PROVISION_TF_PARALLELISM }} $var_file_arg -var-file=input.tfvars
+        for attempt in $(seq 1 "$PROVISION_TF_ATTEMPTS"); do
+          terraform apply -auto-approve -parallelism=${{ env.PROVISION_TF_PARALLELISM }} $var_file_arg -var-file=input.tfvars && break
+          if [ "$attempt" -eq "$PROVISION_TF_ATTEMPTS" ]; then
+            echo "::error::terraform apply failed after $attempt attempts"
+            exit 1
+          fi
+          echo "::warning::terraform apply attempt $attempt failed, retrying in ${PROVISION_TF_RETRY_DELAY}s"
+          sleep "$PROVISION_TF_RETRY_DELAY"
+        done
         terraform refresh $var_file_arg -var-file=input.tfvars
 
         echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
