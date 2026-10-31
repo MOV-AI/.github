@@ -9,6 +9,11 @@ All notable changes to this repository will be documented in this file.
 
 ### Changed
 - `infra-recreation.yml`: `PROVISION_INFRA_VERSION` bumped to `0.1.0-3`.
+- `infra-recreation.yml`: Provision jobs run `terraform apply` with `-parallelism=2`
+  (`PROVISION_TF_PARALLELISM`) to limit concurrent Proxmox operations (DP-2134).
+- `infra-recreation.yml`: `terraform apply` and `terraform destroy` are retried up to 3 times,
+  60 s apart (`PROVISION_TF_ATTEMPTS`, `PROVISION_TF_RETRY_DELAY`), with a warning annotation
+  per failed attempt, to absorb transient Proxmox errors (DP-2134).
 
 ### Fixed
 - `infra-recreation.yml`: each Destroy job unregisters its GitHub runners through the API right
