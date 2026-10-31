@@ -9,6 +9,8 @@ All notable changes to this repository will be documented in this file.
 
 ### Changed
 - `infra-recreation.yml`: `PROVISION_INFRA_VERSION` bumped to `0.1.0-3`.
+- `infra-recreation.yml`: Provision jobs run `terraform apply` with `-parallelism=2`
+  (`PROVISION_TF_PARALLELISM`) to limit concurrent Proxmox operations (DP-2134).
 
 ### Fixed
 - `infra-recreation.yml`: each Destroy job unregisters its GitHub runners through the API right
