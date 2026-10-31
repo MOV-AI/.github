@@ -46,6 +46,16 @@ All notable changes to this repository will be documented in this file.
 - `test_filter` input on `rust-test-workflow.yml`: a cargo-nextest filter expression, the
   equivalent of `cargo test -- --skip <pattern>` for repositories that exclude a class of
   tests from the main run.
+- `test_tier` input on `service-py-deb-workflow.yml`: `quick` or `full` (default `full`). `quick`
+  runs `-m "not liverobot or smoke"` under a 20-minute cap in `Package-Test` and
+  `Package-Test-Rpm`; `full` keeps the previous selection and a 90-minute cap. Other values fail
+  the leg.
+- `service-py-deb-workflow.yml` sets `fail-fast: false` on the `Package-Test` matrix, so one distro's
+  failure no longer cancels the other legs. Every consumer inherits this without opting in.
+- `refresh_source` input on `service-py-deb-workflow.yml` (default `'true'`, so existing consumers
+  are unchanged): `'false'` skips the `RefreshSource` job. On a push event the auto-update action
+  merges the pushed branch into every open pull request based on it, so callers triggered by push
+  to a shared branch such as `dev` should pass `'false'`.
 - Documentation for `Rust Tests and Coverage` in README.md and docs/workflows.md.
 
 ### Changed
