@@ -3,6 +3,23 @@
 
 All notable changes to this repository will be documented in this file.
 
+## [v3] - 2026-10-31
+### Added
+- N/A
+
+### Changed
+- `infra-recreation.yml`: `PROVISION_INFRA_VERSION` bumped to `0.1.0-3`.
+
+### Fixed
+- `infra-recreation.yml`: each Destroy job unregisters its GitHub runners through the API right
+  after `terraform destroy` (`devops-tf-bpg-runners` `scripts/unregister-runners.sh`), so
+  destroyed runners no longer pile up as offline runners in the org (DP-1801).
+
+### Removed
+- N/A
+
+---
+
 ## [v3] - 2026-09-15
 ### Added
 - `rust-test-workflow.yml`: shared white-box stage for Rust repositories — rustfmt, clippy with
