@@ -311,16 +311,28 @@ jobs:
           sudo apt update
           sudo apt install -y ./artifacts/movai-service*
 
+      # Packages that restrict the daemon socket to a group (movai-service: /run/movai is 0750 root:movai-client)
+      # leave the runner user outside it, and a client that cannot open the socket waits for ever. Services whose
+      # package ships neither movai-access nor that group are unaffected.
+      - name: Give the test user the daemon socket
+        if: ${{ matrix.distro != 'rocky8' }}
+        run: |
+          if [ -x /usr/sbin/movai-access ] && getent group movai-client >/dev/null; then
+            sudo /usr/sbin/movai-access grant-user "$USER"
+            echo "MOVAI_TEST_SG=movai-client" >> "$GITHUB_ENV"
+          fi
+
       - name: Run tests on debian artifacts
         if: ${{ inputs.skip_testing != 'true' && matrix.distro != 'rocky8' }}
+        env:
+          MOVAI_TESTS_REQUIRE_DAEMON: "1"
+          TOX_MARKER: ${{ env.TOX_MARKER }}
+        # A new group membership is not active in the running job, so the tests run through sg when it was granted.
         run: |
-          source test_venv/bin/activate
-          if [ -z "${{ env.TOX_MARKER }}" ]; then
-            tox
-          else
-            tox -- -m "${{ env.TOX_MARKER }}"
-          fi
-          deactivate
+          # Single quotes on purpose (SC2016): the shell that sg or bash starts expands TOX_MARKER
+          # shellcheck disable=SC2016
+          run_tests='. test_venv/bin/activate && tox ${TOX_MARKER:+-- -m "$TOX_MARKER"}'
+          if [ -n "${MOVAI_TEST_SG:-}" ]; then sg "$MOVAI_TEST_SG" -c "$run_tests"; else bash -c "$run_tests"; fi
 
       - name: Run tests on rpm artifacts
         if: ${{ inputs.skip_testing != 'true' && matrix.distro == 'rocky8' }}
@@ -377,20 +389,33 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: Run tests on rpm artifacts
+      - name: Install rpm artifacts
         shell: bash
         run: |
           mkdir -p artifacts/${{ env.RPM_DISTRO }}
           mv artifacts/movai-service*.rpm artifacts/${{ env.RPM_DISTRO }}
           sudo rpm -U --force artifacts/${{ env.RPM_DISTRO }}/movai-service*.rpm
           sudo systemctl reload movai-service
-          source test_venv/bin/activate
-          if [ -z "${{ env.TOX_MARKER }}" ]; then
-            pytest tests/ --cov=movai_service --cov=movai_cli --cov=extra-plugins --cov=scripts --cov-report=term --cov-report=xml -o log_cli=true -x
-          else
-            pytest tests/ --cov=movai_service --cov=movai_cli --cov=extra-plugins --cov=scripts --cov-report=term --cov-report=xml -o log_cli=true -x -m "${{ env.TOX_MARKER }}"
+
+      # Same grant as in Package-Test: see the comment there.
+      - name: Give the test user the daemon socket
+        shell: bash
+        run: |
+          if [ -x /usr/sbin/movai-access ] && getent group movai-client >/dev/null; then
+            sudo /usr/sbin/movai-access grant-user "$USER"
+            echo "MOVAI_TEST_SG=movai-client" >> "$GITHUB_ENV"
           fi
-          deactivate
+
+      - name: Run tests on rpm artifacts
+        shell: bash
+        env:
+          MOVAI_TESTS_REQUIRE_DAEMON: "1"
+          TOX_MARKER: ${{ env.TOX_MARKER }}
+        run: |
+          # Single quotes on purpose (SC2016): the shell that sg or bash starts expands TOX_MARKER
+          # shellcheck disable=SC2016
+          run_tests='. test_venv/bin/activate && pytest tests/ --cov=movai_service --cov=movai_cli --cov=extra-plugins --cov=scripts --cov-report=term --cov-report=xml -o log_cli=true -x ${TOX_MARKER:+-m "$TOX_MARKER"}'
+          if [ -n "${MOVAI_TEST_SG:-}" ]; then sg "$MOVAI_TEST_SG" -c "$run_tests"; else bash -c "$run_tests"; fi
 
       - name: Store logs of journalctl
         shell: bash
