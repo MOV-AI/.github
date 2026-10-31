@@ -182,6 +182,7 @@ jobs:
           echo "Input File args: $(cat input.tfvars)"
           terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-ip-runners.tfstate"
           terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+          ./scripts/unregister-runners.sh "${{ env.NAMES_PREFIX }}${{ matrix.node }}-ip-runner"
           terraform refresh $var_file_arg -var-file=input.tfvars
 
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
@@ -191,6 +192,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
           AWS_DEFAULT_REGION: "us-east-1"
+          GH_TOKEN: ${{ secrets.auto_commit_pwd }}
 
       - name: Get current job id
         if: always()
@@ -495,6 +497,7 @@ jobs:
           echo "Input File args: $(cat input.tfvars)"
           terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-qa-runners.tfstate"
           terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+          ./scripts/unregister-runners.sh "${{ env.NAMES_PREFIX }}${{ matrix.node }}-qa-runner"
           terraform refresh $var_file_arg -var-file=input.tfvars
 
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
@@ -504,6 +507,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
           AWS_DEFAULT_REGION: "us-east-1"
+          GH_TOKEN: ${{ secrets.auto_commit_pwd }}
 
       - name: Get current job id
         if: always()
@@ -807,6 +811,7 @@ jobs:
           echo "Input File args: $(cat input.tfvars)"
           terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-robotics-sim-runners.tfstate"
           terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+          ./scripts/unregister-runners.sh "${{ env.NAMES_PREFIX }}${{ matrix.node }}-robotics-sim-runner"
           terraform refresh $var_file_arg -var-file=input.tfvars
 
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
@@ -816,6 +821,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
           AWS_DEFAULT_REGION: "us-east-1"
+          GH_TOKEN: ${{ secrets.auto_commit_pwd }}
 
       - name: Get current job id
         if: always()
@@ -1119,6 +1125,7 @@ jobs:
           echo "Input File args: $(cat input.tfvars)"
           terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-redhat-oracle-runners.tfstate"
           terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+          ./scripts/unregister-runners.sh "${{ env.NAMES_PREFIX }}${{ matrix.node }}-redhat-oracle-runner"
           terraform refresh $var_file_arg -var-file=input.tfvars
 
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
@@ -1128,6 +1135,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
           AWS_DEFAULT_REGION: "us-east-1"
+          GH_TOKEN: ${{ secrets.auto_commit_pwd }}
 
       - name: Get current job id
         if: always()
@@ -1431,6 +1439,7 @@ jobs:
           echo "Input File args: $(cat input.tfvars)"
           terraform init -backend-config="key=${{ env.NAMES_PREFIX }}${{ matrix.node }}-packer-runners.tfstate"
           terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+          ./scripts/unregister-runners.sh "${{ env.NAMES_PREFIX }}${{ matrix.node }}-packer-runner"
           terraform refresh $var_file_arg -var-file=input.tfvars
 
           echo "${{ secrets.ssh_priv_key }}" > ~/.ssh/ci_priv_key.pem
@@ -1440,6 +1449,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.aws_key_id }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.aws_secret_key_id }}
           AWS_DEFAULT_REGION: "us-east-1"
+          GH_TOKEN: ${{ secrets.auto_commit_pwd }}
 
       - name: Get current job id
         if: always()
