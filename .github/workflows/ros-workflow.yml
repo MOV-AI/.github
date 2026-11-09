@@ -502,14 +502,12 @@ jobs:
           mobtest repo --issues ./mobtest-issues.json .
 
       - name: Create SonarCloud project and disable autoscan
-        if: ${{ false }}
         uses: MOV-AI/action-sonarcloud-proj-config@v1
         with:
           sonar_org: 'mov-ai'
           sonar_token: ${{ secrets.sonar_token }}
 
       - name: SonarCloud Scan
-        if: ${{ false }}
         uses: SonarSource/sonarqube-scan-action@v7
         env:
           GITHUB_TOKEN: ${{ github.token }}
