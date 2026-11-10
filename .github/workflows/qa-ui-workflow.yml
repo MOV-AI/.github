@@ -133,6 +133,11 @@ jobs:
         if: always()
         shell: bash
         run: |
+          # -------------------------------------------------------------
+          # PLAYWRIGHT TEST CONTAINER LOGS (Docker Compose)
+          # -------------------------------------------------------------
+          docker compose -f docker-compose.yml ps -a > playwright-docker-compose-ps.log 2>&1 || true
+          docker compose -f docker-compose.yml logs --no-color --timestamps > playwright-docker-compose.log 2>&1 || true
           # for sanity
           docker ps -a
 
