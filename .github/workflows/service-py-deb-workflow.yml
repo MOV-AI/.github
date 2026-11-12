@@ -453,6 +453,7 @@ jobs:
         run: |
           # Single quotes on purpose (SC2016): the shell that sg or bash starts expands TOX_MARKER
           # shellcheck disable=SC2016
+          sudo rm -rf /tmp/userspace/
           run_tests='. test_venv/bin/activate && pytest tests/ --cov=movai_service --cov=movai_cli --cov=extra-plugins --cov=scripts --cov-report=term --cov-report=xml -o log_cli=true -x ${TOX_MARKER:+-m "$TOX_MARKER"}'
           if [ -n "${MOVAI_TEST_SG:-}" ]; then sg "$MOVAI_TEST_SG" -c "$run_tests"; else bash -c "$run_tests"; fi
 
@@ -462,6 +463,7 @@ jobs:
         run: |
           mkdir -p logs
           journalctl -u movai-service > ./logs/movai-service-journal-${{ env.RPM_DISTRO }}.log || true
+          docker logs $(docker ps -a --format '{{.ID}}') >> logs/docker-logs-${{ env.RPM_DISTRO }}.log || true
 
       - name: Stash logs of journalctl
         if: always()
