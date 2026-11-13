@@ -40,6 +40,10 @@ inputs:
     description: 'tfvars file name inside the environment configs group folder. If empty, it is derived from the cluster node'
     required: false
     default: ''
+  fleet_peer_nr:
+    description: 'Number of fleet peer VMs to create besides the manager (0 for a single VM)'
+    required: false
+    default: '0'
   enable_traefik_exposure:
     description: 'Expose the VM through Traefik (true or false). Only supported on the hel0 cluster node'
     required: false
@@ -270,18 +274,35 @@ runs:
         PROXMOX_VE_USERNAME: ${{ steps.select_proxmox_creds.outputs.username }}
         PROXMOX_VE_PASSWORD: ${{ steps.select_proxmox_creds.outputs.password }}
       run: |
-        multiply_node=$(printf '"${{ inputs.cluster_node }}",%.0s' {1..1})
-        node_list_str=${multiply_node::-1}
+        peer_nr="${{ inputs.fleet_peer_nr }}"
+        if ! [[ "$peer_nr" =~ ^[0-9]+$ ]]; then
+          echo "::error::fleet_peer_nr must be a non-negative integer, got '$peer_nr'"
+          exit 1
+        fi
+
+        # One host entry per VM (manager + peers)
+        total_resources=$((peer_nr + 1))
+        node_list_str=""
+        for ((i = 0; i < total_resources; i++)); do
+          node_list_str+="${node_list_str:+,}\"${{ inputs.cluster_node }}\""
+        done
+
+        # Keep at least 3 entries (previous behaviour), more when many peers are requested
+        ip_count=$(( total_resources > 3 ? total_resources : 3 ))
+        ip_list_str=""
+        for ((i = 0; i < ip_count; i++)); do
+          ip_list_str+="${ip_list_str:+,}\"dhcp\""
+        done
         mkdir -p ~/.ssh/
         sudo chmod 700 ~/.ssh/
         echo "${{ inputs.ssh_private_key }}" > ~/.ssh/aws_slave.pem
         var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/${{ steps.select_proxmox_creds.outputs.group }}/${{ steps.select_proxmox_creds.outputs.tfvar }}'
         {
           echo "proxmox_host_list=[$node_list_str]"
-          echo 'fleet_peer_nr="0"'
+          echo "fleet_peer_nr=\"${peer_nr}\""
           echo 'fleet_password="${{ inputs.fleet_password }}"'
           echo 'fleet_manager_name="${{ steps.infra_names.outputs.simul_prefix }}"'
-          echo 'ip_list=["dhcp","dhcp","dhcp"]'
+          echo "ip_list=[${ip_list_str}]"
           echo 'tags=["ip-fleet"]'
           echo 'pool="IP-Temp-VMs"'
           echo "proxmox_ve_username=\"${PROXMOX_VE_USERNAME}\""
