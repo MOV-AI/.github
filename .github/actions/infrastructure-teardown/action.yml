@@ -1,0 +1,288 @@
+name: 'Infrastructure Teardown'
+description: 'Tears down Proxmox infrastructure and cleans up resources'
+inputs:
+  cluster_node:
+    description: 'Cluster node where infrastructure was provisioned'
+    required: true
+    default: 'bb-9'
+  platform_version:
+    description: 'Platform version being tested'
+    required: true
+  platform_repo:
+    description: 'Platform repository being tested'
+    required: false
+    default: 'none'
+  project_repo:
+    description: 'Project repository being tested'
+    required: false
+    default: 'none'
+  project_version:
+    description: 'Project version being tested'
+    required: false
+    default: 'none'
+  provision_infra_repo:
+    description: 'Provision infrastructure repository name'
+    required: false
+    default: 'devops-tf-proxmox-bpg'
+  provision_infra_version:
+    description: 'Provision infrastructure version'
+    required: false
+    default: '2.2.0-3'
+  provision_infra_env_repo:
+    description: 'Provision infrastructure environment repository name'
+    required: false
+    default: 'devops-tf-env-conf'
+  provision_infra_env_version:
+    description: 'Provision infrastructure environment version'
+    required: false
+    default: '0.2.2-6'
+  ci_integration_scripts_version:
+    description: 'CI Integration Scripts version (ci-tools image tag)'
+    required: false
+    default: '4.3.0.9'
+  registry_url:
+    description: 'Docker registry URL holding the ci-tools image'
+    required: true
+    default: 'registry.cloud.mov.ai'
+  registry_user:
+    description: 'Docker registry username'
+    required: true
+  registry_token:
+    description: 'Docker registry token'
+    required: true
+  github_api_user:
+    description: 'GitHub API username'
+    required: true
+  github_api_token:
+    description: 'GitHub API token'
+    required: true
+  proxmox_username:
+    description: 'Proxmox VE username'
+    required: true
+  proxmox_password:
+    description: 'Proxmox VE password'
+    required: true
+  aws_access_key:
+    description: 'AWS access key for S3 storage'
+    required: true
+  aws_secret_key:
+    description: 'AWS secret key for S3 storage'
+    required: true
+  fleet_password:
+    description: 'Fleet password'
+    required: true
+  ssh_private_key:
+    description: 'SSH private key for VM access'
+    required: true
+  proxmox_marvin_username:
+    description: 'Proxmox VE username for Marvin cluster nodes'
+    required: false
+  proxmox_marvin_password:
+    description: 'Proxmox VE password for Marvin cluster nodes'
+    required: false
+  proxmox_hel0_username:
+    description: 'Proxmox VE username for HEL0 cluster node'
+    required: false
+  proxmox_hel0_password:
+    description: 'Proxmox VE password for HEL0 cluster node'
+    required: false
+  proxmox_hel1_username:
+    description: 'Proxmox VE username for HEL1 cluster node'
+    required: false
+  proxmox_hel1_password:
+    description: 'Proxmox VE password for HEL1 cluster node'
+    required: false
+
+outputs:
+  teardown_success:
+    description: 'Whether teardown was successful'
+    value: ${{ steps.teardown_status.outputs.success }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Login to Private Registry
+      shell: bash
+      run: |
+        echo "${{ inputs.registry_token }}" | docker login ${{ inputs.registry_url }} -u "${{ inputs.registry_user }}" --password-stdin
+
+    - name: Setup infra environment configs
+      id: infra_env_configs_setup
+      shell: bash
+      env:
+        CI_TOOLS_DOCKER_IMAGE: "${{ inputs.registry_url }}/qa/ci-tools:${{ inputs.ci_integration_scripts_version }}"
+        PROVISION_ENV_CONF_DIR: "infra_env_configs"
+        PROVISION_INFRA_ENV_REPO: "${{ inputs.provision_infra_env_repo }}"
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_key }}
+      run: |
+        env_configs_dir=$PROVISION_ENV_CONF_DIR
+        env_configs_version=${{ inputs.provision_infra_env_version }}
+        env_configs_repo_name=$PROVISION_INFRA_ENV_REPO
+
+        rm -rf "$env_configs_dir"
+        docker run --rm -u root -v "$(pwd)":/workspace -w /workspace "$CI_TOOLS_DOCKER_IMAGE" \
+          fetch_by_tag --repo "$env_configs_repo_name" --version "$env_configs_version" --gh_api_user "${{ inputs.github_api_user }}" --gh_api_pwd "${{ inputs.github_api_token }}" --target_dir "$env_configs_dir"
+        sudo chown -R "$(id -un)":"$(id -gn)" "$env_configs_dir"
+        ls -la "$env_configs_dir"
+        echo "target_dir=${env_configs_dir}" >> "$GITHUB_OUTPUT"
+
+    - name: Setup terraform proxmox provisioner
+      id: provision_infra_setup
+      shell: bash
+      env:
+        PROVISION_INFRA_REPO: "${{ inputs.provision_infra_repo }}"
+        CI_TOOLS_DOCKER_IMAGE: "${{ inputs.registry_url }}/qa/ci-tools:${{ inputs.ci_integration_scripts_version }}"
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_key }}
+      run: |
+        provision_infra_dir=provision_scripts
+        provision_infra_version=${{ inputs.provision_infra_version }}
+        provision_infra_repo_name=$PROVISION_INFRA_REPO
+
+        rm -rf "$provision_infra_dir"
+        docker run --rm -u root -v "$(pwd)":/workspace -w /workspace "$CI_TOOLS_DOCKER_IMAGE" \
+          fetch_by_tag --repo "$provision_infra_repo_name" --version "$provision_infra_version" --gh_api_user "${{ inputs.github_api_user }}" --gh_api_pwd "${{ inputs.github_api_token }}" --target_dir "$provision_infra_dir"
+        sudo chown -R "$(id -un)":"$(id -gn)" "$provision_infra_dir"
+        ls -la "$provision_infra_dir"
+        echo "target_dir=${provision_infra_dir}/" >> "$GITHUB_OUTPUT"
+
+    - name: Define Instance names
+      id: infra_names
+      shell: bash
+      run: |
+        sanitize() {
+          echo "$1" | sed 's/\./-/g' | sed 's/\//-/g' | sed 's/_/-/g' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/-\{2,\}/-/g' | sed 's/^-//;s/-$//'
+        }
+
+        platform_version="$(sanitize "${{ inputs.platform_version }}")"
+        project_version="$(sanitize "${{ inputs.project_version }}")"
+        cluster_node="$(sanitize "${{ inputs.cluster_node }}")"
+        platform_repo_raw="$(echo "${{ inputs.platform_repo }}" | tr '[:upper:]' '[:lower:]' | xargs)"
+        project_repo_raw="$(echo "${{ inputs.project_repo }}" | tr '[:upper:]' '[:lower:]' | xargs)"
+
+        name_parts=("sanity")
+
+        if [[ "$platform_repo_raw" != "none" ]]; then
+          name_parts+=("platform")
+          if [[ -n "$platform_version" && "$platform_version" != "none" ]]; then
+            name_parts+=("$platform_version")
+          fi
+        elif [[ "$project_repo_raw" != "none" ]]; then
+          name_parts+=("project")
+          if [[ -n "$project_version" && "$project_version" != "none" ]]; then
+            name_parts+=("$project_version")
+          fi
+        fi
+
+        name_parts+=("$cluster_node")
+        local_manager_prefix="$(printf '%s-' "${name_parts[@]}" | sed 's/-$//')"
+        local_manager_prefix="${local_manager_prefix:0:63}"
+        local_manager_prefix="$(echo "$local_manager_prefix" | sed 's/^-//;s/-$//')"
+        echo "$local_manager_prefix"
+        echo "simul_prefix=${local_manager_prefix}" >> "$GITHUB_OUTPUT"
+
+    - name: Select Proxmox credentials
+      id: select_proxmox_creds
+      shell: bash
+      env:
+        CLUSTER_NODE: ${{ inputs.cluster_node }}
+        PROXMOX_MARVIN_VE_USERNAME: ${{ inputs.proxmox_marvin_username }}
+        PROXMOX_MARVIN_VE_PASSWORD: ${{ inputs.proxmox_marvin_password }}
+        PROXMOX_HEL0_VE_USERNAME: ${{ inputs.proxmox_hel0_username }}
+        PROXMOX_HEL0_VE_PASSWORD: ${{ inputs.proxmox_hel0_password }}
+        PROXMOX_HEL1_VE_USERNAME: ${{ inputs.proxmox_hel1_username }}
+        PROXMOX_HEL1_VE_PASSWORD: ${{ inputs.proxmox_hel1_password }}
+      run: |
+        case "$CLUSTER_NODE" in
+          hel0)
+            if [ -z "$PROXMOX_HEL0_VE_USERNAME" ] || [ -z "$PROXMOX_HEL0_VE_PASSWORD" ]; then
+              echo "::error::No valid Proxmox credentials found for HEL0 node"
+              exit 1
+            fi
+            echo "username=$PROXMOX_HEL0_VE_USERNAME" >> "$GITHUB_OUTPUT"
+            echo "password=$PROXMOX_HEL0_VE_PASSWORD" >> "$GITHUB_OUTPUT"
+            echo "group=hel" >> "$GITHUB_OUTPUT"
+            echo "tfvar=${CLUSTER_NODE}_fleet_test.tfvars" >> "$GITHUB_OUTPUT"
+            echo "::notice::Using Proxmox credentials for cluster: hel0"
+            ;;
+          hel1)
+            if [ -z "$PROXMOX_HEL1_VE_USERNAME" ] || [ -z "$PROXMOX_HEL1_VE_PASSWORD" ]; then
+              echo "::error::No valid Proxmox credentials found for HEL1 node"
+              exit 1
+            fi
+            echo "username=$PROXMOX_HEL1_VE_USERNAME" >> "$GITHUB_OUTPUT"
+            echo "password=$PROXMOX_HEL1_VE_PASSWORD" >> "$GITHUB_OUTPUT"
+            echo "group=hel" >> "$GITHUB_OUTPUT"
+            echo "tfvar=${CLUSTER_NODE}_fleet_test.tfvars" >> "$GITHUB_OUTPUT"
+            echo "::notice::Using Proxmox credentials for cluster: hel1"
+            ;;
+          bb-8|bb-9|marvin|mary|kx-01|kx-02)
+            if [ -z "$PROXMOX_MARVIN_VE_USERNAME" ] || [ -z "$PROXMOX_MARVIN_VE_PASSWORD" ]; then
+              echo "::error::No valid Proxmox credentials found for Marvin cluster nodes"
+              exit 1
+            fi
+            echo "username=$PROXMOX_MARVIN_VE_USERNAME" >> "$GITHUB_OUTPUT"
+            echo "password=$PROXMOX_MARVIN_VE_PASSWORD" >> "$GITHUB_OUTPUT"
+            echo "group=marvin" >> "$GITHUB_OUTPUT"
+            echo "tfvar=${CLUSTER_NODE}_simul_bpg.tfvars" >> "$GITHUB_OUTPUT"
+            echo "::notice::Using Proxmox credentials for cluster: $CLUSTER_NODE (Marvin group)"
+            ;;
+          *)
+            echo "::error::Unknown cluster node: $CLUSTER_NODE"
+            exit 1
+            ;;
+        esac
+
+    - name: Teardown remote vms (Proxmox)
+      working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_key }}
+        PROXMOX_VE_USERNAME: ${{ steps.select_proxmox_creds.outputs.username }}
+        PROXMOX_VE_PASSWORD: ${{ steps.select_proxmox_creds.outputs.password }}
+      run: |
+        multiply_node=$(printf '"${{ inputs.cluster_node }}",%.0s' {1..1})
+        node_list_str=${multiply_node::-1}
+        mkdir -p ~/.ssh/
+        sudo chmod 700 ~/.ssh/
+        echo "${{ inputs.ssh_private_key }}" > ~/.ssh/aws_slave.pem
+        var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/${{ steps.select_proxmox_creds.outputs.group }}/${{ steps.select_proxmox_creds.outputs.tfvar }}'
+        {
+          echo "proxmox_host_list=[$node_list_str]"
+          echo 'fleet_peer_nr="0"'
+          echo 'fleet_password="${{ inputs.fleet_password }}"'
+          echo 'fleet_manager_name="${{ steps.infra_names.outputs.simul_prefix }}"'
+          echo 'ip_list=["dhcp","dhcp","dhcp"]'
+          echo 'tags=["ip-fleet"]'
+          echo 'pool="IP-Temp-VMs"'
+          echo "proxmox_ve_username=\"${PROXMOX_VE_USERNAME}\""
+          echo "proxmox_ve_password=\"${PROXMOX_VE_PASSWORD}\""
+          echo
+        } >>input.tfvars
+
+        echo "File args: $var_file_arg"
+        echo "Input File args: $(cat input.tfvars)"
+        attempts=3
+        count=0
+        while [ $count -lt $attempts ]; do
+          terraform init -backend-config="key=${{ inputs.cluster_node }}-sanity-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
+          terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
+          exit_status=$?
+          if [ $exit_status -eq 0 ]; then
+            break
+          elif [ $exit_status -eq 1 ]; then
+            ((count++))
+            echo "Retrying Terraform destroy (attempt $count)..."
+          else
+            echo "Terraform destroy failed with exit status ${exit_status:-unknown}. Exiting..."
+            exit ${exit_status:-1}
+          fi
+        done
+
+    - name: Set teardown status
+      id: teardown_status
+      shell: bash
+      run: |
+        echo "success=true" >> "$GITHUB_OUTPUT"

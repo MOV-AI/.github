@@ -1,0 +1,344 @@
+name: 'Infrastructure Setup'
+description: 'Sets up Proxmox infrastructure for sanity testing including VM provisioning and SSH configuration'
+inputs:
+  cluster_node:
+    description: 'Cluster node where infrastructure will be provisioned'
+    required: true
+    default: 'bb-9'
+  platform_version:
+    description: 'Platform version being tested'
+    required: true
+  platform_repo:
+    description: 'Platform repository being tested'
+    required: false
+    default: 'none'
+  project_repo:
+    description: 'Project repository being tested'
+    required: false
+    default: 'none'
+  project_version:
+    description: 'Project version being tested'
+    required: false
+    default: 'none'
+  provision_infra_repo:
+    description: 'Provision infrastructure repository name'
+    required: false
+    default: 'devops-tf-proxmox-bpg'
+  provision_infra_version:
+    description: 'Provision infrastructure version'
+    required: false
+    default: '2.2.0-3'
+  provision_infra_env_repo:
+    description: 'Provision infrastructure environment repository name'
+    required: false
+    default: 'devops-tf-env-conf'
+  provision_infra_env_version:
+    description: 'Provision infrastructure environment version'
+    required: false
+    default: '0.2.2-6'
+  ci_integration_scripts_version:
+    description: 'CI Integration Scripts version (ci-tools image tag)'
+    required: false
+    default: '4.3.0.9'
+  registry_url:
+    description: 'Docker registry URL holding the ci-tools image'
+    required: true
+    default: 'registry.cloud.mov.ai'
+  registry_user:
+    description: 'Docker registry username'
+    required: true
+  registry_token:
+    description: 'Docker registry token'
+    required: true
+  github_api_user:
+    description: 'GitHub API username'
+    required: true
+  github_api_token:
+    description: 'GitHub API token'
+    required: true
+  proxmox_username:
+    description: 'Proxmox VE username'
+    required: true
+  proxmox_password:
+    description: 'Proxmox VE password'
+    required: true
+  aws_access_key:
+    description: 'AWS access key for S3 storage'
+    required: true
+  aws_secret_key:
+    description: 'AWS secret key for S3 storage'
+    required: true
+  fleet_password:
+    description: 'Fleet password'
+    required: true
+  ssh_private_key:
+    description: 'SSH private key for VM access'
+    required: true
+  proxmox_marvin_username:
+    description: 'Proxmox VE username for Marvin cluster nodes'
+    required: false
+  proxmox_marvin_password:
+    description: 'Proxmox VE password for Marvin cluster nodes'
+    required: false
+  proxmox_hel0_username:
+    description: 'Proxmox VE username for HEL0 cluster node'
+    required: false
+  proxmox_hel0_password:
+    description: 'Proxmox VE password for HEL0 cluster node'
+    required: false
+  proxmox_hel1_username:
+    description: 'Proxmox VE username for HEL1 cluster node'
+    required: false
+  proxmox_hel1_password:
+    description: 'Proxmox VE password for HEL1 cluster node'
+    required: false
+
+outputs:
+  host_ip:
+    description: 'IP address of the provisioned VM'
+    value: ${{ steps.infra_outputs.outputs.host_ip }}
+  host_user:
+    description: 'Username for the provisioned VM'
+    value: ${{ steps.infra_outputs.outputs.host_user }}
+  ssh_connect_string:
+    description: 'SSH connection string for the VM'
+    value: ${{ steps.infra_outputs.outputs.ssh_connect_string }}
+  env_configs_dir:
+    description: 'Environment configs directory'
+    value: ${{ steps.infra_env_configs_setup.outputs.target_dir }}
+  provision_infra_dir:
+    description: 'Provision infrastructure directory'
+    value: ${{ steps.provision_infra_setup.outputs.target_dir }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Login to Private Registry
+      shell: bash
+      run: |
+        echo "${{ inputs.registry_token }}" | docker login ${{ inputs.registry_url }} -u "${{ inputs.registry_user }}" --password-stdin
+
+    - name: Setup infra environment configs
+      id: infra_env_configs_setup
+      shell: bash
+      env:
+        CI_TOOLS_DOCKER_IMAGE: "${{ inputs.registry_url }}/qa/ci-tools:${{ inputs.ci_integration_scripts_version }}"
+        PROVISION_ENV_CONF_DIR: "infra_env_configs"
+        PROVISION_INFRA_ENV_REPO: "${{ inputs.provision_infra_env_repo }}"
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_key }}
+      run: |
+        env_configs_dir=$PROVISION_ENV_CONF_DIR
+        env_configs_version=${{ inputs.provision_infra_env_version }}
+        env_configs_repo_name=$PROVISION_INFRA_ENV_REPO
+
+        rm -rf "$env_configs_dir"
+        docker run --rm -u root -v "$(pwd)":/workspace -w /workspace "$CI_TOOLS_DOCKER_IMAGE" \
+          fetch_by_tag --repo "$env_configs_repo_name" --version "$env_configs_version" --gh_api_user "${{ inputs.github_api_user }}" --gh_api_pwd "${{ inputs.github_api_token }}" --target_dir "$env_configs_dir"
+        sudo chown -R "$(id -un)":"$(id -gn)" "$env_configs_dir"
+        ls -la "$env_configs_dir"
+        echo "target_dir=${env_configs_dir}" >> "$GITHUB_OUTPUT"
+
+    - name: Setup terraform proxmox provisioner
+      id: provision_infra_setup
+      shell: bash
+      env:
+        PROVISION_INFRA_REPO: "${{ inputs.provision_infra_repo }}"
+        CI_TOOLS_DOCKER_IMAGE: "${{ inputs.registry_url }}/qa/ci-tools:${{ inputs.ci_integration_scripts_version }}"
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_key }}
+      run: |
+        provision_infra_dir=provision_scripts
+        provision_infra_version=${{ inputs.provision_infra_version }}
+        provision_infra_repo_name=$PROVISION_INFRA_REPO
+
+        rm -rf "$provision_infra_dir"
+        docker run --rm -u root -v "$(pwd)":/workspace -w /workspace "$CI_TOOLS_DOCKER_IMAGE" \
+          fetch_by_tag --repo "$provision_infra_repo_name" --version "$provision_infra_version" --gh_api_user "${{ inputs.github_api_user }}" --gh_api_pwd "${{ inputs.github_api_token }}" --target_dir "$provision_infra_dir"
+        sudo chown -R "$(id -un)":"$(id -gn)" "$provision_infra_dir"
+        ls -la "$provision_infra_dir"
+        echo "target_dir=${provision_infra_dir}/" >> "$GITHUB_OUTPUT"
+
+    - name: Define Instance names
+      id: infra_names
+      shell: bash
+      run: |
+        sanitize() {
+          echo "$1" | sed 's/\./-/g' | sed 's/\//-/g' | sed 's/_/-/g' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/-\{2,\}/-/g' | sed 's/^-//;s/-$//'
+        }
+
+        platform_version="$(sanitize "${{ inputs.platform_version }}")"
+        project_version="$(sanitize "${{ inputs.project_version }}")"
+        cluster_node="$(sanitize "${{ inputs.cluster_node }}")"
+        platform_repo_raw="$(echo "${{ inputs.platform_repo }}" | tr '[:upper:]' '[:lower:]' | xargs)"
+        project_repo_raw="$(echo "${{ inputs.project_repo }}" | tr '[:upper:]' '[:lower:]' | xargs)"
+
+        name_parts=("sanity")
+
+        if [[ "$platform_repo_raw" != "none" ]]; then
+          name_parts+=("platform")
+          if [[ -n "$platform_version" && "$platform_version" != "none" ]]; then
+            name_parts+=("$platform_version")
+          fi
+        elif [[ "$project_repo_raw" != "none" ]]; then
+          name_parts+=("project")
+          if [[ -n "$project_version" && "$project_version" != "none" ]]; then
+            name_parts+=("$project_version")
+          fi
+        fi
+
+        name_parts+=("$cluster_node")
+        local_manager_prefix="$(printf '%s-' "${name_parts[@]}" | sed 's/-$//')"
+        local_manager_prefix="${local_manager_prefix:0:63}"
+        local_manager_prefix="$(echo "$local_manager_prefix" | sed 's/^-//;s/-$//')"
+        echo "$local_manager_prefix"
+        echo "simul_prefix=${local_manager_prefix}" >> "$GITHUB_OUTPUT"
+
+    - name: Select Proxmox credentials
+      id: select_proxmox_creds
+      shell: bash
+      env:
+        CLUSTER_NODE: ${{ inputs.cluster_node }}
+        PROXMOX_MARVIN_VE_USERNAME: ${{ inputs.proxmox_marvin_username }}
+        PROXMOX_MARVIN_VE_PASSWORD: ${{ inputs.proxmox_marvin_password }}
+        PROXMOX_HEL0_VE_USERNAME: ${{ inputs.proxmox_hel0_username }}
+        PROXMOX_HEL0_VE_PASSWORD: ${{ inputs.proxmox_hel0_password }}
+        PROXMOX_HEL1_VE_USERNAME: ${{ inputs.proxmox_hel1_username }}
+        PROXMOX_HEL1_VE_PASSWORD: ${{ inputs.proxmox_hel1_password }}
+      run: |
+        case "$CLUSTER_NODE" in
+          hel0)
+            if [ -z "$PROXMOX_HEL0_VE_USERNAME" ] || [ -z "$PROXMOX_HEL0_VE_PASSWORD" ]; then
+              echo "::error::No valid Proxmox credentials found for HEL0 node"
+              exit 1
+            fi
+            echo "username=$PROXMOX_HEL0_VE_USERNAME" >> "$GITHUB_OUTPUT"
+            echo "password=$PROXMOX_HEL0_VE_PASSWORD" >> "$GITHUB_OUTPUT"
+            echo "group=hel" >> "$GITHUB_OUTPUT"
+            echo "tfvar=${CLUSTER_NODE}_fleet_test.tfvars" >> "$GITHUB_OUTPUT"
+            echo "::notice::Using Proxmox credentials for cluster: hel0"
+            ;;
+          hel1)
+            if [ -z "$PROXMOX_HEL1_VE_USERNAME" ] || [ -z "$PROXMOX_HEL1_VE_PASSWORD" ]; then
+              echo "::error::No valid Proxmox credentials found for HEL1 node"
+              exit 1
+            fi
+            echo "username=$PROXMOX_HEL1_VE_USERNAME" >> "$GITHUB_OUTPUT"
+            echo "password=$PROXMOX_HEL1_VE_PASSWORD" >> "$GITHUB_OUTPUT"
+            echo "group=hel" >> "$GITHUB_OUTPUT"
+            echo "tfvar=${CLUSTER_NODE}_fleet_test.tfvars" >> "$GITHUB_OUTPUT"
+            echo "::notice::Using Proxmox credentials for cluster: hel1"
+            ;;
+          bb-8|bb-9|marvin|mary|kx-01|kx-02)
+            if [ -z "$PROXMOX_MARVIN_VE_USERNAME" ] || [ -z "$PROXMOX_MARVIN_VE_PASSWORD" ]; then
+              echo "::error::No valid Proxmox credentials found for Marvin cluster nodes"
+              exit 1
+            fi
+            echo "username=$PROXMOX_MARVIN_VE_USERNAME" >> "$GITHUB_OUTPUT"
+            echo "password=$PROXMOX_MARVIN_VE_PASSWORD" >> "$GITHUB_OUTPUT"
+            echo "group=marvin" >> "$GITHUB_OUTPUT"
+            echo "tfvar=${CLUSTER_NODE}_simul_bpg.tfvars" >> "$GITHUB_OUTPUT"
+            echo "::notice::Using Proxmox credentials for cluster: $CLUSTER_NODE (Marvin group)"
+            ;;
+          *)
+            echo "::error::Unknown cluster node: $CLUSTER_NODE"
+            exit 1
+            ;;
+        esac
+
+    - name: Provision remote vms (Proxmox)
+      working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_key }}
+        PROXMOX_VE_USERNAME: ${{ steps.select_proxmox_creds.outputs.username }}
+        PROXMOX_VE_PASSWORD: ${{ steps.select_proxmox_creds.outputs.password }}
+      run: |
+        multiply_node=$(printf '"${{ inputs.cluster_node }}",%.0s' {1..1})
+        node_list_str=${multiply_node::-1}
+
+        var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/${{ steps.select_proxmox_creds.outputs.group }}/${{ steps.select_proxmox_creds.outputs.tfvar }}'
+        {
+          echo "proxmox_host_list=[$node_list_str]"
+          echo 'fleet_peer_nr="0"'
+          echo 'fleet_password="${{ inputs.fleet_password }}"'
+          echo 'fleet_manager_name="${{ steps.infra_names.outputs.simul_prefix }}"'
+          echo 'ip_list=["dhcp","dhcp","dhcp"]'
+          echo 'tags=["ip-fleet"]'
+          echo 'pool="IP-Temp-VMs"'
+          echo "proxmox_ve_username=\"${PROXMOX_VE_USERNAME}\""
+          echo "proxmox_ve_password=\"${PROXMOX_VE_PASSWORD}\""
+          echo
+        } >>input.tfvars
+
+        echo "File args: $var_file_arg"
+        echo "Input File args: $(cat input.tfvars)"
+        terraform init -backend-config="key=${{ inputs.cluster_node }}-sanity-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
+        terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
+        terraform refresh $var_file_arg -var-file=input.tfvars
+
+        echo "${{ inputs.ssh_private_key }}" > ~/.ssh/ci_priv_key.pem
+        sudo chmod 600 ~/.ssh/ci_priv_key.pem
+
+    - name: Gather Terraform outputs
+      working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
+      id: infra_outputs
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_key }}
+      run: |
+        ip=$(terraform output manager_ip_address)
+        user=$(terraform output user)
+        echo "IP: $ip USER: $user"
+        #shellcheck disable=SC2129
+        echo "host_ip=${ip//\"/}" >> "$GITHUB_OUTPUT"
+        echo "host_user=${user//\"/}" >> "$GITHUB_OUTPUT"
+        echo "ssh_connect_string=${user//\"/}@${ip//\"/}" >> "$GITHUB_OUTPUT"
+
+    - name: Configure SSH
+      shell: bash
+      run: |
+        ssh-keygen -f ~/.ssh/known_hosts -R ${{ steps.infra_outputs.outputs.host_ip }} || true
+        ssh-keyscan -H ${{ steps.infra_outputs.outputs.host_ip }} >> ~/.ssh/known_hosts || true
+        ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+          cloud-init status --wait; sudo rm -rf ./workspace; mkdir -p ./workspace
+        '
+
+    - name: Detect and setup Nvidia support
+      shell: bash
+      if: ${{ inputs.cluster_node != 'hel0' && inputs.cluster_node != 'hel1' }}
+      run: |
+        ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -euo pipefail
+            export DEBIAN_FRONTEND=noninteractive
+
+            distribution=$(. /etc/os-release; echo "${ID}${VERSION_ID}")
+            curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg --yes
+            curl -s -L "https://nvidia.github.io/libnvidia-container/${distribution}/libnvidia-container.list" | sed "s#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g" | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+            sudo systemctl disable unattended-upgrades.service --now || true
+            sudo systemctl disable apt-daily.service apt-daily-upgrade.service --now|| true
+
+            lock_wait_secs=300
+            waited=0
+            while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+              echo "Waiting for other software managers to finish... (${waited}s/${lock_wait_secs}s)"
+              sleep 5
+              waited=$((waited + 5))
+              if [ "$waited" -ge "$lock_wait_secs" ]; then
+                echo "::error::Timeout waiting for /var/lib/dpkg/lock-frontend"
+                sudo ps -ef | grep -E "apt|dpkg|unattended" | grep -v grep || true
+                exit 1
+              fi
+            done
+
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends nvidia-container-toolkit
+        '
+        ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            sudo systemctl restart docker
+            sleep 3
+            sudo docker run --gpus=all --rm nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi 2>&1
+        '
