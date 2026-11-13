@@ -36,6 +36,22 @@ inputs:
     description: 'Provision infrastructure environment version'
     required: false
     default: '0.2.2-6'
+  provision_infra_env_file:
+    description: 'tfvars file name inside the environment configs group folder. If empty, it is derived from the cluster node'
+    required: false
+    default: ''
+  fleet_peer_nr:
+    description: 'Number of fleet peer VMs to create besides the manager (0 for a single VM)'
+    required: false
+    default: '0'
+  enable_traefik_exposure:
+    description: 'Expose the VM through Traefik (true or false). Only supported on the hel0 cluster node'
+    required: false
+    default: 'false'
+  name_prefix:
+    description: 'Prefix used for the VM names and the Terraform state key'
+    required: false
+    default: 'sanity'
   ci_integration_scripts_version:
     description: 'CI Integration Scripts version (ci-tools image tag)'
     required: false
@@ -173,7 +189,8 @@ runs:
         platform_repo_raw="$(echo "${{ inputs.platform_repo }}" | tr '[:upper:]' '[:lower:]' | xargs)"
         project_repo_raw="$(echo "${{ inputs.project_repo }}" | tr '[:upper:]' '[:lower:]' | xargs)"
 
-        name_parts=("sanity")
+        name_prefix="$(sanitize "${{ inputs.name_prefix }}")"
+        name_parts=("$name_prefix")
 
         if [[ "$platform_repo_raw" != "none" ]]; then
           name_parts+=("platform")
@@ -193,12 +210,15 @@ runs:
         local_manager_prefix="$(echo "$local_manager_prefix" | sed 's/^-//;s/-$//')"
         echo "$local_manager_prefix"
         echo "simul_prefix=${local_manager_prefix}" >> "$GITHUB_OUTPUT"
+        echo "name_prefix=${name_prefix}" >> "$GITHUB_OUTPUT"
 
     - name: Select Proxmox credentials
       id: select_proxmox_creds
       shell: bash
       env:
         CLUSTER_NODE: ${{ inputs.cluster_node }}
+        PROVISION_ENV_FILE: ${{ inputs.provision_infra_env_file }}
+        ENABLE_TRAEFIK_EXPOSURE: ${{ inputs.enable_traefik_exposure }}
         PROXMOX_MARVIN_VE_USERNAME: ${{ inputs.proxmox_marvin_username }}
         PROXMOX_MARVIN_VE_PASSWORD: ${{ inputs.proxmox_marvin_password }}
         PROXMOX_HEL0_VE_USERNAME: ${{ inputs.proxmox_hel0_username }}
@@ -206,6 +226,11 @@ runs:
         PROXMOX_HEL1_VE_USERNAME: ${{ inputs.proxmox_hel1_username }}
         PROXMOX_HEL1_VE_PASSWORD: ${{ inputs.proxmox_hel1_password }}
       run: |
+        if [ "$ENABLE_TRAEFIK_EXPOSURE" = "true" ] && [ "$CLUSTER_NODE" != "hel0" ]; then
+          echo "::error::Traefik exposure is only supported on the hel0 cluster node"
+          exit 1
+        fi
+
         case "$CLUSTER_NODE" in
           hel0)
             if [ -z "$PROXMOX_HEL0_VE_USERNAME" ] || [ -z "$PROXMOX_HEL0_VE_PASSWORD" ]; then
@@ -246,6 +271,12 @@ runs:
             ;;
         esac
 
+        # An explicit tfvars file wins over the one derived from the cluster node (last value written is used)
+        if [ -n "$PROVISION_ENV_FILE" ]; then
+          echo "tfvar=$PROVISION_ENV_FILE" >> "$GITHUB_OUTPUT"
+          echo "::notice::Using tfvars file override: $PROVISION_ENV_FILE"
+        fi
+
     - name: Provision remote vms (Proxmox)
       working-directory: ${{ steps.provision_infra_setup.outputs.target_dir }}
       shell: bash
@@ -255,26 +286,47 @@ runs:
         PROXMOX_VE_USERNAME: ${{ steps.select_proxmox_creds.outputs.username }}
         PROXMOX_VE_PASSWORD: ${{ steps.select_proxmox_creds.outputs.password }}
       run: |
-        multiply_node=$(printf '"${{ inputs.cluster_node }}",%.0s' {1..1})
-        node_list_str=${multiply_node::-1}
+        peer_nr="${{ inputs.fleet_peer_nr }}"
+        if ! [[ "$peer_nr" =~ ^[0-9]+$ ]]; then
+          echo "::error::fleet_peer_nr must be a non-negative integer, got '$peer_nr'"
+          exit 1
+        fi
+
+        # One host entry per VM (manager + peers)
+        total_resources=$((peer_nr + 1))
+        node_list_str=""
+        for ((i = 0; i < total_resources; i++)); do
+          node_list_str+="${node_list_str:+,}\"${{ inputs.cluster_node }}\""
+        done
+
+        # Keep at least 3 entries (previous behaviour), more when many peers are requested
+        ip_count=$(( total_resources > 3 ? total_resources : 3 ))
+        ip_list_str=""
+        for ((i = 0; i < ip_count; i++)); do
+          ip_list_str+="${ip_list_str:+,}\"dhcp\""
+        done
 
         var_file_arg='-var-file=../${{ steps.infra_env_configs_setup.outputs.target_dir }}/${{ steps.select_proxmox_creds.outputs.group }}/${{ steps.select_proxmox_creds.outputs.tfvar }}'
         {
           echo "proxmox_host_list=[$node_list_str]"
-          echo 'fleet_peer_nr="0"'
+          echo "fleet_peer_nr=\"${peer_nr}\""
           echo 'fleet_password="${{ inputs.fleet_password }}"'
           echo 'fleet_manager_name="${{ steps.infra_names.outputs.simul_prefix }}"'
-          echo 'ip_list=["dhcp","dhcp","dhcp"]'
+          echo "ip_list=[${ip_list_str}]"
           echo 'tags=["ip-fleet"]'
           echo 'pool="IP-Temp-VMs"'
           echo "proxmox_ve_username=\"${PROXMOX_VE_USERNAME}\""
           echo "proxmox_ve_password=\"${PROXMOX_VE_PASSWORD}\""
+          if [ "${{ inputs.enable_traefik_exposure }}" = "true" ]; then
+            echo 'enable_traefik_exposure=true'
+            echo 'proxmox_reserved_domain="vm.hel.mov.ai"'
+          fi
           echo
         } >>input.tfvars
 
         echo "File args: $var_file_arg"
         echo "Input File args: $(cat input.tfvars)"
-        terraform init -backend-config="key=${{ inputs.cluster_node }}-sanity-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
+        terraform init -backend-config="key=${{ inputs.cluster_node }}-${{ steps.infra_names.outputs.name_prefix }}-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
         terraform apply -auto-approve $var_file_arg -var-file=input.tfvars
         terraform refresh $var_file_arg -var-file=input.tfvars
 
