@@ -55,7 +55,7 @@ See [docs/workflows.md](docs/workflows.md) for detailed specifications, inputs, 
 - **infrastructure-teardown**: Destroys the VMs created by `infrastructure-setup` (`terraform destroy`, up to 3 attempts). Outputs `teardown_success`.
 
 ### Infrastructure setup and teardown inputs
-Both actions take the same inputs. The VM names and the Terraform state key are derived from these inputs, so **pass identical values to `infrastructure-setup` and `infrastructure-teardown`**. A different value makes teardown use a different state and leaves the VMs running.
+Both actions take the same inputs. The VM names and the Terraform state key are derived from these inputs, so **pass identical values to `infrastructure-setup` and `infrastructure-teardown`**. A different value makes teardown use a different state and leaves the VMs running, and teardown still passes because it destroys nothing. This also applies to `platform_repo`, `platform_version`, `project_repo`, `project_version` and `provision_infra_env_version`.
 
 | Input | Default | Description |
 |-------|---------|-------------|

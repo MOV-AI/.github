@@ -182,6 +182,8 @@ runs:
     - name: Define Instance names
       id: infra_names
       shell: bash
+      env:
+        FLEET_PEER_NAME_PREFIX: ${{ inputs.fleet_peer_name_prefix }}
       run: |
         sanitize() {
           echo "$1" | sed 's/\./-/g' | sed 's/\//-/g' | sed 's/_/-/g' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/-\{2,\}/-/g' | sed 's/^-//;s/-$//'
@@ -194,6 +196,7 @@ runs:
         project_repo_raw="$(echo "${{ inputs.project_repo }}" | tr '[:upper:]' '[:lower:]' | xargs)"
 
         name_prefix="$(sanitize "${{ inputs.name_prefix }}")"
+        name_prefix="${name_prefix:-sanity}"
         name_parts=("$name_prefix")
 
         if [[ "$platform_repo_raw" != "none" ]]; then
@@ -217,7 +220,8 @@ runs:
         echo "name_prefix=${name_prefix}" >> "$GITHUB_OUTPUT"
 
         # Peer names are <prefix><n> and share the 63 character limit, so leave room for the suffix and a number
-        peer_prefix="${{ inputs.fleet_peer_name_prefix }}"
+        peer_prefix="$(sanitize "$FLEET_PEER_NAME_PREFIX")"
+        peer_prefix="${peer_prefix:0:59}"
         if [[ -z "$peer_prefix" ]]; then
           peer_base="${local_manager_prefix:0:52}"
           peer_prefix="${peer_base%-}-worker"
@@ -298,8 +302,10 @@ runs:
         AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_key }}
         PROXMOX_VE_USERNAME: ${{ steps.select_proxmox_creds.outputs.username }}
         PROXMOX_VE_PASSWORD: ${{ steps.select_proxmox_creds.outputs.password }}
+        FLEET_PEER_NR: ${{ inputs.fleet_peer_nr }}
+        ENABLE_TRAEFIK_EXPOSURE: ${{ inputs.enable_traefik_exposure }}
       run: |
-        peer_nr="${{ inputs.fleet_peer_nr }}"
+        peer_nr="$FLEET_PEER_NR"
         if ! [[ "$peer_nr" =~ ^[0-9]+$ ]]; then
           echo "::error::fleet_peer_nr must be a non-negative integer, got '$peer_nr'"
           exit 1
@@ -331,7 +337,7 @@ runs:
           echo 'pool="IP-Temp-VMs"'
           echo "proxmox_ve_username=\"${PROXMOX_VE_USERNAME}\""
           echo "proxmox_ve_password=\"${PROXMOX_VE_PASSWORD}\""
-          if [ "${{ inputs.enable_traefik_exposure }}" = "true" ]; then
+          if [ "$ENABLE_TRAEFIK_EXPOSURE" = "true" ]; then
             echo 'enable_traefik_exposure=true'
             echo 'proxmox_reserved_domain="vm.hel.mov.ai"'
           fi
