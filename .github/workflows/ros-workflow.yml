@@ -78,6 +78,10 @@ on:
       test_set:
         required: false
         type: string
+      sonar_cloud:
+        required: false
+        type: boolean
+        default: false
       cluster:
         required: false
         default: "mary"
@@ -502,15 +506,15 @@ jobs:
           mobtest repo --issues ./mobtest-issues.json .
 
       - name: Create SonarCloud project and disable autoscan
-        if: ${{ false }}
         uses: MOV-AI/action-sonarcloud-proj-config@v1
+        if: ${{ inputs.sonar_cloud }}
         with:
           sonar_org: 'mov-ai'
           sonar_token: ${{ secrets.sonar_token }}
 
       - name: SonarCloud Scan
-        if: ${{ false }}
         uses: SonarSource/sonarqube-scan-action@v7
+        if: ${{ inputs.sonar_cloud }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SONAR_TOKEN: ${{ secrets.sonar_token }}
