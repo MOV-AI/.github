@@ -1583,7 +1583,7 @@ jobs:
 
   Validation-Simulator-Tests:
     needs: [Validate-boostrap-configs, Compute-timeout, Normalize-Distro-Input, Build-Workspace, Build-Simulator, Select-Simtest-Node]
-    runs-on: ${{ needs.Select-Simtest-Node.outputs.sim_tests_infra }}s
+    runs-on: ${{ needs.Select-Simtest-Node.outputs.sim_tests_infra }}
     if: ${{ github.event_name != 'pull_request'}}
     timeout-minutes: ${{ fromJSON(needs.Compute-timeout.outputs.jobtimeout) }}
     outputs:
