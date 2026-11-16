@@ -44,6 +44,10 @@ inputs:
     description: 'Number of fleet peer VMs to create besides the manager (0 for a single VM)'
     required: false
     default: '0'
+  fleet_peer_name_prefix:
+    description: 'Prefix for fleet peer VM names (a number is appended). If empty, it is derived from the manager name as <manager name>-worker'
+    required: false
+    default: ''
   enable_traefik_exposure:
     description: 'Expose the VM through Traefik (true or false). Only supported on the hel0 cluster node'
     required: false
@@ -200,6 +204,15 @@ runs:
         echo "simul_prefix=${local_manager_prefix}" >> "$GITHUB_OUTPUT"
         echo "name_prefix=${name_prefix}" >> "$GITHUB_OUTPUT"
 
+        # Peer names are <prefix><n> and share the 63 character limit, so leave room for the suffix and a number
+        peer_prefix="${{ inputs.fleet_peer_name_prefix }}"
+        if [[ -z "$peer_prefix" ]]; then
+          peer_base="${local_manager_prefix:0:52}"
+          peer_prefix="${peer_base%-}-worker"
+        fi
+        echo "$peer_prefix"
+        echo "peer_prefix=${peer_prefix}" >> "$GITHUB_OUTPUT"
+
     - name: Select Proxmox credentials
       id: select_proxmox_creds
       shell: bash
@@ -302,6 +315,7 @@ runs:
           echo "fleet_peer_nr=\"${peer_nr}\""
           echo 'fleet_password="${{ inputs.fleet_password }}"'
           echo 'fleet_manager_name="${{ steps.infra_names.outputs.simul_prefix }}"'
+          echo "fleet_peer_name_prefix=\"${{ steps.infra_names.outputs.peer_prefix }}\""
           echo "ip_list=[${ip_list_str}]"
           echo 'tags=["ip-fleet"]'
           echo 'pool="IP-Temp-VMs"'
