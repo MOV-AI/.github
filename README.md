@@ -36,7 +36,7 @@ See [docs/workflows.md](docs/workflows.md) for detailed specifications, inputs, 
 | **Build Product** | Orchestrates complete product build pipeline including validation, workspace build, simulator setup, and testing | v2.3 |
 | **Build Product Composite** | Builds composite projects (multiple products/squads) | v2.1 |
 | **Generic Local Standalone Tests** | Runs QA tests on locally deployed platform instances (install tests, UI tests, etc.) | v3 |
-| **Generic Remote Fleet Tests** | Runs QA tests on provisioned remote fleet infrastructure with Terraform provisioning and Ansible deployment, including infrastructure recreation with dedicated robotics-sim, redhat-oracle, and packer runner pools | v3 |
+| **Generic Remote Fleet Tests** | Runs QA tests on provisioned remote fleet infrastructure with Terraform provisioning and Ansible deployment, including infrastructure recreation with dedicated robotics-sim, redhat-oracle, packer, and metaplanner runner pools | v3 |
 | **Install Tests** | Runs QA install tests on platform deployments | v3 |
 | **Rust Tests and Coverage** | Runs the white-box stage for Rust repositories: rustfmt, clippy with SARIF upload, unit and optional Docker-backed component tests, coverage, and the SonarCloud quality gate | v3 |
 | **Robotic Component Pipeline** | Builds and tests robotic stack components with remote provisioning and test execution | v3 |
