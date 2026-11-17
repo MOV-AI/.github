@@ -336,22 +336,25 @@ runs:
 
         echo "File args: $var_file_arg"
         echo "Input File args: $(cat input.tfvars)"
+        # The step runs under bash -e, so the commands sit inside the if: a failure there is retried instead of ending the step
         attempts=3
-        count=0
-        while [ $count -lt $attempts ]; do
-          terraform init -backend-config="key=${{ inputs.cluster_node }}-${{ steps.infra_names.outputs.name_prefix }}-${{ steps.infra_names.outputs.simul_prefix }}.tfstate"
-          terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars
-          exit_status=$?
-          if [ $exit_status -eq 0 ]; then
+        destroyed=false
+        for ((attempt = 1; attempt <= attempts; attempt++)); do
+          if terraform init -backend-config="key=${{ inputs.cluster_node }}-${{ steps.infra_names.outputs.name_prefix }}-${{ steps.infra_names.outputs.simul_prefix }}.tfstate" \
+            && terraform destroy -auto-approve $var_file_arg -var-file=input.tfvars; then
+            destroyed=true
             break
-          elif [ $exit_status -eq 1 ]; then
-            ((count++))
-            echo "Retrying Terraform destroy (attempt $count)..."
-          else
-            echo "Terraform destroy failed with exit status ${exit_status:-unknown}. Exiting..."
-            exit ${exit_status:-1}
+          fi
+          echo "::warning::Terraform destroy failed (attempt ${attempt}/${attempts})"
+          if ((attempt < attempts)); then
+            sleep 15
           fi
         done
+
+        if [[ "$destroyed" != true ]]; then
+          echo "::error::Terraform destroy failed after ${attempts} attempts"
+          exit 1
+        fi
 
     - name: Set teardown status
       id: teardown_status

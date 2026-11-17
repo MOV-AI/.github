@@ -22,7 +22,8 @@ All notable changes to this repository will be documented in this file.
   to 59 characters.
 
 ### Fixed
-- N/A
+- `infrastructure-teardown`: `terraform init` / `terraform destroy` are now retried up to 3 times.
+  The previous loop never retried, because the step runs under `bash -e` and the first failure ended it.
 
 ### Removed
 - N/A
