@@ -98,6 +98,15 @@ on:
           Install protobuf-compiler from apt. Leave false when build.rs uses
           protoc-bin-vendored, which already ships a pinned binary.
 
+      system_packages:
+        required: false
+        type: string
+        default: ''
+        description: >
+          Space-separated apt packages the build needs, e.g. 'libssl-dev
+          pkg-config'. Only the ones not installed yet are installed, with sudo.
+          GitHub-hosted images already carry most; self-hosted runners may not.
+
       build_warnings:
         required: false
         type: string
@@ -213,6 +222,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends protobuf-compiler
           protoc --version
+
+      - name: Install system packages
+        if: inputs.system_packages != ''
+        env:
+          PACKAGES: ${{ inputs.system_packages }}
+        run: |
+          read -ra wanted <<<"$PACKAGES"
+          missing=()
+          for p in "${wanted[@]}"; do
+            dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p")
+          done
+          if [ "${#missing[@]}" -eq 0 ]; then echo "Already installed: ${wanted[*]}"; exit 0; fi
+          echo "Installing: ${missing[*]}"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends "${missing[@]}"
 
       # Installs whatever rust-toolchain.toml declares when `toolchain` is
       # omitted, and caches internally — so no separate rust-cache step.
@@ -404,6 +428,26 @@ jobs:
           path: result-${{ steps.leg.outputs.slug }}.json
           retention-days: 7
 
+      # Self-hosted runners are not thrown away after a job. Empty the checkout,
+      # with its target/ directories and coverage files, and remove the
+      # containers and networks Testcontainers left behind. It removes them
+      # itself when a test ends, so leftovers come from killed tests; only those
+      # older than 2 hours go, so another job's running tests on the same Docker
+      # daemon are never touched. Toolchains and download caches stay.
+      - name: Clean up the self-hosted runner
+        if: always() && runner.environment == 'self-hosted'
+        working-directory: ${{ runner.temp }}
+        run: |
+          find "$GITHUB_WORKSPACE" -mindepth 1 -delete || true
+          command -v docker >/dev/null || exit 0
+          label=org.testcontainers.managed-by=testcontainers
+          cutoff=$(date -d '2 hours ago' +%s)
+          for c in $(docker ps -aq --filter "label=${label}"); do
+            created=$(date -d "$(docker inspect -f '{{.Created}}' "$c")" +%s)
+            if [ "$created" -lt "$cutoff" ]; then docker rm -fv "$c"; fi
+          done
+          docker network prune -f --filter "label=${label}" --filter until=2h
+
   # One scan for the whole repository, whatever the number of matrix legs: each
   # leg's scan would otherwise overwrite the previous one on the same project.
   sonar:
@@ -469,6 +513,11 @@ jobs:
           key="${{ github.repository_owner }}_${{ github.event.repository.name }}"
           echo "Report: https://sonarcloud.io/project/overview?id=${key}" \
             | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean up the self-hosted runner
+        if: always() && runner.environment == 'self-hosted'
+        working-directory: ${{ runner.temp }}
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete || true
 
   # One readable table for the whole run, in the run summary and, on a pull
   # request, in a single comment that every push updates instead of adding one.
@@ -601,3 +650,8 @@ jobs:
             gh api -X POST "repos/${GH_REPO}/issues/${PR}/comments" -F body=@report.md >/dev/null
             echo "Added a comment"
           fi
+
+      - name: Clean up the self-hosted runner
+        if: always() && runner.environment == 'self-hosted'
+        working-directory: ${{ runner.temp }}
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete || true

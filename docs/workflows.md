@@ -177,6 +177,7 @@ Keep those stages in the consuming repository.
 | `component_test_filters` | string | `{}` | JSON object of cargo-nextest filter expressions for the component pass, keyed by working directory, e.g. `{"backend": "not binary(needs_a_local_image)"}`, to leave out one suite a hosted runner cannot run while every other `tests/` target still runs. Per directory because nextest rejects a binary or package matcher that matches nothing in the crate; a directory with no entry runs unfiltered |
 | `component_test_threads` | number | `2` | Concurrency for the component pass. Several database containers plus an identity provider will exhaust a 4 GB hosted runner at full parallelism |
 | `install_protoc` | boolean | `false` | Install `protobuf-compiler` from apt. Leave `false` when `build.rs` uses `protoc-bin-vendored` |
+| `system_packages` | string | - | Space-separated apt packages the build needs, e.g. `libssl-dev pkg-config`. Only the missing ones are installed, with `sudo`. Hosted images carry most; self-hosted runners may not |
 | `build_warnings` | string | `warn` | Passed to `setup-rust-toolchain`, which sets `CARGO_BUILD_WARNINGS`. That action defaults to `deny`; this defaults to `warn` so adopting the workflow does not immediately fail a repository with an existing warning backlog |
 | `clippy` | boolean | `true` | Run clippy |
 | `clippy_sarif` | boolean | `true` | Upload clippy findings to code scanning as SARIF. Needs Code Security on a private or internal repository; with `false`, findings stay in the job log and the results table, with a count per crate |
@@ -193,7 +194,7 @@ Keep those stages in the consuming repository.
 Job `rust`, one matrix leg per entry in `working_directories`, all run in that directory:
 
 1. **Checkout**
-2. **Install protoc**: Only when `install_protoc` is enabled
+2. **Install protoc and system packages**: `protobuf-compiler` only when `install_protoc` is enabled, then the packages of `system_packages` that are not installed yet
 3. **Setup toolchain**: Installs whatever `rust-toolchain.toml` declares and restores the cargo cache for that directory
 4. **Format**: `cargo fmt --all --check`
 5. **Clippy**: Uploads SARIF to code scanning, one category per leg; blocking or advisory per `clippy_blocking`
@@ -231,6 +232,7 @@ Job `report`, once, even when a leg failed:
 - The caller must grant the permissions the jobs request, because a called workflow cannot be
   given more than its caller: `contents: read`, `security-events: write` (clippy SARIF) and
   `pull-requests: write` (the results comment).
+- On a self-hosted runner (`runner_label` set to one), every job ends with a cleanup step: it empties the checkout, with its `target/` directories and coverage files, and removes Testcontainers containers and networks older than 2 hours, which only a killed test leaves behind. Toolchains and download caches stay. Hosted runners skip the step.
 - The cache is written only on `push` events. Without that, every pull-request branch writes
   its own multi-gigabyte entry, the 10 GB repository cache limit starts evicting, and the
   cache silently stops helping.
