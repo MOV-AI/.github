@@ -98,6 +98,15 @@ on:
           Install protobuf-compiler from apt. Leave false when build.rs uses
           protoc-bin-vendored, which already ships a pinned binary.
 
+      system_packages:
+        required: false
+        type: string
+        default: ''
+        description: >
+          Space-separated apt packages the build needs, e.g. 'libssl-dev
+          pkg-config'. Only the ones not installed yet are installed, with sudo.
+          GitHub-hosted images already carry most; self-hosted runners may not.
+
       build_warnings:
         required: false
         type: string
@@ -195,6 +204,13 @@ jobs:
       run:
         working-directory: ${{ matrix.dir }}
     steps:
+      # Self-hosted runners are not thrown away after a job: start from an
+      # empty checkout, whatever an earlier job left.
+      - name: Empty the workspace of the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        working-directory: ${{ runner.temp }}
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete || true
+
       - uses: actions/checkout@v7
 
       # Artifact names, SARIF categories and cache keys cannot carry a path.
@@ -213,6 +229,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends protobuf-compiler
           protoc --version
+
+      - name: Install system packages
+        if: inputs.system_packages != ''
+        env:
+          PACKAGES: ${{ inputs.system_packages }}
+        run: |
+          read -ra wanted <<<"$PACKAGES"
+          missing=()
+          for p in "${wanted[@]}"; do
+            # dpkg -s also succeeds for a package removed with its config
+            # files kept, so read the status itself.
+            status=$(dpkg-query -W -f='${db:Status-Status}' "$p" 2>/dev/null || true)
+            [ "$status" = installed ] || missing+=("$p")
+          done
+          if [ "${#missing[@]}" -eq 0 ]; then echo "Already installed: ${wanted[*]}"; exit 0; fi
+          echo "Installing: ${missing[*]}"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends "${missing[@]}"
 
       # Installs whatever rust-toolchain.toml declares when `toolchain` is
       # omitted, and caches internally — so no separate rust-cache step.
@@ -404,6 +438,35 @@ jobs:
           path: result-${{ steps.leg.outputs.slug }}.json
           retention-days: 7
 
+      # Self-hosted runners are not thrown away after a job. Remove the
+      # containers and networks Testcontainers left behind: it removes them
+      # itself when a test ends, so leftovers come from killed tests. Only those
+      # older than 2 hours go, so another job's running tests on the same Docker
+      # daemon are never touched; jobs racing to remove the same one is
+      # harmless. Then empty the checkout, with its target/ directories and
+      # coverage files, except on push events: setup-rust-toolchain saves the
+      # cache in its post-job step, after this one, and needs target/. The next
+      # job on this runner empties it before its checkout. Toolchains and
+      # download caches stay.
+      - name: Clean up the self-hosted runner
+        if: always() && runner.environment == 'self-hosted'
+        working-directory: ${{ runner.temp }}
+        run: |
+          if command -v docker >/dev/null; then
+            label=org.testcontainers.managed-by=testcontainers
+            cutoff=$(date -d '2 hours ago' +%s)
+            for c in $(docker ps -aq --filter "label=${label}"); do
+              created=$(docker inspect -f '{{.Created}}' "$c") || continue
+              if [ "$(date -d "$created" +%s)" -lt "$cutoff" ]; then
+                docker rm -fv "$c" || echo "Container ${c} was not removed (another job may have removed it)"
+              fi
+            done
+            docker network prune -f --filter "label=${label}" --filter until=2h || true
+          fi
+          if [ "$GITHUB_EVENT_NAME" != push ]; then
+            find "$GITHUB_WORKSPACE" -mindepth 1 -delete || true
+          fi
+
   # One scan for the whole repository, whatever the number of matrix legs: each
   # leg's scan would otherwise overwrite the previous one on the same project.
   sonar:
@@ -415,6 +478,13 @@ jobs:
     permissions:
       contents: read
     steps:
+      # Self-hosted runners are not thrown away after a job: start from an
+      # empty checkout, whatever an earlier job left.
+      - name: Empty the workspace of the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        working-directory: ${{ runner.temp }}
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete || true
+
       - uses: actions/checkout@v7
         with:
           # Sonar derives new-code from git blame. A shallow clone silently
@@ -470,6 +540,11 @@ jobs:
           echo "Report: https://sonarcloud.io/project/overview?id=${key}" \
             | tee -a "$GITHUB_STEP_SUMMARY"
 
+      - name: Clean up the self-hosted runner
+        if: always() && runner.environment == 'self-hosted'
+        working-directory: ${{ runner.temp }}
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete || true
+
   # One readable table for the whole run, in the run summary and, on a pull
   # request, in a single comment that every push updates instead of adding one.
   report:
@@ -482,6 +557,13 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+      # Self-hosted runners are not thrown away after a job: start from an
+      # empty checkout, whatever an earlier job left.
+      - name: Empty the workspace of the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        working-directory: ${{ runner.temp }}
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete || true
+
       - uses: actions/download-artifact@v4
         with:
           pattern: rust-result-*
@@ -601,3 +683,8 @@ jobs:
             gh api -X POST "repos/${GH_REPO}/issues/${PR}/comments" -F body=@report.md >/dev/null
             echo "Added a comment"
           fi
+
+      - name: Clean up the self-hosted runner
+        if: always() && runner.environment == 'self-hosted'
+        working-directory: ${{ runner.temp }}
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete || true
