@@ -690,6 +690,29 @@ jobs:
           path: dependency_version
           retention-days: 10
 
+      # The build passes the platform's base image as BASE_IMAGE/TAG. A Dockerfile that
+      # hardcodes its FROM ignores them, so the image is built on a different base than
+      # the one the pipeline records (DP-2189). Warn until all projects are fixed.
+      - name: Check Dockerfile uses the selected base image
+        shell: bash
+        env:
+          DOCKERFILE: docker/${{ matrix.workspace['distro'] }}/Dockerfile
+          BASE_NAME: ${{ steps.pre_build.outputs.base_name }}
+          BASE_VERSION: ${{ steps.pre_build.outputs.base_version }}
+        run: |
+          # The last FROM is the stage that becomes the image.
+          from_line=$(grep -iE '^[[:space:]]*FROM[[:space:]]' "$DOCKERFILE" | tail -n 1)
+          echo "Final stage: ${from_line}"
+          echo "Selected base: ${BASE_NAME}:${BASE_VERSION}"
+
+          if grep -qE '\$\{?BASE_IMAGE\}?' <<< "$from_line" && grep -qE '\$\{?TAG\}?' <<< "$from_line"; then
+            echo "Dockerfile uses the selected base image."
+          else
+            msg="${DOCKERFILE} does not use the BASE_IMAGE and TAG build args in its final FROM. The image is not built on the selected base ${BASE_NAME}:${BASE_VERSION}."
+            echo "::warning file=${DOCKERFILE},title=Dockerfile ignores the selected base image::${msg}"
+            echo ":warning: ${msg}" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
