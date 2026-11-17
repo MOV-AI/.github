@@ -6,7 +6,7 @@ All notable changes to this repository will be documented in this file.
 ## [v3] - 2026-11-17
 ### Added
 - `rust-test-workflow.yml`: `system_packages` input, the apt packages a build needs (for example `libssl-dev pkg-config`), installed only when missing, for self-hosted runners whose image lacks them (MPP-346).
-- `rust-test-workflow.yml`: on a self-hosted runner, every job ends by emptying its checkout and removing Testcontainers containers and networks older than 2 hours, because those runners are not thrown away after a job (MPP-346).
+- `rust-test-workflow.yml`: on a self-hosted runner, which is not thrown away after a job, every job empties the workspace before its checkout; at the end the `rust` job removes Testcontainers containers and networks older than 2 hours and, except on push events (when the cache is saved), empties the checkout again (MPP-346).
 - `infrastructure-setup` / `infrastructure-teardown` composite actions, new inputs (MPP-274):
   - `name_prefix` (default `sanity`): first part of the VM names and of the Terraform state key.
   - `fleet_peer_nr` (default `0`): number of fleet peer VMs to create besides the manager.

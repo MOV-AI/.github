@@ -232,7 +232,7 @@ Job `report`, once, even when a leg failed:
 - The caller must grant the permissions the jobs request, because a called workflow cannot be
   given more than its caller: `contents: read`, `security-events: write` (clippy SARIF) and
   `pull-requests: write` (the results comment).
-- On a self-hosted runner (`runner_label` set to one), every job ends with a cleanup step: it empties the checkout, with its `target/` directories and coverage files, and removes Testcontainers containers and networks older than 2 hours, which only a killed test leaves behind. Toolchains and download caches stay. Hosted runners skip the step.
+- On a self-hosted runner (`runner_label` set to one), which is not thrown away after a job, every job empties the workspace before its checkout. At the end, the `rust` job removes Testcontainers containers and networks older than 2 hours, which only a killed test leaves behind, and empties the checkout with its `target/` directories and coverage files, except on push events: the cache is saved after that step and needs `target/`, and the next job empties it first. Toolchains and download caches stay. Hosted runners skip these steps.
 - The cache is written only on `push` events. Without that, every pull-request branch writes
   its own multi-gigabyte entry, the 10 GB repository cache limit starts evicting, and the
   cache silently stops helping.
