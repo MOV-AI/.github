@@ -327,6 +327,49 @@ jobs:
           python3 -m pip install integration-pipeline==$CI_INTEGRATION_SCRIPTS_VERSION --ignore-installed
           deactivate
 
+      # A ros-<distro>-* package with a wrong distro or type is installed in the wrong workspace,
+      # or in none, without any error (DP-2209: ros-humble-movai-common with distro noetic).
+      - name: Check ROS packages match their workspace
+        shell: bash
+        run: |
+          ci_scripts/bin/python3 - product-manifest.yaml <<'EOF'
+          import re
+          import sys
+
+          import yaml
+
+          ROS1 = {"kinetic", "melodic", "noetic"}
+          ROS2 = {"foxy", "galactic", "humble", "iron", "jazzy", "rolling"}
+
+          path = sys.argv[1]
+          with open(path) as f:
+              components = (yaml.safe_load(f) or {}).get("product_components") or {}
+
+          errors = []
+          for section in ("product_config", "system_config"):
+              for comp in components.get(section) or []:
+                  names = comp.get("name")
+                  names = names if isinstance(names, list) else [names]
+                  ctype, distro = comp.get("type"), comp.get("distro")
+                  for name in names:
+                      match = re.match(r"ros-([a-z]+)-", str(name))
+                      if not match or match.group(1) not in ROS1 | ROS2:
+                          continue
+                      ros = match.group(1)
+                      allowed = {"ros", "ros-group", "ros1" if ros in ROS1 else "ros2"}
+                      if distro != ros:
+                          errors.append(f"{section}: {name} has distro '{distro}', expected '{ros}'")
+                      if ctype not in allowed:
+                          errors.append(f"{section}: {name} has type '{ctype}', expected one of {sorted(allowed)}")
+
+          for err in errors:
+              print(f"::error file={path},title=ROS package in the wrong workspace::{err}")
+          if errors:
+              print(f"{len(errors)} product-manifest entries would be installed in the wrong workspace, or in none.")
+              sys.exit(1)
+          print("All ROS packages in product-manifest.yaml match their distro and type.")
+          EOF
+
       - name: Bootstraping simulator metadata
         shell: bash
         run: |
@@ -729,6 +772,65 @@ jobs:
             --tag ${{ env.PUSH_REGISTRY }}/ci/${{ steps.pre_build.outputs.target_tag }}:${{ steps.pre_build.outputs.raised_version }} \
             --pull \
             --push .
+
+      # Every ros-<distro>-* package in product_config must be in the image of its distro, with the
+      # manifest version, and no other distro's package may be in it (DP-2189, DP-2209).
+      - name: Check workspace image packages
+        shell: bash
+        env:
+          IMAGE: ${{ env.PUSH_REGISTRY }}/ci/${{ steps.pre_build.outputs.target_tag }}:${{ steps.pre_build.outputs.raised_version }}
+          DISTRO: ${{ matrix.workspace['distro'] }}
+        run: |
+          set -o pipefail
+          docker run --rm --platform linux/amd64 --entrypoint dpkg-query "$IMAGE" \
+            -W -f='${Package}=${Version}\n' > installed_packages.txt
+          docker rmi "$IMAGE" > /dev/null || true
+
+          .ci-venv/bin/python3 - product-manifest.yaml "$DISTRO" installed_packages.txt <<'EOF'
+          import re
+          import sys
+
+          import yaml
+
+          manifest_path, distro, installed_path = sys.argv[1:4]
+          with open(manifest_path) as f:
+              components = (yaml.safe_load(f) or {}).get("product_components") or {}
+          with open(installed_path) as f:
+              installed = dict(line.strip().split("=", 1) for line in f if "=" in line)
+
+          expected, other = {}, set()
+          for comp in components.get("product_config") or []:
+              names = comp.get("name")
+              names = names if isinstance(names, list) else [names]
+              for name in names:
+                  match = re.match(r"ros-([a-z]+)-", str(name))
+                  if not match:
+                      continue
+                  if match.group(1) == distro:
+                      expected[name] = str(comp.get("version"))
+                  else:
+                      other.add(name)
+
+          errors = []
+          for name, version in sorted(expected.items()):
+              if name not in installed:
+                  errors.append(f"{name}={version} is in product_config but not installed")
+              elif installed[name] != version:
+                  errors.append(f"{name} is {installed[name]}, product_config has {version}")
+          for name in sorted(other & installed.keys()):
+              errors.append(f"{name} belongs to another distro but is installed in the {distro} image")
+
+          for err in errors:
+              print(f"::error title=Workspace image packages ({distro})::{err}")
+          if errors:
+              sys.exit(1)
+          if expected:
+              print(f"All {len(expected)} ros-{distro}-* packages from product_config are installed with the expected version:")
+              for name, version in sorted(expected.items()):
+                  print(f"  {name}={version}")
+          else:
+              print(f"product_config has no ros-{distro}-* packages; nothing to check.")
+          EOF
 
       - name: Get current job id
         if: always()
