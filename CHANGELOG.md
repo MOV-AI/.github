@@ -27,7 +27,16 @@ All notable changes to this repository will be documented in this file.
   to 59 characters.
 
 ### Fixed
-- N/A
+- `integration-robotic-stack-tests.yml`: the project ROS 2 packages (`type: ros2`, `distro: humble`) are installed in
+  ros2-workspace; before, only a noetic list was installed in ros1-workspace, and a wrong manifest entry put
+  `ros-humble-*` packages in it (DP-2209). A new step, "Remote - Check and list project ROS packages", fails when a
+  `ros-<distro>-*` entry of the project manifest has a `distro` or `type` that does not match its name, and lists the
+  ROS 2 packages. When ros2-workspace is not running, the job warns which packages were not installed.
+- `integration-robotic-stack-tests.yml`: brings in the changes made on `hotfix/robotic-tests-failing` after #617:
+  ci-tools `4.2.0.10`, the `REGISTRY` jq quoting fix, the orchestrator and ros1-workspace feature flags, and the robot
+  stop before restart.
+- `integration-build-platform.yml`: calls `integration-robotic-stack-tests.yml@v3` again instead of
+  `@hotfix/robotic-tests-failing` (reverts the reference set in #617).
 
 ### Removed
 - N/A

@@ -395,6 +395,71 @@ jobs:
               --gh_api_pwd ${{ secrets.auto_commit_pwd }}
           '
 
+      # The install lists filter on type and distro, not on the package name, so a wrong entry is
+      # installed in the wrong workspace, or in none (DP-2209). Check the merged project manifest,
+      # then list the ROS 2 packages that "Remote - Firmware Patch" installs in ros2-workspace.
+      # The ssh script is single-quoted: the Python code must not contain single quotes.
+      - name: Remote - Check and list project ROS packages
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd "${{ env.REMOTE_WORKSPACE_PATH }}"
+
+            docker run --rm --entrypoint python3 \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":/check:ro \
+              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              - /check/product-manifest.yaml <<"PYEOF"
+          import re
+          import sys
+
+          import yaml
+
+          ROS1 = {"kinetic", "melodic", "noetic"}
+          ROS2 = {"foxy", "galactic", "humble", "iron", "jazzy", "rolling"}
+
+          path = sys.argv[1]
+          with open(path) as f:
+              components = (yaml.safe_load(f) or {}).get("product_components") or {}
+
+          errors = []
+          for section in ("product_config", "system_config"):
+              for comp in components.get(section) or []:
+                  names = comp.get("name")
+                  names = names if isinstance(names, list) else [names]
+                  ctype, distro = comp.get("type"), comp.get("distro")
+                  for name in names:
+                      match = re.match(r"ros-([a-z]+)-", str(name))
+                      if not match or match.group(1) not in ROS1 | ROS2:
+                          continue
+                      ros = match.group(1)
+                      allowed = {"ros", "ros-group", "ros1" if ros in ROS1 else "ros2"}
+                      if distro != ros:
+                          errors.append(f"{section}: {name} has distro {distro!r}, expected {ros!r}")
+                      if ctype not in allowed:
+                          errors.append(f"{section}: {name} has type {ctype!r}, expected one of {sorted(allowed)}")
+
+          for err in errors:
+              print(f"::error title=ROS package in the wrong workspace::{err}")
+          if errors:
+              print(f"{len(errors)} entries in the project product-manifest.yaml would be installed in the wrong workspace, or in none.")
+              sys.exit(1)
+          print("All ROS packages in the project product-manifest.yaml match their distro and type.")
+          PYEOF
+
+            mkdir -p "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/ros2_packages"
+            docker run --rm -u root --entrypoint integration-pipeline \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":"${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}" \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/ros2_packages":/tmp/ci \
+              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              get_install_list \
+              --manifest_platform_base_key product_components.product_config \
+              --ros_distro humble \
+              --type ros2
+            echo "Project ROS 2 packages for ros2-workspace:"
+            cat "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/ros2_packages/packages.apt"
+          '
+
       - name: Remote - Setup Integration tests ${{ inputs.simulation_qa_key }}
         id: simulator_tests_setup
         shell: bash
@@ -593,6 +658,22 @@ jobs:
 
             "
             docker restart $CONTAINER_ID
+
+            # Install the project ROS 2 packages in ros2-workspace, not in ros1-workspace (DP-2209).
+            # The list comes from "Remote - Check and list project ROS packages".
+            ROS2_PKGS=$(tr "\n" " " < ros2_packages/packages.apt | xargs)
+            ROS2_CONTAINERS=$(docker ps --format "{{.Names}}" --filter "name=^ros2-workspace-")
+            if [ -z "$ROS2_PKGS" ]; then
+              echo "The project has no ROS 2 packages to install."
+            elif [ -z "$ROS2_CONTAINERS" ]; then
+              echo "::warning title=ROS 2 packages not installed::ros2-workspace is not running (disabled in the robot config?), so these project packages are not installed or tested: $ROS2_PKGS"
+            else
+              for ros2_container in $ROS2_CONTAINERS; do
+                echo "Installing in $ros2_container: $ROS2_PKGS"
+                docker exec -t -u root "$ros2_container" bash -c "set -e; apt-get update; mobros install $ROS2_PKGS -y --fail-on-apt-update"
+                docker restart "$ros2_container"
+              done
+            fi
             '
 
       - name: Remote - Integration tests
