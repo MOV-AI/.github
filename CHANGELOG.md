@@ -3,6 +3,32 @@
 
 All notable changes to this repository will be documented in this file.
 
+## [v3] - 2026-11-17
+### Added
+- `infrastructure-setup` / `infrastructure-teardown` composite actions, new inputs (MPP-274):
+  - `name_prefix` (default `sanity`): first part of the VM names and of the Terraform state key.
+  - `fleet_peer_nr` (default `0`): number of fleet peer VMs to create besides the manager.
+  - `fleet_peer_name_prefix`: prefix for peer VM names; defaults to `<manager name>-worker`.
+  - `enable_traefik_exposure` (default `false`): expose the VM through Traefik (`hel0` only).
+  - `provision_infra_env_file`: override the tfvars file derived from the cluster node.
+- `infrastructure-setup`: `peer_ips` output, and a step that waits for cloud-init on each peer.
+
+### Changed
+- `infrastructure-setup` / `infrastructure-teardown`: the Terraform state key is now
+  `<cluster_node>-<name_prefix>-<manager name>.tfstate` (unchanged with the default `name_prefix`).
+  Pass the same inputs to setup and teardown, or teardown reads a different state.
+- `fleet_peer_name_prefix`, `fleet_peer_nr` and `enable_traefik_exposure` are read through `env:`
+  instead of being inserted into the shell scripts; `fleet_peer_name_prefix` is sanitized and cut
+  to 59 characters.
+
+### Fixed
+- N/A
+
+### Removed
+- N/A
+
+---
+
 ## [v3] - 2026-10-31
 ### Added
 - N/A
