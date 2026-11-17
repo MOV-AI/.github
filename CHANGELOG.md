@@ -14,6 +14,9 @@ All notable changes to this repository will be documented in this file.
   - `enable_traefik_exposure` (default `false`): expose the VM through Traefik (`hel0` only).
   - `provision_infra_env_file`: override the tfvars file derived from the cluster node.
 - `infrastructure-setup`: `peer_ips` output, and a step that waits for cloud-init on each peer.
+- `infra-recreation.yml`: Metaplanner (MPP) runner pool. New optional input `INFRA_MPP_CONFIGURATION`
+  (runners per node, default `{"hel0": 0,"hel1": 0}`). Runners use the `gh_runner` profile and the
+  labels `metaplanner-runner` and `metaplanner-runner-<node>`.
 
 ### Changed
 - `infrastructure-setup` / `infrastructure-teardown`: the Terraform state key is now
