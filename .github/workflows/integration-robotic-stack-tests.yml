@@ -75,7 +75,7 @@ on:
       minio_secret_key_id:
         required: true
 env:
-  CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.2.0.9"
+  CI_INTEGRATION_CONTAINER_VERSION: "registry.lis.mov.ai/qa/ci-tools:4.2.0.10"
   CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
   CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
   GITHUB_API_USR: "OttoMation-Movai"
@@ -484,7 +484,8 @@ jobs:
 
             export USERSPACE_FOLDER_PATH="${{ env.USERSPACE_FOLDER_PATH }}"
             sudo mkdir -p "$USERSPACE_FOLDER_PATH/.git";sudo chown 1000:1000 "$USERSPACE_FOLDER_PATH/" -Rf
-            export PUBLIC_IP="$(hostname -I | cut -d ' ' -f1)"
+            export PUBLIC_IP="$(hostname -I | cut -d " " -f1)"
+            export REGISTRY="${{ env.REGISTRY }}"
             export SIMULATION_ID="${{ env.SIMULATION_ID }}"
             export ROBOTNAME="ci_${{ inputs.product_name }}"
             rm -rf userspace
@@ -495,7 +496,18 @@ jobs:
             sudo chmod -R +r /etc/movai
 
             # Configure registry
-            jq '.registry = "${{ env.REGISTRY }}"' "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
+            echo "REGISTRY: $REGISTRY"
+            # No single quotes here: this script is already inside the ssh single-quoted string
+            jq --arg registry "$REGISTRY" ".registry = \$registry" "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
+
+            echo "Before changes:"
+            cat "$CONFIG_FILE_NAME"
+            # Set feature flags
+            jq ".orchestrator[\"extra-env\"] = [\"RAISE_FLOW_VALIDATION_ERRORS=False\",\"RAISE_METADATA_VALIDATION_ERRORS=False\",\"MOVAI_GENERAL_VERBOSITY_LEVEL=DEBUG\",\"PLATFORM_METRICS=1\",\"IGNITION_VERSION=fortress\"]" "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
+            jq ".[\"ros1-workspace\"][\"extra-env\"] = [\"RAISE_FLOW_VALIDATION_ERRORS=False\",\"RAISE_METADATA_VALIDATION_ERRORS=False\",\"MOVAI_GENERAL_VERBOSITY_LEVEL=DEBUG\",\"PLATFORM_METRICS=1\",\"IGNITION_VERSION=fortress\"]" "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
+
+            echo "After changes:"
+            cat "$CONFIG_FILE_NAME"
 
             wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
             chmod +x ./QuickStart_$(cat quickstart_version).bash
@@ -504,7 +516,7 @@ jobs:
             MOVAI_PWD="4Iva6UHAQq9DGITj"
             for robot in $(movai-cli robots list); do
               movai-cli robots user "$robot" "$MOVAI_USER" "$MOVAI_PWD"
-              movai-cli set "$robot" orchestrator.extra-env "RAISE_FLOW_VALIDATION_ERRORS=False"
+              movai-cli stop "$robot" --wait
               movai-cli restart "$robot"
               sleep 5
 
