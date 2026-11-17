@@ -123,6 +123,9 @@ outputs:
   ssh_connect_string:
     description: 'SSH connection string for the VM'
     value: ${{ steps.infra_outputs.outputs.ssh_connect_string }}
+  peer_ips:
+    description: 'Comma-separated IP addresses of the fleet peer VMs (empty when fleet_peer_nr is 0)'
+    value: ${{ steps.infra_outputs.outputs.peer_ips }}
   env_configs_dir:
     description: 'Environment configs directory'
     value: ${{ steps.infra_env_configs_setup.outputs.target_dir }}
@@ -369,6 +372,14 @@ runs:
         echo "host_user=${user//\"/}" >> "$GITHUB_OUTPUT"
         echo "ssh_connect_string=${user//\"/}@${ip//\"/}" >> "$GITHUB_OUTPUT"
 
+        peer_ips="$(terraform output -json peers_ip_addresses | jq -r 'join(",")')"
+        if [[ ",${peer_ips}," == *",N/A,"* ]]; then
+          echo "::error::A fleet peer has no IP address yet: '$peer_ips'"
+          exit 1
+        fi
+        echo "Peer IPs: ${peer_ips:-none}"
+        echo "peer_ips=${peer_ips}" >> "$GITHUB_OUTPUT"
+
     - name: Configure SSH
       shell: bash
       run: |
@@ -377,6 +388,21 @@ runs:
         ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
           cloud-init status --wait; sudo rm -rf ./workspace; mkdir -p ./workspace
         '
+
+    - name: Wait for fleet peers
+      shell: bash
+      if: ${{ steps.infra_outputs.outputs.peer_ips != '' }}
+      env:
+        PEER_IPS: ${{ steps.infra_outputs.outputs.peer_ips }}
+        HOST_USER: ${{ steps.infra_outputs.outputs.host_user }}
+      run: |
+        IFS=',' read -ra peers <<< "$PEER_IPS"
+        for peer_ip in "${peers[@]}"; do
+          echo "Waiting for cloud-init on peer $peer_ip"
+          ssh-keygen -f ~/.ssh/known_hosts -R "$peer_ip" || true
+          ssh-keyscan -H "$peer_ip" >> ~/.ssh/known_hosts || true
+          ssh "${HOST_USER}@${peer_ip}" -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no 'cloud-init status --wait'
+        done
 
     - name: Detect and setup Nvidia support
       shell: bash
