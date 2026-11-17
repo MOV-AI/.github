@@ -51,7 +51,7 @@ See [docs/workflows.md](docs/workflows.md) for detailed specifications, inputs, 
 ## Composite Actions
 - **publish-to-nexus**: Publishes artifacts (Debian/RPM packages) to Nexus repository.
 - **push-to-protected-branch**: Pushes changes to branches protected by organization rulesets or classic branch protection using a temporary PR which is automatically merged.
-- **infrastructure-setup**: Provisions Proxmox test VMs with Terraform (a fleet manager plus optional fleet peers), then configures SSH and, on Marvin cluster nodes, NVIDIA container support. Outputs `host_ip`, `host_user`, `ssh_connect_string`, `env_configs_dir` and `provision_infra_dir` for the manager VM.
+- **infrastructure-setup**: Provisions Proxmox test VMs with Terraform (a fleet manager plus optional fleet peers), then configures SSH and, on Marvin cluster nodes, NVIDIA container support. Outputs `host_ip`, `host_user` and `ssh_connect_string` for the manager VM, `peer_ips` (comma-separated, empty when `fleet_peer_nr` is `0`), `env_configs_dir` and `provision_infra_dir`.
 - **infrastructure-teardown**: Destroys the VMs created by `infrastructure-setup` (`terraform destroy`, up to 3 attempts). Outputs `teardown_success`.
 
 ### Infrastructure setup and teardown inputs
@@ -66,7 +66,7 @@ Both actions take the same inputs. The VM names and the Terraform state key are 
 | `enable_traefik_exposure` | `false` | Expose the VM through Traefik under `vm.hel.mov.ai`. Only on `hel0`; other nodes fail. |
 | `provision_infra_env_file` | `''` | tfvars file in the environment configs group folder. If empty: `<node>_fleet_test.tfvars` (hel) or `<node>_simul_bpg.tfvars` (Marvin). |
 
-The manager VM name is `<name_prefix>-platform|project-<version>-<cluster_node>`, cut to 63 characters. Only the manager VM gets the SSH and NVIDIA setup and is exposed in the outputs.
+The manager VM name is `<name_prefix>-platform|project-<version>-<cluster_node>`, cut to 63 characters. Setup waits for cloud-init on the manager and on each peer. Only the manager VM gets the workspace and NVIDIA setup. `peer_ips` needs a `provision_infra_version` whose Terraform module has the `peers_ip_addresses` output (the default `2.2.0-3` has it).
 
 Credentials and versions (`proxmox_*`, `aws_*`, `registry_*`, `github_api_*`, `fleet_password`, `ssh_private_key`, `provision_infra_*_version`, `ci_integration_scripts_version`) are documented in each `action.yml`.
 
