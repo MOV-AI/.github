@@ -75,7 +75,7 @@ on:
       minio_secret_key_id:
         required: true
 env:
-  CI_INTEGRATION_CONTAINER_VERSION: "registry.lis.mov.ai/qa/ci-tools:4.2.0.10"
+  CI_INTEGRATION_CONTAINER_VERSION: "registry.lis.mov.ai/qa/ci-tools:4.2.0.11"
   CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
   CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
   GITHUB_API_USR: "OttoMation-Movai"
@@ -398,7 +398,6 @@ jobs:
       # The install lists filter on type and distro, not on the package name, so a wrong entry is
       # installed in the wrong workspace, or in none (DP-2209). Check the merged project manifest,
       # then list the ROS 2 packages that "Remote - Firmware Patch" installs in ros2-workspace.
-      # The ssh script is single-quoted: the Python code must not contain single quotes.
       - name: Remote - Check and list project ROS packages
         shell: bash
         run: |
@@ -406,46 +405,11 @@ jobs:
             set -e
             cd "${{ env.REMOTE_WORKSPACE_PATH }}"
 
-            docker run --rm --entrypoint python3 \
-              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":/check:ro \
+            docker run --rm -u root --entrypoint integration-pipeline \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":"${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}" \
               -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
-              - /check/product-manifest.yaml <<"PYEOF"
-          import re
-          import sys
-
-          import yaml
-
-          ROS1 = {"kinetic", "melodic", "noetic"}
-          ROS2 = {"foxy", "galactic", "humble", "iron", "jazzy", "rolling"}
-
-          path = sys.argv[1]
-          with open(path) as f:
-              components = (yaml.safe_load(f) or {}).get("product_components") or {}
-
-          errors = []
-          for section in ("product_config", "system_config"):
-              for comp in components.get(section) or []:
-                  names = comp.get("name")
-                  names = names if isinstance(names, list) else [names]
-                  ctype, distro = comp.get("type"), comp.get("distro")
-                  for name in names:
-                      match = re.match(r"ros-([a-z]+)-", str(name))
-                      if not match or match.group(1) not in ROS1 | ROS2:
-                          continue
-                      ros = match.group(1)
-                      allowed = {"ros", "ros-group", "ros1" if ros in ROS1 else "ros2"}
-                      if distro != ros:
-                          errors.append(f"{section}: {name} has distro {distro!r}, expected {ros!r}")
-                      if ctype not in allowed:
-                          errors.append(f"{section}: {name} has type {ctype!r}, expected one of {sorted(allowed)}")
-
-          for err in errors:
-              print(f"::error title=ROS package in the wrong workspace::{err}")
-          if errors:
-              print(f"{len(errors)} entries in the project product-manifest.yaml would be installed in the wrong workspace, or in none.")
-              sys.exit(1)
-          print("All ROS packages in the project product-manifest.yaml match their distro and type.")
-          PYEOF
+              check_ros_package_placement \
+              --manifest_file product-manifest.yaml
 
             mkdir -p "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/ros2_packages"
             docker run --rm -u root --entrypoint integration-pipeline \
