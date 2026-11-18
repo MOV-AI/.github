@@ -25,9 +25,16 @@ All notable changes to this repository will be documented in this file.
 - `fleet_peer_name_prefix`, `fleet_peer_nr` and `enable_traefik_exposure` are read through `env:`
   instead of being inserted into the shell scripts; `fleet_peer_name_prefix` is sanitized and cut
   to 59 characters.
+- `service-py-deb-workflow`: `refresh_source` now defaults to `'false'`; the RefreshSource
+  autoupdate runs only when a caller passes `'true'`, and never on pull requests labelled
+  `no-autoupdate` (DP-2293).
+- `service-py-deb-workflow` / `Package-Test`: with `test_tier: quick` only the jammy leg runs; the
+  noble leg and the rocky8 clean-install leg run with `test_tier: full` only. `Package-Test-Rpm`
+  still runs in both tiers (DP-2293).
 
 ### Fixed
-- N/A
+- `service-py-deb-workflow` / `Package-Test`: `apt-get` times out each request after 30 s and
+  retries 3 times, instead of hanging on a stalled mirror until the job timeout (DP-2293).
 
 ### Removed
 - N/A
