@@ -8,6 +8,7 @@ All notable changes to this repository will be documented in this file.
 - N/A
 
 ### Changed
+- `infra-recreation.yml`: the Metaplanner (MPP) runners also get `libssl-dev` and `pkg-config` from cloud-init, which the Rust builds need, so the nightly rebuild no longer leaves them to the first job of the day (MPP-346).
 - `rust-test-workflow.yml`: on a self-hosted runner, the `rust` and `sonar` jobs put `~/.cargo/bin` on PATH when rustup is already there, so setup-rust-toolchain uses it instead of downloading the rustup installer on every job (MPP-346).
 
 ### Fixed
