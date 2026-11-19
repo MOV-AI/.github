@@ -248,6 +248,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends "${missing[@]}"
 
+      # A self-hosted runner keeps rustup and the toolchains in ~/.cargo, but
+      # the runner service does not put ~/.cargo/bin on PATH. Without this,
+      # setup-rust-toolchain finds no rustup and downloads the installer on
+      # every job; that download has no retry, so one network error fails it.
+      - name: Put the runner's rustup on PATH
+        if: runner.environment == 'self-hosted'
+        run: |
+          bin="${CARGO_HOME:-$HOME/.cargo}/bin"
+          if [ -x "$bin/rustup" ]; then echo "$bin" >> "$GITHUB_PATH"; fi
+
       # Installs whatever rust-toolchain.toml declares when `toolchain` is
       # omitted, and caches internally — so no separate rust-cache step.
       - uses: actions-rust-lang/setup-rust-toolchain@v2
@@ -490,6 +500,16 @@ jobs:
           # Sonar derives new-code from git blame. A shallow clone silently
           # degrades that, and the failure is invisible — the scan still passes.
           fetch-depth: 0
+
+      # A self-hosted runner keeps rustup and the toolchains in ~/.cargo, but
+      # the runner service does not put ~/.cargo/bin on PATH. Without this,
+      # setup-rust-toolchain finds no rustup and downloads the installer on
+      # every job; that download has no retry, so one network error fails it.
+      - name: Put the runner's rustup on PATH
+        if: runner.environment == 'self-hosted'
+        run: |
+          bin="${CARGO_HOME:-$HOME/.cargo}/bin"
+          if [ -x "$bin/rustup" ]; then echo "$bin" >> "$GITHUB_PATH"; fi
 
       # Rust analysis runs cargo, so the pinned toolchain must be on PATH.
       - uses: actions-rust-lang/setup-rust-toolchain@v2
