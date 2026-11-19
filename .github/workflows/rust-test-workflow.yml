@@ -226,12 +226,7 @@ jobs:
       - name: Install protoc
         if: inputs.install_protoc
         run: |
-          for attempt in 1 2 3; do
-            sudo apt-get -o Acquire::Retries=3 update && break
-            if [ "$attempt" -eq 3 ]; then exit 1; fi
-            echo "::warning::apt-get update failed (attempt ${attempt}/3), retrying in $((attempt * 30))s"
-            sleep $((attempt * 30))
-          done
+          sudo apt-get -o Acquire::Retries=3 update
           sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends protobuf-compiler
           protoc --version
 
@@ -250,15 +245,7 @@ jobs:
           done
           if [ "${#missing[@]}" -eq 0 ]; then echo "Already installed: ${wanted[*]}"; exit 0; fi
           echo "Installing: ${missing[*]}"
-          # A mirror in the middle of a sync fails `apt-get update` for a few
-          # minutes ("File has unexpected size"). The runners are rebuilt every
-          # night, so the first job of the day on each one runs this.
-          for attempt in 1 2 3; do
-            sudo apt-get -o Acquire::Retries=3 update && break
-            if [ "$attempt" -eq 3 ]; then exit 1; fi
-            echo "::warning::apt-get update failed (attempt ${attempt}/3), retrying in $((attempt * 30))s"
-            sleep $((attempt * 30))
-          done
+          sudo apt-get -o Acquire::Retries=3 update
           sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends "${missing[@]}"
 
       # A self-hosted runner keeps rustup and the toolchains in ~/.cargo, but
