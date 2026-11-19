@@ -8,6 +8,8 @@ All notable changes to this repository will be documented in this file.
 - N/A
 
 ### Changed
+- `rust-test-workflow.yml`: `apt-get update` in "Install system packages" and "Install protoc" retries up to three times, with `Acquire::Retries=3`, so a mirror in the middle of a sync doesn't fail the job (MPP-346).
+- `rust-test-workflow.yml`: on a self-hosted runner without rustup (the runners are rebuilt every night), the `rust` and `sonar` jobs install it from `static.rust-lang.org` with curl retries and a SHA-256 check, before setup-rust-toolchain (MPP-346).
 - `rust-test-workflow.yml`: on a self-hosted runner, the `rust` and `sonar` jobs put `~/.cargo/bin` on PATH when rustup is already there, so setup-rust-toolchain uses it instead of downloading the rustup installer on every job (MPP-346).
 
 ### Fixed

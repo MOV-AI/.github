@@ -226,8 +226,13 @@ jobs:
       - name: Install protoc
         if: inputs.install_protoc
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends protobuf-compiler
+          for attempt in 1 2 3; do
+            sudo apt-get -o Acquire::Retries=3 update && break
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            echo "::warning::apt-get update failed (attempt ${attempt}/3), retrying in $((attempt * 30))s"
+            sleep $((attempt * 30))
+          done
+          sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends protobuf-compiler
           protoc --version
 
       - name: Install system packages
@@ -245,18 +250,38 @@ jobs:
           done
           if [ "${#missing[@]}" -eq 0 ]; then echo "Already installed: ${wanted[*]}"; exit 0; fi
           echo "Installing: ${missing[*]}"
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends "${missing[@]}"
+          # A mirror in the middle of a sync fails `apt-get update` for a few
+          # minutes ("File has unexpected size"). The runners are rebuilt every
+          # night, so the first job of the day on each one runs this.
+          for attempt in 1 2 3; do
+            sudo apt-get -o Acquire::Retries=3 update && break
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            echo "::warning::apt-get update failed (attempt ${attempt}/3), retrying in $((attempt * 30))s"
+            sleep $((attempt * 30))
+          done
+          sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends "${missing[@]}"
 
       # A self-hosted runner keeps rustup and the toolchains in ~/.cargo, but
       # the runner service does not put ~/.cargo/bin on PATH. Without this,
       # setup-rust-toolchain finds no rustup and downloads the installer on
       # every job; that download has no retry, so one network error fails it.
+      # On a runner rebuilt overnight, rustup is missing: install it here,
+      # with retries and a checksum check.
       - name: Put the runner's rustup on PATH
         if: runner.environment == 'self-hosted'
         run: |
           bin="${CARGO_HOME:-$HOME/.cargo}/bin"
-          if [ -x "$bin/rustup" ]; then echo "$bin" >> "$GITHUB_PATH"; fi
+          if [ ! -x "$bin/rustup" ]; then
+            url="https://static.rust-lang.org/rustup/dist/$(uname -m)-unknown-linux-gnu/rustup-init"
+            dir=$(mktemp -d)
+            curl --proto '=https' --tlsv1.2 -fsSL --retry 10 --retry-all-errors -o "$dir/rustup-init" "$url"
+            curl --proto '=https' --tlsv1.2 -fsSL --retry 10 --retry-all-errors -o "$dir/rustup-init.sha256" "${url}.sha256"
+            (cd "$dir" && echo "$(cut -d' ' -f1 rustup-init.sha256)  rustup-init" | sha256sum -c -)
+            chmod +x "$dir/rustup-init"
+            "$dir/rustup-init" -y --no-modify-path --profile minimal --default-toolchain none
+            rm -rf "$dir"
+          fi
+          echo "$bin" >> "$GITHUB_PATH"
 
       # Installs whatever rust-toolchain.toml declares when `toolchain` is
       # omitted, and caches internally — so no separate rust-cache step.
@@ -505,11 +530,23 @@ jobs:
       # the runner service does not put ~/.cargo/bin on PATH. Without this,
       # setup-rust-toolchain finds no rustup and downloads the installer on
       # every job; that download has no retry, so one network error fails it.
+      # On a runner rebuilt overnight, rustup is missing: install it here,
+      # with retries and a checksum check.
       - name: Put the runner's rustup on PATH
         if: runner.environment == 'self-hosted'
         run: |
           bin="${CARGO_HOME:-$HOME/.cargo}/bin"
-          if [ -x "$bin/rustup" ]; then echo "$bin" >> "$GITHUB_PATH"; fi
+          if [ ! -x "$bin/rustup" ]; then
+            url="https://static.rust-lang.org/rustup/dist/$(uname -m)-unknown-linux-gnu/rustup-init"
+            dir=$(mktemp -d)
+            curl --proto '=https' --tlsv1.2 -fsSL --retry 10 --retry-all-errors -o "$dir/rustup-init" "$url"
+            curl --proto '=https' --tlsv1.2 -fsSL --retry 10 --retry-all-errors -o "$dir/rustup-init.sha256" "${url}.sha256"
+            (cd "$dir" && echo "$(cut -d' ' -f1 rustup-init.sha256)  rustup-init" | sha256sum -c -)
+            chmod +x "$dir/rustup-init"
+            "$dir/rustup-init" -y --no-modify-path --profile minimal --default-toolchain none
+            rm -rf "$dir"
+          fi
+          echo "$bin" >> "$GITHUB_PATH"
 
       # Rust analysis runs cargo, so the pinned toolchain must be on PATH.
       - uses: actions-rust-lang/setup-rust-toolchain@v2
