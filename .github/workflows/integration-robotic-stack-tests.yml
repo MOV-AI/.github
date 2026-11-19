@@ -75,7 +75,7 @@ on:
       minio_secret_key_id:
         required: true
 env:
-  CI_INTEGRATION_CONTAINER_VERSION: "registry.cloud.mov.ai/qa/ci-tools:4.2.0.9"
+  CI_INTEGRATION_CONTAINER_VERSION: "registry.lis.mov.ai/qa/ci-tools:4.2.0.11"
   CI_INTEGRATION_CONTAINER_WORKSPACE: "/opt/mov.ai/workspace"
   CI_INTEGRATION_EXECUTION_FOLDER: "$(pwd)/temp"
   GITHUB_API_USR: "OttoMation-Movai"
@@ -395,6 +395,35 @@ jobs:
               --gh_api_pwd ${{ secrets.auto_commit_pwd }}
           '
 
+      # The install lists filter on type and distro, not on the package name, so a wrong entry is
+      # installed in the wrong workspace, or in none (DP-2209). Check the merged project manifest,
+      # then list the ROS 2 packages that "Remote - Firmware Patch" installs in ros2-workspace.
+      - name: Remote - Check and list project ROS packages
+        shell: bash
+        run: |
+          ssh ${{ steps.infra_outputs.outputs.ssh_connect_string }} -i ~/.ssh/ci_priv_key.pem -o StrictHostKeyChecking=no '
+            set -e
+            cd "${{ env.REMOTE_WORKSPACE_PATH }}"
+
+            docker run --rm -u root --entrypoint integration-pipeline \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":"${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}" \
+              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              check_ros_package_placement \
+              --manifest_file product-manifest.yaml
+
+            mkdir -p "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/ros2_packages"
+            docker run --rm -u root --entrypoint integration-pipeline \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}":"${{ env.CI_INTEGRATION_CONTAINER_WORKSPACE }}" \
+              -v "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/ros2_packages":/tmp/ci \
+              -i ${{ env.CI_INTEGRATION_CONTAINER_VERSION }} \
+              get_install_list \
+              --manifest_platform_base_key product_components.product_config \
+              --ros_distro humble \
+              --type ros2
+            echo "Project ROS 2 packages for ros2-workspace:"
+            cat "${{ env.CI_INTEGRATION_EXECUTION_FOLDER }}/ros2_packages/packages.apt"
+          '
+
       - name: Remote - Setup Integration tests ${{ inputs.simulation_qa_key }}
         id: simulator_tests_setup
         shell: bash
@@ -484,7 +513,8 @@ jobs:
 
             export USERSPACE_FOLDER_PATH="${{ env.USERSPACE_FOLDER_PATH }}"
             sudo mkdir -p "$USERSPACE_FOLDER_PATH/.git";sudo chown 1000:1000 "$USERSPACE_FOLDER_PATH/" -Rf
-            export PUBLIC_IP="$(hostname -I | cut -d ' ' -f1)"
+            export PUBLIC_IP="$(hostname -I | cut -d " " -f1)"
+            export REGISTRY="${{ env.REGISTRY }}"
             export SIMULATION_ID="${{ env.SIMULATION_ID }}"
             export ROBOTNAME="ci_${{ inputs.product_name }}"
             rm -rf userspace
@@ -495,7 +525,18 @@ jobs:
             sudo chmod -R +r /etc/movai
 
             # Configure registry
-            jq '.registry = "${{ env.REGISTRY }}"' "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
+            echo "REGISTRY: $REGISTRY"
+            # No single quotes here: this script is already inside the ssh single-quoted string
+            jq --arg registry "$REGISTRY" ".registry = \$registry" "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
+
+            echo "Before changes:"
+            cat "$CONFIG_FILE_NAME"
+            # Set feature flags
+            jq ".orchestrator[\"extra-env\"] = [\"RAISE_FLOW_VALIDATION_ERRORS=False\",\"RAISE_METADATA_VALIDATION_ERRORS=False\",\"MOVAI_GENERAL_VERBOSITY_LEVEL=DEBUG\",\"PLATFORM_METRICS=1\",\"IGNITION_VERSION=fortress\"]" "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
+            jq ".[\"ros1-workspace\"][\"extra-env\"] = [\"RAISE_FLOW_VALIDATION_ERRORS=False\",\"RAISE_METADATA_VALIDATION_ERRORS=False\",\"MOVAI_GENERAL_VERBOSITY_LEVEL=DEBUG\",\"PLATFORM_METRICS=1\",\"IGNITION_VERSION=fortress\"]" "$CONFIG_FILE_NAME" > temp.json && mv temp.json "$CONFIG_FILE_NAME"
+
+            echo "After changes:"
+            cat "$CONFIG_FILE_NAME"
 
             wget https://movai-scripts.s3.amazonaws.com/QuickStart_$(cat quickstart_version).bash
             chmod +x ./QuickStart_$(cat quickstart_version).bash
@@ -504,7 +545,7 @@ jobs:
             MOVAI_PWD="4Iva6UHAQq9DGITj"
             for robot in $(movai-cli robots list); do
               movai-cli robots user "$robot" "$MOVAI_USER" "$MOVAI_PWD"
-              movai-cli set "$robot" orchestrator.extra-env "RAISE_FLOW_VALIDATION_ERRORS=False"
+              movai-cli stop "$robot" --wait
               movai-cli restart "$robot"
               sleep 5
 
@@ -581,6 +622,22 @@ jobs:
 
             "
             docker restart $CONTAINER_ID
+
+            # Install the project ROS 2 packages in ros2-workspace, not in ros1-workspace (DP-2209).
+            # The list comes from "Remote - Check and list project ROS packages".
+            ROS2_PKGS=$(tr "\n" " " < ros2_packages/packages.apt | xargs)
+            ROS2_CONTAINERS=$(docker ps --format "{{.Names}}" --filter "name=^ros2-workspace-")
+            if [ -z "$ROS2_PKGS" ]; then
+              echo "The project has no ROS 2 packages to install."
+            elif [ -z "$ROS2_CONTAINERS" ]; then
+              echo "::warning title=ROS 2 packages not installed::ros2-workspace is not running (disabled in the robot config?), so these project packages are not installed or tested: $ROS2_PKGS"
+            else
+              for ros2_container in $ROS2_CONTAINERS; do
+                echo "Installing in $ros2_container: $ROS2_PKGS"
+                docker exec -t -u root "$ros2_container" bash -c "set -e; apt-get update; mobros install $ROS2_PKGS -y --fail-on-apt-update"
+                docker restart "$ros2_container"
+              done
+            fi
             '
 
       - name: Remote - Integration tests
