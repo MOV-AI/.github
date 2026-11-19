@@ -3,6 +3,21 @@
 
 All notable changes to this repository will be documented in this file.
 
+## [v3] - 2026-11-18
+### Added
+- N/A
+
+### Changed
+- `rust-test-workflow.yml`: on a self-hosted runner, the `rust` and `sonar` jobs put `~/.cargo/bin` on PATH when rustup is already there, so setup-rust-toolchain uses it instead of downloading the rustup installer on every job (MPP-346).
+
+### Fixed
+- N/A
+
+### Removed
+- N/A
+
+---
+
 ## [v3] - 2026-11-17
 ### Added
 - `rust-test-workflow.yml`: `system_packages` input, the apt packages a build needs (for example `libssl-dev pkg-config`), installed only when missing, for self-hosted runners whose image lacks them (MPP-346).
