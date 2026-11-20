@@ -1999,7 +1999,7 @@ jobs:
         echo 'proxmox_ve_password="${{ secrets.proxmox_ve_password }}"' >> input.tfvars
         echo 'gh_access_token="${{ secrets.auto_commit_pwd }}"' >> input.tfvars
         echo 'gh_runner_labels=["metaplanner-runner-${{ matrix.node }}","metaplanner-runner"]' >> input.tfvars
-        echo 'cloud_init_packages=["python3-dev","build-essential"]'>>input.tfvars
+        echo 'cloud_init_packages=["python3-dev","build-essential","libssl-dev","pkg-config"]'>>input.tfvars
 
         echo "File args: $var_file_arg"
         echo "Input File args: $(cat input.tfvars)"
