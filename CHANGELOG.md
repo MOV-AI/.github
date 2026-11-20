@@ -8,7 +8,7 @@ All notable changes to this repository will be documented in this file.
 - N/A
 
 ### Changed
-- `rust-test-workflow.yml`: on a self-hosted runner, the `rust` and `sonar` jobs put `~/.cargo/bin` on PATH when rustup is already there, so setup-rust-toolchain uses it instead of downloading the rustup installer on every job (MPP-346).
+- `rust-test-workflow.yml`: on a self-hosted runner, the `rust` and `sonar` jobs put `~/.cargo/bin` on PATH, so setup-rust-toolchain uses the runner's rustup instead of downloading the installer on every job. When rustup is missing or broken (the runners are rebuilt every night), they first install it from `static.rust-lang.org` with curl retries; the SHA-256 check only detects a corrupt download (MPP-346).
 
 ### Fixed
 - N/A

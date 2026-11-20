@@ -250,13 +250,28 @@ jobs:
 
       # A self-hosted runner keeps rustup and the toolchains in ~/.cargo, but
       # the runner service does not put ~/.cargo/bin on PATH. Without this,
-      # setup-rust-toolchain finds no rustup and downloads the installer on
-      # every job; that download has no retry, so one network error fails it.
-      - name: Put the runner's rustup on PATH
+      # setup-rust-toolchain finds no rustup and installs it through
+      # sh.rustup.rs, whose download of rustup-init has no retry. When rustup
+      # is missing or broken (a runner rebuilt overnight, an install cut off),
+      # install it here with curl retries. The .sha256 comes from the same
+      # server, so it only detects a corrupt download. No toolchain and the
+      # default profile: setup-rust-toolchain installs rust-toolchain.toml's.
+      - name: Install rustup and put it on PATH
         if: runner.environment == 'self-hosted'
         run: |
           bin="${CARGO_HOME:-$HOME/.cargo}/bin"
-          if [ -x "$bin/rustup" ]; then echo "$bin" >> "$GITHUB_PATH"; fi
+          if ! "$bin/rustup" --version >/dev/null 2>&1; then
+            url="https://static.rust-lang.org/rustup/dist/$(uname -m)-unknown-linux-gnu/rustup-init"
+            dir=$(mktemp -d)
+            trap 'rm -rf "$dir"' EXIT
+            fetch() { curl --proto '=https' --tlsv1.2 -fsSL --retry 5 --retry-all-errors --retry-max-time 120 -o "$1" "$2"; }
+            fetch "$dir/rustup-init" "$url"
+            fetch "$dir/rustup-init.sha256" "${url}.sha256"
+            (cd "$dir" && echo "$(cut -d' ' -f1 rustup-init.sha256)  rustup-init" | sha256sum -c -)
+            chmod +x "$dir/rustup-init"
+            "$dir/rustup-init" -y --no-modify-path --default-toolchain none
+          fi
+          echo "$bin" >> "$GITHUB_PATH"
 
       # Installs whatever rust-toolchain.toml declares when `toolchain` is
       # omitted, and caches internally — so no separate rust-cache step.
@@ -503,13 +518,28 @@ jobs:
 
       # A self-hosted runner keeps rustup and the toolchains in ~/.cargo, but
       # the runner service does not put ~/.cargo/bin on PATH. Without this,
-      # setup-rust-toolchain finds no rustup and downloads the installer on
-      # every job; that download has no retry, so one network error fails it.
-      - name: Put the runner's rustup on PATH
+      # setup-rust-toolchain finds no rustup and installs it through
+      # sh.rustup.rs, whose download of rustup-init has no retry. When rustup
+      # is missing or broken (a runner rebuilt overnight, an install cut off),
+      # install it here with curl retries. The .sha256 comes from the same
+      # server, so it only detects a corrupt download. No toolchain and the
+      # default profile: setup-rust-toolchain installs rust-toolchain.toml's.
+      - name: Install rustup and put it on PATH
         if: runner.environment == 'self-hosted'
         run: |
           bin="${CARGO_HOME:-$HOME/.cargo}/bin"
-          if [ -x "$bin/rustup" ]; then echo "$bin" >> "$GITHUB_PATH"; fi
+          if ! "$bin/rustup" --version >/dev/null 2>&1; then
+            url="https://static.rust-lang.org/rustup/dist/$(uname -m)-unknown-linux-gnu/rustup-init"
+            dir=$(mktemp -d)
+            trap 'rm -rf "$dir"' EXIT
+            fetch() { curl --proto '=https' --tlsv1.2 -fsSL --retry 5 --retry-all-errors --retry-max-time 120 -o "$1" "$2"; }
+            fetch "$dir/rustup-init" "$url"
+            fetch "$dir/rustup-init.sha256" "${url}.sha256"
+            (cd "$dir" && echo "$(cut -d' ' -f1 rustup-init.sha256)  rustup-init" | sha256sum -c -)
+            chmod +x "$dir/rustup-init"
+            "$dir/rustup-init" -y --no-modify-path --default-toolchain none
+          fi
+          echo "$bin" >> "$GITHUB_PATH"
 
       # Rust analysis runs cargo, so the pinned toolchain must be on PATH.
       - uses: actions-rust-lang/setup-rust-toolchain@v2
