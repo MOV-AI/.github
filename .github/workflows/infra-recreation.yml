@@ -47,9 +47,9 @@ on:
 env:
   CI_INTEGRATION_SCRIPTS_VERSION: "4.1.0.3"
   PROVISION_INFRA_REPO: "devops-tf-bpg-runners"
-  PROVISION_INFRA_VERSION: "0.1.0-4"
+  PROVISION_INFRA_VERSION: "0.1.0-5"
   PROVISION_ENV_CONF_REPO: "devops-tf-env-conf"
-  PROVISION_ENV_CONF_VERSION: "0.2.2-8"
+  PROVISION_ENV_CONF_VERSION: "0.2.2-9"
   PROVISION_POOL: "GithubRunners"
   PROVISION_TF_PARALLELISM: "2" # limit concurrent Proxmox operations: parallel VM creation causes lock errors and node SSH failures (DP-2134)
   PROVISION_TF_ATTEMPTS: "3" # retry terraform apply/destroy on transient Proxmox errors (HTTP 596, node SSH, VM start) (DP-2134)
